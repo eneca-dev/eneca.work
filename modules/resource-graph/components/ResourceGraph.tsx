@@ -7,8 +7,8 @@
 
 'use client'
 
-import { useState, useMemo, useCallback, useRef } from 'react'
-import { Database, ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
+import { useMemo, useCallback, useRef } from 'react'
+import { ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
 import { addDays, startOfDay } from 'date-fns'
 import { useResourceGraphData, useCompanyCalendarEvents } from '../hooks'
 import { useDisplaySettingsStore, useFiltersStore, useUIStateStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
@@ -22,7 +22,6 @@ import {
 import { useFilterOptions } from '../filters'
 import { ResourceGraphTimeline, TimelineHeader, generateDayCells } from './timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
-import { cn } from '@/lib/utils'
 import type { TimelineRange } from '../types'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
 import { UserSync } from '@/components/UserSync'
@@ -47,7 +46,7 @@ function calculateTimelineRange(): TimelineRange {
 }
 
 export function ResourceGraph() {
-  const [loadAll, setLoadAll] = useState(false)
+  // Данные грузятся сразу (без пустого экрана)
 
   // Refs for scroll synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null)
@@ -107,22 +106,8 @@ export function ResourceGraph() {
     return tokensToQueryParams(parsed.tokens, RESOURCE_GRAPH_FILTER_CONFIG)
   }, [filterString])
 
-  // Check if any filters are applied
-  const filtersApplied = useMemo(() => {
-    return Object.keys(queryParams).length > 0
-  }, [queryParams])
-
-  // Determine if we should fetch data
-  const shouldFetchData = filtersApplied || loadAll
-
-  // Data fetching
-  const { data, isLoading, error } = useResourceGraphData(queryParams, {
-    enabled: shouldFetchData,
-  })
-
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
+  // Data fetching - всегда загружаем данные (фильтры применяются на сервере)
+  const { data, isLoading, error } = useResourceGraphData(queryParams)
 
   // Expand all nodes in the tree
   const handleExpandAll = useCallback(() => {
@@ -178,7 +163,7 @@ export function ResourceGraph() {
         </div>
 
         {/* Timeline Header - Dates row (sticky with main header) */}
-        {shouldFetchData && !error && (
+        {!error && (
           <div
             ref={headerScrollRef}
             onScroll={handleHeaderScroll}
@@ -234,37 +219,8 @@ export function ResourceGraph() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {/* Empty state */}
-        {!shouldFetchData && (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-center max-w-md">
-              <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-              <h2 className="text-lg font-medium mb-2">
-                Выберите данные для отображения
-              </h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Используйте фильтр выше для поиска проектов.
-              </p>
-              <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
-                подразделение:"ОВ" проект:"Название"
-              </p>
-              <button
-                onClick={handleLoadAll}
-                className={cn(
-                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm',
-                  'bg-primary text-primary-foreground',
-                  'hover:bg-primary/90 transition-colors'
-                )}
-              >
-                <Database size={16} />
-                Загрузить всё
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Error state */}
-        {shouldFetchData && error && !isLoading && (
+        {error && !isLoading && (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <p className="text-destructive mb-2">Ошибка загрузки данных</p>
@@ -274,7 +230,7 @@ export function ResourceGraph() {
         )}
 
         {/* Timeline Content (rows only, header is in sticky area) */}
-        {shouldFetchData && !error && (
+        {!error && (
           <ResourceGraphTimeline
             ref={contentScrollRef}
             onScroll={handleContentScroll}

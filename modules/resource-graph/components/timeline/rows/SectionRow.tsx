@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import type { Section, TimelineRange } from '../../../types'
+import type { Section, TimelineRange, SectionsBatchData } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid } from '../shared'
 import { SectionPeriodFrame } from '../SectionPeriodFrame'
@@ -23,13 +23,10 @@ import { BudgetsRow } from '../BudgetsRow'
 import { SectionTooltipOverlay } from '../SectionTooltipOverlay'
 import { DecompositionStageRow } from './DecompositionStageRow'
 import {
-  useWorkLogs,
-  useLoadings,
-  useStageReadiness,
-  useStageResponsibles,
-  useSectionBudgets,
   useUpdateSectionDates,
 } from '../../../hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/modules/cache'
 import { getInitials, formatDateShort } from '../../../utils'
 import { SECTION_ROW_HEIGHT, SECTION_ROW_HEIGHT_WITH_CHECKPOINTS, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 
@@ -53,49 +50,50 @@ interface SectionRowProps {
   range: TimelineRange
   /** Объект развёрнут - начинаем загрузку данных */
   isObjectExpanded: boolean
+  /** ID объекта (для инвалидации batch кеша) */
+  objectId: string
+  /** Batch данные для всех секций объекта (из ObjectRow) */
+  batchData?: SectionsBatchData
+  /** Загрузка batch данных */
+  batchLoading?: boolean
 }
 
 /**
  * Строка раздела - двухстрочный layout с графиками готовности
  */
-export function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowProps) {
+export function SectionRow({ section, dayCells, range, isObjectExpanded, objectId, batchData, batchLoading }: SectionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
+  const queryClient = useQueryClient()
 
-  // Lazy load work logs при развороте объекта (не раздела!)
-  const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
-    enabled: isObjectExpanded,
-  })
+  // Данные из batch (загружены в ObjectRow одним запросом)
+  const workLogs = batchData?.workLogs[section.id]
+  const loadings = batchData?.loadings[section.id]
+  const stageReadinessMap = batchData?.stageReadiness[section.id]
+  const stageResponsiblesMap = batchData?.stageResponsibles[section.id]
+  const workLogsLoading = batchLoading ?? false
+  const loadingsLoading = batchLoading ?? false
+  const readinessLoading = batchLoading ?? false
 
-  // Lazy load checkpoints при развороте объекта
+  // Функция для инвалидации batch кеша (вызывается при изменении work logs)
+  const invalidateBatchData = () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.resourceGraph.sectionsBatch(objectId),
+    })
+  }
+
+  // Lazy load checkpoints при развороте объекта (через отдельный модуль из-за linked_sections)
   const { data: checkpointsResult, refetch: refetchCheckpoints } = useCheckpoints(
     isObjectExpanded ? { sectionId: section.id } : undefined
   )
   // Извлекаем массив чекпоинтов из результата (формат: { success, data: Checkpoint[] })
   const checkpoints = checkpointsResult?.data ?? []
 
-  // Lazy load loadings при развороте объекта
-  const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
-    enabled: isObjectExpanded,
-  })
-
-  // Lazy load stage readiness при развороте объекта
-  const { data: stageReadinessMap, isLoading: readinessLoading } = useStageReadiness(section.id, {
-    enabled: isObjectExpanded,
-  })
-
-  // Lazy load stage responsibles при развороте объекта
-  const { data: stageResponsiblesMap } = useStageResponsibles(section.id, {
-    enabled: isObjectExpanded,
-  })
-
-  // Lazy load budgets при развороте объекта
-  const { data: budgets, isLoading: budgetsLoading, refetch: refetchBudgets } = useSectionBudgets(
-    'section',
-    isObjectExpanded ? section.id : undefined
-  )
+  // Budgets из batch данных (загружены в ObjectRow одним запросом)
+  const budgets = batchData?.budgets[section.id]
+  const budgetsLoading = batchLoading ?? false
 
   // Mutation для обновления дат раздела
   const updateSectionDates = useUpdateSectionDates()
@@ -506,7 +504,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             sectionStatusColor={section.status.color}
             budgets={budgets}
             budgetsLoading={budgetsLoading}
-            onRefetch={refetchBudgets}
+            onRefetch={invalidateBatchData}
           />
           {section.decompositionStages.map((stage) => (
             <DecompositionStageRow
@@ -520,7 +518,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
               responsibles={stageResponsiblesMap?.[stage.id]}
               sectionId={section.id}
               sectionName={section.name}
-              onWorkLogCreated={() => refetchWorkLogs()}
+              onWorkLogCreated={invalidateBatchData}
             />
           ))}
         </>
@@ -531,9 +529,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         onClose={() => setIsSectionModalOpen(false)}
         section={section}
         sectionId={section.id}
-        onSuccess={() => {
-          refetchWorkLogs()
-        }}
+        onSuccess={invalidateBatchData}
       />
 
       {/* Checkpoint Create Modal */}

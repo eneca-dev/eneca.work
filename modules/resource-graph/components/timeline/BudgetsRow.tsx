@@ -21,8 +21,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { BudgetCreateModal } from '@/modules/modals'
-import { useDeactivateBudget, type BudgetCurrent } from '@/modules/budgets'
+import { useDeactivateBudget } from '@/modules/budgets'
 import type { DayCell } from './TimelineHeader'
+import type { BatchBudget } from '../../types'
 import type { TimelineRange } from '../../types'
 import { TimelineGrid } from './shared'
 import { calculateBarPosition } from './TimelineBar'
@@ -49,11 +50,11 @@ interface BudgetsRowProps {
   sectionEndDate: string | null
   /** Цвет статуса раздела (для палочек периода) */
   sectionStatusColor?: string
-  /** Бюджеты раздела (загружаются в родительском компоненте) */
-  budgets: BudgetCurrent[] | undefined
+  /** Бюджеты раздела (загружаются в родительском компоненте через batch) */
+  budgets: BatchBudget[] | undefined
   /** Идёт загрузка бюджетов */
   budgetsLoading: boolean
-  /** Callback для перезагрузки данных */
+  /** Callback для перезагрузки данных (инвалидирует batch кеш) */
   onRefetch?: () => void
 }
 
@@ -251,15 +252,7 @@ export function BudgetsRow({
 // ============================================================================
 
 interface BudgetItemRowProps {
-  budget: {
-    budget_id: string
-    name: string
-    planned_amount: number
-    spent_amount: number
-    spent_percentage: number
-    type_name: string | null
-    type_color: string | null
-  }
+  budget: BatchBudget
   dayCells: DayCell[]
   depth: number
   timelineWidth: number

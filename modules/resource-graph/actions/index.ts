@@ -18,6 +18,10 @@ import type {
   Loading,
   ReadinessPoint,
   StageResponsible,
+  SectionsBatchData,
+  SectionsBatchOptions,
+  BatchCheckpoint,
+  BatchBudget,
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
@@ -1570,6 +1574,503 @@ export async function getWorkCategories(): Promise<ActionResult<Array<{
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка загрузки категорий работ',
+    }
+  }
+}
+
+// ============================================================================
+// Batch Data Action - Все данные для секций объекта одним запросом
+// ============================================================================
+
+/**
+ * Получить все данные для секций объекта одним запросом
+ *
+ * Заменяет 8 отдельных запросов на 1:
+ * - workLogs
+ * - loadings
+ * - stageReadiness
+ * - stageResponsibles
+ * - checkpoints
+ * - budgets (опционально, может быть скрыто по permissions)
+ *
+ * Вызывается при развороте объекта (Object).
+ *
+ * @param sectionIds - Массив ID секций объекта
+ * @param options - Опции загрузки (includeBudgets для контроля доступа)
+ * @returns Batch данные для всех секций
+ */
+export async function getSectionsBatchData(
+  sectionIds: string[],
+  options?: SectionsBatchOptions
+): Promise<ActionResult<SectionsBatchData>> {
+  try {
+    if (!sectionIds || sectionIds.length === 0) {
+      return {
+        success: true,
+        data: {
+          workLogs: {},
+          loadings: {},
+          stageReadiness: {},
+          stageResponsibles: {},
+          checkpoints: {},
+          budgets: {},
+        },
+      }
+    }
+
+    const includeBudgets = options?.includeBudgets !== false // По умолчанию включаем
+
+    const supabase = await createClient()
+
+    // Выполняем все запросы параллельно на сервере
+    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, budgetsResult] = await Promise.all([
+      // 1. Work Logs для всех секций
+      supabase
+        .from('work_logs')
+        .select(`
+          work_log_id,
+          decomposition_item_id,
+          work_log_date,
+          work_log_hours,
+          work_log_amount,
+          work_log_description,
+          work_log_created_by,
+          decomposition_items!inner (
+            decomposition_item_section_id
+          ),
+          profiles:work_log_created_by (
+            user_id,
+            first_name,
+            last_name
+          ),
+          budgets (
+            budget_id,
+            name,
+            budget_types (
+              name,
+              color
+            )
+          )
+        `)
+        .in('decomposition_items.decomposition_item_section_id', sectionIds)
+        .order('work_log_date', { ascending: false }),
+
+      // 2. Loadings для всех секций
+      supabase
+        .from('loadings')
+        .select(`
+          loading_id,
+          loading_stage,
+          loading_start,
+          loading_finish,
+          loading_rate,
+          loading_comment,
+          loading_status,
+          is_shortage,
+          loading_responsible,
+          decomposition_stages!inner (
+            decomposition_stage_id,
+            decomposition_stage_section_id
+          ),
+          profiles:loading_responsible (
+            user_id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `)
+        .in('decomposition_stages.decomposition_stage_section_id', sectionIds)
+        .order('loading_start', { ascending: true }),
+
+      // 3. Decomposition stages с их items и responsibles для всех секций
+      supabase
+        .from('decomposition_stages')
+        .select(`
+          decomposition_stage_id,
+          decomposition_stage_section_id,
+          decomposition_stage_responsibles,
+          decomposition_items (
+            decomposition_item_progress,
+            decomposition_item_planned_hours
+          )
+        `)
+        .in('decomposition_stage_section_id', sectionIds),
+
+      // 4. Checkpoints для всех секций (из view_section_checkpoints)
+      supabase
+        .from('view_section_checkpoints')
+        .select(`
+          checkpoint_id,
+          section_id,
+          type_code,
+          type_name,
+          icon,
+          color,
+          title,
+          checkpoint_date,
+          completed_at,
+          status,
+          linked_sections_count
+        `)
+        .in('section_id', sectionIds)
+        .order('checkpoint_date', { ascending: true }),
+
+      // 5. Budgets для всех секций (опционально по permissions)
+      includeBudgets
+        ? supabase
+            .from('v_cache_budgets_current')
+            .select(`
+              budget_id,
+              entity_id,
+              name,
+              planned_amount,
+              spent_amount,
+              remaining_amount,
+              is_active,
+              type_name,
+              type_color
+            `)
+            .eq('entity_type', 'section')
+            .in('entity_id', sectionIds)
+            .eq('is_active', true)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    // Проверяем ошибки
+    if (workLogsResult.error) {
+      console.error('[getSectionsBatchData] WorkLogs error:', workLogsResult.error)
+      return { success: false, error: workLogsResult.error.message }
+    }
+    if (loadingsResult.error) {
+      console.error('[getSectionsBatchData] Loadings error:', loadingsResult.error)
+      return { success: false, error: loadingsResult.error.message }
+    }
+    if (stagesResult.error) {
+      console.error('[getSectionsBatchData] Stages error:', stagesResult.error)
+      return { success: false, error: stagesResult.error.message }
+    }
+    if (checkpointsResult.error) {
+      console.error('[getSectionsBatchData] Checkpoints error:', checkpointsResult.error)
+      return { success: false, error: checkpointsResult.error.message }
+    }
+    if (budgetsResult.error) {
+      console.error('[getSectionsBatchData] Budgets error:', budgetsResult.error)
+      return { success: false, error: budgetsResult.error.message }
+    }
+
+    // Собираем все stage_id для запроса readiness snapshots
+    const stageIds = (stagesResult.data || []).map(s => s.decomposition_stage_id)
+
+    // 4. Параллельно получаем snapshots и profiles для ответственных
+    const allUserIds = new Set<string>()
+    for (const stage of stagesResult.data || []) {
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+      if (responsibles) {
+        for (const id of responsibles) {
+          allUserIds.add(id)
+        }
+      }
+    }
+
+    const [snapshotsResult, profilesResult] = await Promise.all([
+      stageIds.length > 0
+        ? supabase
+            .from('stage_readiness_snapshots')
+            .select('stage_id, snapshot_date, readiness_value')
+            .in('stage_id', stageIds)
+            .order('snapshot_date', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+
+      allUserIds.size > 0
+        ? supabase
+            .from('profiles')
+            .select('user_id, first_name, last_name, avatar_url')
+            .in('user_id', Array.from(allUserIds))
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    if (snapshotsResult.error) {
+      console.error('[getSectionsBatchData] Snapshots error:', snapshotsResult.error)
+      return { success: false, error: snapshotsResult.error.message }
+    }
+    if (profilesResult.error) {
+      console.error('[getSectionsBatchData] Profiles error:', profilesResult.error)
+      return { success: false, error: profilesResult.error.message }
+    }
+
+    // ============================
+    // Трансформация данных
+    // ============================
+
+    // WorkLogs: группируем по sectionId
+    const workLogs: Record<string, WorkLog[]> = {}
+    for (const sectionId of sectionIds) {
+      workLogs[sectionId] = []
+    }
+
+    for (const row of workLogsResult.data || []) {
+      const sectionId = (row.decomposition_items as { decomposition_item_section_id: string })?.decomposition_item_section_id
+      if (!sectionId) continue
+
+      const profile = row.profiles as { user_id: string; first_name: string | null; last_name: string | null } | null
+      const budget = row.budgets as { budget_id: string; name: string; budget_types: { name: string; color: string } | null } | null
+
+      if (!workLogs[sectionId]) {
+        workLogs[sectionId] = []
+      }
+
+      workLogs[sectionId].push({
+        id: row.work_log_id,
+        itemId: row.decomposition_item_id,
+        date: row.work_log_date,
+        hours: Number(row.work_log_hours) || 0,
+        amount: Number(row.work_log_amount) || 0,
+        description: row.work_log_description || '',
+        createdBy: {
+          id: profile?.user_id || null,
+          firstName: profile?.first_name || null,
+          lastName: profile?.last_name || null,
+          name: profile
+            ? `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || null
+            : null,
+        },
+        budget: {
+          id: budget?.budget_id || '',
+          name: budget?.name || 'Без бюджета',
+          typeName: budget?.budget_types?.name || null,
+          typeColor: budget?.budget_types?.color || null,
+        },
+      })
+    }
+
+    // Loadings: группируем по sectionId
+    const loadings: Record<string, Loading[]> = {}
+    for (const sectionId of sectionIds) {
+      loadings[sectionId] = []
+    }
+
+    for (const row of loadingsResult.data || []) {
+      const stage = row.decomposition_stages as {
+        decomposition_stage_id: string
+        decomposition_stage_section_id: string
+      } | null
+      const sectionId = stage?.decomposition_stage_section_id
+      if (!sectionId) continue
+
+      const profile = row.profiles as {
+        user_id: string
+        first_name: string | null
+        last_name: string | null
+        avatar_url: string | null
+      } | null
+
+      if (!loadings[sectionId]) {
+        loadings[sectionId] = []
+      }
+
+      loadings[sectionId].push({
+        id: row.loading_id,
+        stageId: row.loading_stage,
+        startDate: row.loading_start,
+        finishDate: row.loading_finish,
+        rate: Number(row.loading_rate) || 1,
+        comment: row.loading_comment,
+        status: row.loading_status as Loading['status'],
+        isShortage: row.is_shortage,
+        employee: {
+          id: profile?.user_id || null,
+          firstName: profile?.first_name || null,
+          lastName: profile?.last_name || null,
+          name: profile
+            ? `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || null
+            : null,
+          avatarUrl: profile?.avatar_url || null,
+        },
+      })
+    }
+
+    // Stage Readiness: группируем по sectionId -> stageId
+    const stageReadiness: Record<string, Record<string, ReadinessPoint[]>> = {}
+    for (const sectionId of sectionIds) {
+      stageReadiness[sectionId] = {}
+    }
+
+    // Создаём map stage -> section
+    const stageSectionMap = new Map<string, string>()
+    for (const stage of stagesResult.data || []) {
+      stageSectionMap.set(stage.decomposition_stage_id, stage.decomposition_stage_section_id)
+    }
+
+    // Группируем snapshots
+    for (const row of snapshotsResult.data || []) {
+      const sectionId = stageSectionMap.get(row.stage_id)
+      if (!sectionId) continue
+
+      if (!stageReadiness[sectionId]) {
+        stageReadiness[sectionId] = {}
+      }
+      if (!stageReadiness[sectionId][row.stage_id]) {
+        stageReadiness[sectionId][row.stage_id] = []
+      }
+
+      stageReadiness[sectionId][row.stage_id].push({
+        date: row.snapshot_date,
+        value: row.readiness_value,
+      })
+    }
+
+    // Добавляем сегодняшнюю готовность на лету
+    const today = new Date().toISOString().split('T')[0]
+    for (const stage of stagesResult.data || []) {
+      const sectionId = stage.decomposition_stage_section_id
+      const stageId = stage.decomposition_stage_id
+      const items = stage.decomposition_items as Array<{
+        decomposition_item_progress: number | null
+        decomposition_item_planned_hours: number | null
+      }> || []
+
+      let totalWeightedProgress = 0
+      let totalPlannedHours = 0
+
+      for (const item of items) {
+        const hours = item.decomposition_item_planned_hours || 0
+        const progress = item.decomposition_item_progress || 0
+        if (hours > 0) {
+          totalWeightedProgress += progress * hours
+          totalPlannedHours += hours
+        }
+      }
+
+      if (totalPlannedHours > 0) {
+        const todayReadiness = Math.round(totalWeightedProgress / totalPlannedHours)
+
+        if (!stageReadiness[sectionId]) {
+          stageReadiness[sectionId] = {}
+        }
+        if (!stageReadiness[sectionId][stageId]) {
+          stageReadiness[sectionId][stageId] = []
+        }
+
+        // Проверяем нет ли уже точки на сегодня
+        const hasToday = stageReadiness[sectionId][stageId].some(p => p.date === today)
+        if (!hasToday) {
+          stageReadiness[sectionId][stageId].push({
+            date: today,
+            value: todayReadiness,
+          })
+        }
+      }
+    }
+
+    // Stage Responsibles: группируем по sectionId -> stageId
+    const stageResponsibles: Record<string, Record<string, StageResponsible[]>> = {}
+    for (const sectionId of sectionIds) {
+      stageResponsibles[sectionId] = {}
+    }
+
+    // Создаём map профилей
+    const profilesMap = new Map<string, StageResponsible>()
+    for (const p of profilesResult.data || []) {
+      profilesMap.set(p.user_id, {
+        id: p.user_id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        avatarUrl: p.avatar_url,
+      })
+    }
+
+    for (const stage of stagesResult.data || []) {
+      const sectionId = stage.decomposition_stage_section_id
+      const stageId = stage.decomposition_stage_id
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+
+      if (!stageResponsibles[sectionId]) {
+        stageResponsibles[sectionId] = {}
+      }
+
+      stageResponsibles[sectionId][stageId] = (responsibles || [])
+        .map(id => profilesMap.get(id))
+        .filter((p): p is StageResponsible => p !== undefined)
+    }
+
+    // Checkpoints: группируем по sectionId
+    const checkpoints: Record<string, BatchCheckpoint[]> = {}
+    for (const sectionId of sectionIds) {
+      checkpoints[sectionId] = []
+    }
+
+    for (const row of checkpointsResult.data || []) {
+      const sectionId = row.section_id
+      if (!sectionId) continue
+
+      if (!checkpoints[sectionId]) {
+        checkpoints[sectionId] = []
+      }
+
+      // Вычисляем spentPercentage на основе planned и spent
+      checkpoints[sectionId].push({
+        id: row.checkpoint_id,
+        sectionId: row.section_id,
+        typeCode: row.type_code,
+        typeName: row.type_name,
+        icon: row.icon,
+        color: row.color,
+        title: row.title,
+        checkpointDate: row.checkpoint_date,
+        completedAt: row.completed_at,
+        status: row.status as 'pending' | 'completed' | 'completed_late' | 'overdue',
+        linkedSectionsCount: row.linked_sections_count,
+      })
+    }
+
+    // Budgets: группируем по sectionId (entity_id для entity_type='section')
+    const budgets: Record<string, BatchBudget[]> = {}
+    for (const sectionId of sectionIds) {
+      budgets[sectionId] = []
+    }
+
+    for (const row of budgetsResult.data || []) {
+      const sectionId = row.entity_id
+      if (!sectionId) continue
+
+      if (!budgets[sectionId]) {
+        budgets[sectionId] = []
+      }
+
+      const planned_amount = Number(row.planned_amount) || 0
+      const spent_amount = Number(row.spent_amount) || 0
+      const remaining_amount = Number(row.remaining_amount) || 0
+      const spent_percentage = planned_amount > 0 ? Math.round((spent_amount / planned_amount) * 100) : 0
+
+      budgets[sectionId].push({
+        budget_id: row.budget_id,
+        name: row.name,
+        planned_amount,
+        spent_amount,
+        remaining_amount,
+        spent_percentage,
+        type_name: row.type_name,
+        type_color: row.type_color,
+        is_active: row.is_active ?? true,
+      })
+    }
+
+    return {
+      success: true,
+      data: {
+        workLogs,
+        loadings,
+        stageReadiness,
+        stageResponsibles,
+        checkpoints,
+        budgets,
+      },
+    }
+  } catch (error) {
+    console.error('[getSectionsBatchData] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки данных секций',
     }
   }
 }

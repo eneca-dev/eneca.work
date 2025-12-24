@@ -12,7 +12,6 @@ import {
   createDetailCacheQuery,
   createSimpleCacheQuery,
   createCacheMutation,
-  staleTimePresets,
   queryKeys,
 } from '@/modules/cache'
 
@@ -27,6 +26,7 @@ import {
   getLoadingsForSection,
   getStageReadinessForSection,
   getStageResponsiblesForSection,
+  getSectionsBatchData,
   updateItemProgress,
   updateLoadingDates,
   updateStageDates,
@@ -45,7 +45,11 @@ import type {
   Loading,
   ReadinessPoint,
   StageResponsible,
+  SectionsBatchData,
+  SectionsBatchOptions,
 } from '../types'
+
+import { useQuery } from '@tanstack/react-query'
 
 import {
   updateItemProgressInHierarchy,
@@ -103,13 +107,16 @@ export const useUserWorkload = createDetailCacheQuery<Project[]>({
 /**
  * Хук для получения списка тегов проектов
  *
+ * Справочник - загружается один раз за сессию.
+ *
  * @example
  * const { data: tags, isLoading } = useTagOptions()
  */
 export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
   queryKey: queryKeys.projectTags.list(),
   queryFn: getProjectTags,
-  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 /**
@@ -127,13 +134,14 @@ export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
 export const useProjectTagsMap = createSimpleCacheQuery<Record<string, ProjectTag[]>>({
   queryKey: queryKeys.projectTags.map(),
   queryFn: getProjectTagsMap,
-  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 /**
  * Хук для получения праздников и переносов рабочих дней компании
  *
- * Данные кешируются на 24 часа, т.к. праздники очень редко меняются
+ * Справочник - загружается один раз за сессию.
  *
  * @example
  * const { data: events, isLoading } = useCompanyCalendarEvents()
@@ -141,14 +149,15 @@ export const useProjectTagsMap = createSimpleCacheQuery<Record<string, ProjectTa
 export const useCompanyCalendarEvents = createSimpleCacheQuery<CompanyCalendarEvent[]>({
   queryKey: queryKeys.companyCalendar.events(),
   queryFn: getCompanyCalendarEvents,
-  staleTime: staleTimePresets.eternal, // 24 часа - праздники практически не меняются
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 /**
  * Хук для получения структуры проектов (projects, stages, objects, sections)
  *
+ * Справочник - загружается один раз за сессию.
  * Используется для построения иерархии и фильтров.
- * Данные кешируются на 5 минут, т.к. структура меняется относительно редко.
  *
  * @example
  * const { data: structure, isLoading } = useProjectStructure()
@@ -161,7 +170,8 @@ export const useProjectStructure = createSimpleCacheQuery<{
 }>({
   queryKey: queryKeys.filterStructure.project(),
   queryFn: getProjectStructure,
-  staleTime: staleTimePresets.slow, // 5 минут - структура меняется редко
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 // ============================================================================
@@ -252,6 +262,55 @@ export const useStageResponsibles = createDetailCacheQuery<Record<string, StageR
   queryFn: getStageResponsiblesForSection,
   staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
 })
+
+// ============================================================================
+// Batch Data Hook - Все данные для секций объекта одним запросом
+// ============================================================================
+
+/**
+ * Хук для получения всех данных для секций объекта одним запросом
+ *
+ * Заменяет 8 отдельных запросов (useWorkLogs, useLoadings, useStageReadiness, useStageResponsibles,
+ * useCheckpoints, useSectionBudgets) на 1 batch запрос при развороте объекта.
+ *
+ * @param objectId - ID объекта (для ключа кеша)
+ * @param sectionIds - Массив ID секций объекта
+ * @param options - Опции:
+ *   - enabled: включить загрузку
+ *   - includeBudgets: включить загрузку бюджетов (по умолчанию true, может быть false для пользователей без доступа)
+ *
+ * @example
+ * const sectionIds = object.sections.map(s => s.id)
+ * const { data: batchData, isLoading } = useSectionsBatch(object.id, sectionIds, { enabled: isExpanded })
+ *
+ * // Данные для конкретной секции:
+ * batchData?.workLogs[sectionId]
+ * batchData?.loadings[sectionId]
+ * batchData?.stageReadiness[sectionId][stageId]
+ * batchData?.stageResponsibles[sectionId][stageId]
+ * batchData?.checkpoints[sectionId]
+ * batchData?.budgets[sectionId] // может быть пустым если includeBudgets=false
+ */
+export function useSectionsBatch(
+  objectId: string,
+  sectionIds: string[],
+  options?: { enabled?: boolean } & SectionsBatchOptions
+) {
+  const { enabled, ...batchOptions } = options || {}
+
+  return useQuery<SectionsBatchData>({
+    queryKey: queryKeys.resourceGraph.sectionsBatch(objectId),
+    queryFn: async () => {
+      const result = await getSectionsBatchData(sectionIds, batchOptions)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result.data
+    },
+    staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
+    enabled: enabled !== false && sectionIds.length > 0,
+  })
+}
 
 // ============================================================================
 // Budgets Hooks - Re-export from budgets module

@@ -13,6 +13,7 @@ import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 import { usePrefetchCheckpoints } from '@/modules/checkpoints'
+import { useSectionsBatch } from '../../../hooks'
 
 // ============================================================================
 // Object Row
@@ -31,17 +32,26 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = object.sections.length > 0
 
+  // Собираем ID секций для batch загрузки
+  const sectionIds = useMemo(() => object.sections.map((s) => s.id), [object.sections])
+
+  // Batch загрузка всех данных для секций объекта (1 запрос вместо 6×N)
+  const { data: batchData, isLoading: batchLoading } = useSectionsBatch(
+    object.id,
+    sectionIds,
+    { enabled: isExpanded }
+  )
+
   // Prefetch чекпоинтов для всех разделов объекта
   const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
 
   // Prefetch данных при наведении на кнопку раскрытия (до клика)
   const handleMouseEnter = useCallback(() => {
     if (!isExpanded && object.sections.length > 0) {
-      const sectionIds = object.sections.map((s) => s.id)
       prefetchForSections(sectionIds)
       prefetchProjectSections(object.sections[0].id)
     }
-  }, [isExpanded, object.sections, prefetchForSections, prefetchProjectSections])
+  }, [isExpanded, object.sections, sectionIds, prefetchForSections, prefetchProjectSections])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {
@@ -148,6 +158,9 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           dayCells={dayCells}
           range={range}
           isObjectExpanded={isExpanded}
+          objectId={object.id}
+          batchData={batchData}
+          batchLoading={batchLoading}
         />
       ))}
     </>

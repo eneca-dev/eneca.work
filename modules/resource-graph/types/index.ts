@@ -386,3 +386,67 @@ export interface StageResponsible {
   lastName: string | null
   avatarUrl: string | null
 }
+
+// ============================================================================
+// Batch Data Types - Данные для всех секций объекта
+// ============================================================================
+
+/**
+ * Опции для batch загрузки данных секций
+ */
+export interface SectionsBatchOptions {
+  /** Включить загрузку бюджетов (может быть отключено по permissions) */
+  includeBudgets?: boolean
+}
+
+/**
+ * Чекпоинт в batch данных (упрощённый тип для timeline)
+ */
+export interface BatchCheckpoint {
+  id: string
+  sectionId: string
+  typeCode: string
+  typeName: string
+  icon: string
+  color: string
+  title: string | null
+  checkpointDate: string
+  completedAt: string | null
+  status: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  linkedSectionsCount: number
+}
+
+/**
+ * Бюджет в batch данных (совместим с BudgetCurrent для BudgetsRow)
+ * Используем snake_case для совместимости с существующими компонентами
+ */
+export interface BatchBudget {
+  budget_id: string
+  name: string
+  planned_amount: number
+  spent_amount: number
+  remaining_amount: number
+  spent_percentage: number
+  type_name: string | null
+  type_color: string | null
+  is_active: boolean
+}
+
+/**
+ * Batch данные для всех секций объекта
+ * Загружается одним запросом при развороте объекта
+ */
+export interface SectionsBatchData {
+  /** Work logs по секциям: Record<sectionId, WorkLog[]> */
+  workLogs: Record<string, WorkLog[]>
+  /** Loadings по секциям: Record<sectionId, Loading[]> */
+  loadings: Record<string, Loading[]>
+  /** Stage readiness по секциям и этапам: Record<sectionId, Record<stageId, ReadinessPoint[]>> */
+  stageReadiness: Record<string, Record<string, ReadinessPoint[]>>
+  /** Stage responsibles по секциям и этапам: Record<sectionId, Record<stageId, StageResponsible[]>> */
+  stageResponsibles: Record<string, Record<string, StageResponsible[]>>
+  /** Checkpoints по секциям: Record<sectionId, BatchCheckpoint[]> */
+  checkpoints: Record<string, BatchCheckpoint[]>
+  /** Budgets по секциям: Record<sectionId, BatchBudget[]> (может быть пустым если нет доступа) */
+  budgets: Record<string, BatchBudget[]>
+}

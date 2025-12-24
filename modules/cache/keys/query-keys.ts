@@ -241,6 +241,8 @@ export const queryKeys = {
     lists: () => [...queryKeys.resourceGraph.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.resourceGraph.lists(), filters] as const,
     user: (userId: string) => [...queryKeys.resourceGraph.all, 'user', userId] as const,
+    /** Batch данные для всех секций объекта (загрузка при развороте объекта) */
+    sectionsBatch: (objectId: string) => [...queryKeys.resourceGraph.all, 'sectionsBatch', objectId] as const,
     /** Work logs для раздела (lazy load при развороте) */
     workLogs: (sectionId: string) => [...queryKeys.resourceGraph.all, 'workLogs', sectionId] as const,
     /** Loadings для раздела (lazy load при развороте) */
