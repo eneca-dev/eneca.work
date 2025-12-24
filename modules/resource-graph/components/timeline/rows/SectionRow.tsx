@@ -70,9 +70,11 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   })
 
   // Lazy load checkpoints при развороте объекта
-  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints(
+  const { data: checkpointsResult, refetch: refetchCheckpoints } = useCheckpoints(
     isObjectExpanded ? { sectionId: section.id } : undefined
   )
+  // Извлекаем массив чекпоинтов из результата (формат: { success, data: Checkpoint[] })
+  const checkpoints = checkpointsResult?.data ?? []
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
@@ -228,9 +230,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   // Адаптивная высота строки:
   // - Базовая: 56px (только график)
   // - С чекпоинтами: 56px + пространство для чекпоинтов
-  // - Пространство для чекпоинтов: 40px базово + 18px * (maxStack - 1)
-  const CHECKPOINT_BASE_SPACE = 40  // Базовое пространство для одного ряда чекпоинтов
-  const CHECKPOINT_STACK_OFFSET = 18  // Дополнительное пространство для каждого стека
+  // - Пространство для чекпоинтов: 32px базово + 14px * (maxStack - 1)
+  const CHECKPOINT_BASE_SPACE = 32  // Базовое пространство для одного ряда чекпоинтов
+  const CHECKPOINT_STACK_OFFSET = 14  // Дополнительное пространство для каждого стека
 
   const checkpointSpace = hasCheckpoints
     ? CHECKPOINT_BASE_SPACE + Math.max(0, maxCheckpointsOnDate - 1) * CHECKPOINT_STACK_OFFSET

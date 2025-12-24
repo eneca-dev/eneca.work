@@ -90,11 +90,11 @@ import {
 // Constants
 // ============================================================================
 
-const MARKER_RADIUS = 10   // Увеличили для лучшей видимости
-const ICON_SIZE = 12       // Размер иконки внутри маркера
+const MARKER_RADIUS = 8    // Радиус маркера
+const ICON_SIZE = 10       // Размер иконки внутри маркера
 
 // Смещение для чекпоинтов на одну дату (вертикальное)
-const OVERLAP_OFFSET_Y = 18   // Смещение по Y для каждого следующего чекпоинта
+const OVERLAP_OFFSET_Y = 14   // Смещение по Y для каждого следующего чекпоинта
 
 // ============================================================================
 // Icon Helper
@@ -320,7 +320,7 @@ export function CheckpointMarkers({
 
   // Y позиция для чекпоинтов — НАД графиком (в верхней части строки)
   // График занимает нижние 56px, чекпоинты — верхнюю часть
-  const baseY = MARKER_RADIUS + 10  // 10 + 10 = 20px от верха
+  const baseY = MARKER_RADIUS + 8  // 8 + 8 = 16px от верха
 
   return (
     <TooltipProvider>
@@ -343,7 +343,7 @@ export function CheckpointMarkers({
         className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-10"
         style={{ width: timelineWidth, height: rowHeight }}
       >
-        {/* SVG маркеры - расположены под графиком, вертикально друг под другом при совпадении дат */}
+        {/* SVG маркеры - над графиком, вертикально друг под другом при совпадении дат */}
         {checkpoints.map((cp, index) => {
           const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]
           const overlapIndex = checkpointsOnDate.findIndex(c => c.checkpoint_id === cp.checkpoint_id)
@@ -361,7 +361,6 @@ export function CheckpointMarkers({
                 sectionId={sectionId}
                 absoluteRowY={absoluteRowY}
                 overlapIndex={overlapIndex}
-                overlapTotal={overlapTotal}
                 baseY={baseY}
               />
             </g>
@@ -377,7 +376,6 @@ export function CheckpointMarkers({
         {checkpoints.map((cp) => {
           const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]
           const overlapIndex = checkpointsOnDate.findIndex(c => c.checkpoint_id === cp.checkpoint_id)
-          const overlapTotal = checkpointsOnDate.length
 
           return (
             <CheckpointTooltipWrapper
@@ -387,7 +385,6 @@ export function CheckpointMarkers({
               timelineWidth={timelineWidth}
               onMarkerClick={onMarkerClick}
               overlapIndex={overlapIndex}
-              overlapTotal={overlapTotal}
               baseY={baseY}
             />
           )
@@ -406,10 +403,17 @@ function CheckpointMarkerSvg({
   timelineWidth,
   sectionId,
   absoluteRowY,
-  overlapIndex,
-  overlapTotal,
+  overlapIndex = 0,
   baseY,
-}: Omit<CheckpointMarkerProps, 'onMarkerClick'> & { baseY: number }) {
+}: {
+  checkpoint: Checkpoint
+  range: TimelineRange
+  timelineWidth: number
+  sectionId: string
+  absoluteRowY: number
+  overlapIndex?: number
+  baseY: number
+}) {
   const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
 
   // Базовая X позиция (центр дня)
@@ -423,16 +427,22 @@ function CheckpointMarkerSvg({
   const y = baseY + overlapIndex * OVERLAP_OFFSET_Y
   const absoluteY = absoluteRowY + y
 
+  // Регистрируем чекпоинт для отрисовки линий связей
+  // Используем стабильные зависимости: checkpoint_id вместо всего объекта
+  const hasLinkedSections = checkpoint.linked_sections && checkpoint.linked_sections.length > 0
+  const checkpointId = checkpoint.checkpoint_id
+
   useEffect(() => {
-    if (checkpoint.linked_sections && checkpoint.linked_sections.length > 0) {
-      registerCheckpoint({ checkpoint, sectionId, x, y: absoluteY, overlapIndex, overlapTotal })
+    if (hasLinkedSections) {
+      registerCheckpoint({ checkpoint, sectionId, x, y: absoluteY })
     }
     return () => {
-      if (checkpoint.linked_sections && checkpoint.linked_sections.length > 0) {
-        unregisterCheckpoint(checkpoint.checkpoint_id, sectionId)
+      if (hasLinkedSections) {
+        unregisterCheckpoint(checkpointId, sectionId)
       }
     }
-  }, [checkpoint, sectionId, x, absoluteY, overlapIndex, overlapTotal, registerCheckpoint, unregisterCheckpoint])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- используем checkpointId для стабильности
+  }, [checkpointId, sectionId, x, absoluteY, hasLinkedSections, registerCheckpoint, unregisterCheckpoint])
 
   const IconComponent = useMemo(() => getLucideIcon(checkpoint.icon), [checkpoint.icon])
 
@@ -486,7 +496,6 @@ function CheckpointTooltipWrapper({
   timelineWidth: number
   onMarkerClick?: (checkpoint: Checkpoint) => void
   overlapIndex: number
-  overlapTotal: number
   baseY: number
 }) {
   const [isHovered, setIsHovered] = useState(false)
@@ -526,7 +535,7 @@ function CheckpointTooltipWrapper({
         />
       </TooltipTrigger>
       <TooltipContent
-        side="top"
+        side="bottom"
         align="center"
         sideOffset={8}
         className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 shadow-xl shadow-black/40 rounded-lg px-3 py-2.5 max-w-[280px] z-[100]"

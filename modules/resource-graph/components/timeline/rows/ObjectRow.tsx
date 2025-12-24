@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { ChevronRight, Box } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProjectObject, TimelineRange } from '../../../types'
@@ -12,7 +12,7 @@ import { BudgetSpendingArea } from '../BudgetSpendingArea'
 import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
-import { useCheckpointLinks, usePrefetchCheckpoints } from '@/modules/checkpoints'
+import { usePrefetchCheckpoints } from '@/modules/checkpoints'
 
 // ============================================================================
 // Object Row
@@ -31,32 +31,17 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = object.sections.length > 0
 
-  // Отслеживаем видимость объекта для чекпоинтов
-  const { trackObjectVisibility } = useCheckpointLinks()
-
   // Prefetch чекпоинтов для всех разделов объекта
   const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
 
-  // Отслеживаем состояние развёрнутости объекта + prefetch данных
-  useEffect(() => {
-    console.log('[ObjectRow] 🔄 Object visibility state changed:', {
-      objectId: object.id,
-      objectName: object.name,
-      isExpanded,
-      sectionsCount: object.sections.length,
-    })
-
-    trackObjectVisibility(object.id, object.name, isExpanded)
-
-    // При раскрытии объекта - prefetch чекпоинтов для всех разделов
-    if (isExpanded && object.sections.length > 0) {
+  // Prefetch данных при наведении на кнопку раскрытия (до клика)
+  const handleMouseEnter = useCallback(() => {
+    if (!isExpanded && object.sections.length > 0) {
       const sectionIds = object.sections.map((s) => s.id)
       prefetchForSections(sectionIds)
-
-      // Также prefetch project sections для модалки (берём первый раздел)
       prefetchProjectSections(object.sections[0].id)
     }
-  }, [object.id, object.name, isExpanded, trackObjectVisibility, object.sections, prefetchForSections, prefetchProjectSections])
+  }, [isExpanded, object.sections, prefetchForSections, prefetchProjectSections])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {
@@ -88,6 +73,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           {hasChildren ? (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
+              onMouseEnter={handleMouseEnter}
               className="p-0.5 hover:bg-muted rounded transition-colors"
             >
               <ChevronRight
