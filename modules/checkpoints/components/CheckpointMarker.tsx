@@ -240,6 +240,8 @@ interface CheckpointMarkersProps {
   sectionId: string
   /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
   absoluteRowY: number
+  /** Высота строки (адаптивная) */
+  rowHeight?: number
 }
 
 // ============================================================================
@@ -286,6 +288,7 @@ export function CheckpointMarkers({
   onMarkerClick,
   sectionId,
   absoluteRowY,
+  rowHeight = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS,
 }: CheckpointMarkersProps) {
   if (!checkpoints || checkpoints.length === 0) return null
 
@@ -315,10 +318,9 @@ export function CheckpointMarkers({
     return { checkpointPositions: positions, checkpointsByDate: byDate }
   }, [checkpoints, range, timelineWidth])
 
-  // Y позиция для чекпоинтов — ПОД графиком (с отступом от графика)
-  // SECTION_ROW_HEIGHT = 56 (высота графика)
-  // Добавляем отступ + радиус маркера чтобы не пересекаться с графиком
-  const baseY = SECTION_ROW_HEIGHT + MARKER_RADIUS + 6  // 56 + 10 + 6 = 72px
+  // Y позиция для чекпоинтов — НАД графиком (в верхней части строки)
+  // График занимает нижние 56px, чекпоинты — верхнюю часть
+  const baseY = MARKER_RADIUS + 10  // 10 + 10 = 20px от верха
 
   return (
     <TooltipProvider>
@@ -339,7 +341,7 @@ export function CheckpointMarkers({
       {/* SVG слой - только визуальные элементы */}
       <svg
         className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-10"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT_WITH_CHECKPOINTS }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {/* SVG маркеры - расположены под графиком, вертикально друг под другом при совпадении дат */}
         {checkpoints.map((cp, index) => {
@@ -370,7 +372,7 @@ export function CheckpointMarkers({
       {/* HTML слой - тултипы и интерактивность */}
       <div
         className="absolute top-0 left-0 right-0 pointer-events-none z-20"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT_WITH_CHECKPOINTS }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {checkpoints.map((cp) => {
           const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]

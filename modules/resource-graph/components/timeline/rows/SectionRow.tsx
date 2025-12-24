@@ -209,15 +209,39 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
     return { planned, actual, budget }
   }, [section.readinessCheckpoints, mergedSectionReadiness, section.budgetSpending, section.startDate, section.endDate])
 
-  // Динамическая высота строки в зависимости от наличия чекпоинтов
-  const hasCheckpoints = checkpoints.length > 0
-  const rowHeight = hasCheckpoints ? SECTION_ROW_HEIGHT_WITH_CHECKPOINTS : SECTION_ROW_HEIGHT
+  // Вычисляем максимальное количество чекпоинтов на одну дату для адаптивной высоты
+  const { hasCheckpoints, maxCheckpointsOnDate } = useMemo(() => {
+    if (checkpoints.length === 0) return { hasCheckpoints: false, maxCheckpointsOnDate: 0 }
+
+    const byDate = new Map<string, number>()
+    checkpoints.forEach((cp) => {
+      const count = (byDate.get(cp.checkpoint_date) || 0) + 1
+      byDate.set(cp.checkpoint_date, count)
+    })
+
+    return {
+      hasCheckpoints: true,
+      maxCheckpointsOnDate: Math.max(...Array.from(byDate.values())),
+    }
+  }, [checkpoints])
+
+  // Адаптивная высота строки:
+  // - Базовая: 56px (только график)
+  // - С чекпоинтами: 56px + пространство для чекпоинтов
+  // - Пространство для чекпоинтов: 40px базово + 18px * (maxStack - 1)
+  const CHECKPOINT_BASE_SPACE = 40  // Базовое пространство для одного ряда чекпоинтов
+  const CHECKPOINT_STACK_OFFSET = 18  // Дополнительное пространство для каждого стека
+
+  const checkpointSpace = hasCheckpoints
+    ? CHECKPOINT_BASE_SPACE + Math.max(0, maxCheckpointsOnDate - 1) * CHECKPOINT_STACK_OFFSET
+    : 0
+  const rowHeight = SECTION_ROW_HEIGHT + checkpointSpace
 
   return (
     <>
       <div
         className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
-        style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
+        style={{ height: rowHeight, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
         <div
@@ -392,7 +416,17 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         {/* Timeline area */}
         <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Графики раздела - фиксированная высота, всегда 56px, прикреплены к низу */}
+
+          {/* Рамка периода раздела - на всю высоту строки */}
+          <SectionPeriodFrame
+            startDate={section.startDate}
+            endDate={section.endDate}
+            range={range}
+            color={section.status.color}
+            onResize={!isExpanded ? handleSectionResize : undefined}
+          />
+
+          {/* Графики раздела - фиксированная высота 56px, прикреплены к низу */}
           <div
             className={cn(
               'absolute bottom-0 left-0 right-0 transition-all duration-200',
@@ -400,13 +434,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             )}
             style={{ height: SECTION_ROW_HEIGHT }}
           >
-            <SectionPeriodFrame
-              startDate={section.startDate}
-              endDate={section.endDate}
-              range={range}
-              color={section.status.color}
-              onResize={!isExpanded ? handleSectionResize : undefined}
-            />
             {section.readinessCheckpoints.length > 0 && (
               <PlannedReadinessArea
                 checkpoints={section.readinessCheckpoints}
@@ -429,6 +456,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
               />
             )}
           </div>
+
           <SectionTooltipOverlay
             plannedCheckpoints={section.readinessCheckpoints}
             actualSnapshots={mergedSectionReadiness}
@@ -438,12 +466,16 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
           />
-          {/* Маркеры чекпоинтов - поверх всех графиков */}
+
+          {/* Маркеры чекпоинтов - в верхней части строки */}
           {checkpoints.length > 0 && (
             <CheckpointMarkers
               checkpoints={checkpoints}
               range={range}
               timelineWidth={timelineWidth}
+              sectionId={section.id}
+              absoluteRowY={0}
+              rowHeight={rowHeight}
             />
           )}
         </div>
