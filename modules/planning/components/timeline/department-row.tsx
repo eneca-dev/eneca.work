@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, MessageSquare } from "lucide-react"
 import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
+import { formatMinskDate } from '@/lib/timezone-utils'
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useUiStore } from "@/stores/useUiStore"
@@ -290,7 +291,8 @@ export function DepartmentRow({
               const isLastDayOfMonthDate = i === timeUnits.length - 1 // Проверяем, является ли это последним днем месяца
 
               // Получаем суммарную загрузку отдела на эту дату
-              const dateKey = unit.date.toISOString().split("T")[0]
+              // ✅ Форматируем дату в часовом поясе Минска
+              const dateKey = formatMinskDate(unit.date)
               const departmentWorkload = department.dailyWorkloads?.[dateKey] || 0
 
               // Рассчитываем процент загрузки отдела (только для рабочих дней)
@@ -535,7 +537,8 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
             // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
             const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
-            const dateKey = unit.date.toISOString().split("T")[0]
+            // ✅ Форматируем дату в часовом поясе Минска
+            const dateKey = formatMinskDate(unit.date)
             const workload = (team.dailyWorkloads || {})[dateKey] || 0
             // Рассчитываем процент загрузки команды (только для рабочих дней)
             const loadPct = !isWeekendDay && totalTeamCapacity > 0 ? Math.round((workload / totalTeamCapacity) * 100) : 0

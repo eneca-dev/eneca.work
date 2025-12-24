@@ -1,7 +1,10 @@
 import type { CalendarEvent } from "@/modules/calendar/types"
+import { addDays } from 'date-fns'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate } from '@/lib/timezone-utils'
 
 export const isWeekend = (date: Date) => {
-  const day = date.getDay()
+  // ✅ Определяем день недели в часовом поясе Минска
+  const day = getMinskDayOfWeek(date)
   return day === 0 || day === 6 // 0 - воскресенье, 6 - суббота
 }
 
@@ -51,14 +54,17 @@ export const groupDatesByMonth = (dates: { date: Date; label: string; isWeekend?
  * 3. Выходные дни (Сб/Вс)
  */
 export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boolean => {
-  const dateString = date.toISOString().split('T')[0]
+  // ✅ Форматируем дату в часовом поясе Минска
+  const dateString = formatMinskDate(date)
 
   // Приоритет 1: Проверяем переносы
+  // calendar_event_date_start - это timestamp with time zone (ISO строка)
+  // Используем new Date() для парсинга, затем formatMinskDate для получения даты в Minsk
   const transferEvent = calendarEvents.find(
     (event) =>
       event.calendar_event_type === 'Перенос' &&
       event.calendar_event_is_global &&
-      event.calendar_event_date_start.split('T')[0] === dateString &&
+      formatMinskDate(new Date(event.calendar_event_date_start)) === dateString &&
       event.calendar_event_is_weekday !== null
   )
 
@@ -67,11 +73,12 @@ export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boole
   }
 
   // Приоритет 2: Проверяем праздники
+  // calendar_event_date_start - это timestamp with time zone (ISO строка)
   const holidayEvent = calendarEvents.find(
     (event) =>
       event.calendar_event_type === 'Праздник' &&
       event.calendar_event_is_global &&
-      event.calendar_event_date_start.split('T')[0] === dateString
+      formatMinskDate(new Date(event.calendar_event_date_start)) === dateString
   )
 
   if (holidayEvent) {
@@ -100,19 +107,19 @@ export const generateTimeUnits = (
     width: number
     left: number // Накопленная позиция слева
   }[] = []
-  const currentDate = new Date(startDate)
   let accumulatedLeft = 0
 
-  // Генерируем дни
+  // Генерируем дни используя addDays (работает с timestamp, независимо от локального timezone)
   for (let i = 0; i < daysToShow; i++) {
-    const date = new Date(currentDate)
+    const date = addDays(startDate, i)
     const isWeekendDay = isWeekend(date)
     const isWorking = isWorkingDay(date, calendarEvents)
     const width = isWorking ? WORKING_DAY_WIDTH : NON_WORKING_DAY_WIDTH
 
     result.push({
       date,
-      label: date.getDate().toString(),
+      // Используем getMinskDate для получения дня месяца в Minsk timezone
+      label: getMinskDate(date).toString(),
       isWeekend: isWeekendDay,
       isWorkingDay: isWorking,
       width,
@@ -120,7 +127,6 @@ export const generateTimeUnits = (
     })
 
     accumulatedLeft += width
-    currentDate.setDate(currentDate.getDate() + 1)
   }
 
   return result
@@ -129,9 +135,10 @@ export const generateTimeUnits = (
 // Функция для получения текущей даты с началом в понедельник текущей недели
 export const getCurrentWeekStart = () => {
   const today = new Date()
-  const day = today.getDay()
+  // ✅ Используем день недели в часовом поясе Минска
+  const day = getMinskDayOfWeek(today)
   const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Если сегодня воскресенье, то -6, иначе +1
-  
+
   // Создаем новый объект Date, чтобы не мутировать исходный
   const weekStart = new Date(today)
   weekStart.setDate(diff)

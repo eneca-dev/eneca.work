@@ -4,8 +4,9 @@
  * Утилиты для работы с данными графика ресурсов
  */
 
-import { addDays, differenceInDays, startOfWeek, endOfWeek, format } from 'date-fns'
+import { addDays, differenceInDays, startOfWeek, endOfWeek } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { formatMinskDate, getMinskDayOfWeek } from '@/lib/timezone-utils'
 import type {
   TimelineRange,
   TimelineScale,
@@ -368,12 +369,13 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
 
 /**
  * Форматирует дату в строку для использования в качестве ключа
+ * Использует часовой пояс Минска для консистентности
  *
  * @param date - Дата
- * @returns Строка в формате 'YYYY-MM-DD'
+ * @returns Строка в формате 'YYYY-MM-DD' в часовом поясе Минска
  */
 export function formatDateKey(date: Date): string {
-  return format(date, 'yyyy-MM-dd')
+  return formatMinskDate(date)
 }
 
 /**
@@ -444,7 +446,8 @@ export function buildCalendarMap(events: CompanyCalendarEvent[]): Map<string, Pa
 export function getDayInfo(date: Date, calendarMap: Map<string, Partial<DayInfo>>): DayInfo {
   const key = formatDateKey(date)
   const calendarInfo = calendarMap.get(key)
-  const dayOfWeek = date.getDay()
+  // Используем день недели в часовом поясе Минска
+  const dayOfWeek = getMinskDayOfWeek(date)
   const isDefaultWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
   // Базовые значения
@@ -516,11 +519,6 @@ export function getEmployeeColor(employeeId: string | null): string {
   return EMPLOYEE_COLORS[index]
 }
 
-// ============================================================================
-// Profile Transformation
-// ============================================================================
-
-export { transformProfileToCreatedBy } from './profile-transform'
 // ============================================================================
 // Re-exports from format.ts
 // ============================================================================

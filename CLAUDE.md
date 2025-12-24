@@ -524,6 +524,14 @@ When migrating modules to use cache:
 - Format: `1.2M BYN`, `123K BYN`, `999 BYN`
 - Never use ₽ (Russian ruble) or other currency symbols
 
+### Timezone & Dates
+- **Часовой пояс: Europe/Minsk (UTC+3)**
+- Утилиты: `lib/timezone-utils.ts`
+- Для `timestamp with time zone` из БД: `formatMinskDate(new Date(isoString))`
+- Для строки "YYYY-MM-DD": `parseMinskDate(dateString)`
+- Для добавления дней: `addDays()` из date-fns (НЕ `setDate()`)
+- Модуль `calendar`: использует локальный timezone (date-fns создаёт даты локально)
+
 ### Theme System
 - Next-themes for dark/light mode
 - Custom primary color: `#1e7260` (teal/green)

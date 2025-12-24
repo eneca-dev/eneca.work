@@ -14,6 +14,7 @@ import {
 } from "@/lib/supabase-client"
 import { supabase } from "@/lib/supabase-client"
 import { fetchTeamFreshness, confirmTeamActivity as confirmTeamActivityAPI, confirmMultipleTeamsActivity as confirmMultipleTeamsActivityAPI } from "../api/teamActivity"
+import { parseMinskDate, formatMinskDate } from '@/lib/timezone-utils'
 
 // Переменная для хранения текущего Promise запроса саммари проектов
 let fetchProjectSummariesPromise: Promise<void> | null = null
@@ -193,23 +194,18 @@ interface PlanningState {
   cancelPendingRequests: () => void
 }
 
-// Функция для правильного преобразования timestamptz в объект Date
+// Функция для правильного преобразования timestamptz в объект Date в часовом поясе Минска
 const parseTimestampTz = (timestamptz: string | null): Date | null => {
   if (!timestamptz) return null
 
   try {
-    // Если строка не содержит информацию о timezone, добавляем 'Z' для UTC
-    let dateString = timestamptz
-    if (!timestamptz.includes('Z') && !timestamptz.includes('+') && !timestamptz.includes('-', 10)) {
-      dateString = timestamptz + 'Z'
-    }
-    
-    // Преобразуем строку в объект Date
-    return new Date(dateString)
+    // ✅ Парсим дату в часовом поясе Минска
+    // parseMinskDate обрабатывает как "YYYY-MM-DD", так и ISO строки с timezone
+    return parseMinskDate(timestamptz)
   } catch (error) {
     Sentry.captureException(error, {
-      tags: { 
-        module: 'planning', 
+      tags: {
+        module: 'planning',
         action: 'parse_timestamp',
         function: 'parseTimestampTz'
       },
@@ -718,8 +714,9 @@ export const usePlanningStore = create<PlanningState>()(
                   sectionName: item.section_name,
                   stageId: stageId,
                   stageName: item.stage_name || undefined,
-                  startDate: new Date(item.loading_start),
-                  endDate: new Date(item.loading_finish),
+                  // ✅ Парсим даты в часовом поясе Минска
+                  startDate: parseMinskDate(item.loading_start),
+                  endDate: parseMinskDate(item.loading_finish),
                   rate: item.loading_rate || 1,
                   comment: item.loading_comment || undefined,
                 })
@@ -731,12 +728,12 @@ export const usePlanningStore = create<PlanningState>()(
               employee.dailyWorkloads = {}
               if (employee.loadings && employee.loadings.length > 0) {
                 employee.loadings.forEach((loading: Loading) => {
-                  const startDate = new Date(loading.startDate)
-                  const endDate = new Date(loading.endDate)
-                  const currentDate = new Date(startDate)
+                  // loading.startDate и loading.endDate уже Date объекты (парсены через parseMinskDate)
+                  const currentDate = new Date(loading.startDate)
 
-                  while (currentDate <= endDate) {
-                    const dateKey = currentDate.toISOString().split("T")[0]
+                  while (currentDate <= loading.endDate) {
+                    // ✅ Форматируем дату в часовом поясе Минска
+                    const dateKey = formatMinskDate(currentDate)
                     if (!employee.dailyWorkloads[dateKey]) {
                       employee.dailyWorkloads[dateKey] = 0
                     }
@@ -848,12 +845,12 @@ export const usePlanningStore = create<PlanningState>()(
                   }
                   const daily = teamShortageDaily.get(teamKey)!
 
-                  // Разворачиваем период в дни
-                  const start = new Date(row.loading_start as string)
-                  const finish = new Date(row.loading_finish as string)
+                  // ✅ Разворачиваем период в дни (парсим даты в часовом поясе Минска)
+                  const start = parseMinskDate(row.loading_start as string)
+                  const finish = parseMinskDate(row.loading_finish as string)
                   const cur = new Date(start)
                   while (cur <= finish) {
-                    const dateKey = cur.toISOString().split("T")[0]
+                    const dateKey = formatMinskDate(cur)
                     daily[dateKey] = (daily[dateKey] || 0) + (Number(row.loading_rate) || 0)
                     cur.setDate(cur.getDate() + 1)
                   }
@@ -865,8 +862,9 @@ export const usePlanningStore = create<PlanningState>()(
                   const loadingItem: Loading = {
                     id: (row as any).loading_id,
                     sectionId: (row as any).loading_section,
-                    startDate: new Date(row.loading_start as string),
-                    endDate: new Date(row.loading_finish as string),
+                    // ✅ Парсим даты в часовом поясе Минска
+                    startDate: parseMinskDate(row.loading_start as string),
+                    endDate: parseMinskDate(row.loading_finish as string),
                     rate: Number(row.loading_rate) || 0,
                     stageId: "",
                     createdAt: new Date(),
@@ -1131,8 +1129,9 @@ export const usePlanningStore = create<PlanningState>()(
             const apiData = {
               responsibleId: loadingData.responsibleId,
               sectionId: loadingData.sectionId,
-              startDate: loadingData.startDate.toISOString().split("T")[0],
-              endDate: loadingData.endDate.toISOString().split("T")[0],
+              // ✅ Форматируем даты в часовом поясе Минска
+              startDate: formatMinskDate(loadingData.startDate),
+              endDate: formatMinskDate(loadingData.endDate),
               rate: loadingData.rate,
               stageId: loadingData.stageId,
               comment: loadingData.comment || undefined,
@@ -2720,8 +2719,9 @@ export const usePlanningStore = create<PlanningState>()(
                   sectionName: item.section_name,
                   stageId: stageId,
                   stageName: item.stage_name || undefined,
-                  startDate: new Date(item.loading_start),
-                  endDate: new Date(item.loading_finish),
+                  // ✅ Парсим даты в часовом поясе Минска
+                  startDate: parseMinskDate(item.loading_start),
+                  endDate: parseMinskDate(item.loading_finish),
                   rate: item.loading_rate || 1,
                   comment: item.loading_comment || undefined,
                 })
@@ -2733,12 +2733,12 @@ export const usePlanningStore = create<PlanningState>()(
               employee.dailyWorkloads = {}
               if (employee.loadings && employee.loadings.length > 0) {
                 employee.loadings.forEach((loading: Loading) => {
-                  const startDate = new Date(loading.startDate)
-                  const endDate = new Date(loading.endDate)
-                  const currentDate = new Date(startDate)
+                  // loading.startDate и loading.endDate уже Date объекты (парсены через parseMinskDate)
+                  const currentDate = new Date(loading.startDate)
 
-                  while (currentDate <= endDate) {
-                    const dateKey = currentDate.toISOString().split("T")[0]
+                  while (currentDate <= loading.endDate) {
+                    // ✅ Форматируем дату в часовом поясе Минска
+                    const dateKey = formatMinskDate(currentDate)
                     if (!employee.dailyWorkloads[dateKey]) {
                       employee.dailyWorkloads[dateKey] = 0
                     }

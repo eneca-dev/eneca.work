@@ -168,5 +168,8 @@ export {
   type TemplateSaveModalProps,
 } from './components/templates'
 
+// Project Report
+export { ProjectReportModal, type ProjectReportModalProps } from './components/project-report/ProjectReportModal'
+
 // Global
 // export { GlobalModals } from './components/GlobalModals'

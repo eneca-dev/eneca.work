@@ -1,8 +1,9 @@
-import { create } from "zustand" 
+import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import { supabase } from "@/lib/supabase-client"
 import type { Department, Employee, Team } from "../types"
 import { formatDateToLocalString } from "../utils/section-utils"
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 interface WorkloadState {
   // Данные
@@ -101,8 +102,9 @@ export const useWorkloadStore = create<WorkloadState>()(
                   projectId: item.project_id,
                   projectName: item.project_name,
                   projectStatus: item.project_status,
-                  startDate: new Date(item.loading_start),
-                  endDate: new Date(item.loading_finish),
+                  // ✅ Парсим даты в часовом поясе Минска
+                  startDate: parseMinskDate(item.loading_start),
+                  endDate: parseMinskDate(item.loading_finish),
                   rate: item.loading_rate || 1,
                   createdAt: new Date(),
                   updatedAt: new Date(),

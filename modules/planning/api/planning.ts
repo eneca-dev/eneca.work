@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs"
 import { supabase, type SectionHierarchy } from "@/lib/supabase-client"
 import type { Loading } from "../types"
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[]> {
   return Sentry.startSpan(
@@ -185,8 +186,9 @@ export async function fetchSectionLoadings(sectionId: string): Promise<Loading[]
             responsibleName: profile ? `${profile.first_name} ${profile.last_name}` : "Не указан",
             sectionId: item.loading_section,
             stageId: item.loading_stage ?? null,
-            startDate: new Date(item.loading_start),
-            endDate: new Date(item.loading_finish),
+            // ✅ Парсим даты в часовом поясе Минска
+            startDate: parseMinskDate(item.loading_start),
+            endDate: parseMinskDate(item.loading_finish),
             rate: item.loading_rate || 1,
             createdAt: item.loading_created ? new Date(item.loading_created) : new Date(),
             updatedAt: item.loading_updated ? new Date(item.loading_updated) : new Date(),
