@@ -22,10 +22,14 @@ modules/cache/
 ├── hooks/
 │   ├── index.ts                # Экспорты хуков
 │   ├── use-cache-query.ts      # Фабрики для queries
-│   └── use-cache-mutation.ts   # Фабрики для mutations
+│   ├── use-cache-mutation.ts   # Фабрики для mutations
+│   ├── use-users.ts            # Хуки для пользователей
+│   └── use-work-categories.ts  # Хуки для категорий работ
 ├── actions/
 │   ├── base.ts                 # safeAction wrapper
-│   └── projects.ts             # Server Actions для проектов
+│   ├── projects.ts             # Server Actions для проектов
+│   ├── users.ts                # Server Actions для пользователей
+│   └── work-categories.ts      # Server Actions для категорий
 ├── realtime/
 │   ├── config.ts               # Таблицы → Query Keys
 │   ├── realtime-sync.tsx       # Компонент синхронизации
@@ -60,6 +64,13 @@ export interface Item {
 export async function getItems(): Promise<ActionResult<Item[]>> {
   try {
     const supabase = await createClient()
+
+    // Auth check (обязательно!)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { data, error } = await supabase.from('items').select('*')
 
     if (error) return { success: false, error: error.message }
@@ -74,6 +85,13 @@ export async function updateItem(
 ): Promise<ActionResult<Item>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { data, error } = await supabase
       .from('items')
       .update({ name: input.name })
@@ -303,9 +321,45 @@ const staleTimePresets = {
   static: 10 * 60 * 1000,   // 10 мин — справочники
   slow: 5 * 60 * 1000,      // 5 мин — профили, настройки
   medium: 3 * 60 * 1000,    // 3 мин — проекты (default)
-  fast: 2 * 60 * 1000,      // 2 мин — разделы
+  fast: 2 * 60 * 1000,      // 2 мин — разделы, декомпозиция
   realtime: 1 * 60 * 1000,  // 1 мин — загрузки
   none: 0,                   // 0 — уведомления
+}
+```
+
+---
+
+## Query Keys
+
+Все query keys определены централизованно в `keys/query-keys.ts`:
+
+```typescript
+export const queryKeys = {
+  users: { all, lists, list, details, detail, current, permissions },
+  employees: { all, list, detail },
+  projects: { all, lists, list, details, detail, statistics, hierarchy, favorites },
+  sections: { all, lists, list, details, detail, hierarchy, decomposition, readinessCheckpoints },
+  loadings: { all, lists, list, details, detail, byEmployee, bySection },
+  departments: { all, list, detail },
+  teams: { all, list, detail },
+  positions: { all, list },
+  categories: { all, list },
+  workCategories: { all, list },
+  difficultyLevels: { all, list },
+  stageStatuses: { all, list },
+  decomposition: { all, bootstrap, stages, items, workLogs },
+  notifications: { all, lists, list, infinite, unreadCount, typeCounts },
+  calendar: { all, events, global },
+  resourceGraph: { all, lists, list, user, workLogs, loadings, stageReadiness, stageReports, stageResponsibles },
+  budgets: { all, lists, list, details, detail, versions, byEntity, sectionSummary },
+  budgetTags: { all, list, detail },
+  checkpoints: { all, lists, list, details, detail, audit, bySection, byProject },
+  checkpointTypes: { all, list, details, detail },
+  kanban: { all, lists, list, infinite, details, detail },
+  sectionStatuses: { all, list },
+  filterStructure: { all, org, project, tags },
+  projectTags: { all, list, map },
+  companyCalendar: { all, events },
 }
 ```
 
@@ -325,16 +379,30 @@ Realtime синхронизация включена по умолчанию в 
 
 | Таблица | Инвалидируемые ключи |
 |---------|---------------------|
-| projects | `queryKeys.projects.all` |
-| stages | `queryKeys.projects.all` |
-| objects | `queryKeys.projects.all` |
-| sections | `queryKeys.sections.all`, `queryKeys.projects.all` |
-| profiles | `queryKeys.users.all` |
-| loadings | `queryKeys.loadings.all`, `queryKeys.sections.all` |
-| departments | `queryKeys.departments.all` |
-| teams | `queryKeys.teams.all` |
-| clients | `queryKeys.projects.all` |
-| notifications | `queryKeys.notifications.all` |
+| `projects` | `projects.all` |
+| `stages` | `projects.all` |
+| `objects` | `projects.all` |
+| `sections` | `sections.all`, `projects.all`, `resourceGraph.all` |
+| `profiles` | `users.all` |
+| `loadings` | `loadings.all`, `resourceGraph.all` (workLogs) |
+| `decomposition_stages` | `decomposition.all`, `sections.all`, `resourceGraph.all`, `kanban.all` |
+| `decomposition_items` | `decomposition.all`, `sections.all`, `resourceGraph.all`, `kanban.all` |
+| `section_readiness_checkpoints` | `resourceGraph.all` |
+| `section_readiness_snapshots` | `resourceGraph.all` |
+| `work_logs` | `resourceGraph.all` (workLogs) |
+| `project_reports` | `resourceGraph.all` (stageReports) |
+| `budgets` | `resourceGraph.all` |
+| `budget_versions` | `resourceGraph.all` |
+| `section_statuses` | `sectionStatuses.all`, `sections.all`, `resourceGraph.all` |
+| `departments` | `departments.all` |
+| `teams` | `teams.all` |
+| `clients` | `projects.all` |
+| `notifications` | `notifications.all` |
+| `user_notifications` | `notifications.all` |
+| `section_checkpoints` | `checkpoints.all`, `sections.all`, `resourceGraph.all` |
+| `checkpoint_section_links` | `checkpoints.all` |
+| `checkpoint_audit` | `checkpoints.all` (INSERT only) |
+| `checkpoint_types` | `checkpointTypes.all`, `checkpoints.all` |
 
 ### Добавление новой таблицы
 
@@ -416,11 +484,30 @@ export async function getItems(): Promise<ActionResult<Item[]>> {
 }
 ```
 
+### Hardcoded query keys
+
+**Никогда** не используйте строковые массивы напрямую:
+
+```typescript
+// ❌ Плохо
+queryKey: ['employees', 'list']
+
+// ✅ Хорошо
+queryKey: () => queryKeys.employees.list()
+```
+
 ---
 
 ## Changelog
 
-### v0.2.0 (текущая)
+### v0.3.0 (текущая)
+
+- [x] Query keys для employees, decomposition, sectionStatuses
+- [x] Realtime подписки для декомпозиции и статусов
+- [x] Документация по auth checks в Server Actions
+- [x] Расширенная таблица realtime subscriptions
+
+### v0.2.0
 
 - [x] Hook Factories (createCacheQuery, createCacheMutation, etc.)
 - [x] Realtime синхронизация с debounce

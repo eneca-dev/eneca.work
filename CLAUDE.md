@@ -502,6 +502,11 @@ When migrating modules to use cache:
 - No i18n library used
 - Date formatting with `date-fns`
 
+### Currency
+- **Single currency: BYN** (Belarusian ruble)
+- Format: `1.2M BYN`, `123K BYN`, `999 BYN`
+- Never use ₽ (Russian ruble) or other currency symbols
+
 ### Theme System
 - Next-themes for dark/light mode
 - Custom primary color: `#1e7260` (teal/green)

@@ -41,6 +41,8 @@ export const useCreateDecompositionItem = createCacheMutation<CreateItemInput, I
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ].filter(Boolean) as readonly unknown[][],
 })
 
@@ -64,6 +66,8 @@ export const useUpdateDecompositionItem = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ].filter(Boolean) as readonly unknown[][],
 })
 
@@ -88,6 +92,8 @@ export const useDeleteDecompositionItem = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -110,6 +116,8 @@ export const useMoveDecompositionItems = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -132,6 +140,8 @@ export const useReorderDecompositionItems = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -154,6 +164,8 @@ export const useBulkCreateDecompositionItems = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -176,5 +188,7 @@ export const useBulkDeleteDecompositionItems = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })

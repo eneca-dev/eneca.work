@@ -6,7 +6,7 @@ import { GlobalNotification } from "@/components/ui/notification";
 import { NoSSR } from "@/components/NoSSR";
 import { UserPermissionsSyncProvider } from "@/modules/permissions";
 import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
-import { QueryProvider, RealtimeSync } from "@/modules/cache";
+import { QueryProvider, RealtimeSync, ReferencePrefetch } from "@/modules/cache";
 
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
@@ -15,6 +15,7 @@ export default function ClientProviders({ children }: { children: React.ReactNod
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         <NoSSR>
           <RealtimeSync />
+          <ReferencePrefetch />
           <UserPermissionsSyncProvider>
             <FeedbackProvider>
               <ThemeSync />

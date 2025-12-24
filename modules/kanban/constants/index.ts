@@ -1,49 +1,49 @@
 import type { KanbanColumn, StageStatus, SectionStatus } from '../types'
 
 // Колонки доски (статусы этапов)
-// Тепловая карта: от холодных к горячим (активным) и остывают к финишу
+// Семантически понятная цветовая схема для лучшей различимости
 export const KANBAN_COLUMNS: KanbanColumn[] = [
   {
     id: 'backlog',
     title: 'Бэклог',
-    color: 'text-slate-600 dark:text-slate-400',
-    bgColor: 'bg-slate-100 dark:bg-slate-900/50',
-    borderColor: 'border-slate-200 dark:border-slate-700',
+    color: 'text-gray-500 dark:text-gray-400',
+    bgColor: 'bg-gray-100 dark:bg-gray-800/50',
+    borderColor: 'border-gray-200 dark:border-gray-700',
   },
   {
     id: 'planned',
     title: 'План',
-    color: 'text-teal-600 dark:text-teal-400',
-    bgColor: 'bg-teal-50 dark:bg-teal-900/30',
-    borderColor: 'border-teal-200 dark:border-teal-800',
+    color: 'text-violet-600 dark:text-violet-400',
+    bgColor: 'bg-violet-50 dark:bg-violet-900/30',
+    borderColor: 'border-violet-200 dark:border-violet-800',
   },
   {
     id: 'in_progress',
     title: 'В работе',
-    color: 'text-orange-600 dark:text-orange-400',
-    bgColor: 'bg-orange-50 dark:bg-orange-900/30',
-    borderColor: 'border-orange-200 dark:border-orange-800',
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/30',
+    borderColor: 'border-blue-200 dark:border-blue-800',
   },
   {
     id: 'paused',
     title: 'Пауза',
-    color: 'text-stone-600 dark:text-stone-400',
-    bgColor: 'bg-stone-100 dark:bg-stone-900/50',
-    borderColor: 'border-stone-200 dark:border-stone-700',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/30',
+    borderColor: 'border-amber-200 dark:border-amber-800',
   },
   {
     id: 'review',
     title: 'Проверка',
-    color: 'text-indigo-600 dark:text-indigo-400',
-    bgColor: 'bg-indigo-50 dark:bg-indigo-900/30',
-    borderColor: 'border-indigo-200 dark:border-indigo-800',
+    color: 'text-pink-600 dark:text-pink-400',
+    bgColor: 'bg-pink-50 dark:bg-pink-900/30',
+    borderColor: 'border-pink-200 dark:border-pink-800',
   },
   {
     id: 'done',
     title: 'Готово',
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
-    borderColor: 'border-emerald-200 dark:border-emerald-800',
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-50 dark:bg-green-900/30',
+    borderColor: 'border-green-200 dark:border-green-800',
   },
 ]
 

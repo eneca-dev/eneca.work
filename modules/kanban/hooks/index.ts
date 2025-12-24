@@ -125,6 +125,7 @@ export { useStageStatuses } from './useStageStatuses'
 
 import { useMutation, type InfiniteData } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
+import { flushSync } from 'react-dom'
 import { updateStageStatus, updateTaskProgress } from '../actions'
 import type { StageStatus } from '../types'
 
@@ -181,40 +182,44 @@ export function useUpdateStageStatusOptimistic(
         InfiniteData<KanbanSection[]>
       >(infiniteQueryKey)
 
-      // Оптимистично обновляем кеш infinite query
+      // КРИТИЧНО: Используем flushSync для СИНХРОННОГО обновления кеша и ререндера
+      // Это гарантирует, что карточка переместится в новую колонку ДО того,
+      // как handleDragEnd вызовет setActiveCard(null)
       if (previousData) {
-        queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
-          infiniteQueryKey,
-          (old) => {
-            if (!old) return old
+        flushSync(() => {
+          queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
+            infiniteQueryKey,
+            (old) => {
+              if (!old) return old
 
-            // Обновляем каждую страницу
-            const newPages = old.pages.map((page) =>
-              page.map((section) => {
-                // Находим нужный section
-                if (section.id !== input.sectionId) return section
+              // Обновляем каждую страницу
+              const newPages = old.pages.map((page) =>
+                page.map((section) => {
+                  // Находим нужный section
+                  if (section.id !== input.sectionId) return section
 
-                // Обновляем stages в этом section
-                return {
-                  ...section,
-                  stages: section.stages.map((stage) => {
-                    if (stage.id !== input.stageId) return stage
-                    // Обновляем статус этапа
-                    return {
-                      ...stage,
-                      status: input.newStatus,
-                    }
-                  }),
-                }
-              })
-            )
+                  // Обновляем stages в этом section
+                  return {
+                    ...section,
+                    stages: section.stages.map((stage) => {
+                      if (stage.id !== input.stageId) return stage
+                      // Обновляем статус этапа
+                      return {
+                        ...stage,
+                        status: input.newStatus,
+                      }
+                    }),
+                  }
+                })
+              )
 
-            return {
-              ...old,
-              pages: newPages,
+              return {
+                ...old,
+                pages: newPages,
+              }
             }
-          }
-        )
+          )
+        })
       }
 
       // Возвращаем контекст для отката при ошибке
@@ -226,7 +231,10 @@ export function useUpdateStageStatusOptimistic(
       console.error('[useUpdateStageStatusOptimistic] Error:', error)
 
       if (context?.previousData) {
-        queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+        // КРИТИЧНО: Откат тоже должен быть синхронным (как и оптимистичное обновление)
+        flushSync(() => {
+          queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+        })
       }
     },
 
@@ -272,49 +280,52 @@ export function useUpdateTaskProgressOptimistic(
       >(infiniteQueryKey)
 
       if (previousData) {
-        queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
-          infiniteQueryKey,
-          (old) => {
-            if (!old) return old
+        // КРИТИЧНО: Используем flushSync для синхронного обновления progress
+        flushSync(() => {
+          queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
+            infiniteQueryKey,
+            (old) => {
+              if (!old) return old
 
-            const newPages = old.pages.map((page) =>
-              page.map((section) => {
-                if (section.id !== input.sectionId) return section
+              const newPages = old.pages.map((page) =>
+                page.map((section) => {
+                  if (section.id !== input.sectionId) return section
 
-                return {
-                  ...section,
-                  stages: section.stages.map((stage) => {
-                    if (stage.id !== input.stageId) return stage
+                  return {
+                    ...section,
+                    stages: section.stages.map((stage) => {
+                      if (stage.id !== input.stageId) return stage
 
-                    // Обновляем progress у задачи
-                    const newTasks = stage.tasks.map((task) => {
-                      if (task.id !== input.taskId) return task
-                      return { ...task, progress: input.progress }
-                    })
+                      // Обновляем progress у задачи
+                      const newTasks = stage.tasks.map((task) => {
+                        if (task.id !== input.taskId) return task
+                        return { ...task, progress: input.progress }
+                      })
 
-                    // Пересчитываем progress этапа
-                    const totalProgress = newTasks.reduce(
-                      (sum, t) => sum + t.progress,
-                      0
-                    )
-                    const avgProgress =
-                      newTasks.length > 0
-                        ? Math.round(totalProgress / newTasks.length)
-                        : 0
+                      // Пересчитываем progress этапа
+                      const totalProgress = newTasks.reduce(
+                        (sum, t) => sum + t.progress,
+                        0
+                      )
+                      const avgProgress =
+                        newTasks.length > 0
+                          ? Math.round(totalProgress / newTasks.length)
+                          : 0
 
-                    return {
-                      ...stage,
-                      tasks: newTasks,
-                      progress: avgProgress,
-                    }
-                  }),
-                }
-              })
-            )
+                      return {
+                        ...stage,
+                        tasks: newTasks,
+                        progress: avgProgress,
+                      }
+                    }),
+                  }
+                })
+              )
 
-            return { ...old, pages: newPages }
-          }
-        )
+              return { ...old, pages: newPages }
+            }
+          )
+        })
       }
 
       return { previousData, infiniteQueryKey }
@@ -323,7 +334,10 @@ export function useUpdateTaskProgressOptimistic(
     onError: (error, _input, context) => {
       console.error('[useUpdateTaskProgressOptimistic] Error:', error)
       if (context?.previousData) {
-        queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+        // КРИТИЧНО: Откат тоже должен быть синхронным
+        flushSync(() => {
+          queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+        })
       }
     },
 

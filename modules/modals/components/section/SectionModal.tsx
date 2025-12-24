@@ -58,6 +58,7 @@ type SectionFormData = z.infer<typeof sectionFormSchema>
 export interface SectionModalProps extends BaseModalProps {
   section: Section
   sectionId: string
+  initialTab?: 'overview' | 'tasks' | 'readiness'
 }
 
 // ============================================================================
@@ -70,6 +71,7 @@ export function SectionModal({
   onSuccess,
   section,
   sectionId,
+  initialTab = 'overview',
 }: SectionModalProps) {
   // ─────────────────────────────────────────────────────────────────────────
   // Animation state
@@ -146,18 +148,20 @@ export function SectionModal({
   const [editingName, setEditingName] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
 
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab)
+    }
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
-      setActiveTab('overview')
     }
-  }, [isOpen])
+  }, [isOpen, initialTab])
 
   // Focus name input when editing starts
   useEffect(() => {

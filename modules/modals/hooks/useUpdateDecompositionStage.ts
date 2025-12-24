@@ -37,6 +37,8 @@ export const useCreateDecompositionStage = createCacheMutation<CreateStageInput,
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -60,6 +62,8 @@ export const useUpdateDecompositionStage = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -84,6 +88,8 @@ export const useDeleteDecompositionStage = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })
 
@@ -106,5 +112,7 @@ export const useReorderDecompositionStages = createCacheMutation<
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Kanban - для обновления канбан-доски
+    queryKeys.kanban.all,
   ],
 })

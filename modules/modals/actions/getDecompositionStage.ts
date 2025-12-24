@@ -19,6 +19,41 @@ export interface DecompositionItem {
   progress: number
 }
 
+// Raw types from RPC (database column names)
+interface RawStage {
+  decomposition_stage_id: string
+  decomposition_stage_name: string
+  decomposition_stage_start: string | null
+  decomposition_stage_finish: string | null
+  decomposition_stage_description: string | null
+  decomposition_stage_status_id: string | null
+  decomposition_stage_responsibles: string[] | null
+}
+
+interface RawItem {
+  decomposition_item_id: string
+  decomposition_item_stage_id: string | null
+  decomposition_item_description: string | null
+  decomposition_item_work_category_id: string | null
+  decomposition_item_difficulty_id: string | null
+  decomposition_item_planned_hours: number | null
+  decomposition_item_progress: number | null
+}
+
+interface DecompositionBootstrapRpcResponse {
+  categories: WorkCategory[]
+  difficultyLevels: DifficultyLevel[]
+  statuses: StageStatus[]
+  profiles: Profile[]
+  stages: RawStage[]
+  items: RawItem[]
+}
+
+interface WorkLogsAggRow {
+  decomposition_item_id: string
+  actual_hours: number | null
+}
+
 export interface DecompositionStage {
   id: string
   name: string
@@ -81,17 +116,14 @@ export async function getDecompositionBootstrap(
       return { success: false, error: error.message }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const json = data as any
+    const json = data as DecompositionBootstrapRpcResponse | null
 
     const categories: WorkCategory[] = json?.categories || []
     const difficulties: DifficultyLevel[] = json?.difficultyLevels || []
     const statuses: StageStatus[] = json?.statuses || []
     const profiles: Profile[] = json?.profiles || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stagesRaw = (json?.stages || []) as any[]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const itemsRaw = (json?.items || []) as any[]
+    const stagesRaw: RawStage[] = json?.stages || []
+    const itemsRaw: RawItem[] = json?.items || []
 
     // Build stages with decomposition items
     const stageMap = new Map<string, DecompositionStage>()
@@ -128,10 +160,8 @@ export async function getDecompositionBootstrap(
       const stage = stageMap.get(stageId)
       if (!stage) return
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const category = categories.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const difficulty = difficulties.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)
+      const category = categories.find((c) => c.work_category_id === it.decomposition_item_work_category_id)
+      const difficulty = difficulties.find((d) => d.difficulty_id === it.decomposition_item_difficulty_id)
 
       const decomp: DecompositionItem = {
         id: it.decomposition_item_id,
@@ -225,10 +255,9 @@ export async function getWorkLogsAggregate(
     }
 
     const hoursById: Record<string, number> = {}
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const row of (data as any[]) || []) {
-      const key = row.decomposition_item_id as string
-      hoursById[key] = Number(row.actual_hours || 0)
+    const rows = (data as WorkLogsAggRow[] | null) || []
+    for (const row of rows) {
+      hoursById[row.decomposition_item_id] = Number(row.actual_hours || 0)
     }
 
     return { success: true, data: hoursById }

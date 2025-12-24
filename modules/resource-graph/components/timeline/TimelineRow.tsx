@@ -169,7 +169,7 @@ function BaseRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           depth === 0 && 'bg-muted/20'
         )}
         style={{ height, minWidth: totalWidth }}
@@ -398,7 +398,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        className="flex border-b border-border/50 group"
         style={{ height: ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
@@ -413,7 +413,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
           <div className="w-5 shrink-0" />
 
           {/* Progress Circle - кликабельный для редактирования */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -467,7 +467,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
           </div>
 
           {/* Кнопка добавления отчёта */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -540,12 +540,12 @@ function formatHoursCompact(hours: number): string {
  */
 function formatBudgetAmount(amount: number): string {
   if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}M ₽`
+    return `${(amount / 1_000_000).toFixed(1)}M BYN`
   }
   if (amount >= 1_000) {
-    return `${Math.round(amount / 1_000)}K ₽`
+    return `${Math.round(amount / 1_000)}K BYN`
   }
-  return `${Math.round(amount)} ₽`
+  return `${Math.round(amount)} BYN`
 }
 
 // ============================================================================
@@ -732,7 +732,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           // Завершённые этапы — полупрозрачные и серые
           isCompleted && 'opacity-50 grayscale-[30%]'
         )}
@@ -790,7 +790,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
                 />
                 {/* Прирост за сегодня */}
                 {todayDelta !== null && todayDelta !== 0 && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
@@ -1245,7 +1245,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        className="flex border-b border-border/50 group"
         style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}
@@ -1279,7 +1279,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             )}
 
             {/* Кнопка добавления чекпоинта (появляется при hover) */}
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -1303,7 +1303,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             </TooltipProvider>
 
             {/* Avatar вместо иконки */}
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar className="w-5 h-5 shrink-0">
@@ -1357,7 +1357,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
               <div className="flex items-center gap-1.5 ml-auto">
                 {/* План (зелёный) */}
                 {todayIndicators.planned !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-emerald-500">
@@ -1372,7 +1372,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
                 )}
                 {/* Факт (синий) */}
                 {todayIndicators.actual !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-blue-500">
@@ -1397,7 +1397,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
                 )}
                 {/* Бюджет (оранжевый/красный) */}
                 {todayIndicators.budget !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span

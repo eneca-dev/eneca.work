@@ -330,7 +330,7 @@ export function BudgetCreateModal({
                         disabled={isCreating}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
-                        ₽
+                        BYN
                       </span>
                     </div>
                   </div>

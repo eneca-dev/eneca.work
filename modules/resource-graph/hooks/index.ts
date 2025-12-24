@@ -20,6 +20,7 @@ import {
   getResourceGraphData,
   getUserWorkload,
   getProjectTags,
+  getProjectTagsMap,
   getCompanyCalendarEvents,
   getWorkLogsForSection,
   getLoadingsForSection,
@@ -35,6 +36,7 @@ import {
   createLoading as createLoadingAction,
   updateLoading as updateLoadingAction,
   deleteLoading as deleteLoadingAction,
+  deleteDecompositionItem as deleteDecompositionItemAction,
 } from '../actions'
 
 import type {
@@ -102,8 +104,26 @@ export const useUserWorkload = createDetailCacheQuery<Project[]>({
  * const { data: tags, isLoading } = useTagOptions()
  */
 export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
-  queryKey: ['project-tags', 'list'],
+  queryKey: queryKeys.projectTags.list(),
   queryFn: getProjectTags,
+  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+})
+
+/**
+ * Хук для получения тегов всех проектов пакетом
+ *
+ * Возвращает Record<projectId, tags[]> для эффективного доступа
+ * к тегам каждого проекта в sidebar timeline.
+ *
+ * Оптимизация: один запрос вместо N запросов на каждый проект.
+ *
+ * @example
+ * const { data: tagsMap, isLoading } = useProjectTagsMap()
+ * const projectTags = tagsMap?.[project.id] || []
+ */
+export const useProjectTagsMap = createSimpleCacheQuery<Record<string, ProjectTag[]>>({
+  queryKey: queryKeys.projectTags.map(),
+  queryFn: getProjectTagsMap,
   staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
 })
 
@@ -116,7 +136,7 @@ export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
  * const { data: events, isLoading } = useCompanyCalendarEvents()
  */
 export const useCompanyCalendarEvents = createSimpleCacheQuery<CompanyCalendarEvent[]>({
-  queryKey: ['company-calendar-events', 'list'],
+  queryKey: queryKeys.companyCalendar.events(),
   queryFn: getCompanyCalendarEvents,
   staleTime: staleTimePresets.eternal, // 24 часа - праздники практически не меняются
 })
@@ -665,6 +685,38 @@ export const useDeleteLoading = createCacheMutation<
       return deleteLoadingFromCache(oldData as Loading[] | undefined, input.loadingId)
     },
   },
+})
+
+// ============================================================================
+// Decomposition Item Mutation Hooks
+// ============================================================================
+
+/**
+ * Тип входных данных для удаления задачи
+ */
+interface DeleteDecompositionItemInput {
+  itemId: string
+  sectionId: string // Нужен для инвалидации кеша work_logs
+}
+
+/**
+ * Мутация для удаления задачи с каскадным удалением отчётов
+ *
+ * @example
+ * const mutation = useDeleteDecompositionItem()
+ * mutation.mutate({ itemId: 'xxx', sectionId: 'yyy' })
+ */
+export const useDeleteDecompositionItem = createCacheMutation<
+  DeleteDecompositionItemInput,
+  { itemId: string }
+>({
+  mutationFn: ({ itemId }) => deleteDecompositionItemAction(itemId),
+
+  // Инвалидируем все связанные кеши
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.all, // Основные данные графика
+    queryKeys.resourceGraph.workLogs(input.sectionId), // Отчёты раздела
+  ],
 })
 
 // ============================================================================

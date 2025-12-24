@@ -6,6 +6,7 @@ import type { Stage, TimelineRange } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { BaseRow } from './BaseRow'
 import { ObjectRow } from './ObjectRow'
+import { ProjectReportsRow } from '../ProjectReportsRow'
 
 // ============================================================================
 // Stage Row
@@ -22,7 +23,8 @@ interface StageRowProps {
  */
 export function StageRow({ stage, dayCells, range }: StageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const hasChildren = stage.objects.length > 0
+  // Всегда показываем кнопку развёртывания для стадий (отчёты могут быть даже без объектов)
+  const hasChildren = true
 
   return (
     <BaseRow
@@ -35,6 +37,16 @@ export function StageRow({ stage, dayCells, range }: StageRowProps) {
       dayCells={dayCells}
       range={range}
     >
+      {/* Stage Reports Row */}
+      <ProjectReportsRow
+        stageId={stage.id}
+        stageName={stage.name}
+        dayCells={dayCells}
+        depth={2}
+        range={range}
+      />
+
+      {/* Objects */}
       {stage.objects.map((obj) => (
         <ObjectRow
           key={obj.id}

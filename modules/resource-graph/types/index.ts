@@ -271,6 +271,8 @@ export interface Project {
     lastName: string | null
     name: string | null
   }
+  /** Теги проекта (загружаются отдельно через useProjectTagsMap) */
+  tags?: ProjectTag[]
   stages: Stage[]
 }
 

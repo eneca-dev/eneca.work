@@ -1,16 +1,6 @@
 'use client'
 
 import { useCallback, useState, useMemo } from 'react'
-import {
-  DndContext,
-  DragOverlay,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
-} from '@dnd-kit/core'
 import { Loader2, LayoutGrid, AlertCircle, Database, ChevronDown } from 'lucide-react'
 import { InlineFilter, type FilterOption } from '@/modules/inline-filter'
 import { useKanbanFiltersStore, KANBAN_FILTER_CONFIG } from '../stores'
@@ -19,7 +9,6 @@ import { useKanbanSectionsInfinite, useStageStatuses, useUpdateStageStatusOptimi
 import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanSwimlane } from './KanbanSwimlane'
-import { KanbanCard } from './KanbanCard'
 
 // ============================================================================
 // Local View State
@@ -84,9 +73,10 @@ export function KanbanBoard() {
     collapsedSections: [],
   })
 
-  const [activeCard, setActiveCard] = useState<{
-    stage: KanbanStage
-    section: KanbanSection
+  // HTML5 Drag and Drop state
+  const [draggedCard, setDraggedCard] = useState<{
+    stageId: string
+    sectionId: string
   } | null>(null)
 
   // Build board from sections
@@ -114,51 +104,72 @@ export function KanbanBoard() {
     }))
   }, [])
 
-  // DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  )
+  // ============================================================================
+  // HTML5 Drag and Drop Handlers
+  // ============================================================================
 
-  // Handle drag start
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const { stage, section } = event.active.data.current as {
-      stage: KanbanStage
-      section: KanbanSection
+  // Handle drag start - сохраняем информацию о перетаскиваемой карточке
+  const handleDragStart = useCallback((stageId: string, sectionId: string, e: React.DragEvent) => {
+    setDraggedCard({ stageId, sectionId })
+
+    // Настраиваем нативное drag событие
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', JSON.stringify({ stageId, sectionId }))
+
+    // Устанавливаем прозрачность для ghost image
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0)
     }
-    setActiveCard({ stage, section })
   }, [])
 
-  // Handle drag end
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      setActiveCard(null)
+  // Handle drag over - разрешаем drop только в пределах того же section
+  const handleDragOver = useCallback((targetSectionId: string, e: React.DragEvent) => {
+    e.preventDefault()
 
-      const { active, over } = event
-      if (!over) return
+    if (!draggedCard) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
 
-      // Parse IDs: format is "sectionId:stageId" for active, "sectionId:status" for over
-      const [activeSectionId, activeStageId] = (active.id as string).split(':')
-      const [overSectionId, overStatus] = (over.id as string).split(':')
+    // Запрещаем drop в другой section
+    if (draggedCard.sectionId !== targetSectionId) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
 
-      // Only allow drops within the same section
-      if (activeSectionId !== overSectionId) return
+    e.dataTransfer.dropEffect = 'move'
+  }, [draggedCard])
 
-      // Оптимистичное обновление статуса этапа:
-      // 1. UI обновится мгновенно
-      // 2. Запрос пойдёт на сервер в фоне
-      // 3. При ошибке - автоматический откат
-      updateStatus({
-        stageId: activeStageId,
-        sectionId: activeSectionId,
-        newStatus: overStatus as StageStatus,
-      })
-    },
-    [updateStatus]
-  )
+  // Handle drop - обновляем статус карточки
+  const handleDrop = useCallback((targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => {
+    e.preventDefault()
+
+    if (!draggedCard) return
+
+    // Проверяем, что drop в том же section
+    if (draggedCard.sectionId !== targetSectionId) {
+      setDraggedCard(null)
+      return
+    }
+
+    // Оптимистичное обновление статуса:
+    // 1. updateStatus вызывает onMutate с flushSync - кеш обновляется синхронно
+    // 2. React ререндерит компоненты с новым состоянием
+    // 3. Карточка моментально появляется в новой колонке
+    // 4. Запрос идёт на сервер в фоне, при ошибке - автоматический откат
+    updateStatus({
+      stageId: draggedCard.stageId,
+      sectionId: draggedCard.sectionId,
+      newStatus: targetStatus,
+    })
+
+    setDraggedCard(null)
+  }, [draggedCard, updateStatus])
+
+  // Handle drag end - очищаем состояние если drop не произошёл
+  const handleDragEnd = useCallback(() => {
+    setDraggedCard(null)
+  }, [])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -275,58 +286,44 @@ export function KanbanBoard() {
       <KanbanHeader statuses={statuses} />
 
       {/* Swimlanes */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-          {sectionsToShow.map((section) => (
-            <KanbanSwimlane
-              key={section.id}
-              section={section}
-              isCollapsed={viewSettings.collapsedSections.includes(section.id)}
-              onToggleCollapse={() => toggleSectionCollapse(section.id)}
-            />
-          ))}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
+        {sectionsToShow.map((section) => (
+          <KanbanSwimlane
+            key={section.id}
+            section={section}
+            isCollapsed={viewSettings.collapsedSections.includes(section.id)}
+            onToggleCollapse={() => toggleSectionCollapse(section.id)}
+            draggedCard={draggedCard}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+          />
+        ))}
 
-          {/* Load More Button */}
-          {hasNextPage && (
-            <div className="flex justify-center py-4 border-t bg-card/50">
-              <button
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                {isFetchingNextPage ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Загрузка...
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-4 w-4" />
-                    Загрузить ещё
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Drag Overlay */}
-        <DragOverlay>
-          {activeCard && (
-            <div className="opacity-90 rotate-2 scale-105">
-              <KanbanCard
-                stage={activeCard.stage}
-                section={activeCard.section}
-              />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+        {/* Load More Button */}
+        {hasNextPage && (
+          <div className="flex justify-center py-4 border-t bg-card/50">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Загрузка...
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Загрузить ещё
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

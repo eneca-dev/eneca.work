@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useDraggable } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
-import { Clock, ChevronDown } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Clock, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -14,8 +13,9 @@ import {
 } from '@/components/ui/tooltip'
 import type { KanbanStage, KanbanSection, KanbanTask } from '../types'
 import { getColumnById } from '../constants'
-import { AddReportModal } from './AddReportModal'
-import { useKanbanStore } from '../stores/kanban-store'
+import { WorkLogCreateModal, TaskSidebar } from '@/modules/modals'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+import { useKanbanFiltersStore } from '../stores'
 import { Input } from '@/components/ui/input'
 
 interface TaskItemProps {
@@ -25,54 +25,31 @@ interface TaskItemProps {
 }
 
 function TaskItem({ task, section, stage }: TaskItemProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  // Модалки
+  const [isWorkLogModalOpen, setIsWorkLogModalOpen] = useState(false)
+  const [isTaskSidebarOpen, setIsTaskSidebarOpen] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [isEditingPlannedHours, setIsEditingPlannedHours] = useState(false)
-  const [tempPlannedHours, setTempPlannedHours] = useState(task.plannedHours.toString())
-  const [isEditingProgress, setIsEditingProgress] = useState(false)
-  const [tempProgress, setTempProgress] = useState(task.progress.toString())
 
-  const updateTaskPlannedHours = useKanbanStore((state) => state.updateTaskPlannedHours)
-  const updateTaskProgress = useKanbanStore((state) => state.updateTaskProgress)
-
-  const handleSavePlannedHours = () => {
-    const newHours = parseFloat(tempPlannedHours)
-    if (!isNaN(newHours) && newHours >= 0) {
-      updateTaskPlannedHours(section.id, stage.id, task.id, newHours)
-    }
-    setIsEditingPlannedHours(false)
-  }
-
-  const handleCancelEdit = () => {
-    setTempPlannedHours(task.plannedHours.toString())
-    setIsEditingPlannedHours(false)
-  }
-
-  const handleSaveProgress = () => {
-    const newProgress = parseFloat(tempProgress)
-    if (!isNaN(newProgress) && newProgress >= 0 && newProgress <= 100) {
-      updateTaskProgress(section.id, stage.id, task.id, newProgress)
-    }
-    setIsEditingProgress(false)
-  }
-
-  const handleCancelProgressEdit = () => {
-    setTempProgress(task.progress.toString())
-    setIsEditingProgress(false)
-  }
+  // Для инвалидации кеша после успешного сохранения
+  const queryClient = useQueryClient()
+  const { getQueryParams } = useKanbanFiltersStore()
 
   return (
     <>
       <div className="flex items-center gap-2 py-2">
-        {/* Task description */}
+        {/* Task description - клик открывает TaskSidebar */}
         <span
           className={cn(
-            'flex-1 text-xs truncate',
+            'flex-1 text-xs truncate cursor-pointer hover:text-primary transition-colors',
             task.progress === 100
               ? 'text-muted-foreground line-through'
               : 'text-foreground'
           )}
-          title={task.description}
+          title={`${task.description} (клик для редактирования)`}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsTaskSidebarOpen(true)
+          }}
         >
           {task.description}
         </span>
@@ -83,6 +60,32 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
+          {/* CPI Indicator for Task */}
+          {task.actualHours > 0 && (() => {
+            const cpiStatus = getCPIStatus(task.cpi)
+            const CPIIcon = cpiStatus.icon
+            return (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={cn(
+                      'flex items-center justify-center w-4 h-4 rounded-full flex-shrink-0',
+                      cpiStatus.bgColor
+                    )}>
+                      <CPIIcon className={cn('w-2.5 h-2.5', cpiStatus.color)} />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-xs">
+                      <div className="font-semibold">{cpiStatus.label}</div>
+                      <div className="text-[10px]">{cpiStatus.description}</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )
+          })()}
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -90,45 +93,13 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
                   className="flex items-center gap-1.5 cursor-pointer hover:bg-muted/50 rounded px-1.5 py-0.5 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setIsModalOpen(true)
+                    setIsWorkLogModalOpen(true)
                   }}
                 >
                   <span className="text-[11px] text-muted-foreground font-medium">
-                    {task.actualHours}/
-                    {isEditingPlannedHours ? (
-                      <Input
-                        type="number"
-                        value={tempPlannedHours}
-                        onChange={(e) => setTempPlannedHours(e.target.value)}
-                        onBlur={handleSavePlannedHours}
-                        onKeyDown={(e) => {
-                          e.stopPropagation()
-                          if (e.key === 'Enter') {
-                            handleSavePlannedHours()
-                          } else if (e.key === 'Escape') {
-                            handleCancelEdit()
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-block w-12 h-5 text-[11px] px-1 py-0 text-center"
-                        autoFocus
-                        min="0"
-                        step="0.5"
-                      />
-                    ) : (
-                      <span
-                        className="hover:underline cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIsEditingPlannedHours(true)
-                        }}
-                      >
-                        {task.plannedHours}
-                      </span>
-                    )}{' '}
-                    ч
+                    {task.actualHours}/{task.plannedHours} ч
                   </span>
-                  {isHovered && !isEditingPlannedHours && (
+                  {isHovered && (
                     <Clock className="h-3 w-3 text-muted-foreground" />
                   )}
                 </div>
@@ -175,55 +146,131 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
                 strokeLinecap="round"
               />
             </svg>
-            {/* Percentage text - editable */}
-            {isEditingProgress ? (
-              <Input
-                type="number"
-                value={tempProgress}
-                onChange={(e) => setTempProgress(e.target.value)}
-                onBlur={handleSaveProgress}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter') {
-                    handleSaveProgress()
-                  } else if (e.key === 'Escape') {
-                    handleCancelProgressEdit()
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute w-10 h-5 text-[7px] px-0.5 py-0 text-center"
-                autoFocus
-                min="0"
-                max="100"
-                step="10"
-              />
-            ) : (
-              <span
-                className="absolute text-[7px] font-medium text-foreground cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsEditingProgress(true)
-                  setTempProgress(task.progress.toString())
-                }}
-                title="Нажмите для изменения прогресса"
-              >
-                {task.progress}%
-              </span>
-            )}
+            {/* Percentage text - клик открывает TaskSidebar */}
+            <span
+              className="absolute text-[7px] font-medium text-foreground cursor-pointer hover:underline"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsTaskSidebarOpen(true)
+              }}
+              title="Нажмите для редактирования задачи"
+            >
+              {task.progress}%
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Add Report Modal */}
-      <AddReportModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        task={task}
-        section={section}
-        stage={stage}
+      {/* WorkLog Create Modal */}
+      <WorkLogCreateModal
+        isOpen={isWorkLogModalOpen}
+        onClose={() => setIsWorkLogModalOpen(false)}
+        onSuccess={() => {
+          setIsWorkLogModalOpen(false)
+
+          // Инвалидируем кеш канбана - данные перезагрузятся с сервера
+          // Это обновит actualHours задачи после создания отчёта
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
+        sectionId={section.id}
+        sectionName={section.name}
+        defaultItemId={task.id}
+      />
+
+      {/* Task Sidebar */}
+      <TaskSidebar
+        isOpen={isTaskSidebarOpen}
+        onClose={() => setIsTaskSidebarOpen(false)}
+        onSuccess={() => {
+          setIsTaskSidebarOpen(false)
+
+          // Инвалидируем кеш канбана - данные перезагрузятся с сервера
+          // Это обновит plannedHours, progress и другие поля задачи
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
+        task={{
+          id: task.id,
+          description: task.description,
+          plannedHours: task.plannedHours,
+          plannedDueDate: task.dueDate || null,
+          progress: task.progress,
+          order: task.order,
+          responsible: task.responsible ? {
+            id: task.responsible.userId,
+            firstName: task.responsible.firstName,
+            lastName: task.responsible.lastName,
+            name: null,
+          } : {
+            id: null,
+            firstName: null,
+            lastName: null,
+            name: null,
+          },
+          // Поля, которых нет в KanbanTask, передаём как null
+          status: {
+            id: null,
+            name: null,
+            color: null,
+          },
+          difficulty: {
+            id: null,
+            abbr: null,
+            name: null,
+          },
+          workCategoryId: null,
+          workCategoryName: task.workCategory || null,
+        }}
+        taskId={task.id}
+        sectionId={section.id}
+        stageId={stage.id}
       />
     </>
   )
+}
+
+// CPI (Cost Performance Index) indicator
+function getCPIStatus(cpi: number | null) {
+  if (cpi === null || cpi === undefined) {
+    return {
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted/20',
+      icon: Minus,
+      label: 'Нет данных',
+      description: 'Нет фактических часов для расчета эффективности',
+    }
+  }
+
+  if (cpi >= 1.0) {
+    return {
+      color: 'text-emerald-600 dark:text-emerald-500',
+      bgColor: 'bg-emerald-500/10',
+      icon: TrendingUp,
+      label: 'Эффективно',
+      description: `CPI: ${cpi.toFixed(2)} — Работаем эффективнее плана`,
+    }
+  }
+
+  if (cpi >= 0.8) {
+    return {
+      color: 'text-amber-600 dark:text-amber-500',
+      bgColor: 'bg-amber-500/10',
+      icon: Minus,
+      label: 'Приемлемо',
+      description: `CPI: ${cpi.toFixed(2)} — Небольшой перерасход времени`,
+    }
+  }
+
+  return {
+    color: 'text-red-600 dark:text-red-500',
+    bgColor: 'bg-red-500/10',
+    icon: TrendingDown,
+    label: 'Критично',
+    description: `CPI: ${cpi.toFixed(2)} — Значительный перерасход времени`,
+  }
 }
 
 // Compact circular progress component for card
@@ -321,21 +368,26 @@ function CompactCircularProgress({
 interface KanbanCardProps {
   stage: KanbanStage
   section: KanbanSection
+  // HTML5 Drag and Drop
+  onDragStart: (stageId: string, sectionId: string, e: React.DragEvent) => void
+  onDragEnd: () => void
+  isDragging: boolean
 }
 
-export function KanbanCard({ stage, section }: KanbanCardProps) {
+export function KanbanCard({
+  stage,
+  section,
+  onDragStart,
+  onDragEnd,
+  isDragging
+}: KanbanCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: `${section.id}:${stage.id}`,
-      data: { stage, section },
-    })
 
   const column = getColumnById(stage.status)
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
+  // HTML5 Drag handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    onDragStart(stage.id, section.id, e)
   }
 
   const tasksCount = stage.tasks.length
@@ -355,19 +407,19 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
       className={cn(
         'group relative',
         'w-full max-w-full',
         'bg-card rounded-lg border shadow-sm',
-        'transition-all duration-200 ease-out',
         'hover:shadow-md hover:border-primary/30',
         'cursor-grab active:cursor-grabbing',
         'overflow-hidden',
-        isDragging && 'opacity-50 shadow-lg scale-[1.02] z-50 cursor-grabbing'
+        // Уменьшаем прозрачность при перетаскивании
+        // Карточка остаётся на месте, но визуально "подсвечивается" что она активна
+        isDragging && 'opacity-50 ring-2 ring-primary/50'
       )}
     >
       {/* Card Header */}
@@ -425,6 +477,37 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
 
           {/* Hours and Progress */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* CPI Indicator */}
+            {(() => {
+              const cpiStatus = getCPIStatus(stage.cpi)
+              const CPIIcon = cpiStatus.icon
+              return (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        'flex items-center justify-center w-6 h-6 rounded-full',
+                        cpiStatus.bgColor
+                      )}>
+                        <CPIIcon className={cn('w-3.5 h-3.5', cpiStatus.color)} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="text-xs space-y-1">
+                        <div className="font-semibold">{cpiStatus.label}</div>
+                        <div>{cpiStatus.description}</div>
+                        {stage.cpi !== null && (
+                          <div className="text-muted-foreground text-[10px] pt-1 border-t border-border/50">
+                            EV (заработано): {((stage.plannedHours * stage.progress) / 100).toFixed(1)} ч
+                          </div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            })()}
+
             <div className="text-right">
               <div className="text-[10px] text-muted-foreground leading-tight">
                 Факт/План
@@ -464,14 +547,15 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
           'absolute left-0 top-2 rounded-full',
           'w-0.5',
           isExpanded ? 'bottom-2' : 'bottom-2',
-          column?.id === 'done' && 'bg-emerald-500',
-          column?.id === 'review' && 'bg-indigo-500',
-          column?.id === 'in_progress' && 'bg-orange-500',
-          column?.id === 'paused' && 'bg-stone-500',
-          column?.id === 'planned' && 'bg-teal-500',
-          column?.id === 'backlog' && 'bg-slate-400'
+          column?.id === 'done' && 'bg-green-500',
+          column?.id === 'review' && 'bg-pink-500',
+          column?.id === 'in_progress' && 'bg-blue-500',
+          column?.id === 'paused' && 'bg-amber-500',
+          column?.id === 'planned' && 'bg-violet-500',
+          column?.id === 'backlog' && 'bg-gray-400'
         )}
       />
     </div>
   )
 }
+

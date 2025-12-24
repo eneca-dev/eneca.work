@@ -42,7 +42,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: OBJECT_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}

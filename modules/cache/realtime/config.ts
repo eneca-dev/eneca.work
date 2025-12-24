@@ -161,6 +161,14 @@ export const realtimeSubscriptions: TableSubscription[] = [
   // Справочники
   // ============================================================================
   {
+    table: 'section_statuses',
+    invalidateKeys: [
+      queryKeys.sectionStatuses.all,
+      queryKeys.sections.all, // секции показывают статусы
+      queryKeys.resourceGraph.all, // resource graph показывает статусы
+    ],
+  },
+  {
     table: 'departments',
     invalidateKeys: [queryKeys.departments.all],
   },

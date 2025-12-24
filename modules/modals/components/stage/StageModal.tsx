@@ -9,17 +9,15 @@ import {
   X,
   Edit3,
   Loader2,
-  Check,
   ListTodo,
-  Users,
   Clock,
   CheckCircle2,
+  Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useUsers, type CachedUser } from '@/modules/cache'
 import type { DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
-import { getInitials } from '@/modules/resource-graph/utils'
+import { useStageResponsibles } from '@/modules/resource-graph/hooks'
 import type { BaseModalProps } from '../../types'
 import { useUpdateDecompositionStage, useStageStatuses } from '../../hooks'
 import { StatusDropdown, type StatusOption } from '../section/StatusDropdown'
@@ -30,8 +28,8 @@ import { ResponsiblesDropdown } from './ResponsiblesDropdown'
 // Constants
 // ============================================================================
 
-const ANIMATION_DURATION = 300
-const PANEL_WIDTH = 480
+const ANIMATION_DURATION = 200
+const PANEL_WIDTH = 420
 
 // ============================================================================
 // Schema
@@ -95,9 +93,18 @@ export function StageModal({
 
   const { data: statuses, isLoading: statusesLoading } = useStageStatuses()
   const { data: users, isLoading: usersLoading } = useUsers()
+  const { data: stageResponsiblesMap, isLoading: responsiblesLoading } = useStageResponsibles(sectionId, {
+    enabled: isOpen,
+  })
+
+  // Extract responsibles for this stage from the map
+  const stageResponsibles = useMemo(() => {
+    if (!stageResponsiblesMap) return []
+    return stageResponsiblesMap[stageId] || []
+  }, [stageResponsiblesMap, stageId])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Mutation hook
+  // Mutation
   // ─────────────────────────────────────────────────────────────────────────
 
   const updateMutation = useUpdateDecompositionStage()
@@ -106,15 +113,12 @@ export function StageModal({
   // Form
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Extract responsible IDs from stage - we'll need to load them
-  const initialResponsibles: string[] = []
-
   const form = useForm<StageFormData>({
     resolver: zodResolver(stageFormSchema),
     defaultValues: {
       name: stage.name,
       statusId: stage.status.id || null,
-      responsibles: initialResponsibles,
+      responsibles: [],
       startDate: stage.startDate || null,
       endDate: stage.finishDate || null,
     },
@@ -126,18 +130,22 @@ export function StageModal({
   const watchedStartDate = watch('startDate')
   const watchedEndDate = watch('endDate')
 
+  // Initialize responsibles when they load
+  const initialResponsibleIds = useMemo(() => {
+    return stageResponsibles.map((r) => r.id)
+  }, [stageResponsibles])
+
   useEffect(() => {
     if (isOpen) {
       reset({
         name: stage.name,
         statusId: stage.status.id || null,
-        responsibles: initialResponsibles,
+        responsibles: initialResponsibleIds,
         startDate: stage.startDate || null,
         endDate: stage.finishDate || null,
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, stage, reset])
+  }, [isOpen, stage, reset, initialResponsibleIds])
 
   // ─────────────────────────────────────────────────────────────────────────
   // UI State
@@ -146,7 +154,6 @@ export function StageModal({
   const [editingName, setEditingName] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -156,7 +163,6 @@ export function StageModal({
     }
   }, [isOpen])
 
-  // Focus name input when editing starts
   useEffect(() => {
     if (editingName && nameInputRef.current) {
       nameInputRef.current.focus()
@@ -189,22 +195,13 @@ export function StageModal({
       .filter((u): u is CachedUser => u !== undefined)
   }, [users, watchedResponsibles])
 
-  // Calculate metrics
+  // Metrics
   const totalTasks = stage.items.length
-  const totalHours = stage.items.reduce(
-    (sum, item) => sum + (item.plannedHours || 0),
-    0
-  )
-  const completedTasks = stage.items.filter(
-    (item) => (item.progress ?? 0) >= 100
-  ).length
-  const avgProgress =
-    totalTasks > 0
-      ? Math.round(
-          stage.items.reduce((sum, item) => sum + (item.progress ?? 0), 0) /
-            totalTasks
-        )
-      : 0
+  const totalHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
+  const completedTasks = stage.items.filter((item) => (item.progress ?? 0) >= 100).length
+  const avgProgress = totalTasks > 0
+    ? Math.round(stage.items.reduce((sum, item) => sum + (item.progress ?? 0), 0) / totalTasks)
+    : 0
 
   // ─────────────────────────────────────────────────────────────────────────
   // Save handlers
@@ -218,23 +215,13 @@ export function StageModal({
       try {
         const updateData: Record<string, unknown> = {}
 
-        if (field === 'name') {
-          updateData.name = value as string
-        } else if (field === 'statusId') {
-          updateData.statusId = value as string | null
-        } else if (field === 'responsibles') {
-          updateData.responsibles = value as string[]
-        } else if (field === 'startDate') {
-          updateData.startDate = value as string | null
-        } else if (field === 'endDate') {
-          updateData.endDate = value as string | null
-        }
+        if (field === 'name') updateData.name = value as string
+        else if (field === 'statusId') updateData.statusId = value as string | null
+        else if (field === 'responsibles') updateData.responsibles = value as string[]
+        else if (field === 'startDate') updateData.startDate = value as string | null
+        else if (field === 'endDate') updateData.endDate = value as string | null
 
-        await updateMutation.mutateAsync({
-          stageId,
-          sectionId,
-          ...updateData,
-        })
+        await updateMutation.mutateAsync({ stageId, sectionId, ...updateData })
         onSuccess?.()
         return true
       } catch (err) {
@@ -272,20 +259,11 @@ export function StageModal({
     }
   }, [form, saveField])
 
-  const handleStartDateChange = useCallback(
-    async (value: string) => {
+  const handleDateChange = useCallback(
+    async (field: 'startDate' | 'endDate', value: string) => {
       const dateValue = value || null
-      setValue('startDate', dateValue)
-      await saveField('startDate', dateValue)
-    },
-    [setValue, saveField]
-  )
-
-  const handleEndDateChange = useCallback(
-    async (value: string) => {
-      const dateValue = value || null
-      setValue('endDate', dateValue)
-      await saveField('endDate', dateValue)
+      setValue(field, dateValue)
+      await saveField(field, dateValue)
     },
     [setValue, saveField]
   )
@@ -318,23 +296,24 @@ export function StageModal({
 
   if (!isVisible) return null
 
-  const isLoading = statusesLoading || usersLoading
+  const isLoading = statusesLoading || usersLoading || responsiblesLoading
 
   return (
     <>
       {/* Overlay */}
       <div
         className={cn(
-          'fixed inset-0 z-50 transition-all duration-300',
+          'fixed inset-0 z-50 transition-all',
           isAnimating
-            ? 'bg-black/35 backdrop-blur-[2px]'
+            ? 'bg-black/50 backdrop-blur-sm'
             : 'bg-transparent backdrop-blur-0'
         )}
+        style={{ transitionDuration: `${ANIMATION_DURATION}ms` }}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Slide-in Panel with Focus Trap */}
+      {/* Slide-in Panel */}
       <FocusScope.Root trapped={isAnimating} loop>
         <div
           role="dialog"
@@ -342,225 +321,214 @@ export function StageModal({
           aria-labelledby="stage-modal-title"
           className={cn(
             'fixed inset-y-0 right-0 z-50',
-            'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950',
-            'border-l border-slate-800/80',
-            'shadow-[-8px_0_40px_-15px_rgba(0,0,0,0.6)]',
+            'bg-slate-900/95 backdrop-blur-md',
+            'border-l border-slate-700/50',
+            'shadow-2xl shadow-black/50',
             'flex flex-col',
-            'transition-all duration-300 ease-out',
-            isAnimating
-              ? 'translate-x-0 opacity-100'
-              : 'translate-x-full opacity-95'
+            'transition-transform',
+            isAnimating ? 'translate-x-0' : 'translate-x-full'
           )}
-          style={{ width: PANEL_WIDTH }}
+          style={{ width: PANEL_WIDTH, transitionDuration: `${ANIMATION_DURATION}ms` }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <header className="relative px-5 pt-5 pb-4 border-b border-slate-800/60">
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              aria-label="Закрыть"
-              className={cn(
-                'absolute top-4 right-4',
-                'p-2 rounded-lg',
-                'text-slate-500 hover:text-slate-300',
-                'hover:bg-slate-800/50',
-                'transition-all duration-200'
-              )}
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Editable name */}
-            <div className="pr-10">
+          <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+            <div className="flex items-center gap-2 min-w-0">
+              <Layers className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-xs font-medium text-slate-300">Этап</span>
+              <span className="text-[10px] text-slate-500">·</span>
               {editingName ? (
-                <div className="flex items-center gap-2">
-                  <label htmlFor="stage-name" className="sr-only">
-                    Название этапа
-                  </label>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <input
-                    id="stage-name"
-                    {...(() => {
-                      const { ref, ...rest } = form.register('name')
-                      return {
-                        ...rest,
-                        ref: (e: HTMLInputElement | null) => {
-                          ref(e)
-                          nameInputRef.current = e
-                        },
-                      }
-                    })()}
+                    ref={nameInputRef}
+                    {...form.register('name')}
                     className={cn(
-                      'flex-1 px-3 py-1.5 text-base font-semibold',
-                      'bg-slate-800/80 border border-slate-600',
-                      'rounded-lg text-slate-100',
-                      'focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20'
+                      'flex-1 min-w-0 px-2 py-1 text-xs font-medium',
+                      'bg-slate-800 border border-slate-600 rounded',
+                      'text-slate-100',
+                      'focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
                     )}
                     disabled={savingField === 'name'}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleNameSave()
                       if (e.key === 'Escape') {
                         setEditingName(false)
-                        reset()
+                        setValue('name', stage.name) // Only reset name, not entire form
                       }
                     }}
+                    onBlur={handleNameSave}
                   />
-                  <button
-                    onClick={handleNameSave}
-                    disabled={savingField === 'name'}
-                    aria-label="Сохранить название"
-                    className="p-2 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
-                  >
-                    {savingField === 'name' ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                  </button>
+                  {savingField === 'name' && (
+                    <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                  )}
                 </div>
               ) : (
                 <button
-                  className="group flex items-center gap-2 text-left max-w-full"
+                  className="group flex items-center gap-1.5 min-w-0"
                   onClick={() => setEditingName(true)}
-                  aria-label="Редактировать название"
                 >
-                  <h2
+                  <span
                     id="stage-modal-title"
-                    className="text-lg font-semibold text-slate-100 truncate"
+                    className="text-xs text-slate-200 truncate max-w-[180px]"
+                    title={stage.name}
                   >
                     {form.watch('name') || stage.name}
-                  </h2>
-                  <Edit3 className="w-3.5 h-3.5 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  </span>
+                  <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               )}
-
-              {/* Status badge */}
-              <div className="mt-3">
-                <StatusDropdown
-                  id="stage-status"
-                  value={selectedStatus}
-                  options={statusOptions}
-                  onChange={handleStatusChange}
-                  isLoading={savingField === 'statusId'}
-                  disabled={statusesLoading}
-                />
-              </div>
             </div>
-
-            {/* Dates */}
-            <div className="mt-4">
-              <DateRangeInput
-                idPrefix="stage-date"
-                startDate={watchedStartDate ?? null}
-                endDate={watchedEndDate ?? null}
-                onStartDateChange={handleStartDateChange}
-                onEndDateChange={handleEndDateChange}
-                savingField={
-                  savingField === 'startDate' || savingField === 'endDate'
-                    ? (savingField as 'startDate' | 'endDate')
-                    : null
-                }
-              />
-            </div>
-
-            {/* Responsibles */}
-            <div className="mt-4">
-              <ResponsiblesDropdown
-                id="stage-responsibles"
-                value={selectedResponsibles}
-                users={users || []}
-                onChange={handleResponsiblesChange}
-                isLoading={savingField === 'responsibles'}
-                disabled={usersLoading}
-              />
-            </div>
+            <button
+              onClick={onClose}
+              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </header>
 
-          {/* Error message */}
+          {/* Error */}
           {saveError && (
-            <div
-              role="alert"
-              className="mx-5 mt-4 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400"
-            >
+            <div className="mx-4 mt-3 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-[11px] text-red-400">
               {saveError}
             </div>
           )}
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-5">
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2
-                  className="h-6 w-6 animate-spin text-slate-500"
-                  aria-label="Загрузка..."
-                />
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
               </div>
             ) : (
-              <>
-                {/* Metrics */}
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
-                      <ListTodo className="w-3.5 h-3.5" />
-                      Задачи
-                    </div>
-                    <div className="text-slate-200 font-medium">
-                      {completedTasks} / {totalTasks}
-                    </div>
+              <div className="space-y-4">
+                {/* Status & Period Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Status */}
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                      Статус
+                    </label>
+                    <StatusDropdown
+                      id="stage-status"
+                      value={selectedStatus}
+                      options={statusOptions}
+                      onChange={handleStatusChange}
+                      isLoading={savingField === 'statusId'}
+                      disabled={statusesLoading}
+                    />
                   </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      План. часы
-                    </div>
-                    <div className="text-slate-200 font-medium">
-                      {totalHours}ч
-                    </div>
+
+                  {/* Period */}
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                      Период
+                    </label>
+                    <DateRangeInput
+                      idPrefix="stage-date"
+                      startDate={watchedStartDate ?? null}
+                      endDate={watchedEndDate ?? null}
+                      onStartDateChange={(v) => handleDateChange('startDate', v)}
+                      onEndDateChange={(v) => handleDateChange('endDate', v)}
+                      savingField={
+                        savingField === 'startDate' || savingField === 'endDate'
+                          ? (savingField as 'startDate' | 'endDate')
+                          : null
+                      }
+                    />
                   </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3 col-span-2">
-                    <div className="flex items-center gap-2 text-slate-500 text-xs mb-2">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Готовность
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-amber-500 rounded-full transition-all"
-                          style={{ width: `${avgProgress}%` }}
-                        />
-                      </div>
-                      <span className="text-slate-200 font-medium text-sm w-10 text-right">
-                        {avgProgress}%
-                      </span>
-                    </div>
-                  </div>
+                </div>
+
+                {/* Responsibles - Full Width */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    Ответственные
+                  </label>
+                  <ResponsiblesDropdown
+                    id="stage-responsibles"
+                    value={selectedResponsibles}
+                    users={users || []}
+                    onChange={handleResponsiblesChange}
+                    isLoading={savingField === 'responsibles'}
+                    disabled={usersLoading}
+                  />
+                </div>
+
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-3 gap-2">
+                  <MetricCard
+                    icon={<ListTodo className="w-3 h-3" />}
+                    label="Задачи"
+                    value={`${completedTasks}/${totalTasks}`}
+                  />
+                  <MetricCard
+                    icon={<Clock className="w-3 h-3" />}
+                    label="Часы"
+                    value={`${totalHours}ч`}
+                  />
+                  <MetricCard
+                    icon={<CheckCircle2 className="w-3 h-3" />}
+                    label="Готовность"
+                    value={`${avgProgress}%`}
+                    progress={avgProgress}
+                  />
                 </div>
 
                 {/* Tasks list */}
                 <div>
-                  <h3 className="flex items-center gap-2 text-sm font-medium text-slate-400 mb-3">
-                    <ListTodo className="w-4 h-4" />
+                  <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-2">
+                    <ListTodo className="w-3 h-3" />
                     Задачи ({totalTasks})
                   </h3>
 
                   {stage.items.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 text-sm">
+                    <div className="text-center py-4 text-slate-500 text-xs">
                       Нет задач в этапе
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {stage.items.map((item) => (
                         <TaskRow key={item.id} item={item} />
                       ))}
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
       </FocusScope.Root>
     </>
+  )
+}
+
+// ============================================================================
+// Metric Card Component
+// ============================================================================
+
+interface MetricCardProps {
+  icon: React.ReactNode
+  label: string
+  value: string
+  progress?: number
+}
+
+function MetricCard({ icon, label, value, progress }: MetricCardProps) {
+  return (
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+      <div className="flex items-center gap-1.5 text-slate-500 text-[10px] mb-1">
+        {icon}
+        {label}
+      </div>
+      <div className="text-slate-200 text-sm font-medium">{value}</div>
+      {progress !== undefined && (
+        <div className="mt-1.5 h-1 bg-slate-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-amber-500 rounded-full transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -575,46 +543,44 @@ function TaskRow({ item }: { item: DecompositionItem }) {
   return (
     <div
       className={cn(
-        'px-3 py-2.5 rounded-lg border transition-colors',
+        'flex items-center gap-2 px-2.5 py-2 rounded border transition-colors',
         isCompleted
           ? 'bg-emerald-500/5 border-emerald-500/20'
           : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm text-slate-300 truncate">
-            {item.description || 'Без описания'}
-          </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-            {item.difficulty.abbr && (
-              <span className="px-1.5 py-0.5 bg-slate-700/50 rounded">
-                {item.difficulty.abbr}
-              </span>
-            )}
-            {item.plannedHours > 0 && <span>{item.plannedHours}ч</span>}
-          </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-slate-300 truncate">
+          {item.description || 'Без описания'}
         </div>
+        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+          {item.difficulty.abbr && (
+            <span className="px-1 py-0.5 bg-slate-700/50 rounded text-[9px]">
+              {item.difficulty.abbr}
+            </span>
+          )}
+          {item.plannedHours > 0 && <span>{item.plannedHours}ч</span>}
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all',
-                isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
-              )}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <span
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="w-12 h-1 bg-slate-700 rounded-full overflow-hidden">
+          <div
             className={cn(
-              'text-xs font-medium w-8 text-right',
-              isCompleted ? 'text-emerald-400' : 'text-slate-400'
+              'h-full rounded-full transition-all',
+              isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
             )}
-          >
-            {progress}%
-          </span>
+            style={{ width: `${progress}%` }}
+          />
         </div>
+        <span
+          className={cn(
+            'text-[10px] font-medium w-7 text-right',
+            isCompleted ? 'text-emerald-400' : 'text-slate-400'
+          )}
+        >
+          {progress}%
+        </span>
       </div>
     </div>
   )

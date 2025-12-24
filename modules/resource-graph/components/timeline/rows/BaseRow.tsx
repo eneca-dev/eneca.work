@@ -64,7 +64,7 @@ export function BaseRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           depth === 0 && 'bg-muted/20'
         )}
         style={{ height, minWidth: totalWidth }}

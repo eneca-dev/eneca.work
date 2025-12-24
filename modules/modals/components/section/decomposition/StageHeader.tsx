@@ -121,7 +121,7 @@ export function StageHeader({
 
   // Get responsible employees
   const responsibleEmployees = useMemo(
-    () => employees.filter((emp) => stage.responsibles.includes(emp.user_id)),
+    () => employees.filter((emp) => (stage.responsibles || []).includes(emp.user_id)),
     [employees, stage.responsibles]
   )
 
