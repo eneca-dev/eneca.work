@@ -1,12 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronRight, AlertTriangle, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { SectionModal } from '@/modules/modals'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+import type { Section } from '@/modules/resource-graph/types'
 import type { KanbanSection, StageStatus } from '../types'
 import { KANBAN_COLUMNS, SECTION_STATUSES } from '../constants'
 import { KanbanDropZone } from './KanbanDropZone'
+import { useKanbanFiltersStore } from '../stores'
 
 interface DraggedCard {
   stageId: string
@@ -87,10 +92,41 @@ export function KanbanSwimlane({
 }: KanbanSwimlaneProps) {
   // Локальное состояние для отслеживания наведения на этот swimlane
   const [isOver, setIsOver] = useState(false)
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
+  const [modalInitialTab, setModalInitialTab] = useState<'overview' | 'tasks' | 'readiness'>('overview')
+
+  // Для инвалидации кеша после успешного сохранения
+  const queryClient = useQueryClient()
+  const { getQueryParams } = useKanbanFiltersStore()
 
   // Проверяем, активен ли drag из другого раздела (для показа предупреждения)
   const isDragFromOtherSection = draggedCard !== null && draggedCard.sectionId !== section.id
   const statusConfig = SECTION_STATUSES[section.status]
+
+  // Преобразуем KanbanSection в Section для модалки
+  const getSectionForModal = (): Section => ({
+    id: section.id,
+    name: section.name,
+    description: section.description || null,
+    startDate: null, // Нет в KanbanSection
+    endDate: null, // Нет в KanbanSection
+    responsible: {
+      id: section.responsible?.userId || null,
+      firstName: section.responsible?.firstName || null,
+      lastName: section.responsible?.lastName || null,
+      name: null,
+      avatarUrl: null,
+    },
+    status: {
+      id: null, // Нет в KanbanSection (есть только строка)
+      name: section.status,
+      color: null,
+    },
+    readinessCheckpoints: [],
+    actualReadiness: [],
+    budgetSpending: [],
+    decompositionStages: [], // SectionModal загрузит их через свои хуки
+  })
 
   // Обработчики для отслеживания наведения на весь swimlane
   const handleDragEnter = (e: React.DragEvent) => {
@@ -165,21 +201,42 @@ export function KanbanSwimlane({
               className="font-semibold text-sm text-foreground cursor-pointer hover:underline hover:text-primary transition-colors"
               onClick={(e) => {
                 e.stopPropagation()
-                // TODO: Open section modal
-                console.log('Open section modal for:', section.id)
+                setModalInitialTab('overview')
+                setIsSectionModalOpen(true)
               }}
             >
               {section.name}
             </h3>
             <span
               className={cn(
-                'px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0',
+                'flex items-center justify-center',
+                'h-6 min-w-[24px] px-1.5 rounded-md',
+                'text-[10px] font-medium flex-shrink-0',
                 statusConfig.bgColor,
                 statusConfig.color
               )}
             >
               {section.stages.length}
             </span>
+
+            {/* Кнопка быстрого добавления задачи */}
+            <button
+              className={cn(
+                'flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md',
+                'bg-primary/10 hover:bg-primary/20',
+                'text-primary hover:text-primary',
+                'transition-colors duration-150',
+                'border border-primary/30 hover:border-primary/50'
+              )}
+              onClick={(e) => {
+                e.stopPropagation()
+                setModalInitialTab('tasks')
+                setIsSectionModalOpen(true)
+              }}
+              title="Добавить задачу"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
             {section.projectName} • {section.stageName} • {section.objectName}
@@ -243,6 +300,24 @@ export function KanbanSwimlane({
           )}
         </div>
       </div>
+
+      {/* Section Modal */}
+      <SectionModal
+        isOpen={isSectionModalOpen}
+        onClose={() => setIsSectionModalOpen(false)}
+        onSuccess={() => {
+          setIsSectionModalOpen(false)
+
+          // Инвалидируем кеш канбана - данные перезагрузятся с сервера
+          // Это обновит название, статус, ответственного и другие поля раздела
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
+        section={getSectionForModal()}
+        sectionId={section.id}
+        initialTab={modalInitialTab}
+      />
     </div>
   )
 }
