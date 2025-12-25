@@ -94,7 +94,7 @@ const MARKER_RADIUS = 8    // Радиус маркера
 const ICON_SIZE = 10       // Размер иконки внутри маркера
 
 // Смещение для чекпоинтов на одну дату (вертикальное)
-const OVERLAP_OFFSET_Y = 14   // Смещение по Y для каждого следующего чекпоинта
+const OVERLAP_OFFSET_Y = 12   // Компактное смещение по Y для каждого следующего чекпоинта
 
 // ============================================================================
 // Icon Helper
@@ -320,7 +320,8 @@ export function CheckpointMarkers({
 
   // Y позиция для чекпоинтов — НАД графиком (в верхней части строки)
   // График занимает нижние 56px, чекпоинты — верхнюю часть
-  const baseY = MARKER_RADIUS + 8  // 8 + 8 = 16px от верха
+  // Компактно: 4px отступ сверху, маркер 16px, 4px отступ снизу = 24px
+  const baseY = MARKER_RADIUS + 4  // 8 + 4 = 12px от верха
 
   return (
     <TooltipProvider>
@@ -343,6 +344,20 @@ export function CheckpointMarkers({
         className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-10"
         style={{ width: timelineWidth, height: rowHeight }}
       >
+        {/* Горизонтальная линия, соединяющая чекпоинты */}
+        {checkpointPositions.length >= 2 && (
+          <line
+            x1={checkpointPositions[0].x}
+            y1={baseY}
+            x2={checkpointPositions[checkpointPositions.length - 1].x}
+            y2={baseY}
+            stroke="currentColor"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+            className="text-amber-500/40"
+          />
+        )}
+
         {/* SVG маркеры - над графиком, вертикально друг под другом при совпадении дат */}
         {checkpoints.map((cp, index) => {
           const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]
@@ -456,6 +471,14 @@ function CheckpointMarkerSvg({
   return (
     <g transform={`translate(${x}, ${y})`}>
       <g className={cn("checkpoint-marker", checkpoint.status === 'pending' && "animate-pulse-subtle")}>
+        {/* Непрозрачный фоновый круг (скрывает линию под чекпоинтом) */}
+        <circle
+          cx={0}
+          cy={0}
+          r={MARKER_RADIUS}
+          className="fill-background"
+        />
+        {/* Цветной круг поверх фона */}
         <circle
           cx={0}
           cy={0}

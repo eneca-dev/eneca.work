@@ -26,8 +26,6 @@ interface SectionTooltipOverlayProps {
   /** Даты раздела для определения активной зоны */
   sectionStartDate: string | null
   sectionEndDate: string | null
-  /** Высота строки (динамическая, зависит от наличия чекпоинтов) */
-  rowHeight?: number
 }
 
 interface DayMetrics {
@@ -51,7 +49,6 @@ export function SectionTooltipOverlay({
   timelineWidth,
   sectionStartDate,
   sectionEndDate,
-  rowHeight = SECTION_ROW_HEIGHT,
 }: SectionTooltipOverlayProps) {
   // Вычисляем метрики для каждого дня в диапазоне раздела
   const dayMetrics = useMemo(() => {
@@ -166,8 +163,8 @@ export function SectionTooltipOverlay({
   return (
     <TooltipProvider delayDuration={100}>
       <div
-        className="absolute inset-0 z-10 pointer-events-none"
-        style={{ width: timelineWidth, height: rowHeight }}
+        className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
+        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
       >
         {dayMetrics.map((day) => (
           <DayTooltip key={day.date} day={day} />

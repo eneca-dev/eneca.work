@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
-import { ChevronRight, Calendar, Loader2, Plus } from 'lucide-react'
+import { ChevronRight, Calendar, Loader2, Flag } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -27,6 +27,7 @@ import {
 } from '../../../hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
+import { openCheckpointEdit } from '@/modules/modals'
 import { getInitials, formatDateShort } from '../../../utils'
 import { SECTION_ROW_HEIGHT, SECTION_ROW_HEIGHT_WITH_CHECKPOINTS, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 
@@ -228,9 +229,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   // Адаптивная высота строки:
   // - Базовая: 56px (только график)
   // - С чекпоинтами: 56px + пространство для чекпоинтов
-  // - Пространство для чекпоинтов: 32px базово + 14px * (maxStack - 1)
-  const CHECKPOINT_BASE_SPACE = 32  // Базовое пространство для одного ряда чекпоинтов
-  const CHECKPOINT_STACK_OFFSET = 14  // Дополнительное пространство для каждого стека
+  // - Пространство для чекпоинтов: 24px базово + 12px * (maxStack - 1)
+  const CHECKPOINT_BASE_SPACE = 24  // Компактное пространство для одного ряда чекпоинтов
+  const CHECKPOINT_STACK_OFFSET = 12  // Дополнительное пространство для каждого стека
 
   const checkpointSpace = hasCheckpoints
     ? CHECKPOINT_BASE_SPACE + Math.max(0, maxCheckpointsOnDate - 1) * CHECKPOINT_STACK_OFFSET
@@ -240,13 +241,13 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50 group"
         style={{ height: rowHeight, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
         <div
           className={cn(
-            'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
+            'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2 relative',
             'sticky left-0 z-20 bg-background'
           )}
           style={{
@@ -254,7 +255,19 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* Первая строка: Expand + Checkpoint Button + Avatar + Name */}
+          {/* Create checkpoint button - positioned at right edge of sidebar (like loading in DecompositionStageRow) */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-amber-500 bg-background border-r border-t border-b border-border"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsCheckpointModalOpen(true)
+            }}
+          >
+            <Flag className="w-3 h-3" />
+            <span>Чекпоинт</span>
+          </button>
+
+          {/* Первая строка: Expand + Avatar + Name */}
           <div className="flex items-center gap-1.5 min-w-0">
             {hasChildren ? (
               <button
@@ -271,30 +284,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
             ) : (
               <div className="w-5 shrink-0" />
             )}
-
-            {/* Кнопка добавления чекпоинта */}
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsCheckpointModalOpen(true)
-                    }}
-                    className={cn(
-                      'p-0.5 rounded transition-all shrink-0',
-                      'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
-                      'opacity-0 group-hover:opacity-100'
-                    )}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Добавить чекпоинт
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
 
             {/* Avatar */}
             <TooltipProvider delayDuration={300}>
@@ -476,6 +465,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
               sectionId={section.id}
               absoluteRowY={0}
               rowHeight={rowHeight}
+              onMarkerClick={(checkpoint) => openCheckpointEdit(checkpoint.checkpoint_id)}
             />
           )}
         </div>
