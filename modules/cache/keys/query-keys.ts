@@ -101,7 +101,7 @@ export const queryKeys = {
     statistics: (id: string) => [...queryKeys.projects.detail(id), 'statistics'] as const,
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
-    structure: () => [...queryKeys.projects.all, 'structure'] as const,
+    // structure moved to filterStructure.project() for unified caching
   },
 
   // -------------------------------------------------------------------------
@@ -241,6 +241,8 @@ export const queryKeys = {
     lists: () => [...queryKeys.resourceGraph.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.resourceGraph.lists(), filters] as const,
     user: (userId: string) => [...queryKeys.resourceGraph.all, 'user', userId] as const,
+    /** Инвалидирует ВСЕ sectionsBatch запросы (для чекпоинтов и других cross-object изменений) */
+    allSectionsBatch: () => [...queryKeys.resourceGraph.all, 'sectionsBatch'] as const,
     /** Batch данные для всех секций объекта (загрузка при развороте объекта) */
     sectionsBatch: (objectId: string) => [...queryKeys.resourceGraph.all, 'sectionsBatch', objectId] as const,
     /** Work logs для раздела (lazy load при развороте) */

@@ -1,80 +1,11 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useRef, useLayoutEffect } from 'react'
 import { format, parseISO, differenceInDays } from 'date-fns'
-import {
-  ArrowRightFromLine,
-  Flag,
-  Bookmark,
-  HelpCircle,
-  Star,
-  AlertCircle,
-  CheckCircle,
-  Calendar,
-  Clock,
-  Target,
-  Trophy,
-  Award,
-  FileCheck,
-  FileText,
-  Send,
-  Milestone,
-  Rocket,
-  Zap,
-  Bell,
-  Eye,
-  Lock,
-  Unlock,
-  Shield,
-  Heart,
-  ThumbsUp,
-  MessageSquare,
-  CircleCheck,
-  CircleDot,
-  Hourglass,
-  Timer,
-  AlarmCheck,
-  Sparkles,
-  Flame,
-  Bolt,
-  TrendingUp,
-  Activity,
-  BarChart3,
-  PieChart,
-  LineChart,
-  GitCommit,
-  GitBranch,
-  Users,
-  User,
-  UserCheck,
-  Crown,
-  Gem,
-  Diamond,
-  Box,
-  Package,
-  Inbox,
-  Archive,
-  FolderCheck,
-  FolderOpen,
-  Files,
-  ClipboardCheck,
-  Layers,
-  CircleAlert,
-  TriangleAlert,
-  Info,
-  Ban,
-  XCircle,
-  MinusCircle,
-  PlusCircle,
-  Play,
-  Pause,
-  type LucideIcon,
-} from 'lucide-react'
 import type { Checkpoint } from '../actions/checkpoints'
 import type { TimelineRange } from '@/modules/resource-graph/types'
 import {
   DAY_CELL_WIDTH,
-  SECTION_ROW_HEIGHT,
   SECTION_ROW_HEIGHT_WITH_CHECKPOINTS
 } from '@/modules/resource-graph/constants'
 import { cn } from '@/lib/utils'
@@ -85,6 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getIcon } from '../constants/icon-map'
 
 // ============================================================================
 // Constants
@@ -97,135 +29,8 @@ const ICON_SIZE = 10       // Размер иконки внутри марке�
 const OVERLAP_OFFSET_Y = 12   // Компактное смещение по Y для каждого следующего чекпоинта
 
 // ============================================================================
-// Icon Helper
-// ============================================================================
-
-// Маппинг названий иконок на компоненты
-// Все иконки, доступные для выбора в CheckpointCreateModal
-const ICON_MAP: Record<string, LucideIcon> = {
-  // Основные иконки чекпоинтов
-  Flag,
-  Bookmark,
-  Star,
-  AlertCircle,
-  CheckCircle,
-  Calendar,
-  Clock,
-  Target,
-  Trophy,
-  Award,
-
-  // Документы и файлы
-  FileCheck,
-  FileText,
-  Files,
-  FolderCheck,
-  FolderOpen,
-  ClipboardCheck,
-
-  // Действия и события
-  Send,
-  ArrowRightFromLine,
-  Milestone,
-  Rocket,
-  Zap,
-  Bell,
-
-  // Состояния и индикаторы
-  Eye,
-  Lock,
-  Unlock,
-  Shield,
-  Heart,
-  ThumbsUp,
-  MessageSquare,
-  CircleCheck,
-  CircleDot,
-
-  // Время
-  Hourglass,
-  Timer,
-  AlarmCheck,
-
-  // Специальные эффекты
-  Sparkles,
-  Flame,
-  Bolt,
-
-  // Графики и аналитика
-  TrendingUp,
-  Activity,
-  BarChart3,
-  PieChart,
-  LineChart,
-
-  // Git и версионирование
-  GitCommit,
-  GitBranch,
-
-  // Пользователи
-  Users,
-  User,
-  UserCheck,
-
-  // Награды
-  Crown,
-  Gem,
-  Diamond,
-
-  // Организация
-  Box,
-  Package,
-  Inbox,
-  Archive,
-  Layers,
-
-  // Предупреждения
-  CircleAlert,
-  TriangleAlert,
-  Info,
-  Ban,
-  XCircle,
-  MinusCircle,
-  PlusCircle,
-
-  // Управление
-  Play,
-  Pause,
-
-  // Fallback иконка для неизвестных типов
-  HelpCircle,
-}
-
-/**
- * Получить компонент иконки Lucide по названию
- */
-function getLucideIcon(iconName: string): LucideIcon {
-  return ICON_MAP[iconName] || HelpCircle
-}
-
-// ============================================================================
 // Types
 // ============================================================================
-
-interface CheckpointMarkerProps {
-  /** Чекпоинт для отображения */
-  checkpoint: Checkpoint
-  /** Диапазон временной шкалы */
-  range: TimelineRange
-  /** Общая ширина timeline в пикселях */
-  timelineWidth: number
-  /** ID секции (для регистрации связанных чекпоинтов) */
-  sectionId: string
-  /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
-  absoluteRowY: number
-  /** Callback клика на маркер */
-  onMarkerClick?: (checkpoint: Checkpoint) => void
-  /** Индекс наложения (для смещения при одной дате) */
-  overlapIndex?: number
-  /** Общее количество чекпоинтов на эту дату */
-  overlapTotal?: number
-}
 
 interface CheckpointMarkersProps {
   /** Список чекпоинтов раздела */
@@ -238,8 +43,6 @@ interface CheckpointMarkersProps {
   onMarkerClick?: (checkpoint: Checkpoint) => void
   /** ID секции (для регистрации связанных чекпоинтов) */
   sectionId: string
-  /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
-  absoluteRowY: number
   /** Высота строки (адаптивная) */
   rowHeight?: number
 }
@@ -287,7 +90,6 @@ export function CheckpointMarkers({
   timelineWidth,
   onMarkerClick,
   sectionId,
-  absoluteRowY,
   rowHeight = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS,
 }: CheckpointMarkersProps) {
   if (!checkpoints || checkpoints.length === 0) return null
@@ -353,8 +155,7 @@ export function CheckpointMarkers({
             y2={baseY}
             stroke="currentColor"
             strokeWidth={1}
-            strokeDasharray="3 3"
-            className="text-amber-500/40"
+            className="text-muted-foreground/20"
           />
         )}
 
@@ -362,7 +163,6 @@ export function CheckpointMarkers({
         {checkpoints.map((cp, index) => {
           const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]
           const overlapIndex = checkpointsOnDate.findIndex(c => c.checkpoint_id === cp.checkpoint_id)
-          const overlapTotal = checkpointsOnDate.length
 
           return (
             <g
@@ -374,7 +174,6 @@ export function CheckpointMarkers({
                 range={range}
                 timelineWidth={timelineWidth}
                 sectionId={sectionId}
-                absoluteRowY={absoluteRowY}
                 overlapIndex={overlapIndex}
                 baseY={baseY}
               />
@@ -383,9 +182,9 @@ export function CheckpointMarkers({
         })}
       </svg>
 
-      {/* HTML слой - тултипы и интерактивность */}
+      {/* HTML слой - тултипы и интерактивность (z-50 для приоритета над sidebar z-20) */}
       <div
-        className="absolute top-0 left-0 right-0 pointer-events-none z-20"
+        className="absolute top-0 left-0 right-0 pointer-events-none z-50"
         style={{ width: timelineWidth, height: rowHeight }}
       >
         {checkpoints.map((cp) => {
@@ -401,6 +200,7 @@ export function CheckpointMarkers({
               onMarkerClick={onMarkerClick}
               overlapIndex={overlapIndex}
               baseY={baseY}
+              sectionId={sectionId}
             />
           )
         })}
@@ -417,7 +217,6 @@ function CheckpointMarkerSvg({
   range,
   timelineWidth,
   sectionId,
-  absoluteRowY,
   overlapIndex = 0,
   baseY,
 }: {
@@ -425,11 +224,11 @@ function CheckpointMarkerSvg({
   range: TimelineRange
   timelineWidth: number
   sectionId: string
-  absoluteRowY: number
   overlapIndex?: number
   baseY: number
 }) {
   const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
+  const circleRef = useRef<SVGCircleElement>(null)
 
   // Базовая X позиция (центр дня)
   const x = useMemo(() => {
@@ -440,52 +239,75 @@ function CheckpointMarkerSvg({
 
   // Y позиция: базовая + вертикальное смещение для нескольких чекпоинтов на одну дату
   const y = baseY + overlapIndex * OVERLAP_OFFSET_Y
-  const absoluteY = absoluteRowY + y
 
   // Регистрируем чекпоинт для отрисовки линий связей
   // Используем стабильные зависимости: checkpoint_id вместо всего объекта
   const hasLinkedSections = checkpoint.linked_sections && checkpoint.linked_sections.length > 0
   const checkpointId = checkpoint.checkpoint_id
 
-  useEffect(() => {
-    if (hasLinkedSections) {
-      registerCheckpoint({ checkpoint, sectionId, x, y: absoluteY })
-    }
-    return () => {
-      if (hasLinkedSections) {
-        unregisterCheckpoint(checkpointId, sectionId)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- используем checkpointId для стабильности
-  }, [checkpointId, sectionId, x, absoluteY, hasLinkedSections, registerCheckpoint, unregisterCheckpoint])
+  // Вычисляем реальную позицию через DOM измерения
+  useLayoutEffect(() => {
+    if (!hasLinkedSections || !circleRef.current) return
 
-  const IconComponent = useMemo(() => getLucideIcon(checkpoint.icon), [checkpoint.icon])
+    // Находим content wrapper (родитель CheckpointVerticalLinks SVG)
+    const circle = circleRef.current
+    const contentWrapper = circle.closest('[data-timeline-content]') as HTMLElement | null
+
+    if (!contentWrapper) {
+      // Fallback: регистрируем с локальными координатами
+      registerCheckpoint({ checkpoint, sectionId, x, y })
+      return () => unregisterCheckpoint(checkpointId, sectionId)
+    }
+
+    // Вычисляем позицию относительно content wrapper
+    // Это даёт координаты в той же системе, что и CheckpointVerticalLinks SVG
+    const circleRect = circle.getBoundingClientRect()
+    const wrapperRect = contentWrapper.getBoundingClientRect()
+
+    // getBoundingClientRect для circle даёт bounding box (левый верхний угол)
+    // Добавляем MARKER_RADIUS чтобы получить центр круга
+    const absoluteX = circleRect.left - wrapperRect.left + MARKER_RADIUS
+    const absoluteY = circleRect.top - wrapperRect.top + MARKER_RADIUS
+
+    registerCheckpoint({ checkpoint, sectionId, x: absoluteX, y: absoluteY })
+
+    return () => unregisterCheckpoint(checkpointId, sectionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- используем checkpointId для стабильности
+  }, [checkpointId, sectionId, x, y, hasLinkedSections, registerCheckpoint, unregisterCheckpoint])
+
+  const IconComponent = useMemo(() => getIcon(checkpoint.icon), [checkpoint.icon])
 
   if (x < 0 || x > timelineWidth) return null
 
-  const statusColor = STATUS_COLORS[checkpoint.status]
-  const baseColor = checkpoint.color || '#6B7280'
+  // Зависимый чекпоинт - тот, у которого owner секция !== текущая секция
+  const isDependant = checkpoint.section_id !== sectionId
+
+  // Цвет берётся из типа чекпоинта (или серый для зависимых)
+  const baseColor = isDependant ? '#6B7280' : (checkpoint.color || '#6B7280')
   const rgb = hexToRgb(baseColor)
-  const bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : 'rgba(107, 114, 128, 0.15)'
+  const bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isDependant ? 0.1 : 0.15})` : 'rgba(107, 114, 128, 0.1)'
 
   return (
     <g transform={`translate(${x}, ${y})`}>
-      <g className={cn("checkpoint-marker", checkpoint.status === 'pending' && "animate-pulse-subtle")}>
+      <g className={cn("checkpoint-marker", checkpoint.status === 'pending' && !isDependant && "animate-pulse-subtle")}>
         {/* Непрозрачный фоновый круг (скрывает линию под чекпоинтом) */}
         <circle
+          ref={circleRef}
           cx={0}
           cy={0}
           r={MARKER_RADIUS}
           className="fill-background"
         />
-        {/* Цветной круг поверх фона */}
+        {/* Цветной круг поверх фона - цвет из типа */}
         <circle
           cx={0}
           cy={0}
           r={MARKER_RADIUS}
           fill={bgColorRgba}
-          stroke={statusColor}
-          strokeWidth={1.5}
+          stroke={baseColor}
+          strokeWidth={isDependant ? 1 : 1.5}
+          strokeDasharray={isDependant ? "2,2" : undefined}
+          opacity={isDependant ? 0.6 : 1}
         />
         <foreignObject
           x={-ICON_SIZE / 2}
@@ -495,7 +317,11 @@ function CheckpointMarkerSvg({
           className="pointer-events-none overflow-visible"
         >
           <div className="flex items-center justify-center w-full h-full">
-            <IconComponent size={ICON_SIZE} style={{ color: baseColor }} strokeWidth={2.5} />
+            <IconComponent
+              size={ICON_SIZE}
+              style={{ color: baseColor, opacity: isDependant ? 0.5 : 1 }}
+              strokeWidth={2.5}
+            />
           </div>
         </foreignObject>
       </g>
@@ -513,6 +339,7 @@ function CheckpointTooltipWrapper({
   onMarkerClick,
   overlapIndex,
   baseY,
+  sectionId,
 }: {
   checkpoint: Checkpoint
   range: TimelineRange
@@ -520,6 +347,7 @@ function CheckpointTooltipWrapper({
   onMarkerClick?: (checkpoint: Checkpoint) => void
   overlapIndex: number
   baseY: number
+  sectionId: string
 }) {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -535,7 +363,11 @@ function CheckpointTooltipWrapper({
 
   if (x < 0 || x > timelineWidth) return null
 
-  const statusColor = STATUS_COLORS[checkpoint.status]
+  // Зависимый чекпоинт - тот, у которого owner секция !== текущая секция
+  const isDependant = checkpoint.section_id !== sectionId
+
+  // Цвет берётся из типа чекпоинта
+  const typeColor = isDependant ? '#6B7280' : (checkpoint.color || '#6B7280')
   const linkedSections = checkpoint.linked_sections || []
 
   return (
@@ -568,15 +400,22 @@ function CheckpointTooltipWrapper({
         <div className="space-y-1.5">
           <div>
             <div className="text-sm font-medium text-white">{checkpoint.title}</div>
-            <div className="text-[10px] text-white/50">{checkpoint.type_name}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-white/50">{checkpoint.type_name}</span>
+              {isDependant && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">
+                  зависимый
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between gap-3 text-[11px]">
             <span className="text-white/60 tabular-nums">
               {format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
-              <span style={{ color: statusColor }} className="text-[10px]">{STATUS_LABELS[checkpoint.status]}</span>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: typeColor }} />
+              <span className="text-[10px] text-white/60">{STATUS_LABELS[checkpoint.status]}</span>
             </span>
           </div>
           {checkpoint.description && (

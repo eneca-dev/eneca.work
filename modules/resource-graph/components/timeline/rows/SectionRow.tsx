@@ -30,6 +30,7 @@ import { queryKeys } from '@/modules/cache'
 import { openCheckpointEdit } from '@/modules/modals'
 import { getInitials, formatDateShort } from '../../../utils'
 import { SECTION_ROW_HEIGHT, SECTION_ROW_HEIGHT_WITH_CHECKPOINTS, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
+import { useRowExpanded } from '../../../stores'
 
 // Dynamic imports
 const SectionModal = dynamic(
@@ -39,7 +40,8 @@ const SectionModal = dynamic(
 
 // Импорты для чекпоинтов
 import { CheckpointCreateModal } from '@/modules/modals'
-import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
+import { CheckpointMarkers } from '@/modules/checkpoints'
+import { mapBatchCheckpointToCheckpoint } from '../../../utils'
 
 // ============================================================================
 // Section Row
@@ -63,7 +65,7 @@ interface SectionRowProps {
  * Строка раздела - двухстрочный layout с графиками готовности
  */
 export function SectionRow({ section, dayCells, range, isObjectExpanded, objectId, batchData, batchLoading }: SectionRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const { isExpanded, toggle } = useRowExpanded('section', section.id)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
@@ -78,19 +80,20 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   const loadingsLoading = batchLoading ?? false
   const readinessLoading = batchLoading ?? false
 
-  // Функция для инвалидации batch кеша (вызывается при изменении work logs)
+  // Функция для инвалидации batch кеша (вызывается при изменении данных)
   const invalidateBatchData = () => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.resourceGraph.sectionsBatch(objectId),
     })
   }
 
-  // Lazy load checkpoints при развороте объекта (через отдельный модуль из-за linked_sections)
-  const { data: checkpointsResult, refetch: refetchCheckpoints } = useCheckpoints(
-    isObjectExpanded ? { sectionId: section.id } : undefined
+  // Checkpoints из batch данных (загружены в ObjectRow одним запросом)
+  // Маппим BatchCheckpoint в Checkpoint для совместимости с CheckpointMarkers
+  const batchCheckpoints = batchData?.checkpoints[section.id] ?? []
+  const checkpoints = useMemo(
+    () => batchCheckpoints.map(mapBatchCheckpointToCheckpoint),
+    [batchCheckpoints]
   )
-  // Извлекаем массив чекпоинтов из результата (формат: { success, data: Checkpoint[] })
-  const checkpoints = checkpointsResult?.data ?? []
 
   // Budgets из batch данных (загружены в ObjectRow одним запросом)
   const budgets = batchData?.budgets[section.id]
@@ -271,7 +274,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
           <div className="flex items-center gap-1.5 min-w-0">
             {hasChildren ? (
               <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={toggle}
                 className="p-0.5 hover:bg-muted rounded transition-colors shrink-0"
               >
                 <ChevronRight
@@ -463,7 +466,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
               range={range}
               timelineWidth={timelineWidth}
               sectionId={section.id}
-              absoluteRowY={0}
               rowHeight={rowHeight}
               onMarkerClick={(checkpoint) => openCheckpointEdit(checkpoint.checkpoint_id)}
             />
@@ -528,9 +530,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
         onClose={() => setIsCheckpointModalOpen(false)}
         sectionId={section.id}
         sectionName={section.name}
-        onSuccess={() => {
-          refetchCheckpoints()
-        }}
+        onSuccess={invalidateBatchData}
       />
     </>
   )

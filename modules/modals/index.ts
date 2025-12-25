@@ -140,6 +140,7 @@ export { SectionMetrics } from './components/section'
 
 // Stage
 export { StageModal, type StageModalProps } from './components/stage'
+export { StageCreateModal, type StageCreateModalProps } from './components/stage'
 export { ResponsiblesDropdown } from './components/stage'
 
 // Item / Task

@@ -1,27 +1,17 @@
 /**
  * Budget Management - Main Table Component
  *
- * Логика распределения бюджета:
- * 1. Общий бюджет проекта распределяется по разделам в %
- * 2. Задачи оцениваются в часах по категориям (К, ВС, ГС)
- * 3. Часы приводятся к категории К через коэффициенты
- * 4. Бюджет по трудозатратам = Приведённые часы × Ставка К
- * 5. Сравнение выделенного бюджета и бюджета по трудозатратам
+ * Иерархия: Проект → Стадия → Объект → Раздел → Этап → Задача
+ * С колонкой компактных баров бюджетов для каждого уровня
  */
 
 'use client'
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import {
   ChevronRight,
   ChevronDown,
-  Download,
-  AlertTriangle,
-  CheckCircle2,
-  Settings2,
-  Pencil,
-  Check,
-  X,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,17 +19,16 @@ import { cn } from '@/lib/utils'
 // Types
 // ============================================================================
 
-/** Категория специалиста */
 type EmployeeCategory = 'К' | 'ВС' | 'ГС'
 
-/** Коэффициенты приведения к категории К */
-interface ConversionRates {
-  К: number   // всегда 1.0
-  ВС: number  // например 1.3
-  ГС: number  // например 1.6
+interface Budget {
+  id: string
+  name: string
+  type: 'Основной' | 'Премиальный' | 'Дополнительный'
+  planned: number
+  spent: number
 }
 
-/** Задача декомпозиции */
 interface Task {
   id: string
   name: string
@@ -47,148 +36,211 @@ interface Task {
   plannedHours: number
 }
 
-/** Этап декомпозиции */
-interface Stage {
+interface DecompStage {
   id: string
   name: string
   tasks: Task[]
 }
 
-/** Раздел проекта */
 interface Section {
   id: string
   code: string
   name: string
-  budgetPercent: number      // % от общего бюджета
-  rateK: number              // Ставка категории К (BYN/час)
-  conversionRates: ConversionRates
-  stages: Stage[]
+  budgets: Budget[]
+  stages: DecompStage[]
 }
 
-/** Проект */
+interface ProjectObject {
+  id: string
+  name: string
+  budgets: Budget[]
+  sections: Section[]
+}
+
+interface ProjectStage {
+  id: string
+  name: string
+  budgets: Budget[]
+  objects: ProjectObject[]
+}
+
 interface Project {
   id: string
   name: string
-  totalBudget: number        // Общий бюджет проекта
-  sections: Section[]
+  budgets: Budget[]
+  stages: ProjectStage[]
 }
 
 // ============================================================================
 // Mock Data
 // ============================================================================
 
-const MOCK_PROJECT: Project = {
-  id: 'p1',
-  name: 'П-28/24 Жилой комплекс',
-  totalBudget: 145000,
-  sections: [
-    {
-      id: 's1',
-      code: 'АР',
-      name: 'Архитектурные решения',
-      budgetPercent: 31,
-      rateK: 28.5,
-      conversionRates: { К: 1.0, ВС: 1.35, ГС: 1.65 },
-      stages: [
-        {
-          id: 'st1',
-          name: '1.1 Курирование',
-          tasks: [
-            { id: 't1', name: 'Совещания и координация', category: 'ГС', plannedHours: 80 },
-            { id: 't2', name: 'Контроль качества', category: 'ГС', plannedHours: 40 },
-          ],
-        },
-        {
-          id: 'st2',
-          name: '1.2 Моделирование LOD200',
-          tasks: [
-            { id: 't3', name: 'Объёмно-планировочное решение', category: 'ВС', plannedHours: 160 },
-            { id: 't4', name: 'Функциональное зонирование', category: 'ВС', plannedHours: 80 },
-            { id: 't5', name: 'Координационная основа', category: 'К', plannedHours: 40 },
-          ],
-        },
-        {
-          id: 'st3',
-          name: '1.3 Моделирование LOD300',
-          tasks: [
-            { id: 't6', name: 'Детализация отделки', category: 'ВС', plannedHours: 120 },
-            { id: 't7', name: 'Корректировка по смежникам', category: 'К', plannedHours: 60 },
-          ],
-        },
-        {
-          id: 'st4',
-          name: '1.4 Оформление',
-          tasks: [
-            { id: 't8', name: 'Оформление чертежей', category: 'К', plannedHours: 200 },
-            { id: 't9', name: 'Спецификации', category: 'К', plannedHours: 80 },
-          ],
-        },
-      ],
-    },
-    {
-      id: 's2',
-      code: 'КР',
-      name: 'Конструктивные решения',
-      budgetPercent: 42,
-      rateK: 32.0,
-      conversionRates: { К: 1.0, ВС: 1.30, ГС: 1.55 },
-      stages: [
-        {
-          id: 'st5',
-          name: '2.1 Расчёт несущих конструкций',
-          tasks: [
-            { id: 't10', name: 'Статический расчёт', category: 'ВС', plannedHours: 200 },
-            { id: 't11', name: 'Динамический расчёт', category: 'ВС', plannedHours: 120 },
-            { id: 't12', name: 'Расчёт фундаментов', category: 'ВС', plannedHours: 80 },
-          ],
-        },
-        {
-          id: 'st6',
-          name: '2.2 Проектирование узлов',
-          tasks: [
-            { id: 't13', name: 'Узлы сопряжения', category: 'К', plannedHours: 160 },
-            { id: 't14', name: 'Типовые решения', category: 'К', plannedHours: 80 },
-          ],
-        },
-        {
-          id: 'st7',
-          name: '2.3 Оформление',
-          tasks: [
-            { id: 't15', name: 'Оформление чертежей КЖ', category: 'К', plannedHours: 240 },
-            { id: 't16', name: 'Оформление чертежей КМ', category: 'К', plannedHours: 160 },
-            { id: 't17', name: 'Спецификации', category: 'К', plannedHours: 60 },
-          ],
-        },
-      ],
-    },
-    {
-      id: 's3',
-      code: 'ОВ',
-      name: 'Отопление и вентиляция',
-      budgetPercent: 27,
-      rateK: 26.8,
-      conversionRates: { К: 1.0, ВС: 1.25, ГС: 1.50 },
-      stages: [
-        {
-          id: 'st8',
-          name: '3.1 Расчёт систем',
-          tasks: [
-            { id: 't18', name: 'Теплотехнический расчёт', category: 'ВС', plannedHours: 60 },
-            { id: 't19', name: 'Аэродинамический расчёт', category: 'ВС', plannedHours: 80 },
-          ],
-        },
-        {
-          id: 'st9',
-          name: '3.2 Проектирование',
-          tasks: [
-            { id: 't20', name: 'Схема отопления', category: 'К', plannedHours: 120 },
-            { id: 't21', name: 'Схема вентиляции', category: 'К', plannedHours: 160 },
-            { id: 't22', name: 'Спецификации оборудования', category: 'К', plannedHours: 40 },
-          ],
-        },
-      ],
-    },
-  ],
+const MOCK_DATA: Project[] = [
+  {
+    id: 'p1',
+    name: 'П-28/24 Жилой комплекс "Минск-Сити"',
+    budgets: [
+      { id: 'b1', name: 'Основной', type: 'Основной', planned: 450000, spent: 127500 },
+      { id: 'b2', name: 'Премиальный', type: 'Премиальный', planned: 35000, spent: 12000 },
+    ],
+    stages: [
+      {
+        id: 'ps1',
+        name: 'Стадия П (Проект)',
+        budgets: [
+          { id: 'b3', name: 'Основной', type: 'Основной', planned: 280000, spent: 95000 },
+        ],
+        objects: [
+          {
+            id: 'o1',
+            name: 'Жилой дом №1 (корпус А)',
+            budgets: [
+              { id: 'b4', name: 'Основной', type: 'Основной', planned: 145000, spent: 52000 },
+            ],
+            sections: [
+              {
+                id: 's1',
+                code: 'АР',
+                name: 'Архитектурные решения',
+                budgets: [
+                  { id: 'b5', name: 'Основной', type: 'Основной', planned: 45000, spent: 18500 },
+                  { id: 'b6', name: 'Премиальный', type: 'Премиальный', planned: 5000, spent: 2100 },
+                ],
+                stages: [
+                  {
+                    id: 'ds1',
+                    name: '1.1 Курирование',
+                    tasks: [
+                      { id: 't1', name: 'Совещания и координация', category: 'ГС', plannedHours: 80 },
+                      { id: 't2', name: 'Контроль качества', category: 'ГС', plannedHours: 40 },
+                    ],
+                  },
+                  {
+                    id: 'ds2',
+                    name: '1.2 Моделирование LOD200',
+                    tasks: [
+                      { id: 't3', name: 'Объёмно-планировочное решение', category: 'ВС', plannedHours: 160 },
+                      { id: 't4', name: 'Функциональное зонирование', category: 'ВС', plannedHours: 80 },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: 's2',
+                code: 'КР',
+                name: 'Конструктивные решения',
+                budgets: [
+                  { id: 'b7', name: 'Основной', type: 'Основной', planned: 62000, spent: 31000 },
+                  { id: 'b8', name: 'Доп. работы', type: 'Дополнительный', planned: 8000, spent: 8500 },
+                ],
+                stages: [
+                  {
+                    id: 'ds3',
+                    name: '2.1 Расчёт конструкций',
+                    tasks: [
+                      { id: 't5', name: 'Статический расчёт', category: 'ВС', plannedHours: 200 },
+                      { id: 't6', name: 'Динамический расчёт', category: 'ВС', plannedHours: 120 },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: 's3',
+                code: 'ОВ',
+                name: 'Отопление и вентиляция',
+                budgets: [
+                  { id: 'b9', name: 'Основной', type: 'Основной', planned: 38000, spent: 12000 },
+                ],
+                stages: [
+                  {
+                    id: 'ds4',
+                    name: '3.1 Расчёт систем',
+                    tasks: [
+                      { id: 't7', name: 'Теплотехнический расчёт', category: 'ВС', plannedHours: 60 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'o2',
+            name: 'Жилой дом №2 (корпус Б)',
+            budgets: [
+              { id: 'b10', name: 'Основной', type: 'Основной', planned: 135000, spent: 43000 },
+            ],
+            sections: [
+              {
+                id: 's4',
+                code: 'АР',
+                name: 'Архитектурные решения',
+                budgets: [
+                  { id: 'b11', name: 'Основной', type: 'Основной', planned: 42000, spent: 15000 },
+                ],
+                stages: [
+                  {
+                    id: 'ds5',
+                    name: '1.1 Курирование',
+                    tasks: [
+                      { id: 't8', name: 'Совещания', category: 'ГС', plannedHours: 60 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'ps2',
+        name: 'Стадия Р (Рабочая документация)',
+        budgets: [
+          { id: 'b12', name: 'Основной', type: 'Основной', planned: 170000, spent: 32500 },
+        ],
+        objects: [],
+      },
+    ],
+  },
+  {
+    id: 'p2',
+    name: 'П-15/24 Торговый центр',
+    budgets: [
+      { id: 'b13', name: 'Основной', type: 'Основной', planned: 280000, spent: 95000 },
+    ],
+    stages: [
+      {
+        id: 'ps3',
+        name: 'Стадия П',
+        budgets: [],
+        objects: [
+          {
+            id: 'o3',
+            name: 'Торговый блок',
+            budgets: [
+              { id: 'b14', name: 'Основной', type: 'Основной', planned: 180000, spent: 65000 },
+            ],
+            sections: [
+              {
+                id: 's5',
+                code: 'ЭС',
+                name: 'Электроснабжение',
+                budgets: [
+                  { id: 'b15', name: 'Основной', type: 'Основной', planned: 52000, spent: 28000 },
+                ],
+                stages: [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+const BUDGET_COLORS: Record<string, string> = {
+  'Основной': '#1E7260',
+  'Премиальный': '#F59E0B',
+  'Дополнительный': '#6366F1',
 }
 
 // ============================================================================
@@ -199,220 +251,313 @@ function formatCurrency(value: number): string {
   return value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 }
 
+function getTotalBudget(budgets: Budget[]): number {
+  return budgets.reduce((sum, b) => sum + b.planned, 0)
+}
+
 function formatHours(value: number): string {
   return value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
 }
 
-/** Рассчитать приведённые часы К для задачи */
-function calcConvertedHours(task: Task, rates: ConversionRates): number {
-  return task.plannedHours * rates[task.category]
-}
-
-/** Рассчитать итоги по этапу */
-function calcStageStats(stage: Stage, rates: ConversionRates) {
-  let totalHours = 0
-  let convertedHoursK = 0
-  const hoursByCategory: Record<EmployeeCategory, number> = { К: 0, ВС: 0, ГС: 0 }
-
-  stage.tasks.forEach((task) => {
-    totalHours += task.plannedHours
-    convertedHoursK += calcConvertedHours(task, rates)
-    hoursByCategory[task.category] += task.plannedHours
-  })
-
-  return { totalHours, convertedHoursK, hoursByCategory }
-}
-
-/** Рассчитать итоги по разделу */
-function calcSectionStats(section: Section, totalBudget: number) {
-  let totalHours = 0
-  let convertedHoursK = 0
-  const hoursByCategory: Record<EmployeeCategory, number> = { К: 0, ВС: 0, ГС: 0 }
-
-  section.stages.forEach((stage) => {
-    const stats = calcStageStats(stage, section.conversionRates)
-    totalHours += stats.totalHours
-    convertedHoursK += stats.convertedHoursK
-    hoursByCategory.К += stats.hoursByCategory.К
-    hoursByCategory.ВС += stats.hoursByCategory.ВС
-    hoursByCategory.ГС += stats.hoursByCategory.ГС
-  })
-
-  const allocatedBudget = (totalBudget * section.budgetPercent) / 100
-  const laborBudget = convertedHoursK * section.rateK
-  const difference = allocatedBudget - laborBudget
-
-  return {
-    totalHours,
-    convertedHoursK,
-    hoursByCategory,
-    allocatedBudget,
-    laborBudget,
-    difference,
-  }
-}
-
-// ============================================================================
-// Editable Cell Component
-// ============================================================================
-
-interface EditableCellProps {
-  value: number
-  onChange: (value: number) => void
-  format?: 'number' | 'percent' | 'currency'
-  suffix?: string
-  className?: string
-  textClassName?: string
-  min?: number
-  max?: number
-  step?: number
-}
-
-function EditableCell({
-  value,
-  onChange,
-  format = 'number',
-  suffix = '',
-  className = '',
-  textClassName = '',
-  min = 0,
-  max = 999999,
-  step = 1,
-}: EditableCellProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editValue, setEditValue] = useState(value.toString())
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [isEditing])
-
-  const handleSave = useCallback(() => {
-    const parsed = parseFloat(editValue.replace(',', '.'))
-    if (!isNaN(parsed) && parsed >= min && parsed <= max) {
-      onChange(parsed)
-    }
-    setIsEditing(false)
-  }, [editValue, onChange, min, max])
-
-  const handleCancel = useCallback(() => {
-    setEditValue(value.toString())
-    setIsEditing(false)
-  }, [value])
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave()
-    } else if (e.key === 'Escape') {
-      handleCancel()
-    }
-  }, [handleSave, handleCancel])
-
-  const displayValue = useMemo(() => {
-    if (format === 'percent') return `${value}%`
-    if (format === 'currency') return formatCurrency(value)
-    return value.toFixed(step < 1 ? 2 : 0)
-  }, [value, format, step])
-
-  if (isEditing) {
-    return (
-      <div className={cn('flex items-center gap-1', className)}>
-        <input
-          ref={inputRef}
-          type="number"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSave}
-          min={min}
-          max={max}
-          step={step}
-          className="w-full bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-[11px] tabular-nums text-white outline-none focus:border-blue-500"
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div
-      className={cn(
-        'group flex items-center gap-1 cursor-pointer rounded px-1 -mx-1 hover:bg-white/5 transition-colors',
-        className
-      )}
-      onClick={() => {
-        setEditValue(value.toString())
-        setIsEditing(true)
-      }}
-    >
-      <span className={cn('text-[11px] tabular-nums', textClassName)}>
-        {displayValue}{suffix}
-      </span>
-      <Pencil size={10} className="opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />
-    </div>
-  )
+function calcTotalHours(stages: DecompStage[]): number {
+  return stages.reduce((sum, stage) =>
+    sum + stage.tasks.reduce((s, t) => s + t.plannedHours, 0), 0)
 }
 
 // ============================================================================
 // Sub-Components
 // ============================================================================
 
-/** Цветной индикатор категории */
+/** Компактные бары бюджетов с суммами и процентом от родителя */
+function BudgetBars({
+  budgets,
+  parentTotal = 0,
+  maxWidth = 100
+}: {
+  budgets: Budget[]
+  parentTotal?: number
+  maxWidth?: number
+}) {
+  if (budgets.length === 0) {
+    return <span className="text-[10px] text-white/20">—</span>
+  }
+
+  const total = getTotalBudget(budgets)
+  const percentOfParent = parentTotal > 0 ? Math.round((total / parentTotal) * 100) : null
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Bars */}
+      <div className="flex flex-col gap-0.5" style={{ width: maxWidth }}>
+        {budgets.map((budget) => {
+          const progress = budget.planned > 0 ? (budget.spent / budget.planned) * 100 : 0
+          const isOver = budget.spent > budget.planned
+
+          return (
+            <div
+              key={budget.id}
+              className="group relative"
+              title={`${budget.name}: ${formatCurrency(budget.spent)} / ${formatCurrency(budget.planned)} BYN`}
+            >
+              {/* Background bar (planned) */}
+              <div
+                className="h-2 rounded-sm overflow-hidden"
+                style={{ backgroundColor: `${BUDGET_COLORS[budget.type]}20` }}
+              >
+                {/* Progress bar (spent) */}
+                <div
+                  className="h-full rounded-sm transition-all"
+                  style={{
+                    width: `${Math.min(progress, 100)}%`,
+                    backgroundColor: isOver ? '#EF4444' : BUDGET_COLORS[budget.type],
+                  }}
+                />
+              </div>
+
+              {/* Label on hover */}
+              <div className="absolute left-0 -top-6 hidden group-hover:block z-20 px-1.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-[9px] text-white/80 whitespace-nowrap shadow-lg">
+                {budget.name}: {formatCurrency(budget.spent)} / {formatCurrency(budget.planned)} BYN
+                {isOver && <span className="text-red-400 ml-1">(+{formatCurrency(budget.spent - budget.planned)})</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Amount + Percent */}
+      <div className="flex flex-col items-end min-w-[90px]">
+        <div className="flex items-baseline gap-1">
+          <span className="text-[11px] text-white/80 tabular-nums font-medium">
+            {formatCurrency(total)}
+          </span>
+          <span className="text-[9px] text-white/30">BYN</span>
+        </div>
+        {percentOfParent !== null && (
+          <span className="text-[9px] text-white/40 tabular-nums">
+            {percentOfParent}% от родителя
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Бейдж категории */
 function CategoryBadge({ category }: { category: EmployeeCategory }) {
   const colors: Record<EmployeeCategory, string> = {
     К: '#3b82f6',
     ВС: '#8b5cf6',
     ГС: '#f59e0b',
   }
-  const color = colors[category]
-
   return (
     <span
-      className="inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-semibold"
-      style={{ backgroundColor: `${color}20`, color }}
+      className="inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-semibold"
+      style={{ backgroundColor: `${colors[category]}20`, color: colors[category] }}
     >
       {category}
     </span>
   )
 }
 
-/** Индикатор разницы бюджетов */
-function BudgetDiff({ value }: { value: number }) {
-  const isPositive = value >= 0
-  const color = isPositive ? '#22c55e' : '#ef4444'
-  const Icon = isPositive ? CheckCircle2 : AlertTriangle
+// ============================================================================
+// Row Components
+// ============================================================================
+
+interface RowProps {
+  expanded: Set<string>
+  onToggle: (id: string) => void
+  parentTotal?: number
+}
+
+function ProjectRow({ project, expanded, onToggle }: { project: Project } & RowProps) {
+  const isExpanded = expanded.has(project.id)
+  const hasChildren = project.stages.length > 0
+  const projectTotal = getTotalBudget(project.budgets)
 
   return (
-    <div className="flex items-center gap-1">
-      <Icon size={12} style={{ color }} />
-      <span
-        className="text-[11px] tabular-nums font-medium"
-        style={{ color }}
+    <>
+      <tr
+        className="border-b border-white/5 bg-gradient-to-r from-blue-500/10 to-transparent hover:from-blue-500/15 cursor-pointer"
+        onClick={() => hasChildren && onToggle(project.id)}
       >
-        {isPositive ? '+' : ''}{formatCurrency(value)}
-      </span>
-    </div>
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-2">
+            <button className={cn('w-4 h-4 flex items-center justify-center text-white/40', !hasChildren && 'invisible')}>
+              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[9px] text-blue-400 font-medium">
+              ПРОЕКТ
+            </span>
+            <span className="text-xs font-medium text-white/90">{project.name}</span>
+          </div>
+        </td>
+        <td className="px-3 py-2">
+          <BudgetBars budgets={project.budgets} />
+        </td>
+        <td className="px-3 py-2 text-right text-[11px] text-white/50">—</td>
+      </tr>
+      {isExpanded && project.stages.map(stage => (
+        <StageRow key={stage.id} stage={stage} expanded={expanded} onToggle={onToggle} parentTotal={projectTotal} />
+      ))}
+    </>
   )
 }
 
-/** Прогресс-бар заполнения бюджета */
-function BudgetBar({ allocated, labor }: { allocated: number; labor: number }) {
-  const percentage = allocated > 0 ? Math.min((labor / allocated) * 100, 150) : 0
-  const isOver = labor > allocated
-  const color = isOver ? '#ef4444' : '#22c55e'
+function StageRow({ stage, expanded, onToggle, parentTotal = 0 }: { stage: ProjectStage } & RowProps) {
+  const isExpanded = expanded.has(stage.id)
+  const hasChildren = stage.objects.length > 0
+  const stageTotal = getTotalBudget(stage.budgets)
 
   return (
-    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-      <div
-        className="h-full rounded-full transition-all duration-300"
-        style={{
-          width: `${Math.min(percentage, 100)}%`,
-          backgroundColor: color,
-        }}
-      />
-    </div>
+    <>
+      <tr
+        className="border-b border-white/5 bg-gradient-to-r from-violet-500/5 to-transparent hover:from-violet-500/10 cursor-pointer"
+        onClick={() => hasChildren && onToggle(stage.id)}
+      >
+        <td className="px-3 py-1.5">
+          <div className="flex items-center gap-2 pl-6">
+            <button className={cn('w-4 h-4 flex items-center justify-center text-white/40', !hasChildren && 'invisible')}>
+              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+            <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-[9px] text-violet-400 font-medium">
+              СТАДИЯ
+            </span>
+            <span className="text-[11px] text-white/80">{stage.name}</span>
+          </div>
+        </td>
+        <td className="px-3 py-1.5">
+          <BudgetBars budgets={stage.budgets} parentTotal={parentTotal} />
+        </td>
+        <td className="px-3 py-1.5 text-right text-[11px] text-white/50">—</td>
+      </tr>
+      {isExpanded && stage.objects.map(obj => (
+        <ObjectRow key={obj.id} object={obj} expanded={expanded} onToggle={onToggle} parentTotal={stageTotal || parentTotal} />
+      ))}
+    </>
+  )
+}
+
+function ObjectRow({ object, expanded, onToggle, parentTotal = 0 }: { object: ProjectObject } & RowProps) {
+  const isExpanded = expanded.has(object.id)
+  const hasChildren = object.sections.length > 0
+  const objectTotal = getTotalBudget(object.budgets)
+
+  return (
+    <>
+      <tr
+        className="border-b border-white/5 bg-gradient-to-r from-pink-500/5 to-transparent hover:from-pink-500/10 cursor-pointer"
+        onClick={() => hasChildren && onToggle(object.id)}
+      >
+        <td className="px-3 py-1.5">
+          <div className="flex items-center gap-2 pl-12">
+            <button className={cn('w-4 h-4 flex items-center justify-center text-white/40', !hasChildren && 'invisible')}>
+              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-[9px] text-pink-400 font-medium">
+              ОБЪЕКТ
+            </span>
+            <span className="text-[11px] text-white/70">{object.name}</span>
+          </div>
+        </td>
+        <td className="px-3 py-1.5">
+          <BudgetBars budgets={object.budgets} parentTotal={parentTotal} />
+        </td>
+        <td className="px-3 py-1.5 text-right text-[11px] text-white/50">—</td>
+      </tr>
+      {isExpanded && object.sections.map(section => (
+        <SectionRow key={section.id} section={section} expanded={expanded} onToggle={onToggle} parentTotal={objectTotal || parentTotal} />
+      ))}
+    </>
+  )
+}
+
+function SectionRow({ section, expanded, onToggle, parentTotal = 0 }: { section: Section } & RowProps) {
+  const isExpanded = expanded.has(section.id)
+  const hasChildren = section.stages.length > 0
+  const totalHours = calcTotalHours(section.stages)
+
+  return (
+    <>
+      <tr
+        className="border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent hover:from-emerald-500/10 cursor-pointer"
+        onClick={() => hasChildren && onToggle(section.id)}
+      >
+        <td className="px-3 py-1.5">
+          <div className="flex items-center gap-2 pl-[72px]">
+            <button className={cn('w-4 h-4 flex items-center justify-center text-white/40', !hasChildren && 'invisible')}>
+              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+            <span className="px-1 py-0.5 rounded bg-emerald-500/20 text-[9px] text-emerald-400 font-mono font-medium">
+              {section.code}
+            </span>
+            <span className="text-[11px] text-white/70">{section.name}</span>
+          </div>
+        </td>
+        <td className="px-3 py-1.5">
+          <BudgetBars budgets={section.budgets} parentTotal={parentTotal} />
+        </td>
+        <td className="px-3 py-1.5 text-right">
+          {totalHours > 0 && (
+            <span className="text-[11px] text-white/60 tabular-nums">{formatHours(totalHours)} ч</span>
+          )}
+        </td>
+      </tr>
+      {isExpanded && section.stages.map(stage => (
+        <DecompStageRow key={stage.id} stage={stage} expanded={expanded} onToggle={onToggle} />
+      ))}
+    </>
+  )
+}
+
+function DecompStageRow({ stage, expanded, onToggle }: { stage: DecompStage } & RowProps) {
+  const isExpanded = expanded.has(stage.id)
+  const hasChildren = stage.tasks.length > 0
+  const totalHours = stage.tasks.reduce((sum, t) => sum + t.plannedHours, 0)
+
+  return (
+    <>
+      <tr
+        className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer"
+        onClick={() => hasChildren && onToggle(stage.id)}
+      >
+        <td className="px-3 py-1">
+          <div className="flex items-center gap-2 pl-[96px]">
+            <button className={cn('w-4 h-4 flex items-center justify-center text-white/30', !hasChildren && 'invisible')}>
+              {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            </button>
+            <span className="text-[10px] text-white/50">{stage.name}</span>
+          </div>
+        </td>
+        <td className="px-3 py-1">
+          <span className="text-[10px] text-white/20">—</span>
+        </td>
+        <td className="px-3 py-1 text-right">
+          <span className="text-[10px] text-white/50 tabular-nums">{formatHours(totalHours)} ч</span>
+        </td>
+      </tr>
+      {isExpanded && stage.tasks.map(task => (
+        <TaskRow key={task.id} task={task} />
+      ))}
+    </>
+  )
+}
+
+function TaskRow({ task }: { task: Task }) {
+  return (
+    <tr className="border-b border-white/5 hover:bg-white/[0.01]">
+      <td className="px-3 py-1">
+        <div className="flex items-center gap-2 pl-[120px]">
+          <CategoryBadge category={task.category} />
+          <span className="text-[10px] text-white/40">{task.name}</span>
+        </div>
+      </td>
+      <td className="px-3 py-1">
+        <span className="text-[10px] text-white/20">—</span>
+      </td>
+      <td className="px-3 py-1 text-right">
+        <span className="text-[10px] text-white/40 tabular-nums">{task.plannedHours} ч</span>
+      </td>
+    </tr>
   )
 }
 
@@ -421,469 +566,108 @@ function BudgetBar({ allocated, labor }: { allocated: number; labor: number }) {
 // ============================================================================
 
 export function BudgetTable() {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['s1', 's2', 's3'])
-  )
-  const [expandedStages, setExpandedStages] = useState<Set<string>>(
-    new Set(['st1', 'st2'])
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    new Set(['p1', 'ps1', 'o1', 's1'])
   )
 
-  // Editable state
-  const [totalBudget, setTotalBudget] = useState(MOCK_PROJECT.totalBudget)
-  const [sectionData, setSectionData] = useState(() =>
-    MOCK_PROJECT.sections.map((s) => ({
-      id: s.id,
-      budgetPercent: s.budgetPercent,
-      rateK: s.rateK,
-    }))
-  )
-
-  // Create project with current editable values
-  const project = useMemo(() => ({
-    ...MOCK_PROJECT,
-    totalBudget,
-    sections: MOCK_PROJECT.sections.map((s) => {
-      const data = sectionData.find((d) => d.id === s.id)
-      return {
-        ...s,
-        budgetPercent: data?.budgetPercent ?? s.budgetPercent,
-        rateK: data?.rateK ?? s.rateK,
+  const handleToggle = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
       }
-    }),
-  }), [totalBudget, sectionData])
-
-  // Update handlers
-  const updateSectionPercent = useCallback((sectionId: string, value: number) => {
-    setSectionData((prev) =>
-      prev.map((s) => (s.id === sectionId ? { ...s, budgetPercent: value } : s))
-    )
-  }, [])
-
-  const updateSectionRate = useCallback((sectionId: string, value: number) => {
-    setSectionData((prev) =>
-      prev.map((s) => (s.id === sectionId ? { ...s, rateK: value } : s))
-    )
-  }, [])
-
-  // Рассчитать общие итоги
-  const totals = useMemo(() => {
-    let totalHours = 0
-    let totalConvertedK = 0
-    let totalAllocated = 0
-    let totalLabor = 0
-
-    project.sections.forEach((section) => {
-      const stats = calcSectionStats(section, project.totalBudget)
-      totalHours += stats.totalHours
-      totalConvertedK += stats.convertedHoursK
-      totalAllocated += stats.allocatedBudget
-      totalLabor += stats.laborBudget
-    })
-
-    const percentUsed = project.sections.reduce((sum, s) => sum + s.budgetPercent, 0)
-
-    return {
-      hours: totalHours,
-      convertedK: totalConvertedK,
-      allocated: totalAllocated,
-      labor: totalLabor,
-      difference: totalAllocated - totalLabor,
-      percentUsed,
-    }
-  }, [project])
-
-  const toggleSection = (id: string) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
   }
 
-  const toggleStage = (id: string) => {
-    setExpandedStages((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+  // Expand all / collapse all
+  const allIds = useMemo(() => {
+    const ids: string[] = []
+    MOCK_DATA.forEach(p => {
+      ids.push(p.id)
+      p.stages.forEach(ps => {
+        ids.push(ps.id)
+        ps.objects.forEach(o => {
+          ids.push(o.id)
+          o.sections.forEach(s => {
+            ids.push(s.id)
+            s.stages.forEach(ds => ids.push(ds.id))
+          })
+        })
+      })
     })
-  }
+    return ids
+  }, [])
+
+  const expandAll = () => setExpanded(new Set(allIds))
+  const collapseAll = () => setExpanded(new Set())
 
   return (
     <div className="h-full flex flex-col bg-zinc-950">
-      {/* ================================================================== */}
       {/* Header */}
-      {/* ================================================================== */}
-      <header className="shrink-0 border-b border-white/10 bg-zinc-900/80 backdrop-blur-sm">
-        <div className="px-4 py-2 flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-semibold text-white/90">
-              {project.name}
-            </h1>
-            <div className="flex items-center gap-3 text-[11px] text-white/50">
-              <span className="flex items-center gap-1.5">
-                Общий бюджет:
-                <EditableCell
-                  value={totalBudget}
-                  onChange={setTotalBudget}
-                  format="currency"
-                  suffix=" BYN"
-                  textClassName="text-emerald-400 font-semibold"
-                  min={0}
-                  max={10000000}
-                  step={1000}
-                />
-              </span>
-              <span>·</span>
-              <span>
-                Распределено: <span className={cn(
-                  'font-medium',
-                  totals.percentUsed === 100 ? 'text-emerald-400' : 'text-amber-400'
-                )}>{totals.percentUsed}%</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-white/60 hover:text-white/90 hover:bg-white/5 transition-colors">
-              <Settings2 size={12} />
-              Коэффициенты
+      <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/10 bg-zinc-900/50">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xs font-medium text-white/70">Декомпозиция с бюджетами</h2>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={expandAll}
+              className="px-2 py-0.5 text-[10px] text-white/40 hover:text-white/70 hover:bg-white/5 rounded transition-colors"
+            >
+              Развернуть всё
             </button>
-            <button className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-white/60 hover:text-white/90 hover:bg-white/5 transition-colors">
-              <Download size={12} />
-              Экспорт
+            <button
+              onClick={collapseAll}
+              className="px-2 py-0.5 text-[10px] text-white/40 hover:text-white/70 hover:bg-white/5 rounded transition-colors"
+            >
+              Свернуть всё
             </button>
-          </div>
-        </div>
-
-        {/* Column Group Headers */}
-        <div className="flex border-t border-white/5 bg-zinc-900/60 text-[8px] font-medium text-white/30 uppercase tracking-wider">
-          <div className="w-[280px] shrink-0 px-3 py-1 border-r border-white/5" />
-          <div className="w-[200px] shrink-0 px-2 py-1 text-center border-r border-white/10 bg-blue-500/5">
-            Трудозатраты
-          </div>
-          <div className="w-[150px] shrink-0 px-2 py-1 text-center border-r border-white/10 bg-emerald-500/5">
-            Бюджет
-          </div>
-          <div className="flex-1 min-w-[200px] px-2 py-1 text-center bg-amber-500/5">
-            Сравнение
-          </div>
-        </div>
-
-        {/* Column Headers */}
-        <div className="flex border-t border-white/5 bg-zinc-900/50 text-[8px] font-medium text-white/40 tracking-wide">
-          {/* Структура */}
-          <div className="w-[280px] shrink-0 px-3 py-1.5 border-r border-white/5">
-            Раздел / Этап / Задача
-          </div>
-
-          {/* Трудозатраты */}
-          <div className="w-[40px] shrink-0 px-1 py-1.5 text-center">
-            Кат.
-          </div>
-          <div className="w-[80px] shrink-0 px-2 py-1.5 text-right">
-            Плановые, чел-ч
-          </div>
-          <div className="w-[80px] shrink-0 px-2 py-1.5 text-right border-r border-white/10">
-            Приведённые, чел-ч
-          </div>
-
-          {/* Бюджет */}
-          <div className="w-[50px] shrink-0 px-2 py-1.5 text-center">
-            %
-          </div>
-          <div className="w-[100px] shrink-0 px-2 py-1.5 text-right border-r border-white/10">
-            Ставка, BYN/ч
-          </div>
-
-          {/* Сравнение */}
-          <div className="w-[200px] shrink-0 px-2 py-1.5 text-center">
-            Запрашиваемый / Максимальный
-          </div>
-          <div className="flex-1 min-w-[100px] px-2 py-1.5">
-            Разница, BYN
-          </div>
-        </div>
-      </header>
-
-      {/* ================================================================== */}
-      {/* Table Body */}
-      {/* ================================================================== */}
-      <div className="flex-1 overflow-auto">
-        {project.sections.map((section) => {
-          const isExpanded = expandedSections.has(section.id)
-          const stats = calcSectionStats(section, project.totalBudget)
-
-          return (
-            <div key={section.id}>
-              {/* Section Row */}
-              <div
-                className={cn(
-                  'flex items-center h-9 border-b border-white/5',
-                  'bg-gradient-to-r from-white/[0.04] to-transparent',
-                  'hover:from-white/[0.06] transition-colors'
-                )}
-              >
-                {/* Структура */}
-                <div
-                  className="w-[280px] shrink-0 flex items-center gap-2 px-3 border-r border-white/5 cursor-pointer"
-                  onClick={() => toggleSection(section.id)}
-                >
-                  <button className="shrink-0 w-4 h-4 flex items-center justify-center text-white/40">
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </button>
-                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-mono text-white/70">
-                    {section.code}
-                  </span>
-                  <span className="truncate text-[12px] font-medium text-white/90">
-                    {section.name}
-                  </span>
-                </div>
-
-                {/* Трудозатраты: Кат. */}
-                <div className="w-[40px] shrink-0 px-1" />
-
-                {/* Трудозатраты: Плановые */}
-                <div className="w-[80px] shrink-0 px-2 text-right">
-                  <span className="text-[11px] tabular-nums font-semibold text-white/90">
-                    {formatHours(stats.totalHours)}
-                  </span>
-                </div>
-
-                {/* Трудозатраты: Приведённые */}
-                <div className="w-[80px] shrink-0 px-2 text-right border-r border-white/10">
-                  <span className="text-[11px] tabular-nums font-semibold text-blue-400">
-                    {formatHours(stats.convertedHoursK)}
-                  </span>
-                </div>
-
-                {/* Бюджет: % по разделу (editable) */}
-                <div className="w-[50px] shrink-0 px-1 flex justify-center" onClick={(e) => e.stopPropagation()}>
-                  <EditableCell
-                    value={section.budgetPercent}
-                    onChange={(v) => updateSectionPercent(section.id, v)}
-                    format="percent"
-                    textClassName="font-semibold text-amber-400"
-                    min={0}
-                    max={100}
-                    step={1}
-                  />
-                </div>
-
-                {/* Бюджет: Ставка (editable) */}
-                <div className="w-[100px] shrink-0 px-2 flex justify-end border-r border-white/10" onClick={(e) => e.stopPropagation()}>
-                  <EditableCell
-                    value={section.rateK}
-                    onChange={(v) => updateSectionRate(section.id, v)}
-                    textClassName="text-white/70"
-                    min={0}
-                    max={500}
-                    step={0.5}
-                  />
-                </div>
-
-                {/* Сравнение: Запрашиваемый / Максимальный */}
-                <div className="w-[200px] shrink-0 px-3 flex items-center justify-center gap-1">
-                  <span className="text-[11px] tabular-nums font-semibold text-violet-400">
-                    {formatCurrency(stats.laborBudget)}
-                  </span>
-                  <span className="text-white/30">/</span>
-                  <span className="text-[11px] tabular-nums font-semibold text-emerald-400">
-                    {formatCurrency(stats.allocatedBudget)}
-                  </span>
-                </div>
-
-                {/* Сравнение: Разница */}
-                <div className="flex-1 min-w-[100px] px-2 flex items-center gap-2">
-                  <BudgetDiff value={stats.difference} />
-                  <div className="flex-1 max-w-[80px]">
-                    <BudgetBar allocated={stats.allocatedBudget} labor={stats.laborBudget} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Stages */}
-              {isExpanded &&
-                section.stages.map((stage) => {
-                  const stageExpanded = expandedStages.has(stage.id)
-                  const stageStats = calcStageStats(stage, section.conversionRates)
-
-                  return (
-                    <div key={stage.id}>
-                      {/* Stage Row */}
-                      <div
-                        className={cn(
-                          'flex items-center h-8 border-b border-white/5',
-                          'hover:bg-white/[0.02] cursor-pointer transition-colors'
-                        )}
-                        onClick={() => toggleStage(stage.id)}
-                      >
-                        {/* Структура */}
-                        <div className="w-[280px] shrink-0 flex items-center gap-2 pl-8 pr-3 border-r border-white/5">
-                          <button className="shrink-0 w-4 h-4 flex items-center justify-center text-white/30">
-                            {stageExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </button>
-                          <span className="truncate text-[11px] text-white/70">
-                            {stage.name}
-                          </span>
-                        </div>
-
-                        {/* Трудозатраты: Кат. - empty */}
-                        <div className="w-[40px] shrink-0 px-1" />
-
-                        {/* Трудозатраты: Плановые */}
-                        <div className="w-[80px] shrink-0 px-2 text-right">
-                          <span className="text-[11px] tabular-nums text-white/70">
-                            {formatHours(stageStats.totalHours)}
-                          </span>
-                        </div>
-
-                        {/* Трудозатраты: Приведённые */}
-                        <div className="w-[80px] shrink-0 px-2 text-right border-r border-white/10">
-                          <span className="text-[11px] tabular-nums text-blue-400/70">
-                            {formatHours(stageStats.convertedHoursK)}
-                          </span>
-                        </div>
-
-                        {/* Empty cells for budget columns */}
-                        <div className="w-[50px] shrink-0 px-1" />
-                        <div className="w-[100px] shrink-0 px-2 border-r border-white/10" />
-                        <div className="w-[200px] shrink-0 px-3" />
-                        <div className="flex-1 min-w-[100px] px-2" />
-                      </div>
-
-                      {/* Tasks */}
-                      {stageExpanded &&
-                        stage.tasks.map((task) => {
-                          const convertedHours = calcConvertedHours(task, section.conversionRates)
-
-                          return (
-                            <div
-                              key={task.id}
-                              className="flex items-center h-7 border-b border-white/5 hover:bg-white/[0.015] transition-colors"
-                            >
-                              {/* Структура */}
-                              <div className="w-[280px] shrink-0 pl-14 pr-3 border-r border-white/5">
-                                <span className="truncate text-[11px] text-white/50">
-                                  {task.name}
-                                </span>
-                              </div>
-
-                              {/* Трудозатраты: Кат. */}
-                              <div className="w-[40px] shrink-0 px-1 flex justify-center">
-                                <CategoryBadge category={task.category} />
-                              </div>
-
-                              {/* Трудозатраты: Плановые */}
-                              <div className="w-[80px] shrink-0 px-2 text-right">
-                                <span className="text-[11px] tabular-nums text-white/60">
-                                  {formatHours(task.plannedHours)}
-                                </span>
-                              </div>
-
-                              {/* Трудозатраты: Приведённые */}
-                              <div className="w-[80px] shrink-0 px-2 text-right border-r border-white/10">
-                                <span className="text-[11px] tabular-nums text-blue-400/60">
-                                  {formatHours(convertedHours)}
-                                </span>
-                              </div>
-
-                              {/* Empty cells for budget columns at task level */}
-                              <div className="w-[50px] shrink-0 px-1" />
-                              <div className="w-[100px] shrink-0 px-2 border-r border-white/10" />
-                              <div className="w-[200px] shrink-0 px-3" />
-                              <div className="flex-1 min-w-[100px] px-2" />
-                            </div>
-                          )
-                        })}
-                    </div>
-                  )
-                })}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ================================================================== */}
-      {/* Footer - Totals */}
-      {/* ================================================================== */}
-      <footer className="shrink-0 border-t border-white/10 bg-zinc-900/90 backdrop-blur-sm">
-        <div className="flex items-center h-10">
-          {/* Структура */}
-          <div className="w-[280px] shrink-0 px-3 border-r border-white/5">
-            <span className="text-[11px] font-semibold text-white/70 uppercase tracking-wider">
-              Итого по проекту
-            </span>
-          </div>
-
-          {/* Трудозатраты: Кат. */}
-          <div className="w-[40px] shrink-0 px-1" />
-
-          {/* Трудозатраты: Плановые */}
-          <div className="w-[80px] shrink-0 px-2 text-right">
-            <span className="text-[12px] tabular-nums font-bold text-white">
-              {formatHours(totals.hours)}
-            </span>
-          </div>
-
-          {/* Трудозатраты: Приведённые */}
-          <div className="w-[80px] shrink-0 px-2 text-right border-r border-white/10">
-            <span className="text-[12px] tabular-nums font-bold text-blue-400">
-              {formatHours(totals.convertedK)}
-            </span>
-          </div>
-
-          {/* Бюджет: % */}
-          <div className="w-[50px] shrink-0 px-1 text-center">
-            <span className={cn(
-              'text-[11px] tabular-nums font-bold',
-              totals.percentUsed === 100 ? 'text-emerald-400' : 'text-amber-400'
-            )}>
-              {totals.percentUsed}%
-            </span>
-          </div>
-
-          {/* Бюджет: Ставка */}
-          <div className="w-[100px] shrink-0 px-2 text-right border-r border-white/10">
-            <span className="text-[11px] text-white/40">—</span>
-          </div>
-
-          {/* Сравнение: Запрашиваемый / Максимальный */}
-          <div className="w-[200px] shrink-0 px-3 flex items-center justify-center gap-1">
-            <span className="text-[12px] tabular-nums font-bold text-violet-400">
-              {formatCurrency(totals.labor)}
-            </span>
-            <span className="text-white/30">/</span>
-            <span className="text-[12px] tabular-nums font-bold text-emerald-400">
-              {formatCurrency(totals.allocated)}
-            </span>
-          </div>
-
-          {/* Сравнение: Разница */}
-          <div className="flex-1 min-w-[100px] px-2">
-            <BudgetDiff value={totals.difference} />
           </div>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 px-3 py-1.5 border-t border-white/5 text-[9px] text-white/40">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#3b82f6]" />
-            <span>К — Конструктор</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#8b5cf6]" />
-            <span>ВС — Ведущий специалист</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
-            <span>ГС — Главный специалист</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2 text-white/30">
-            <Pencil size={10} />
-            <span>Кликните для редактирования % и ставок</span>
-          </div>
+        <div className="flex items-center gap-3 text-[9px] text-white/40">
+          {Object.entries(BUDGET_COLORS).map(([type, color]) => (
+            <div key={type} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: color }} />
+              <span>{type}</span>
+            </div>
+          ))}
         </div>
-      </footer>
+      </div>
+
+      {/* Table */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full border-collapse min-w-[700px]">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-zinc-900/95 backdrop-blur-sm border-b border-white/10">
+              <th className="text-left px-3 py-2 text-[10px] font-medium text-white/50 uppercase tracking-wider w-1/2">
+                Структура
+              </th>
+              <th className="text-left px-3 py-2 text-[10px] font-medium text-white/50 uppercase tracking-wider w-[240px]">
+                <div className="flex items-center gap-1">
+                  <Wallet size={10} />
+                  Бюджеты
+                </div>
+              </th>
+              <th className="text-right px-3 py-2 text-[10px] font-medium text-white/50 uppercase tracking-wider w-[80px]">
+                Часы
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {MOCK_DATA.map(project => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                expanded={expanded}
+                onToggle={handleToggle}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

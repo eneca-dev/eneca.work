@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, SearchX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, TimelineRange } from '../../types'
 import { TimelineHeader, type DayCell } from './TimelineHeader'
@@ -41,16 +41,23 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
   ) {
     if (isLoading) {
       return (
-        <div className={cn('flex items-center justify-center h-full', className)}>
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <div className={cn('flex items-center justify-center h-full bg-background', className)}>
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">Загрузка...</span>
+          </div>
         </div>
       )
     }
 
     if (projects.length === 0) {
       return (
-        <div className={cn('flex items-center justify-center h-full text-muted-foreground', className)}>
-          Нет данных для отображения
+        <div className={cn('flex items-center justify-center h-full bg-background', className)}>
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <SearchX className="h-12 w-12 opacity-50" />
+            <span className="text-sm">Нет данных для отображения</span>
+            <span className="text-xs">Попробуйте изменить фильтры</span>
+          </div>
         </div>
       )
     }
@@ -84,7 +91,7 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
           )}
 
           {/* Content area - wrapper with relative positioning for absolute SVG */}
-          <div className="relative flex-1">
+          <div className="relative flex-1" data-timeline-content>
             {/* Content area - project rows */}
             {projects.map((project) => (
               <ProjectRow

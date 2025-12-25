@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { FolderKanban } from 'lucide-react'
 import type { Project, TimelineRange } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
@@ -8,6 +7,7 @@ import { BaseRow } from './BaseRow'
 import { StageRow } from './StageRow'
 import { ProjectStatusTags } from '../shared'
 import { useProjectTagsMap } from '../../../hooks'
+import { useRowExpanded } from '../../../stores'
 
 // ============================================================================
 // Project Row (Top Level)
@@ -23,7 +23,7 @@ interface ProjectRowProps {
  * Строка проекта - верхний уровень иерархии
  */
 export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const { isExpanded, toggle } = useRowExpanded('project', project.id)
   const hasChildren = project.stages.length > 0
 
   // Fetch project tags (cached, single request for all projects)
@@ -34,7 +34,7 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
     <BaseRow
       depth={0}
       isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
+      onToggle={toggle}
       hasChildren={hasChildren}
       icon={<FolderKanban className="w-4 h-4" />}
       label={project.name}

@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import * as LucideIcons from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { PRESET_COLORS, CHECKPOINT_ICONS } from './constants'
+import { ICON_MAP, getIcon } from '../../constants/icon-map'
 import type { IconColorPickerProps } from './types'
 
 export function IconColorPicker({
@@ -14,20 +13,32 @@ export function IconColorPicker({
   selectedColor,
   onIconChange,
   onColorChange,
+  open: controlledOpen,
+  onOpenChange,
+  renderTrigger,
 }: IconColorPickerProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
 
-  const IconComponent = (LucideIcons as unknown as Record<string, LucideIcon>)[selectedIcon]
+  // Support both controlled and uncontrolled modes
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? (onOpenChange || (() => {})) : setInternalOpen
+
+  const IconComponent = getIcon(selectedIcon)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center justify-center w-5 h-5 rounded hover:bg-amber-500/10 transition-colors"
-        >
-          {IconComponent && <IconComponent size={12} style={{ color: selectedColor }} />}
-        </button>
+        {renderTrigger ? (
+          renderTrigger({ icon: IconComponent, color: selectedColor })
+        ) : (
+          <button
+            type="button"
+            className="flex items-center justify-center w-5 h-5 rounded hover:bg-amber-500/10 transition-colors"
+          >
+            {IconComponent && <IconComponent size={12} style={{ color: selectedColor }} />}
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         className={cn(
@@ -45,7 +56,7 @@ export function IconColorPicker({
           <ScrollArea className="h-[200px]">
             <div className="grid grid-cols-8 gap-1 p-1">
               {CHECKPOINT_ICONS.map((iconName) => {
-                const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName]
+                const IconComp = ICON_MAP[iconName]
                 if (!IconComp) return null
                 return (
                   <button

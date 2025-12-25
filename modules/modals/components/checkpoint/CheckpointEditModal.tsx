@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { X, Flag, Loader2, Check, Trash2, CircleCheckBig } from 'lucide-react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import { X, Flag, Loader2, Check, Trash2, CircleCheckBig, Plus } from 'lucide-react'
+import * as LucideIcons from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
 import {
@@ -13,7 +15,7 @@ import {
   useProjectSections,
   usePrefetchCheckpoints,
 } from '@/modules/checkpoints/hooks'
-import { CheckpointTypeSelector, SectionMultiSelect } from '@/modules/checkpoints/components/shared'
+import { IconColorPicker } from '@/modules/checkpoints/components/shared'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DeleteConfirmDialog } from '@/modules/modals/components/section/decomposition/dialogs'
 import type { BaseModalProps } from '../../types'
@@ -92,8 +94,6 @@ export function CheckpointEditModal({
   // Инициализация данных из чекпоинта
   useEffect(() => {
     if (checkpoint && checkpointTypes.length > 0) {
-      const currentType = checkpointTypes.find(t => t.type_id === checkpoint.type_id)
-
       console.log('[CheckpointEditModal] Initializing checkpoint data:', {
         checkpointId,
         completed_at: checkpoint.completed_at,
@@ -108,33 +108,34 @@ export function CheckpointEditModal({
       setDescription(checkpoint.description || '')
       setLinkedSectionIds(checkpoint.linked_sections?.map(s => s.section_id) || [])
 
-      // Если тип custom — берём icon/color из VIEW (они могут быть кастомизированы)
-      // Если тип НЕ custom — берём icon/color из типа (игнорируем старые custom значения)
-      if (currentType?.is_custom) {
-        setCustomIcon(checkpoint.icon || 'Flag')
-        setCustomColor(checkpoint.color || '#6b7280')
-      } else if (currentType) {
-        // Для не-custom типов используем иконку/цвет из типа
-        setCustomIcon(currentType.icon || 'Flag')
-        setCustomColor(currentType.color || '#6b7280')
-      }
+      // Всегда берём icon/color из чекпоинта (они уже скомбинированы в VIEW)
+      setCustomIcon(checkpoint.icon || 'Flag')
+      setCustomColor(checkpoint.color || '#6b7280')
     }
   }, [checkpoint, checkpointTypes, checkpointId])
 
-  // Обновление иконки и цвета при смене типа
-  useEffect(() => {
-    if (selectedType && !selectedType.is_custom) {
-      // При смене на НЕ-custom тип — автоматически устанавливаем иконку/цвет этого типа
-      setCustomIcon(selectedType.icon || 'Flag')
-      setCustomColor(selectedType.color || '#6b7280')
-    }
-    // Для custom типа ничего не делаем — пользователь сам выберет иконку/цвет
-  }, [selectedType])
+  // Note: Removed auto-update of icon/color on type change
+  // Now handled by handleTypeSelect which prefills when user explicitly selects a type template
 
-  // Валидация
+  // При выборе типа - предзаполняем поля (тип = шаблон)
+  const handleTypeSelect = useCallback((typeId: string) => {
+    setSelectedTypeId(typeId)
+
+    const type = checkpointTypes.find((t) => t.type_id === typeId)
+    if (type && !type.is_custom) {
+      // Предзаполняем из шаблона типа
+      setName(type.name)
+      setCustomIcon(type.icon)
+      setCustomColor(type.color)
+    }
+    // Для кастомного типа - ничего не предзаполняем
+  }, [checkpointTypes])
+
+  // Валидация - название и описание обязательны
   const canSave = useMemo(() => {
     const hasDate = !!deadlineDate
-    const hasName = selectedType?.is_custom ? name.trim().length > 0 : true
+    const hasName = name.trim().length > 0
+    const hasDescription = description.trim().length > 0
 
     const hasChanges =
       selectedTypeId !== checkpoint?.type_id ||
@@ -142,10 +143,10 @@ export function CheckpointEditModal({
       deadlineDate !== (checkpoint?.checkpoint_date || '') ||
       description !== (checkpoint?.description || '') ||
       JSON.stringify(linkedSectionIds.sort()) !== JSON.stringify(checkpoint?.linked_sections?.map(s => s.section_id).sort() || []) ||
-      (selectedType?.is_custom && (customIcon !== checkpoint?.icon || customColor !== checkpoint?.color))
+      customIcon !== checkpoint?.icon || customColor !== checkpoint?.color
 
-    return hasDate && hasName && hasChanges && !updateCheckpoint.isPending
-  }, [selectedTypeId, name, deadlineDate, description, linkedSectionIds, customIcon, customColor, selectedType, checkpoint, updateCheckpoint.isPending])
+    return hasDate && hasName && hasDescription && hasChanges && !updateCheckpoint.isPending
+  }, [selectedTypeId, name, deadlineDate, description, linkedSectionIds, customIcon, customColor, checkpoint, updateCheckpoint.isPending])
 
   // Сохранение
   const handleSave = async (): Promise<void> => {
@@ -158,13 +159,12 @@ export function CheckpointEditModal({
       checkpointDate: deadlineDate,
       description: description.trim() || null,
       linkedSectionIds,
-      // Если тип custom — передаем custom_icon/custom_color
-      // Если тип НЕ custom — обнуляем custom_icon/custom_color (чтобы VIEW взял иконку из типа)
-      customIcon: selectedType?.is_custom ? customIcon : null,
-      customColor: selectedType?.is_custom ? customColor : null,
-      // Для optimistic update: передаем иконку и цвет явно (для любого типа)
-      _optimisticIcon: selectedType?.is_custom ? customIcon : selectedType?.icon,
-      _optimisticColor: selectedType?.is_custom ? customColor : selectedType?.color,
+      // Всегда передаём иконку и цвет (пользователь мог изменить после предзаполнения)
+      customIcon,
+      customColor,
+      // Для optimistic update: передаем иконку и цвет явно
+      _optimisticIcon: customIcon,
+      _optimisticColor: customColor,
     }
 
     // Закрываем модалку сразу для мгновенного отклика
@@ -359,124 +359,250 @@ export function CheckpointEditModal({
                 )} />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {/* Left column */}
-                <div className="space-y-3">
-                  {/* Checkpoint Type Selector */}
-                  <div>
-                    <label className={cn(
-                      'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                      'text-slate-500 dark:text-slate-400'
-                    )}>
-                      Тип чекпоинта
-                    </label>
-                    <CheckpointTypeSelector
-                      types={checkpointTypes}
-                      selectedTypeId={selectedTypeId}
-                      onSelect={setSelectedTypeId}
-                      customIcon={customIcon}
-                      customColor={customColor}
-                      onCustomIconChange={setCustomIcon}
-                      onCustomColorChange={setCustomColor}
-                      isLoading={typesLoading}
-                    />
-                  </div>
+              <div className="space-y-3">
+                {/* Type Selector - шаблоны */}
+                <div>
+                  <label className={cn(
+                    'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
+                    'text-slate-500 dark:text-slate-400'
+                  )}>
+                    Шаблон чекпоинта
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {checkpointTypes.map((type) => {
+                      const isSelected = selectedTypeId === type.type_id
+                      const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[type.icon] || Flag
 
-                  {/* Linked Sections */}
-                  <div>
-                    <label className={cn(
-                      'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                      'text-slate-500 dark:text-slate-400'
-                    )}>
-                      Связанные разделы
-                    </label>
-                    <SectionMultiSelect
-                      selectedIds={linkedSectionIds}
-                      onChange={setLinkedSectionIds}
-                      sections={projectSections}
-                      excludeId={checkpoint?.section_id}
-                      isLoading={sectionsLoading}
-                    />
+                      return (
+                        <button
+                          key={type.type_id}
+                          type="button"
+                          onClick={() => handleTypeSelect(type.type_id)}
+                          className={cn(
+                            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium',
+                            'border transition-all duration-150',
+                            isSelected
+                              ? 'shadow-sm'
+                              : cn(
+                                  'border-slate-200 bg-white text-slate-600',
+                                  'hover:border-slate-300 hover:bg-slate-50',
+                                  'dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400',
+                                  'dark:hover:border-slate-600 dark:hover:bg-slate-800/60'
+                                )
+                          )}
+                          style={
+                            isSelected
+                              ? {
+                                  borderColor: `${type.is_custom ? customColor : type.color}60`,
+                                  backgroundColor: `${type.is_custom ? customColor : type.color}15`,
+                                  color: type.is_custom ? customColor : type.color,
+                                }
+                              : undefined
+                          }
+                        >
+                          {type.is_custom ? (
+                            <>
+                              {(() => {
+                                const CustomIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
+                                return <CustomIcon size={12} className="shrink-0" />
+                              })()}
+                              <span>Создать свой</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconComp size={12} className="shrink-0" style={{ color: isSelected ? type.color : undefined }} />
+                              <span>{type.name}</span>
+                            </>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
-                {/* Right column */}
-                <div className="space-y-3">
-                  {/* Checkpoint Name */}
-                  <div>
-                    <label className={cn(
-                      'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                      'text-slate-500 dark:text-slate-400'
-                    )}>
-                      Название {selectedType?.is_custom && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={
-                        selectedType?.is_custom
-                          ? 'Введите название'
-                          : 'По умолчанию — название типа'
-                      }
-                      className={cn(
-                        'w-full px-2.5 py-1.5 text-xs rounded transition-colors',
-                        'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
-                        'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                        'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
-                        'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
-                      )}
-                      disabled={updateCheckpoint.isPending}
-                    />
+                {/* Two columns for the rest */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Left column */}
+                  <div className="space-y-3">
+                    {/* Name + Preview */}
+                    <div>
+                      <label className={cn(
+                        'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
+                        'text-slate-500 dark:text-slate-400'
+                      )}>
+                        Название <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {/* Checkpoint Preview - circle with icon (clickable to open picker) */}
+                        <IconColorPicker
+                          selectedIcon={customIcon}
+                          selectedColor={customColor}
+                          onIconChange={setCustomIcon}
+                          onColorChange={setCustomColor}
+                          renderTrigger={({ color: previewColor }) => {
+                            const PreviewIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
+                            return (
+                              <button
+                                type="button"
+                                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 cursor-pointer transition-transform hover:scale-105"
+                                style={{
+                                  borderColor: previewColor,
+                                  backgroundColor: `${previewColor}20`,
+                                }}
+                              >
+                                <PreviewIcon size={14} style={{ color: previewColor }} />
+                              </button>
+                            )
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="Введите название"
+                          className={cn(
+                            'flex-1 px-2.5 py-1.5 text-xs rounded transition-colors',
+                            'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
+                            'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
+                            'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
+                            'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                          )}
+                          disabled={updateCheckpoint.isPending}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Deadline Date */}
+                    <div>
+                      <label className={cn(
+                        'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
+                        'text-slate-500 dark:text-slate-400'
+                      )}>
+                        Дата дедлайна <span className="text-red-500">*</span>
+                      </label>
+                      <DatePicker
+                        value={deadlineDate ? new Date(deadlineDate) : null}
+                        onChange={(d) => setDeadlineDate(formatDateLocal(d))}
+                        placeholder="Выберите дату"
+                        calendarWidth="260px"
+                        offsetY={32}
+                        offsetX={0}
+                        inputClassName={cn(
+                          'w-full px-2.5 py-1.5 text-xs rounded transition-colors cursor-pointer',
+                          'bg-white border border-slate-300 text-slate-700',
+                          'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
+                          'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200',
+                          'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                        )}
+                      />
+                    </div>
+
+                    {/* Linked Sections - Plus button approach */}
+                    <div>
+                      <label className={cn(
+                        'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
+                        'text-slate-500 dark:text-slate-400'
+                      )}>
+                        Связанные разделы
+                      </label>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {linkedSectionIds.map((id) => {
+                          const section = projectSections.find(s => s.id === id)
+                          if (!section) return null
+                          return (
+                            <span
+                              key={id}
+                              className={cn(
+                                'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px]',
+                                'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                              )}
+                            >
+                              {section.name}
+                              <button
+                                type="button"
+                                onClick={() => setLinkedSectionIds(prev => prev.filter(i => i !== id))}
+                                className="hover:text-red-500 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          )
+                        })}
+                        {/* Plus button with dropdown */}
+                        <div className="relative group">
+                          <button
+                            type="button"
+                            className={cn(
+                              'w-6 h-6 rounded flex items-center justify-center transition-colors',
+                              'border border-dashed border-slate-300 text-slate-400',
+                              'hover:border-slate-400 hover:text-slate-500 hover:bg-slate-50',
+                              'dark:border-slate-700 dark:text-slate-500',
+                              'dark:hover:border-slate-600 dark:hover:text-slate-400 dark:hover:bg-slate-800/50'
+                            )}
+                          >
+                            <Plus size={12} />
+                          </button>
+                          {/* Dropdown */}
+                          <div className={cn(
+                            'absolute left-0 top-full mt-1 z-20 min-w-[180px] max-h-[150px] overflow-y-auto',
+                            'bg-white border border-slate-200 rounded-md shadow-lg',
+                            'dark:bg-slate-900 dark:border-slate-700',
+                            'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
+                            'transition-all duration-150'
+                          )}>
+                            {sectionsLoading ? (
+                              <div className="p-2 text-[10px] text-slate-400">Загрузка...</div>
+                            ) : projectSections.filter(s => s.id !== checkpoint?.section_id && !linkedSectionIds.includes(s.id)).length === 0 ? (
+                              <div className="p-2 text-[10px] text-slate-400">Нет доступных разделов</div>
+                            ) : (
+                              projectSections
+                                .filter(s => s.id !== checkpoint?.section_id && !linkedSectionIds.includes(s.id))
+                                .map(section => (
+                                  <button
+                                    key={section.id}
+                                    type="button"
+                                    onClick={() => setLinkedSectionIds(prev => [...prev, section.id])}
+                                    className={cn(
+                                      'w-full text-left px-2.5 py-1.5 text-[11px] transition-colors',
+                                      'hover:bg-slate-50 dark:hover:bg-slate-800',
+                                      'text-slate-600 dark:text-slate-400'
+                                    )}
+                                  >
+                                    {section.name}
+                                  </button>
+                                ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Deadline Date */}
-                  <div>
-                    <label className={cn(
-                      'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                      'text-slate-500 dark:text-slate-400'
-                    )}>
-                      Дата дедлайна <span className="text-red-500">*</span>
-                    </label>
-                    <DatePicker
-                      value={deadlineDate ? new Date(deadlineDate) : null}
-                      onChange={(d) => setDeadlineDate(formatDateLocal(d))}
-                      placeholder="Выберите дату"
-                      calendarWidth="260px"
-                      offsetY={32}
-                      offsetX={-260}
-                      inputClassName={cn(
-                        'w-full px-2.5 py-1.5 text-xs rounded transition-colors cursor-pointer',
-                        'bg-white border border-slate-300 text-slate-700',
-                        'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                        'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200',
-                        'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
-                      )}
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div className="flex flex-col">
-                    <label className={cn(
-                      'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                      'text-slate-500 dark:text-slate-400'
-                    )}>
-                      Описание
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Необязательно..."
-                      rows={3}
-                      className={cn(
-                        'w-full px-2.5 py-1.5 text-xs flex-1 resize-none rounded transition-colors',
-                        'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
-                        'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                        'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
-                        'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
-                      )}
-                      disabled={updateCheckpoint.isPending}
-                    />
+                  {/* Right column */}
+                  <div className="space-y-3">
+                    {/* Description - required */}
+                    <div className="flex flex-col h-full">
+                      <label className={cn(
+                        'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
+                        'text-slate-500 dark:text-slate-400'
+                      )}>
+                        Описание <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Опишите событие для понимания другими участниками..."
+                        rows={6}
+                        className={cn(
+                          'w-full px-2.5 py-1.5 text-xs flex-1 resize-none rounded transition-colors',
+                          'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
+                          'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
+                          'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
+                          'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                        )}
+                        disabled={updateCheckpoint.isPending}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

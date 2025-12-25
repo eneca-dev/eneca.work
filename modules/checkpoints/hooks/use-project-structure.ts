@@ -15,7 +15,8 @@ import { getProjectStructure } from '@/modules/resource-graph/actions'
  * ```
  */
 export const useProjectStructure = createSimpleCacheQuery({
-  queryKey: queryKeys.projects.structure(),
+  // Используем filterStructure.project() для единого кеша с фильтрами
+  queryKey: queryKeys.filterStructure.project(),
   queryFn: getProjectStructure,
-  staleTime: staleTimePresets.medium, // 3 минуты кеширования
+  staleTime: staleTimePresets.medium, // 5 минут - синхронизировано с filter options
 })

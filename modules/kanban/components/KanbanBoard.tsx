@@ -1,14 +1,199 @@
 'use client'
 
 import { useCallback, useState, useMemo } from 'react'
-import { Loader2, LayoutGrid, AlertCircle, Database, ChevronDown } from 'lucide-react'
-import { InlineFilter, type FilterOption } from '@/modules/inline-filter'
-import { useKanbanFiltersStore, KANBAN_FILTER_CONFIG } from '../stores'
+import { Loader2, LayoutGrid, SearchX, AlertCircle, Database, ChevronDown } from 'lucide-react'
+import { InlineFilter, type FilterOption, type FilterConfig, type FilterQueryParams } from '@/modules/inline-filter'
+import { useKanbanFiltersStore, useKanbanUIStore, KANBAN_FILTER_CONFIG } from '../stores'
 import { useKanbanFilterOptions } from '../filters/useFilterOptions'
-import { useKanbanSectionsInfinite, useStageStatuses, useUpdateStageStatusOptimistic } from '../hooks'
+import { useKanbanSectionsInfinite, useUpdateStageStatusOptimistic } from '../hooks'
 import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
-import { KanbanHeader } from './KanbanHeader'
 import { KanbanSwimlane } from './KanbanSwimlane'
+
+// ============================================================================
+// Internal Props (for embedding in TasksView)
+// ============================================================================
+
+interface KanbanBoardInternalProps {
+  /** Filter string from parent */
+  filterString: string
+  /** Parsed query params from parent */
+  queryParams: FilterQueryParams
+  /** Filter config from parent */
+  filterConfig: FilterConfig
+}
+
+/**
+ * KanbanBoardInternal - версия без своего FilterToolbar
+ *
+ * Используется в TasksView для встраивания в общую страницу с табами
+ */
+export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardInternalProps) {
+  // Infinite query для загрузки данных с пагинацией
+  // Всегда передаём queryParams (даже пустой {}) для стабильного cache key
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useKanbanSectionsInfinite(queryParams)
+
+  // Собираем все секции из всех страниц
+  const sections = useMemo(() => {
+    return data?.pages.flat() ?? []
+  }, [data])
+
+  // Mutation для обновления статуса этапа (с оптимистичным обновлением)
+  const { mutate: updateStatus } = useUpdateStageStatusOptimistic(queryParams)
+
+  // UI state из Zustand store (сохраняется между переключениями вкладок)
+  const { collapsedSections, showEmptySwimlanes, toggleSectionCollapse } = useKanbanUIStore()
+
+  // HTML5 Drag and Drop state
+  const [draggedCard, setDraggedCard] = useState<{
+    stageId: string
+    sectionId: string
+  } | null>(null)
+
+  // Build board from sections
+  const board: KanbanBoardType | null = useMemo(() => {
+    if (!sections || sections.length === 0) return null
+    return {
+      projectId: sections[0]?.projectId || '',
+      projectName: sections[0]?.projectName || '',
+      sections,
+    }
+  }, [sections])
+
+  // HTML5 Drag and Drop Handlers
+  const handleDragStart = useCallback((stageId: string, sectionId: string, e: React.DragEvent) => {
+    setDraggedCard({ stageId, sectionId })
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', JSON.stringify({ stageId, sectionId }))
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((targetSectionId: string, e: React.DragEvent) => {
+    e.preventDefault()
+    if (!draggedCard) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    if (draggedCard.sectionId !== targetSectionId) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    e.dataTransfer.dropEffect = 'move'
+  }, [draggedCard])
+
+  const handleDrop = useCallback((targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => {
+    e.preventDefault()
+    if (!draggedCard) return
+    if (draggedCard.sectionId !== targetSectionId) {
+      setDraggedCard(null)
+      return
+    }
+    updateStatus({
+      stageId: draggedCard.stageId,
+      sectionId: draggedCard.sectionId,
+      newStatus: targetStatus,
+    })
+    setDraggedCard(null)
+  }, [draggedCard, updateStatus])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedCard(null)
+  }, [])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="text-sm">Загрузка...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="flex flex-col items-center gap-3 text-destructive">
+          <AlertCircle className="h-8 w-8" />
+          <span className="text-sm">{error instanceof Error ? error.message : 'Ошибка загрузки данных'}</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Empty state
+  if (!board || board.sections.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <SearchX className="h-12 w-12 opacity-50" />
+          <span className="text-sm">Нет данных для отображения</span>
+          <span className="text-xs">Попробуйте изменить фильтры</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Filter sections based on view settings
+  const sectionsToShow = showEmptySwimlanes
+    ? board.sections
+    : board.sections.filter((s) => s.stages.length > 0)
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Swimlanes */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
+        {sectionsToShow.map((section) => (
+          <KanbanSwimlane
+            key={section.id}
+            section={section}
+            isCollapsed={collapsedSections.includes(section.id)}
+            onToggleCollapse={() => toggleSectionCollapse(section.id)}
+            draggedCard={draggedCard}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+          />
+        ))}
+
+        {/* Load More Button */}
+        {hasNextPage && (
+          <div className="flex justify-center py-4 border-t bg-card/50">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Загрузка...
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Загрузить ещё
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ============================================================================
 // Local View State
@@ -20,7 +205,7 @@ interface ViewSettings {
 }
 
 // ============================================================================
-// Component
+// Standalone Component (original with own filter bar)
 // ============================================================================
 
 export function KanbanBoard() {
@@ -58,9 +243,6 @@ export function KanbanBoard() {
   const sections = useMemo(() => {
     return data?.pages.flat() ?? []
   }, [data])
-
-  // Загружаем статусы этапов из БД
-  const { statuses, isLoading: statusesLoading } = useStageStatuses()
 
   // Mutation для обновления статуса этапа (с оптимистичным обновлением)
   const { mutate: updateStatus } = useUpdateStageStatusOptimistic(
@@ -208,7 +390,7 @@ export function KanbanBoard() {
   }
 
   // Loading state
-  if (isLoading || statusesLoading) {
+  if (isLoading) {
     return (
       <div className="flex flex-col h-full">
         <FilterToolbar
@@ -281,9 +463,6 @@ export function KanbanBoard() {
         filterOptions={filterOptions}
         sectionsCount={board.sections.length}
       />
-
-      {/* Column Headers */}
-      <KanbanHeader statuses={statuses} />
 
       {/* Swimlanes */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">

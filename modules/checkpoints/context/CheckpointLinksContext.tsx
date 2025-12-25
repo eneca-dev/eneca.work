@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode } from 'react'
 import type { Checkpoint } from '../actions/checkpoints'
 
 // ============================================================================
@@ -14,22 +14,6 @@ interface CheckpointPosition {
   y: number
   /** X позиция центра маркера чекпоинта в пикселях от левого края timeline */
   x: number
-  /** Индекс наложения (для синхронизации смещения между связанными чекпоинтами) */
-  overlapIndex: number
-  /** Общее количество чекпоинтов на эту дату */
-  overlapTotal: number
-}
-
-interface SectionVisibility {
-  sectionId: string
-  sectionName: string
-  isExpanded: boolean
-}
-
-interface ObjectVisibility {
-  objectId: string
-  objectName: string
-  isExpanded: boolean
 }
 
 interface CheckpointLinksContextValue {
@@ -39,16 +23,6 @@ interface CheckpointLinksContextValue {
   unregisterCheckpoint: (checkpointId: string, sectionId: string) => void
   /** Все зарегистрированные позиции */
   positions: CheckpointPosition[]
-  /** Получить синхронизированное максимальное смещение по X для группы связанных чекпоинтов */
-  getGroupMaxOffset: (checkpointId: string) => number | null
-  /** Обновить видимость секции (развёрнута/свёрнута) */
-  trackSectionVisibility: (sectionId: string, sectionName: string, isExpanded: boolean) => void
-  /** Получить информацию о видимости секции */
-  getSectionVisibility: (sectionId: string) => SectionVisibility | undefined
-  /** Обновить видимость объекта (развёрнут/свёрнут) */
-  trackObjectVisibility: (objectId: string, objectName: string, isExpanded: boolean) => void
-  /** Получить информацию о видимости объекта */
-  getObjectVisibility: (objectId: string) => ObjectVisibility | undefined
 }
 
 // ============================================================================
@@ -65,78 +39,44 @@ interface CheckpointLinksProviderProps {
   children: ReactNode
 }
 
+/**
+ * Провайдер для отслеживания позиций чекпоинтов
+ *
+ * Каждый видимый чекпоинт регистрирует свою позицию через registerCheckpoint.
+ * CheckpointVerticalLinks использует эти позиции для отрисовки связей.
+ *
+ * Когда секция сворачивается/скрывается, чекпоинт отменяет регистрацию
+ * через unregisterCheckpoint (в useEffect cleanup).
+ *
+ * ОПТИМИЗАЦИЯ: Используем useRef + Map для хранения позиций, чтобы избежать
+ * cascade re-renders. useState[version] используется только для trigger
+ * финального re-render когда нужно отрисовать линии.
+ */
 export function CheckpointLinksProvider({ children }: CheckpointLinksProviderProps) {
-  const [positions, setPositions] = useState<CheckpointPosition[]>([])
-  const [sectionVisibility, setSectionVisibility] = useState<Map<string, SectionVisibility>>(new Map())
-  const [objectVisibility, setObjectVisibility] = useState<Map<string, ObjectVisibility>>(new Map())
+  // Map хранит позиции без trigger re-render при каждом изменении
+  const positionsRef = useRef<Map<string, CheckpointPosition>>(new Map())
+
+  // version увеличивается когда нужно пересчитать positions массив
+  const [version, setVersion] = useState(0)
 
   const registerCheckpoint = useCallback((position: CheckpointPosition) => {
-    setPositions(prev => {
-      // Удаляем старую позицию если есть, добавляем новую
-      const filtered = prev.filter(
-        p => !(p.checkpoint.checkpoint_id === position.checkpoint.checkpoint_id && p.sectionId === position.sectionId)
-      )
-      return [...filtered, position]
-    })
+    const key = `${position.checkpoint.checkpoint_id}-${position.sectionId}`
+    positionsRef.current.set(key, position)
+    setVersion(v => v + 1)
   }, [])
 
   const unregisterCheckpoint = useCallback((checkpointId: string, sectionId: string) => {
-    setPositions(prev => prev.filter(
-      p => !(p.checkpoint.checkpoint_id === checkpointId && p.sectionId === sectionId)
-    ))
-  }, [])
-
-  const getGroupMaxOffset = useCallback((checkpointId: string) => {
-    // Находим все позиции с этим checkpoint_id
-    const groupPositions = positions.filter(p => p.checkpoint.checkpoint_id === checkpointId)
-
-    // Если нет связанных чекпоинтов (< 2 позиций), возвращаем null
-    if (groupPositions.length < 2) {
-      return null
+    const key = `${checkpointId}-${sectionId}`
+    if (positionsRef.current.has(key)) {
+      positionsRef.current.delete(key)
+      setVersion(v => v + 1)
     }
-
-    // Находим максимальный overlapIndex и overlapTotal в группе
-    let maxOverlapIndex = 0
-    let maxOverlapTotal = 1
-
-    for (const pos of groupPositions) {
-      if (pos.overlapTotal > maxOverlapTotal ||
-          (pos.overlapTotal === maxOverlapTotal && pos.overlapIndex > maxOverlapIndex)) {
-        maxOverlapIndex = pos.overlapIndex
-        maxOverlapTotal = pos.overlapTotal
-      }
-    }
-
-    // Вычисляем только смещение по X (без смещения по Y)
-    const offsetMultiplier = maxOverlapTotal > 1 ? maxOverlapIndex - (maxOverlapTotal - 1) / 2 : 0
-    const OVERLAP_OFFSET_X = 6
-
-    return offsetMultiplier * OVERLAP_OFFSET_X
-  }, [positions])
-
-  const trackSectionVisibility = useCallback((sectionId: string, sectionName: string, isExpanded: boolean) => {
-    setSectionVisibility(prev => {
-      const next = new Map(prev)
-      next.set(sectionId, { sectionId, sectionName, isExpanded })
-      return next
-    })
   }, [])
 
-  const getSectionVisibility = useCallback((sectionId: string) => {
-    return sectionVisibility.get(sectionId)
-  }, [sectionVisibility])
-
-  const trackObjectVisibility = useCallback((objectId: string, objectName: string, isExpanded: boolean) => {
-    setObjectVisibility(prev => {
-      const next = new Map(prev)
-      next.set(objectId, { objectId, objectName, isExpanded })
-      return next
-    })
-  }, [])
-
-  const getObjectVisibility = useCallback((objectId: string) => {
-    return objectVisibility.get(objectId)
-  }, [objectVisibility])
+  // Преобразуем Map в массив только когда version меняется
+  const positions = useMemo(() => {
+    return Array.from(positionsRef.current.values())
+  }, [version])
 
   return (
     <CheckpointLinksContext.Provider
@@ -144,11 +84,6 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
         registerCheckpoint,
         unregisterCheckpoint,
         positions,
-        getGroupMaxOffset,
-        trackSectionVisibility,
-        getSectionVisibility,
-        trackObjectVisibility,
-        getObjectVisibility
       }}
     >
       {children}

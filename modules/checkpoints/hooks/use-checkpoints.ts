@@ -37,6 +37,7 @@ import {
   type AuditEntry,
   type SectionOption,
 } from '@/modules/checkpoints/actions/checkpoints'
+import { calculateCheckpointStatus } from '@/modules/checkpoints/utils/status-utils'
 
 import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
 
@@ -130,6 +131,8 @@ export const useCreateCheckpoint = createCacheMutation<CreateCheckpointInput, Ch
     queryKeys.checkpoints.bySection(input.sectionId),
     // Инвалидируем списки для связанных разделов (если есть)
     ...(input.linkedSectionIds || []).map(id => queryKeys.checkpoints.bySection(id)),
+    // Инвалидируем все sectionsBatch (чекпоинты грузятся в batch в resource-graph)
+    queryKeys.resourceGraph.allSectionsBatch(),
   ],
 })
 
@@ -159,36 +162,10 @@ export const useUpdateCheckpoint = createCacheMutation<UpdateCheckpointInput, Ch
     queryKeys.checkpoints.detail(input.checkpointId),
     // Инвалидируем все списки чекпоинтов (т.к. не знаем какие секции затронуты)
     queryKeys.checkpoints.lists(),
+    // Инвалидируем все sectionsBatch (чекпоинты грузятся в batch в resource-graph)
+    queryKeys.resourceGraph.allSectionsBatch(),
   ],
 })
-
-/**
- * Вычисляет статус чекпоинта на основе дат
- *
- * Используется в useCompleteCheckpoint для optimistic update.
- * Логика соответствует VIEW logic из миграции 2025-12-18_section_checkpoints_status_audit.sql
- */
-function calculateCheckpointStatus(
-  completedAt: string | null,
-  checkpointDate: string
-): Checkpoint['status'] {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0) // Сброс времени для корректного сравнения дат
-
-  const deadline = new Date(checkpointDate)
-  deadline.setHours(0, 0, 0, 0)
-
-  if (completedAt) {
-    const completed = new Date(completedAt)
-    completed.setHours(0, 0, 0, 0)
-
-    // Выполнен в срок или с опозданием
-    return completed <= deadline ? 'completed' : 'completed_late'
-  }
-
-  // Не выполнен: просрочен или ожидается
-  return now > deadline ? 'overdue' : 'pending'
-}
 
 /**
  * Хук для отметки чекпоинта как выполненного/невыполненного
@@ -222,9 +199,8 @@ export const useCompleteCheckpoint = createUpdateMutation({
       status,
     }
   },
-  // ОПТИМИЗИРОВАНО: Убраны sections.all и resourceGraph.all
-  // Чекпоинты загружаются отдельно, optimistic update уже обновил списки
-  invalidateKeys: [],
+  // Инвалидируем sectionsBatch для синхронизации с resource-graph
+  invalidateKeys: () => [queryKeys.resourceGraph.allSectionsBatch()],
 })
 
 /**
@@ -244,9 +220,8 @@ export const useDeleteCheckpoint = createDeleteMutation({
   listQueryKey: queryKeys.checkpoints.lists(),
   getId: (checkpointId: string) => checkpointId,
   getItemId: (item: Checkpoint) => item.checkpoint_id,
-  // ОПТИМИЗИРОВАНО: Убраны sections.all и resourceGraph.all
-  // Optimistic delete уже удалил элемент из списков
-  invalidateKeys: [],
+  // Инвалидируем sectionsBatch для синхронизации с resource-graph
+  invalidateKeys: () => [queryKeys.resourceGraph.allSectionsBatch()],
 })
 
 // ============================================================================

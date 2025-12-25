@@ -134,6 +134,53 @@ export async function getResourceGraphData(
       }
     }
 
+    // Apply team filter (requires subquery to get team members)
+    const teamId = filters?.team_id
+    if (teamId && typeof teamId === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId)
+
+      // Get team members from v_org_structure
+      let teamQuery = supabase.from('v_org_structure').select('employee_id')
+      if (isUuid) {
+        teamQuery = teamQuery.eq('team_id', teamId)
+      } else {
+        teamQuery = teamQuery.ilike('team_name', teamId)
+      }
+
+      const { data: teamMembers, error: teamError } = await teamQuery
+
+      if (teamError) {
+        console.error('[getResourceGraphData] Team filter error:', teamError)
+        return { success: false, error: teamError.message }
+      }
+
+      // Get unique employee IDs from team
+      const employeeIds = [
+        ...new Set(
+          (teamMembers || [])
+            .map((m) => m.employee_id)
+            .filter((id): id is string => id !== null)
+        ),
+      ]
+
+      if (employeeIds.length === 0) {
+        return { success: true, data: [] }
+      }
+
+      query = query.in('section_responsible_id', employeeIds)
+    }
+
+    // Apply responsible filter (по имени или UUID)
+    const responsibleId = filters?.responsible_id
+    if (responsibleId && typeof responsibleId === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsibleId)
+      if (isUuid) {
+        query = query.eq('section_responsible_id', responsibleId)
+      } else {
+        query = query.ilike('section_responsible_name', responsibleId)
+      }
+    }
+
     // Order for consistent hierarchy
     query = query
       .order('project_name')
@@ -1623,7 +1670,7 @@ export async function getSectionsBatchData(
     const supabase = await createClient()
 
     // Выполняем все запросы параллельно на сервере
-    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, budgetsResult] = await Promise.all([
+    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, linkedCheckpointsResult, budgetsResult] = await Promise.all([
       // 1. Work Logs для всех секций
       supabase
         .from('work_logs')
@@ -1696,24 +1743,35 @@ export async function getSectionsBatchData(
         `)
         .in('decomposition_stage_section_id', sectionIds),
 
-      // 4. Checkpoints для всех секций (из view_section_checkpoints)
+      // 4. Checkpoints для всех секций (из view_section_checkpoints) - основные
       supabase
         .from('view_section_checkpoints')
         .select(`
           checkpoint_id,
           section_id,
+          type_id,
           type_code,
           type_name,
+          is_custom,
           icon,
           color,
           title,
+          description,
           checkpoint_date,
           completed_at,
           status,
+          status_label,
+          linked_sections,
           linked_sections_count
         `)
         .in('section_id', sectionIds)
         .order('checkpoint_date', { ascending: true }),
+
+      // 4b. Linked checkpoints - находим checkpoint_id связанные с нашими секциями
+      supabase
+        .from('checkpoint_section_links')
+        .select('checkpoint_id, section_id')
+        .in('section_id', sectionIds),
 
       // 5. Budgets для всех секций (опционально по permissions)
       includeBudgets
@@ -1752,6 +1810,10 @@ export async function getSectionsBatchData(
     if (checkpointsResult.error) {
       console.error('[getSectionsBatchData] Checkpoints error:', checkpointsResult.error)
       return { success: false, error: checkpointsResult.error.message }
+    }
+    if (linkedCheckpointsResult.error) {
+      console.error('[getSectionsBatchData] LinkedCheckpoints error:', linkedCheckpointsResult.error)
+      return { success: false, error: linkedCheckpointsResult.error.message }
     }
     if (budgetsResult.error) {
       console.error('[getSectionsBatchData] Budgets error:', budgetsResult.error)
@@ -2007,20 +2069,172 @@ export async function getSectionsBatchData(
         checkpoints[sectionId] = []
       }
 
-      // Вычисляем spentPercentage на основе planned и spent
+      // linked_sections из view - JSONB массив
+      const linkedSections = (row.linked_sections as Array<{
+        section_id: string
+        section_name: string
+        object_id: string | null
+      }> | null) ?? []
+
       checkpoints[sectionId].push({
         id: row.checkpoint_id,
         sectionId: row.section_id,
+        typeId: row.type_id,
         typeCode: row.type_code,
         typeName: row.type_name,
+        isCustom: row.is_custom ?? false,
         icon: row.icon,
         color: row.color,
         title: row.title,
+        description: row.description,
         checkpointDate: row.checkpoint_date,
         completedAt: row.completed_at,
         status: row.status as 'pending' | 'completed' | 'completed_late' | 'overdue',
-        linkedSectionsCount: row.linked_sections_count,
+        statusLabel: row.status_label ?? '',
+        linkedSections,
+        linkedSectionsCount: row.linked_sections_count ?? 0,
       })
+    }
+
+    // Linked Checkpoints: добавляем чекпоинты в связанные секции
+    // Собираем уникальные checkpoint_id которые нужно загрузить
+    const loadedCheckpointIds = new Set(
+      (checkpointsResult.data || []).map(row => row.checkpoint_id)
+    )
+    const linkedCheckpointMap = new Map<string, string[]>() // checkpoint_id -> [linked_section_ids]
+
+    for (const link of linkedCheckpointsResult.data || []) {
+      if (!link.checkpoint_id || !link.section_id) continue
+      if (!linkedCheckpointMap.has(link.checkpoint_id)) {
+        linkedCheckpointMap.set(link.checkpoint_id, [])
+      }
+      linkedCheckpointMap.get(link.checkpoint_id)!.push(link.section_id)
+    }
+
+    // Загружаем полные данные чекпоинтов которые ещё не загружены
+    const checkpointIdsToLoad = Array.from(linkedCheckpointMap.keys()).filter(
+      id => !loadedCheckpointIds.has(id)
+    )
+
+    if (checkpointIdsToLoad.length > 0) {
+      const { data: additionalCheckpoints, error: additionalError } = await supabase
+        .from('view_section_checkpoints')
+        .select(`
+          checkpoint_id,
+          section_id,
+          type_id,
+          type_code,
+          type_name,
+          is_custom,
+          icon,
+          color,
+          title,
+          description,
+          checkpoint_date,
+          completed_at,
+          status,
+          status_label,
+          linked_sections,
+          linked_sections_count
+        `)
+        .in('checkpoint_id', checkpointIdsToLoad)
+
+      if (!additionalError && additionalCheckpoints) {
+        // Создаём map чекпоинтов по checkpoint_id
+        const checkpointDataMap = new Map<string, typeof additionalCheckpoints[0]>()
+        for (const row of additionalCheckpoints) {
+          checkpointDataMap.set(row.checkpoint_id, row)
+        }
+
+        // Добавляем чекпоинты в связанные секции
+        for (const [checkpointId, linkedSectionIds] of linkedCheckpointMap) {
+          const row = checkpointDataMap.get(checkpointId)
+          if (!row) continue
+
+          const linkedSectionsData = (row.linked_sections as Array<{
+            section_id: string
+            section_name: string
+            object_id: string | null
+          }> | null) ?? []
+
+          for (const linkedSectionId of linkedSectionIds) {
+            if (!checkpoints[linkedSectionId]) {
+              checkpoints[linkedSectionId] = []
+            }
+
+            // Проверяем что чекпоинт ещё не добавлен в эту секцию
+            const alreadyExists = checkpoints[linkedSectionId].some(
+              c => c.id === checkpointId
+            )
+            if (alreadyExists) continue
+
+            checkpoints[linkedSectionId].push({
+              id: row.checkpoint_id,
+              sectionId: row.section_id, // Оригинальный section_id (владелец)
+              typeId: row.type_id,
+              typeCode: row.type_code,
+              typeName: row.type_name,
+              isCustom: row.is_custom ?? false,
+              icon: row.icon,
+              color: row.color,
+              title: row.title,
+              description: row.description,
+              checkpointDate: row.checkpoint_date,
+              completedAt: row.completed_at,
+              status: row.status as 'pending' | 'completed' | 'completed_late' | 'overdue',
+              statusLabel: row.status_label ?? '',
+              linkedSections: linkedSectionsData,
+              linkedSectionsCount: row.linked_sections_count ?? 0,
+            })
+          }
+        }
+      }
+    }
+
+    // Также добавляем уже загруженные чекпоинты в их связанные секции
+    for (const [checkpointId, linkedSectionIds] of linkedCheckpointMap) {
+      if (!loadedCheckpointIds.has(checkpointId)) continue
+
+      // Находим данные чекпоинта среди уже загруженных
+      const row = (checkpointsResult.data || []).find(r => r.checkpoint_id === checkpointId)
+      if (!row) continue
+
+      const linkedSectionsData = (row.linked_sections as Array<{
+        section_id: string
+        section_name: string
+        object_id: string | null
+      }> | null) ?? []
+
+      for (const linkedSectionId of linkedSectionIds) {
+        if (!checkpoints[linkedSectionId]) {
+          checkpoints[linkedSectionId] = []
+        }
+
+        // Проверяем что чекпоинт ещё не добавлен в эту секцию
+        const alreadyExists = checkpoints[linkedSectionId].some(
+          c => c.id === checkpointId
+        )
+        if (alreadyExists) continue
+
+        checkpoints[linkedSectionId].push({
+          id: row.checkpoint_id,
+          sectionId: row.section_id,
+          typeId: row.type_id,
+          typeCode: row.type_code,
+          typeName: row.type_name,
+          isCustom: row.is_custom ?? false,
+          icon: row.icon,
+          color: row.color,
+          title: row.title,
+          description: row.description,
+          checkpointDate: row.checkpoint_date,
+          completedAt: row.completed_at,
+          status: row.status as 'pending' | 'completed' | 'completed_late' | 'overdue',
+          statusLabel: row.status_label ?? '',
+          linkedSections: linkedSectionsData,
+          linkedSectionsCount: row.linked_sections_count ?? 0,
+        })
+      }
     }
 
     // Budgets: группируем по sectionId (entity_id для entity_type='section')

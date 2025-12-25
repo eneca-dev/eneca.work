@@ -6,29 +6,6 @@
 import type { LucideIcon } from 'lucide-react'
 
 /**
- * Тип значения фильтра
- * - string: текстовое значение (по умолчанию)
- * - date: дата (поддержка операторов >, <, >=, <=)
- * - number: число (поддержка операторов >, <, >=, <=)
- * - boolean: да/нет
- * - select: выбор из списка enumValues
- */
-export type FilterValueType = 'string' | 'date' | 'number' | 'boolean' | 'select'
-
-/**
- * Операторы сравнения для date/number фильтров
- */
-export type FilterOperator = 'eq' | 'ne' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains'
-
-/**
- * Значение для select/boolean типов
- */
-export interface FilterEnumValue {
-  value: string
-  label: string
-}
-
-/**
  * Конфигурация одного ключа фильтра
  */
 export interface FilterKeyConfig {
@@ -44,14 +21,6 @@ export interface FilterKeyConfig {
   icon?: LucideIcon
   /** Цвет ключа: 'violet' | 'blue' | 'amber' | 'emerald' | 'rose' | 'cyan' | 'gray' */
   color?: FilterKeyColor
-
-  // === Тип значения (для будущего расширения) ===
-  /** Тип значения фильтра */
-  valueType?: FilterValueType
-  /** Доступные операторы (для date/number) */
-  operators?: FilterOperator[]
-  /** Значения для select/boolean типов */
-  enumValues?: FilterEnumValue[]
 }
 
 /**

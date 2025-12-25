@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Users, ChevronDown, Loader2, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -40,7 +41,10 @@ export function ResponsiblesDropdown({
 }: ResponsiblesDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 288 })
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Filter users by search
@@ -65,10 +69,12 @@ export function ResponsiblesDropdown({
     if (!isOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node
+      // Check if click is outside both container and dropdown portal
+      const isOutsideContainer = containerRef.current && !containerRef.current.contains(target)
+      const isOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(target)
+
+      if (isOutsideContainer && isOutsideDropdown) {
         setIsOpen(false)
         setSearch('')
       }
@@ -100,6 +106,18 @@ export function ResponsiblesDropdown({
     }
   }, [isOpen])
 
+  // Calculate dropdown position when opened
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: Math.max(288, rect.width),
+      })
+    }
+  }, [isOpen])
+
   const handleToggle = (userId: string) => {
     const newIds = selectedIds.has(userId)
       ? value.filter((u) => u.user_id !== userId).map((u) => u.user_id)
@@ -115,6 +133,7 @@ export function ResponsiblesDropdown({
     <div ref={containerRef} className="relative">
       {/* Trigger button */}
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -176,13 +195,19 @@ export function ResponsiblesDropdown({
         </div>
       )}
 
-      {/* Dropdown */}
-      {isOpen && (
+      {/* Dropdown - rendered in portal to escape overflow:hidden */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
+          ref={dropdownRef}
           role="listbox"
           aria-label="Выберите ответственных"
           aria-multiselectable="true"
-          className="absolute top-full left-0 mt-2 z-20 w-72 bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+          className="fixed z-[9999] bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-xl shadow-2xl shadow-black/40 overflow-hidden"
+          style={{
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+          }}
         >
           {/* Search input */}
           <div className="p-2 border-b border-slate-700/50">
@@ -255,7 +280,8 @@ export function ResponsiblesDropdown({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useMemo, useCallback } from 'react'
 import { ChevronRight, Box } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProjectObject, TimelineRange } from '../../../types'
@@ -14,6 +14,7 @@ import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 import { usePrefetchCheckpoints } from '@/modules/checkpoints'
 import { useSectionsBatch } from '../../../hooks'
+import { useRowExpanded } from '../../../stores'
 
 // ============================================================================
 // Object Row
@@ -29,7 +30,7 @@ interface ObjectRowProps {
  * Строка объекта - показывает агрегированные метрики из всех разделов
  */
 export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const { isExpanded, toggle } = useRowExpanded('object', object.id)
   const hasChildren = object.sections.length > 0
 
   // Собираем ID секций для batch загрузки
@@ -82,7 +83,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           {/* Expand/Collapse */}
           {hasChildren ? (
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={toggle}
               onMouseEnter={handleMouseEnter}
               className="p-0.5 hover:bg-muted rounded transition-colors"
             >

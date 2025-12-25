@@ -108,3 +108,40 @@ export const useKanbanFiltersStore = create<KanbanFiltersState>()(
     )
   )
 )
+
+// ============================================================================
+// UI State Store (сохраняется между переключениями вкладок)
+// ============================================================================
+
+interface KanbanUIState {
+  /** Свёрнутые секции */
+  collapsedSections: string[]
+  /** Показывать пустые swimlanes */
+  showEmptySwimlanes: boolean
+  /** Toggle collapse для секции */
+  toggleSectionCollapse: (sectionId: string) => void
+  /** Установить показ пустых swimlanes */
+  setShowEmptySwimlanes: (show: boolean) => void
+}
+
+export const useKanbanUIStore = create<KanbanUIState>()(
+  devtools(
+    (set, get) => ({
+      collapsedSections: [],
+      showEmptySwimlanes: true,
+
+      toggleSectionCollapse: (sectionId) => {
+        const { collapsedSections } = get()
+        const isCollapsed = collapsedSections.includes(sectionId)
+        set({
+          collapsedSections: isCollapsed
+            ? collapsedSections.filter((id) => id !== sectionId)
+            : [...collapsedSections, sectionId],
+        })
+      },
+
+      setShowEmptySwimlanes: (show) => set({ showEmptySwimlanes: show }),
+    }),
+    { name: 'kanban-ui' }
+  )
+)

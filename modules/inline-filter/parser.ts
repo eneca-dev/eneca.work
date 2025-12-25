@@ -35,6 +35,34 @@ export const MAX_FILTER_STRING_LENGTH = 2000
  */
 const TOKEN_REGEX = /([^\s:]+):(?:"([^"]+)"|([^\s]+))/g
 
+// ============================================================================
+// Вспомогательные функции
+// ============================================================================
+
+/**
+ * Экранирует специальные символы в значении фильтра
+ *
+ * @internal
+ */
+function escapeFilterValue(value: string): string {
+  // Экранируем обратные слеши и кавычки
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * Разэкранирует специальные символы в значении фильтра
+ *
+ * @internal
+ */
+function unescapeFilterValue(value: string): string {
+  // Разэкранируем кавычки и обратные слеши
+  return value.replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+}
+
+// ============================================================================
+// Основные функции
+// ============================================================================
+
 /**
  * Парсит строку фильтров в структурированный объект
  *
@@ -66,7 +94,9 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
     if (tokens.length >= MAX_TOKENS) break
 
     const key = match[1]
-    const value = match[2] ?? match[3] // Значение в кавычках или без
+    const rawValue = match[2] ?? match[3] // Значение в кавычках или без
+    // Разэкранируем значение для правильного round-trip
+    const value = rawValue ? unescapeFilterValue(rawValue) : ''
 
     // Игнорируем неизвестные ключи
     if (!validKeys.has(key)) {
@@ -89,16 +119,6 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
     tokens,
     raw: trimmedInput,
   }
-}
-
-/**
- * Экранирует специальные символы в значении фильтра
- *
- * @internal
- */
-function escapeFilterValue(value: string): string {
-  // Экранируем обратные слеши и кавычки
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 /**

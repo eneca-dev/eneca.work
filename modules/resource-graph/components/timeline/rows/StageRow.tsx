@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { Layers } from 'lucide-react'
 import type { Stage, TimelineRange } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { BaseRow } from './BaseRow'
 import { ObjectRow } from './ObjectRow'
 import { ProjectReportsRow } from '@/modules/project-reports'
+import { useRowExpanded } from '../../../stores'
 
 // ============================================================================
 // Stage Row
@@ -23,7 +23,7 @@ interface StageRowProps {
  * Строка стадии проекта
  */
 export function StageRow({ stage, projectName, dayCells, range }: StageRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const { isExpanded, toggle } = useRowExpanded('stage', stage.id)
   // Всегда показываем кнопку развёртывания для стадий (отчёты могут быть даже без объектов)
   const hasChildren = true
 
@@ -31,7 +31,7 @@ export function StageRow({ stage, projectName, dayCells, range }: StageRowProps)
     <BaseRow
       depth={1}
       isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
+      onToggle={toggle}
       hasChildren={hasChildren}
       icon={<Layers className="w-4 h-4" />}
       label={stage.name}

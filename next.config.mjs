@@ -31,15 +31,16 @@ const nextConfig = {
   },
   experimental: {
     webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
+    // Отключаем параллельную компиляцию - частая причина "call" ошибок
+    parallelServerBuildTraces: false,
+    parallelServerCompiles: false,
   },
   webpack: (config, { dev, isServer }) => {
     // Отключаем проблемное кэширование в dev режиме или по переменной окружения
     if (dev || process.env.NEXT_WEBPACK_CACHE === 'false') {
       config.cache = false;
     }
-    
+
     // Настройки для решения проблем с PackFileCacheStrategy
     if (config.cache && typeof config.cache === 'object') {
       config.cache.type = 'filesystem';
@@ -51,7 +52,7 @@ const nextConfig = {
       config.cache.compression = 'gzip';
       config.cache.hashAlgorithm = 'md4';
     }
-    
+
     // Дополнительные оптимизации для dev режима
     if (dev) {
       config.optimization = {
@@ -60,8 +61,18 @@ const nextConfig = {
         removeEmptyChunks: false,
         splitChunks: false,
       };
+
+      // Задержка HMR для стабильности
+      config.watchOptions = {
+        aggregateTimeout: 300,  // Ждёт 300мс после изменения
+        poll: 1000,             // Проверяет раз в секунду
+        ignored: [
+          '**/node_modules/**',
+          '**/.git/**',
+        ],
+      };
     }
-    
+
     return config;
   },
 }

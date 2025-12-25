@@ -10,7 +10,7 @@
  */
 
 // Components
-export { BudgetTable } from './components'
+export { BudgetTable, BudgetHierarchy, BudgetManagementPage } from './components'
 
 // Types (TODO)
 // export type { ... } from './types'

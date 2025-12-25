@@ -1,10 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Flag, Check, CircleDashed, type LucideIcon } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IconColorPicker } from './IconColorPicker'
+import { ICON_MAP, Flag, Check, CircleDashed } from '../../constants/icon-map'
 import type { CheckpointTypeSelectorProps } from './types'
 
 export function CheckpointTypeSelector({
@@ -30,13 +29,11 @@ export function CheckpointTypeSelector({
       <div className="grid grid-cols-2 gap-1.5">
         {types.map((type) => {
           const isSelected = selectedTypeId === type.type_id
-          const IconComponent =
-            (LucideIcons as unknown as Record<string, LucideIcon>)[type.icon] || Flag
+          const IconComponent = ICON_MAP[type.icon] || Flag
 
           // Кастомный тип - особое отображение
           if (type.is_custom) {
-            const CustomIconComponent =
-              (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
+            const CustomIconComponent = ICON_MAP[customIcon] || Flag
 
             return (
               <div

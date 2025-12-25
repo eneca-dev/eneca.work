@@ -400,19 +400,34 @@ export interface SectionsBatchOptions {
 }
 
 /**
- * Чекпоинт в batch данных (упрощённый тип для timeline)
+ * Связанный раздел для чекпоинта в batch данных
+ */
+export interface BatchLinkedSection {
+  section_id: string
+  section_name: string
+  object_id: string | null
+}
+
+/**
+ * Чекпоинт в batch данных (для timeline и маркеров)
+ * Содержит все поля, необходимые для CheckpointMarkers
  */
 export interface BatchCheckpoint {
   id: string
   sectionId: string
+  typeId: string
   typeCode: string
   typeName: string
+  isCustom: boolean
   icon: string
   color: string
   title: string | null
+  description: string | null
   checkpointDate: string
   completedAt: string | null
   status: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  statusLabel: string
+  linkedSections: BatchLinkedSection[]
   linkedSectionsCount: number
 }
 

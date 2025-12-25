@@ -9,7 +9,7 @@ import { SectionModal } from '@/modules/modals'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
 import type { Section } from '@/modules/resource-graph/types'
 import type { KanbanSection, StageStatus } from '../types'
-import { KANBAN_COLUMNS, SECTION_STATUSES } from '../constants'
+import { KANBAN_COLUMNS } from '../constants'
 import { KanbanDropZone } from './KanbanDropZone'
 import { useKanbanFiltersStore } from '../stores'
 
@@ -30,7 +30,7 @@ interface KanbanSwimlaneProps {
   onDragEnd: () => void
 }
 
-// Circular progress component
+// Circular progress component - упрощённый нейтральный стиль
 function CircularProgress({ progress }: { progress: number }) {
   const radius = 16
   const circumference = 2 * Math.PI * radius
@@ -45,9 +45,9 @@ function CircularProgress({ progress }: { progress: number }) {
           cy="20"
           r={radius}
           stroke="currentColor"
-          strokeWidth="3"
+          strokeWidth="2.5"
           fill="none"
-          className="text-muted"
+          className="text-border"
         />
         {/* Progress circle */}
         <circle
@@ -55,25 +55,16 @@ function CircularProgress({ progress }: { progress: number }) {
           cy="20"
           r={radius}
           stroke="currentColor"
-          strokeWidth="3"
+          strokeWidth="2.5"
           fill="none"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
-          className={cn(
-            'transition-all duration-500',
-            progress === 100
-              ? 'text-emerald-500'
-              : progress > 50
-                ? 'text-primary'
-                : progress > 0
-                  ? 'text-amber-500'
-                  : 'text-muted-foreground/30'
-          )}
+          className="text-foreground/60 transition-all duration-500"
           strokeLinecap="round"
         />
       </svg>
       {/* Percentage text */}
-      <span className="absolute text-[10px] font-medium text-foreground">
+      <span className="absolute text-[10px] font-medium text-muted-foreground">
         {progress}%
       </span>
     </div>
@@ -101,7 +92,6 @@ export function KanbanSwimlane({
 
   // Проверяем, активен ли drag из другого раздела (для показа предупреждения)
   const isDragFromOtherSection = draggedCard !== null && draggedCard.sectionId !== section.id
-  const statusConfig = SECTION_STATUSES[section.status]
 
   // Преобразуем KanbanSection в Section для модалки
   const getSectionForModal = (): Section => ({
@@ -157,16 +147,16 @@ export function KanbanSwimlane({
   return (
     <div
       className={cn(
-        'border-b border-border/50 last:border-b-0',
+        'border-b border-border last:border-b-0',
         'transition-all duration-300 ease-out'
       )}
     >
       {/* Swimlane Header */}
       <div
         className={cn(
-          'sticky left-0 z-10',
+          'group',
           'flex items-center gap-3 px-4 py-3',
-          'bg-muted/30 hover:bg-muted/50',
+          'bg-background hover:bg-muted/30',
           'cursor-pointer select-none',
           'transition-colors duration-150'
         )}
@@ -187,9 +177,9 @@ export function KanbanSwimlane({
           )}
         </button>
 
-        {/* Avatar */}
+        {/* Avatar - нейтральный стиль */}
         <Avatar className="h-8 w-8 flex-shrink-0">
-          <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
+          <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
             {getInitials()}
           </AvatarFallback>
         </Avatar>
@@ -198,7 +188,7 @@ export function KanbanSwimlane({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3
-              className="font-semibold text-sm text-foreground cursor-pointer hover:underline hover:text-primary transition-colors"
+              className="font-medium text-sm text-foreground cursor-pointer hover:underline transition-colors"
               onClick={(e) => {
                 e.stopPropagation()
                 setModalInitialTab('overview')
@@ -207,26 +197,18 @@ export function KanbanSwimlane({
             >
               {section.name}
             </h3>
-            <span
-              className={cn(
-                'flex items-center justify-center',
-                'h-6 min-w-[24px] px-1.5 rounded-md',
-                'text-[10px] font-medium flex-shrink-0',
-                statusConfig.bgColor,
-                statusConfig.color
-              )}
-            >
-              {section.stages.length}
+            <span className="text-xs text-muted-foreground">
+              {section.stages.length} этапов
             </span>
 
             {/* Кнопка быстрого добавления задачи */}
             <button
               className={cn(
-                'flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-md',
-                'bg-primary/10 hover:bg-primary/20',
-                'text-primary hover:text-primary',
-                'transition-colors duration-150',
-                'border border-primary/30 hover:border-primary/50'
+                'flex-shrink-0 h-5 w-5 flex items-center justify-center rounded',
+                'text-muted-foreground hover:text-foreground',
+                'hover:bg-muted',
+                'transition-all duration-150',
+                'opacity-0 group-hover:opacity-100'
               )}
               onClick={(e) => {
                 e.stopPropagation()
@@ -235,10 +217,10 @@ export function KanbanSwimlane({
               }}
               title="Добавить задачу"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
+          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">
             {section.projectName} • {section.stageName} • {section.objectName}
           </p>
         </div>
@@ -247,7 +229,7 @@ export function KanbanSwimlane({
         <div className="flex items-center gap-4 flex-shrink-0">
           {/* Hours */}
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">Факт/План</div>
+            <div className="text-[10px] text-muted-foreground/70">Факт/План</div>
             <div className="text-sm font-medium text-foreground">
               {section.totalActualHours}/{section.totalPlannedHours} ч
             </div>

@@ -1,49 +1,49 @@
 import type { KanbanColumn, StageStatus, SectionStatus } from '../types'
 
 // Колонки доски (статусы этапов)
-// Семантически понятная цветовая схема для лучшей различимости
+// Минималистичный стиль: нейтральные рамки, цвет только в индикаторе
 export const KANBAN_COLUMNS: KanbanColumn[] = [
   {
     id: 'backlog',
     title: 'Бэклог',
-    color: 'text-gray-500 dark:text-gray-400',
-    bgColor: 'bg-gray-100 dark:bg-gray-800/50',
-    borderColor: 'border-gray-200 dark:border-gray-700',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
   {
     id: 'planned',
     title: 'План',
-    color: 'text-violet-600 dark:text-violet-400',
-    bgColor: 'bg-violet-50 dark:bg-violet-900/30',
-    borderColor: 'border-violet-200 dark:border-violet-800',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
   {
     id: 'in_progress',
     title: 'В работе',
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/30',
-    borderColor: 'border-blue-200 dark:border-blue-800',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
   {
     id: 'paused',
     title: 'Пауза',
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-900/30',
-    borderColor: 'border-amber-200 dark:border-amber-800',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
   {
     id: 'review',
     title: 'Проверка',
-    color: 'text-pink-600 dark:text-pink-400',
-    bgColor: 'bg-pink-50 dark:bg-pink-900/30',
-    borderColor: 'border-pink-200 dark:border-pink-800',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
   {
     id: 'done',
     title: 'Готово',
-    color: 'text-green-600 dark:text-green-400',
-    bgColor: 'bg-green-50 dark:bg-green-900/30',
-    borderColor: 'border-green-200 dark:border-green-800',
+    color: 'text-muted-foreground',
+    bgColor: '',
+    borderColor: 'border-border',
   },
 ]
 

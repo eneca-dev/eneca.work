@@ -5,7 +5,7 @@
  * Route: /budget
  */
 
-import { BudgetTable } from '@/modules/budget-management'
+import { BudgetManagementPage } from '@/modules/budget-management'
 
 export const metadata = {
   title: 'Бюджет проекта | eneca.work',
@@ -13,5 +13,5 @@ export const metadata = {
 }
 
 export default function BudgetPage() {
-  return <BudgetTable />
+  return <BudgetManagementPage />
 }

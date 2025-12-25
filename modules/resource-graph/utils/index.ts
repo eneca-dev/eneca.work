@@ -520,6 +520,53 @@ export function getEmployeeColor(employeeId: string | null): string {
 }
 
 // ============================================================================
+// Checkpoint Mapping
+// ============================================================================
+
+import type { BatchCheckpoint } from '../types'
+import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
+
+/**
+ * Преобразует BatchCheckpoint (из batch загрузки) в Checkpoint (для CheckpointMarkers)
+ *
+ * Batch-тип использует camelCase и содержит только поля, нужные для отображения.
+ * Checkpoint использует snake_case и включает дополнительные поля для модалок.
+ *
+ * @param batch - Чекпоинт из batch данных
+ * @returns Чекпоинт в формате для CheckpointMarkers
+ */
+export function mapBatchCheckpointToCheckpoint(batch: BatchCheckpoint): Checkpoint {
+  return {
+    checkpoint_id: batch.id,
+    section_id: batch.sectionId,
+    type_id: batch.typeId,
+    type_code: batch.typeCode,
+    type_name: batch.typeName,
+    is_custom: batch.isCustom,
+    title: batch.title ?? '',
+    description: batch.description,
+    checkpoint_date: batch.checkpointDate,
+    icon: batch.icon,
+    color: batch.color,
+    completed_at: batch.completedAt,
+    completed_by: null, // Не используется в CheckpointMarkers
+    status: batch.status,
+    status_label: batch.statusLabel,
+    created_by: null, // Не используется в CheckpointMarkers
+    created_at: '', // Не используется в CheckpointMarkers
+    updated_at: '', // Не используется в CheckpointMarkers
+    section_responsible: null, // Не используется в CheckpointMarkers
+    project_manager: null, // Не используется в CheckpointMarkers
+    linked_sections: batch.linkedSections.map(ls => ({
+      section_id: ls.section_id,
+      section_name: ls.section_name,
+      object_id: ls.object_id,
+    })),
+    linked_sections_count: batch.linkedSectionsCount,
+  }
+}
+
+// ============================================================================
 // Re-exports from format.ts
 // ============================================================================
 

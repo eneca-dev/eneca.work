@@ -1,5 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+/**
+ * Hook for stage statuses (Kanban columns)
+ *
+ * Uses TanStack Query for caching - data is fetched once and reused
+ */
+
+import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
 
 // ============================================================================
 // Types
@@ -23,87 +30,46 @@ export interface StageStatusFormData {
 }
 
 // ============================================================================
+// Query function
+// ============================================================================
+
+async function fetchStageStatuses(): Promise<StageStatus[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('stage_statuses')
+    .select('*')
+    .eq('is_active', true)
+    .order('kanban_order')
+
+  if (error) {
+    throw new Error(error.message || 'Ошибка загрузки статусов')
+  }
+
+  return data || []
+}
+
+// ============================================================================
 // Hook
 // ============================================================================
 
 /**
  * Хук для работы со статусами этапов канбан-доски
- * Аналог useSectionStatuses, но для stage_statuses таблицы
+ *
+ * Использует TanStack Query с staleTime: Infinity - данные загружаются
+ * один раз и кешируются до перезагрузки страницы или явной инвалидации.
  */
 export function useStageStatuses() {
-  const [statuses, setStatuses] = useState<StageStatus[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadStatuses = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('stage_statuses')
-        .select('*')
-        .eq('is_active', true)  // Только активные статусы
-        .order('kanban_order')  // Сортируем по порядку колонок
-
-      if (error) {
-        console.warn('❌ Ошибка загрузки статусов этапов:', error)
-        setError(error.message || 'Ошибка загрузки статусов')
-        return
-      }
-
-      console.log('✅ Загружено статусов этапов:', data?.length || 0)
-      setStatuses(data || [])
-    } catch (err) {
-      console.warn('❌ Ошибка загрузки статусов этапов:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки статусов'
-      setError(errorMessage)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // Загружаем статусы при монтировании компонента
-  useEffect(() => {
-    loadStatuses()
-  }, [loadStatuses])
-
-  // Слушаем глобальные события изменения статусов для автоматического обновления
-  useEffect(() => {
-    const handleStatusCreated = () => {
-      console.log('📥 useStageStatuses: получили событие stageStatusCreated, обновляем список')
-      loadStatuses()
-    }
-
-    const handleStatusUpdated = () => {
-      console.log('📥 useStageStatuses: получили событие stageStatusUpdated, обновляем список')
-      loadStatuses()
-    }
-
-    const handleStatusDeleted = () => {
-      console.log('📥 useStageStatuses: получили событие stageStatusDeleted, обновляем список')
-      loadStatuses()
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('stageStatusCreated', handleStatusCreated)
-      window.addEventListener('stageStatusUpdated', handleStatusUpdated)
-      window.addEventListener('stageStatusDeleted', handleStatusDeleted)
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('stageStatusCreated', handleStatusCreated)
-        window.removeEventListener('stageStatusUpdated', handleStatusUpdated)
-        window.removeEventListener('stageStatusDeleted', handleStatusDeleted)
-      }
-    }
-  }, [loadStatuses])
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.stageStatuses.list(),
+    queryFn: fetchStageStatuses,
+    staleTime: Infinity, // Статусы редко меняются - кешируем навсегда
+    gcTime: 24 * 60 * 60 * 1000, // 24 часа
+  })
 
   return {
-    statuses,
+    statuses: data ?? [],
     isLoading,
-    error,
-    loadStatuses,
+    error: error?.message ?? null,
+    loadStatuses: refetch,
   }
 }

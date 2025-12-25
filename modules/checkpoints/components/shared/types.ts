@@ -43,6 +43,12 @@ export interface IconColorPickerProps {
   onIconChange: (icon: string) => void
   /** Callback при изменении цвета */
   onColorChange: (color: string) => void
+  /** Controlled open state */
+  open?: boolean
+  /** Callback for open state change */
+  onOpenChange?: (open: boolean) => void
+  /** Custom trigger render function */
+  renderTrigger?: (props: { icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> | undefined; color: string }) => React.ReactNode
 }
 
 /**
