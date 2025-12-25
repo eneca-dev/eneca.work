@@ -12002,6 +12002,8 @@ export type Database = {
           decomposition_item_order: number | null
           decomposition_item_planned_due_date: string | null
           decomposition_item_planned_hours: number | null
+          decomposition_item_actual_hours: number | null
+          decomposition_item_cpi: number | null
           decomposition_item_progress: number | null
           decomposition_item_status_id: string | null
           decomposition_item_work_category_id: string | null
