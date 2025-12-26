@@ -25,6 +25,8 @@ import type {
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
+import { getFilterContext } from '@/modules/filter-permissions/server'
+import { applyMandatoryFilters } from '@/modules/filter-permissions/utils'
 
 // ============================================================================
 // Query Actions
@@ -45,6 +47,12 @@ export async function getResourceGraphData(
   try {
     const supabase = await createClient()
 
+    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
+    const filterContext = await getFilterContext()
+    const secureFilters = filterContext
+      ? applyMandatoryFilters(filters || {}, filterContext)
+      : filters || {}
+
     // Build query
     let query = supabase
       .from('v_resource_graph')
@@ -52,7 +60,7 @@ export async function getResourceGraphData(
 
     // Apply tag filter first (requires subquery to get project IDs)
     // Метки передаются как названия, нужно сначала найти их ID
-    const tagValues = filters?.tag_id
+    const tagValues = secureFilters?.tag_id
     if (tagValues) {
       const tagArray = Array.isArray(tagValues) ? tagValues : [tagValues]
       if (tagArray.length > 0) {
@@ -103,39 +111,39 @@ export async function getResourceGraphData(
     }
 
     // Apply subdivision filter (фильтр по подразделению - по названию)
-    if (filters?.subdivision_id && typeof filters.subdivision_id === 'string') {
+    if (secureFilters?.subdivision_id && typeof secureFilters.subdivision_id === 'string') {
       // Проверяем: это UUID или название?
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.subdivision_id)
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.subdivision_id)
       if (isUuid) {
-        query = query.eq('section_subdivision_id', filters.subdivision_id)
+        query = query.eq('section_subdivision_id', secureFilters.subdivision_id)
       } else {
         // Фильтрация по названию (case-insensitive)
-        query = query.ilike('section_subdivision_name', filters.subdivision_id)
+        query = query.ilike('section_subdivision_name', secureFilters.subdivision_id)
       }
     }
 
     // Apply department filter (фильтр по отделу - по названию)
-    if (filters?.department_id && typeof filters.department_id === 'string') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.department_id)
+    if (secureFilters?.department_id && typeof secureFilters.department_id === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.department_id)
       if (isUuid) {
-        query = query.eq('section_department_id', filters.department_id)
+        query = query.eq('section_department_id', secureFilters.department_id)
       } else {
-        query = query.ilike('section_department_name', filters.department_id)
+        query = query.ilike('section_department_name', secureFilters.department_id)
       }
     }
 
     // Apply project filter (по названию или ID)
-    if (filters?.project_id && typeof filters.project_id === 'string') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.project_id)
+    if (secureFilters?.project_id && typeof secureFilters.project_id === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.project_id)
       if (isUuid) {
-        query = query.eq('project_id', filters.project_id)
+        query = query.eq('project_id', secureFilters.project_id)
       } else {
-        query = query.ilike('project_name', filters.project_id)
+        query = query.ilike('project_name', secureFilters.project_id)
       }
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = filters?.team_id
+    const teamId = secureFilters?.team_id
     if (teamId && typeof teamId === 'string') {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId)
 
@@ -171,7 +179,7 @@ export async function getResourceGraphData(
     }
 
     // Apply responsible filter (по имени или UUID)
-    const responsibleId = filters?.responsible_id
+    const responsibleId = secureFilters?.responsible_id
     if (responsibleId && typeof responsibleId === 'string') {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsibleId)
       if (isUuid) {

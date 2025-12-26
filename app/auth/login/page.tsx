@@ -30,42 +30,40 @@ export default function LoginPage() {
   }, [])
 
   // Функция для получения понятного сообщения об ошибке
+  // ВАЖНО: Не раскрываем информацию о существовании пользователя (user enumeration)
   const getErrorMessage = (error: any): string => {
     if (!error?.message) return "Произошла неизвестная ошибка"
-    
+
     const message = error.message.toLowerCase()
-    
-    // Проверка различных типов ошибок
-    if (message.includes('invalid login credentials') || message.includes('invalid credentials')) {
-      return "Неверный email или пароль. Проверьте правильность ввода данных."
+
+    // Все ошибки входа показываем как общее сообщение (безопасность)
+    if (
+      message.includes('invalid login credentials') ||
+      message.includes('invalid credentials') ||
+      message.includes('user not found') ||
+      message.includes('invalid email')
+    ) {
+      return "Неверный email или пароль"
     }
-    
+
     if (message.includes('email not confirmed')) {
       return "Email не подтвержден. Проверьте почту и перейдите по ссылке подтверждения."
     }
-    
-    if (message.includes('user not found')) {
-      return "Пользователь с таким email не найден. Проверьте правильность email или зарегистрируйтесь."
-    }
-    
-    if (message.includes('invalid email')) {
-      return "Указан некорректный email адрес. Проверьте правильность ввода."
-    }
-    
+
     if (message.includes('too many requests') || message.includes('rate limit')) {
       return "Слишком много попыток входа. Подождите несколько минут и попробуйте снова."
     }
-    
+
     if (message.includes('account is disabled') || message.includes('user disabled')) {
       return "Ваш аккаунт заблокирован. Обратитесь к администратору."
     }
-    
+
     if (message.includes('signup is disabled')) {
-      return "Система временно недоступна. Попробуйте позже или обратитесь к администратору."
+      return "Система временно недоступна. Попробуйте позже."
     }
-    
-    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
-    return error.message
+
+    // Для неизвестных ошибок — общее сообщение (не раскрываем детали)
+    return "Не удалось войти. Проверьте данные и попробуйте снова."
   }
 
   const validateForm = (): string | null => {
@@ -91,29 +89,6 @@ export default function LoginPage() {
     return null
   }
 
-  const checkEmailExists = async (email: string): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/check-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: email.trim() }),
-      })
-
-      if (!response.ok) {
-        console.error('Ошибка при проверке email:', response.statusText)
-        return true // В случае ошибки API, продолжаем с попыткой входа
-      }
-
-      const data = await response.json()
-      return data.exists
-    } catch (error) {
-      console.error('Ошибка при проверке email:', error)
-      return true // В случае ошибки, продолжаем с попыткой входа
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -136,14 +111,6 @@ export default function LoginPage() {
           const trimmedEmail = email.trim()
           span.setAttribute("auth.email", trimmedEmail)
           span.setAttribute("auth.method", "password")
-          // Сначала проверяем существование email
-          const emailExists = await checkEmailExists(trimmedEmail)
-          span.setAttribute("auth.email_exists_checked", true)
-          if (!emailExists) {
-            setError("Пользователь с таким email не найден. Пожалуйста, зарегистрируйтесь или проверьте правильность email адреса.")
-            setLoading(false)
-            return
-          }
 
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: trimmedEmail,
@@ -215,7 +182,6 @@ export default function LoginPage() {
         {error && (
           <div className="p-3 bg-red-100 border border-red-200 text-red-600 text-sm rounded-md dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
             {error}
-            {error.includes("не найден")}
           </div>
         )}
 

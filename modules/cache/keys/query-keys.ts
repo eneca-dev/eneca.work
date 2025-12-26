@@ -271,6 +271,8 @@ export const queryKeys = {
       [...queryKeys.budgets.all, 'entity', entityType, entityId] as const,
     sectionSummary: (projectId?: string) =>
       [...queryKeys.budgets.all, 'section-summary', projectId] as const,
+    parentCandidates: (entityType: string, entityId: string, budgetTypeId: string) =>
+      [...queryKeys.budgets.all, 'parent-candidates', entityType, entityId, budgetTypeId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -351,6 +353,15 @@ export const queryKeys = {
     project: () => [...queryKeys.filterStructure.all, 'project'] as const,
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Filter Permissions (контекст разрешений фильтров)
+  // -------------------------------------------------------------------------
+  filterPermissions: {
+    all: ['filter-permissions'] as const,
+    /** Контекст текущего пользователя (роли, scope, org structure) */
+    context: () => [...queryKeys.filterPermissions.all, 'context'] as const,
   },
 
   // -------------------------------------------------------------------------

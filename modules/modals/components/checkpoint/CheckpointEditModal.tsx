@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { X, Flag, Loader2, Check, Trash2, CircleCheckBig, Plus } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { X, Flag, Loader2, Check, Trash2, CircleCheckBig, Plus, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getIcon } from '@/modules/checkpoints/constants/icon-map'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
 import {
   useCheckpoint,
@@ -17,7 +16,6 @@ import {
 } from '@/modules/checkpoints/hooks'
 import { IconColorPicker } from '@/modules/checkpoints/components/shared'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { DeleteConfirmDialog } from '@/modules/modals/components/section/decomposition/dialogs'
 import type { BaseModalProps } from '../../types'
 
 // ============================================================================
@@ -50,8 +48,8 @@ export function CheckpointEditModal({
   const [customIcon, setCustomIcon] = useState<string>('Flag')
   const [customColor, setCustomColor] = useState<string>('#6b7280')
 
-  // Delete confirmation state
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  // Delete confirmation state (inline)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Prefetch utilities - для получения данных из кеша
   const { getCheckpointFromCache } = usePrefetchCheckpoints()
@@ -94,28 +92,22 @@ export function CheckpointEditModal({
   // Инициализация данных из чекпоинта
   useEffect(() => {
     if (checkpoint && checkpointTypes.length > 0) {
-      console.log('[CheckpointEditModal] Initializing checkpoint data:', {
-        checkpointId,
-        completed_at: checkpoint.completed_at,
-        isCompleted: !!checkpoint.completed_at,
-        title: checkpoint.title,
-        checkpoint_date: checkpoint.checkpoint_date,
-      })
-
       setSelectedTypeId(checkpoint.type_id)
       setName(checkpoint.title || '')
       setDeadlineDate(checkpoint.checkpoint_date || '')
       setDescription(checkpoint.description || '')
       setLinkedSectionIds(checkpoint.linked_sections?.map(s => s.section_id) || [])
-
-      // Всегда берём icon/color из чекпоинта (они уже скомбинированы в VIEW)
       setCustomIcon(checkpoint.icon || 'Flag')
       setCustomColor(checkpoint.color || '#6b7280')
     }
   }, [checkpoint, checkpointTypes, checkpointId])
 
-  // Note: Removed auto-update of icon/color on type change
-  // Now handled by handleTypeSelect which prefills when user explicitly selects a type template
+  // Reset delete confirm при закрытии
+  useEffect(() => {
+    if (!isOpen) {
+      setShowDeleteConfirm(false)
+    }
+  }, [isOpen])
 
   // При выборе типа - предзаполняем поля (тип = шаблон)
   const handleTypeSelect = useCallback((typeId: string) => {
@@ -123,12 +115,10 @@ export function CheckpointEditModal({
 
     const type = checkpointTypes.find((t) => t.type_id === typeId)
     if (type && !type.is_custom) {
-      // Предзаполняем из шаблона типа
       setName(type.name)
       setCustomIcon(type.icon)
       setCustomColor(type.color)
     }
-    // Для кастомного типа - ничего не предзаполняем
   }, [checkpointTypes])
 
   // Валидация - название и описание обязательны
@@ -152,6 +142,15 @@ export function CheckpointEditModal({
   const handleSave = async (): Promise<void> => {
     if (!canSave || !checkpoint) return
 
+    const optimisticLinkedSections = linkedSectionIds.map(id => {
+      const section = projectSections.find(s => s.id === id)
+      return {
+        section_id: id,
+        section_name: section?.name || '',
+        object_id: section?.objectId || null,
+      }
+    })
+
     const payload = {
       checkpointId,
       typeId: selectedTypeId !== checkpoint.type_id ? selectedTypeId : undefined,
@@ -159,50 +158,38 @@ export function CheckpointEditModal({
       checkpointDate: deadlineDate,
       description: description.trim() || null,
       linkedSectionIds,
-      // Всегда передаём иконку и цвет (пользователь мог изменить после предзаполнения)
       customIcon,
       customColor,
-      // Для optimistic update: передаем иконку и цвет явно
       _optimisticIcon: customIcon,
       _optimisticColor: customColor,
+      _optimisticTypeName: selectedType?.name,
+      _optimisticTypeCode: selectedType?.type,
+      _optimisticIsCustom: selectedType?.is_custom,
+      _optimisticLinkedSections: optimisticLinkedSections,
     }
 
-    // Закрываем модалку сразу для мгновенного отклика
-    // Optimistic update обновит чекпоинт в кеше мгновенно
     onClose()
     onSuccess?.()
 
-    // Обновление происходит в фоне с optimistic update
     updateCheckpoint.mutate(payload, {
-      onSuccess: (result) => {
-        console.log('[CheckpointEditModal] Checkpoint updated successfully:', result)
-      },
       onError: (error) => {
         console.error('[CheckpointEditModal] Failed to update checkpoint:', error)
-        // TODO: Показать toast с ошибкой пользователю
       },
     })
   }
 
   // Удаление
   const handleDelete = (): void => {
-    setShowDeleteDialog(true)
-  }
-
-  const handleConfirmDelete = (): void => {
     if (!checkpoint) return
 
-    // Закрываем модалку сразу (optimistic update)
     onClose()
 
     deleteCheckpoint.mutate(checkpointId, {
       onSuccess: () => {
-        console.log('[CheckpointEditModal] Checkpoint deleted successfully')
         onSuccess?.()
       },
       onError: (error) => {
         console.error('[CheckpointEditModal] Failed to delete checkpoint:', error)
-        // TODO: Показать toast с ошибкой и переоткрыть модалку если нужно
       },
     })
   }
@@ -213,15 +200,9 @@ export function CheckpointEditModal({
 
     const newCompleted = !checkpoint.completed_at
 
-    console.log('[CheckpointEditModal] Toggle complete clicked:', {
-      checkpointId,
-      currentStatus: checkpoint.completed_at ? 'completed' : 'not completed',
-      newStatus: newCompleted ? 'completed' : 'not completed',
-      completed_at: checkpoint.completed_at,
-      willBe: newCompleted,
-    })
+    // Закрываем модалку сразу для лучшего UX
+    onClose()
 
-    // Optimistic update происходит автоматически в хуке useCompleteCheckpoint
     completeCheckpoint.mutate(
       {
         checkpointId,
@@ -229,7 +210,6 @@ export function CheckpointEditModal({
       },
       {
         onSuccess: () => {
-          console.log('[CheckpointEditModal] Checkpoint completion toggled successfully')
           onSuccess?.()
         },
         onError: (error) => {
@@ -247,21 +227,21 @@ export function CheckpointEditModal({
     return `${y}-${m}-${day}`
   }
 
-  // Loading state: не показываем loader если checkpoint уже в кеше
   const isLoading = (!cachedCheckpoint && checkpointLoading) || typesLoading
+  const isPending = updateCheckpoint.isPending || deleteCheckpoint.isPending || completeCheckpoint.isPending
 
   if (!isOpen) return null
 
   return (
-    <>
-      {/* Overlay */}
+    <div className="fixed inset-0 z-[100]">
+      {/* Overlay - блокирует все клики */}
       <div
-        className="fixed inset-0 z-50 bg-black/20 dark:bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      {/* Modal Container */}
+      <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
         <div
           className={cn(
             'pointer-events-auto w-full max-w-xl',
@@ -304,37 +284,6 @@ export function CheckpointEditModal({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Complete/Uncomplete button */}
-              {!isLoading && checkpoint && (
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleToggleComplete}
-                        disabled={completeCheckpoint.isPending || updateCheckpoint.isPending}
-                        className={cn(
-                          'flex items-center justify-center transition-all',
-                          'disabled:opacity-50 disabled:cursor-not-allowed'
-                        )}
-                      >
-                        <CircleCheckBig
-                          className={cn(
-                            'w-5 h-5 transition-colors',
-                            checkpoint.completed_at
-                              ? 'text-green-500 hover:text-green-600 dark:text-green-500 dark:hover:text-green-400'
-                              : 'text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400'
-                          )}
-                          strokeWidth={2}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[11px] py-1 px-2">
-                      {checkpoint.completed_at ? 'Отменить выполнение' : 'Отметить выполненным'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-
               {/* Close button */}
               <button
                 onClick={onClose}
@@ -371,7 +320,7 @@ export function CheckpointEditModal({
                   <div className="flex flex-wrap gap-1.5">
                     {checkpointTypes.map((type) => {
                       const isSelected = selectedTypeId === type.type_id
-                      const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[type.icon] || Flag
+                      const IconComp = getIcon(type.icon, Flag)
 
                       return (
                         <button
@@ -403,7 +352,7 @@ export function CheckpointEditModal({
                           {type.is_custom ? (
                             <>
                               {(() => {
-                                const CustomIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
+                                const CustomIcon = getIcon(customIcon, Flag)
                                 return <CustomIcon size={12} className="shrink-0" />
                               })()}
                               <span>Создать свой</span>
@@ -433,14 +382,13 @@ export function CheckpointEditModal({
                         Название <span className="text-red-500">*</span>
                       </label>
                       <div className="flex items-center gap-2">
-                        {/* Checkpoint Preview - circle with icon (clickable to open picker) */}
                         <IconColorPicker
                           selectedIcon={customIcon}
                           selectedColor={customColor}
                           onIconChange={setCustomIcon}
                           onColorChange={setCustomColor}
                           renderTrigger={({ color: previewColor }) => {
-                            const PreviewIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
+                            const PreviewIcon = getIcon(customIcon, Flag)
                             return (
                               <button
                                 type="button"
@@ -467,7 +415,7 @@ export function CheckpointEditModal({
                             'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
                             'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
                           )}
-                          disabled={updateCheckpoint.isPending}
+                          disabled={isPending}
                         />
                       </div>
                     </div>
@@ -497,7 +445,7 @@ export function CheckpointEditModal({
                       />
                     </div>
 
-                    {/* Linked Sections - Plus button approach */}
+                    {/* Linked Sections */}
                     <div>
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
@@ -580,7 +528,7 @@ export function CheckpointEditModal({
 
                   {/* Right column */}
                   <div className="space-y-3">
-                    {/* Description - required */}
+                    {/* Description */}
                     <div className="flex flex-col h-full">
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
@@ -600,11 +548,47 @@ export function CheckpointEditModal({
                           'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
                           'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
                         )}
-                        disabled={updateCheckpoint.isPending}
+                        disabled={isPending}
                       />
                     </div>
                   </div>
                 </div>
+
+                {/* Delete Confirmation - inline red zone */}
+                {showDeleteConfirm && (
+                  <div className="p-3 border border-red-500/30 bg-red-500/10 rounded-lg">
+                    <div className="flex items-center gap-2 text-xs text-red-400 mb-2">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span className="font-medium">Удалить чекпоинт?</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+                      Это действие нельзя будет отменить.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className={cn(
+                          'flex-1 px-2 py-1 text-[11px] font-medium rounded',
+                          'text-slate-600 bg-slate-100 hover:bg-slate-200',
+                          'dark:text-slate-400 dark:bg-slate-800 dark:hover:bg-slate-700',
+                          'transition-colors'
+                        )}
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        className={cn(
+                          'flex-1 px-2 py-1 text-[11px] font-medium rounded',
+                          'text-white bg-red-600 hover:bg-red-500',
+                          'transition-colors'
+                        )}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -616,35 +600,45 @@ export function CheckpointEditModal({
           )}>
             {/* Left side - Delete button */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleDelete}
-                disabled={isLoading || deleteCheckpoint.isPending || updateCheckpoint.isPending}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded transition-colors',
-                  'text-red-600 hover:bg-red-50',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'dark:text-red-400 dark:hover:bg-red-500/10'
-                )}
-              >
-                {deleteCheckpoint.isPending ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Удаление...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3 h-3" />
-                    Удалить
-                  </>
-                )}
-              </button>
+              {!showDeleteConfirm && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={isLoading || isPending}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded transition-colors',
+                    'text-red-600 hover:bg-red-50',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    'dark:text-red-400 dark:hover:bg-red-500/10'
+                  )}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Удалить
+                </button>
+              )}
             </div>
 
-            {/* Right side - Cancel and Save buttons */}
+            {/* Right side - Complete, Cancel and Save buttons */}
             <div className="flex items-center gap-2">
+              {/* Complete/Uncomplete button */}
+              {!isLoading && checkpoint && (
+                <button
+                  onClick={handleToggleComplete}
+                  disabled={isPending}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded border transition-colors',
+                    checkpoint.completed_at
+                      ? 'text-amber-600 border-amber-300 bg-amber-50 hover:bg-amber-100 dark:text-amber-400 dark:border-amber-500/30 dark:bg-amber-500/10 dark:hover:bg-amber-500/20'
+                      : 'text-green-600 border-green-300 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:border-green-500/30 dark:bg-green-500/10 dark:hover:bg-green-500/20',
+                    'disabled:opacity-50 disabled:cursor-not-allowed'
+                  )}
+                >
+                  <CircleCheckBig className="w-3.5 h-3.5" />
+                  {checkpoint.completed_at ? 'Отменить' : 'Выполнено'}
+                </button>
+              )}
               <button
                 onClick={onClose}
-                disabled={updateCheckpoint.isPending}
+                disabled={isPending}
                 className={cn(
                   'px-3 py-1.5 text-[11px] font-medium rounded border transition-colors',
                   'text-slate-600 border-slate-300 bg-white',
@@ -683,16 +677,7 @@ export function CheckpointEditModal({
           </div>
         </div>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <DeleteConfirmDialog
-        isOpen={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
-        onConfirm={handleConfirmDelete}
-        title="Удалить чекпоинт?"
-        description={`Вы уверены, что хотите удалить чекпоинт "${checkpoint?.title || ''}"? Это действие нельзя будет отменить.`}
-      />
-    </>
+    </div>
   )
 }
 

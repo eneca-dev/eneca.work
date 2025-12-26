@@ -36,8 +36,8 @@ const nextConfig = {
     parallelServerCompiles: false,
   },
   webpack: (config, { dev, isServer }) => {
-    // Отключаем проблемное кэширование в dev режиме или по переменной окружения
-    if (dev || process.env.NEXT_WEBPACK_CACHE === 'false') {
+    // Отключаем кэширование только по явной переменной окружения
+    if (process.env.NEXT_WEBPACK_CACHE === 'false') {
       config.cache = false;
     }
 
@@ -64,11 +64,14 @@ const nextConfig = {
 
       // Задержка HMR для стабильности
       config.watchOptions = {
-        aggregateTimeout: 300,  // Ждёт 300мс после изменения
-        poll: 1000,             // Проверяет раз в секунду
+        aggregateTimeout: 500,  // Ждёт 500мс после изменения
+        // НЕ используем polling - fs events более эффективны на macOS
         ignored: [
           '**/node_modules/**',
           '**/.git/**',
+          '**/.next/**',
+          '**/out/**',
+          '**/*.log',
         ],
       };
     }

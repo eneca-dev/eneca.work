@@ -112,8 +112,8 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
       return {
         id: userState.id!,
         email: userState.email || "",
-        name: userState.profile?.firstName && userState.profile?.lastName 
-          ? `${userState.profile.firstName} ${userState.profile.lastName}`
+        name: userState.profile?.first_name && userState.profile?.last_name
+          ? `${userState.profile.first_name} ${userState.profile.last_name}`
           : userState.name || "",
         avatar_url: userState.profile?.avatar_url || "",
         position: "",
@@ -124,15 +124,15 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
         dateJoined: "",
         workLocation:
-          userState.profile?.workFormat === "Гибридный" ? "hybrid" :
-          userState.profile?.workFormat === "В офисе" ? "office" :
-          userState.profile?.workFormat === "Удаленно" ? "remote" :
+          userState.profile?.work_format === "Гибридный" ? "hybrid" :
+          userState.profile?.work_format === "В офисе" ? "office" :
+          userState.profile?.work_format === "Удаленно" ? "remote" :
           "office",
         country: userState.profile?.country || "",
         city: userState.profile?.city || "",
-        employmentRate: userState.profile?.employmentRate || 1,
+        employmentRate: userState.profile?.employment_rate || 1,
         salary: userState.profile?.salary || 0,
-        isHourly: userState.profile?.isHourly || false
+        isHourly: userState.profile?.is_hourly || false
       }
     }
 

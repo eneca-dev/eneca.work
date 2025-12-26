@@ -2,12 +2,11 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { X, Flag, Loader2, Plus } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
 import { useCheckpointTypes, useCreateCheckpoint, useProjectStructure } from '@/modules/checkpoints/hooks'
 import { IconColorPicker } from '@/modules/checkpoints/components/shared'
+import { getIcon } from '@/modules/checkpoints/constants/icon-map'
 import type { SectionOption } from '@/modules/checkpoints/components/shared'
 import type { BaseModalProps } from '../../types'
 
@@ -133,6 +132,16 @@ export function CheckpointCreateModal({
   const handleSave = async () => {
     if (!canSave) return
 
+    // Подготавливаем данные для optimistic update
+    const optimisticLinkedSections = linkedSectionIds.map(id => {
+      const section = projectSections.find(s => s.id === id)
+      return {
+        section_id: id,
+        section_name: section?.name || '',
+        object_id: section?.objectId || null,
+      }
+    })
+
     const payload = {
       sectionId: sectionId,
       typeId: selectedTypeId,
@@ -143,6 +152,11 @@ export function CheckpointCreateModal({
       // Всегда передаём иконку и цвет (пользователь мог изменить после предзаполнения)
       customIcon: icon,
       customColor: color,
+      // Данные для optimistic update
+      _optimisticTypeName: selectedType?.name || name.trim(),
+      _optimisticTypeCode: selectedType?.type || 'custom',
+      _optimisticIsCustom: selectedType?.is_custom ?? true,
+      _optimisticLinkedSections: optimisticLinkedSections.length > 0 ? optimisticLinkedSections : undefined,
     }
 
     // Закрываем модалку сразу для мгновенного отклика
@@ -254,7 +268,7 @@ export function CheckpointCreateModal({
                   <div className="flex flex-wrap gap-1.5">
                     {checkpointTypes.map((type) => {
                       const isSelected = selectedTypeId === type.type_id
-                      const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[type.icon] || Flag
+                      const IconComp = getIcon(type.icon, Flag)
 
                       return (
                         <button
@@ -286,7 +300,7 @@ export function CheckpointCreateModal({
                           {type.is_custom ? (
                             <>
                               {(() => {
-                                const CustomIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[icon] || Flag
+                                const CustomIcon = getIcon(icon, Flag)
                                 return <CustomIcon size={12} className="shrink-0" />
                               })()}
                               <span>Создать свой</span>
@@ -323,7 +337,7 @@ export function CheckpointCreateModal({
                           onIconChange={setIcon}
                           onColorChange={setColor}
                           renderTrigger={({ color: previewColor }) => {
-                            const PreviewIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[icon] || Flag
+                            const PreviewIcon = getIcon(icon, Flag)
                             return (
                               <button
                                 type="button"

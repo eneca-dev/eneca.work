@@ -1,10 +1,15 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Wallet, AlertCircle, Check, Loader2 } from 'lucide-react'
+import { X, Wallet, AlertCircle, Check, Loader2, Link2, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useBudgetTypes, useBudgetsByEntity, useCreateBudget } from '@/modules/budgets'
-import type { BudgetEntityType } from '@/modules/budgets/types'
+import {
+  useBudgetTypes,
+  useBudgetsByEntity,
+  useCreateBudget,
+  useFindParentBudgetCandidates,
+} from '@/modules/budgets'
+import type { BudgetEntityType, BudgetCurrent } from '@/modules/budgets/types'
 import type { BaseModalProps } from '../../types'
 
 // ============================================================================
@@ -72,12 +77,21 @@ export function BudgetCreateModal({
   const [amountString, setAmountString] = useState('')
   const [comment, setComment] = useState('')
   const [hasInteractedWithName, setHasInteractedWithName] = useState(false)
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null)
+  const [showParentDropdown, setShowParentDropdown] = useState(false)
 
   // Queries
   const { data: budgetTypes = [], isLoading: typesLoading } = useBudgetTypes()
   const { data: existingBudgets = [], isLoading: budgetsLoading } = useBudgetsByEntity(
     entityType,
     entityId
+  )
+
+  // Parent budget candidates (только когда выбран тип)
+  const { data: parentCandidates = [], isLoading: parentLoading } = useFindParentBudgetCandidates(
+    entityType,
+    entityId,
+    selectedTypeId || undefined
   )
 
   // Mutation
@@ -100,6 +114,12 @@ export function BudgetCreateModal({
 
   const amount = useMemo(() => parseCurrency(amountString), [amountString])
 
+  // Выбранный родительский бюджет
+  const selectedParent = useMemo(
+    () => parentCandidates.find((p) => p.budget_id === selectedParentId),
+    [parentCandidates, selectedParentId]
+  )
+
   const isFormValid = useMemo(() => {
     return (
       selectedTypeId.trim() !== '' &&
@@ -116,6 +136,15 @@ export function BudgetCreateModal({
     }
   }, [selectedType, hasInteractedWithName])
 
+  // Auto-select first parent candidate when type changes
+  useEffect(() => {
+    if (parentCandidates.length > 0) {
+      setSelectedParentId(parentCandidates[0].budget_id)
+    } else {
+      setSelectedParentId(null)
+    }
+  }, [parentCandidates])
+
   // Reset form on open
   useEffect(() => {
     if (isOpen) {
@@ -124,6 +153,8 @@ export function BudgetCreateModal({
       setAmountString('')
       setComment('')
       setHasInteractedWithName(false)
+      setSelectedParentId(null)
+      setShowParentDropdown(false)
     }
   }, [isOpen])
 
@@ -147,6 +178,11 @@ export function BudgetCreateModal({
     }
   }, [amount])
 
+  const handleParentSelect = useCallback((parent: BudgetCurrent | null) => {
+    setSelectedParentId(parent?.budget_id || null)
+    setShowParentDropdown(false)
+  }, [])
+
   const handleSubmit = useCallback(() => {
     if (!isFormValid || isCreating) return
 
@@ -158,6 +194,7 @@ export function BudgetCreateModal({
         planned_amount: amount,
         comment: comment.trim() || undefined,
         budget_type_id: selectedTypeId,
+        parent_budget_id: selectedParentId,
       },
       {
         onSuccess: () => {
@@ -176,6 +213,7 @@ export function BudgetCreateModal({
     amount,
     comment,
     selectedTypeId,
+    selectedParentId,
     onSuccess,
     onClose,
   ])
@@ -230,132 +268,240 @@ export function BudgetCreateModal({
                 <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 items-end">
-                {/* Left column */}
-                <div className="space-y-3">
-                  {/* Budget Type Selector */}
+              <div className="space-y-3">
+                {/* Budget Type Selector */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    Тип бюджета
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {budgetTypes
+                      .filter((t) => t.is_active)
+                      .map((type) => {
+                        const isSelected = selectedTypeId === type.type_id
+                        const isMain = type.name === MAIN_BUDGET_TYPE_NAME
+                        const isDisabled = isMain && hasExistingMainBudget
+
+                        return (
+                          <button
+                            key={type.type_id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => setSelectedTypeId(type.type_id)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium',
+                              'border transition-all duration-150',
+                              isSelected
+                                ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                                : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-300',
+                              isDisabled && 'opacity-40 cursor-not-allowed'
+                            )}
+                          >
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: type.color || '#6b7280' }}
+                            />
+                            {type.name}
+                            {isSelected && <Check className="w-3 h-3 text-amber-500" />}
+                          </button>
+                        )
+                      })}
+                  </div>
+
+                  {/* Warning for main budget */}
+                  {isMainBudgetType && hasExistingMainBudget && (
+                    <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-500/80">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>Основной бюджет уже создан</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Parent Budget (показываем только если выбран тип и это не проект) */}
+                {selectedTypeId && entityType !== 'project' && (
                   <div>
                     <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Тип бюджета
+                      Родительский бюджет
                     </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {budgetTypes
-                        .filter((t) => t.is_active)
-                        .map((type) => {
-                          const isSelected = selectedTypeId === type.type_id
-                          const isMain = type.name === MAIN_BUDGET_TYPE_NAME
-                          const isDisabled = isMain && hasExistingMainBudget
+                    {parentLoading ? (
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Поиск...</span>
+                      </div>
+                    ) : parentCandidates.length === 0 ? (
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <Link2 className="w-3 h-3" />
+                        <span>Нет родительского бюджета</span>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowParentDropdown(!showParentDropdown)}
+                          className={cn(
+                            'w-full flex items-center justify-between px-2.5 py-1.5 text-xs',
+                            'bg-slate-800/50 border border-slate-700 rounded',
+                            'text-slate-200 hover:border-slate-600',
+                            'transition-colors'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Link2 className="w-3 h-3 text-slate-500" />
+                            {selectedParent ? (
+                              <>
+                                <div
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: selectedParent.type_color || '#6b7280' }}
+                                />
+                                <span>{selectedParent.name}</span>
+                                <span className="text-slate-500">
+                                  ({ENTITY_TYPE_LABELS[selectedParent.entity_type]})
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-slate-500">Выберите родителя...</span>
+                            )}
+                          </div>
+                          <ChevronDown className={cn(
+                            'w-3 h-3 text-slate-500 transition-transform',
+                            showParentDropdown && 'rotate-180'
+                          )} />
+                        </button>
 
-                          return (
+                        {/* Dropdown */}
+                        {showParentDropdown && (
+                          <div className={cn(
+                            'absolute top-full left-0 right-0 mt-1 z-10',
+                            'bg-slate-800 border border-slate-700 rounded',
+                            'shadow-lg shadow-black/50',
+                            'max-h-32 overflow-y-auto'
+                          )}>
+                            {/* Option: No parent */}
                             <button
-                              key={type.type_id}
                               type="button"
-                              disabled={isDisabled}
-                              onClick={() => setSelectedTypeId(type.type_id)}
+                              onClick={() => handleParentSelect(null)}
                               className={cn(
-                                'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium',
-                                'border transition-all duration-150',
-                                isSelected
-                                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                                  : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-300',
-                                isDisabled && 'opacity-40 cursor-not-allowed'
+                                'w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-left',
+                                'hover:bg-slate-700/50 transition-colors',
+                                !selectedParentId && 'bg-slate-700/30'
                               )}
                             >
-                              <div
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: type.color || '#6b7280' }}
-                              />
-                              {type.name}
-                              {isSelected && <Check className="w-3 h-3 text-amber-500" />}
+                              <Link2 className="w-3 h-3 text-slate-500" />
+                              <span className="text-slate-400">Без родителя</span>
                             </button>
-                          )
-                        })}
-                    </div>
 
-                    {/* Warning for main budget */}
-                    {isMainBudgetType && hasExistingMainBudget && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-500/80">
-                        <AlertCircle className="h-3 w-3" />
-                        <span>Основной бюджет уже создан</span>
+                            {/* Parent candidates */}
+                            {parentCandidates.map((parent) => (
+                              <button
+                                key={parent.budget_id}
+                                type="button"
+                                onClick={() => handleParentSelect(parent)}
+                                className={cn(
+                                  'w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-left',
+                                  'hover:bg-slate-700/50 transition-colors',
+                                  selectedParentId === parent.budget_id && 'bg-slate-700/30'
+                                )}
+                              >
+                                <div
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: parent.type_color || '#6b7280' }}
+                                />
+                                <span className="text-slate-200">{parent.name}</span>
+                                <span className="text-slate-500">
+                                  ({ENTITY_TYPE_LABELS[parent.entity_type]})
+                                </span>
+                                <span className="ml-auto text-slate-600 font-mono">
+                                  {formatCurrency(parent.planned_amount)} BYN
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Budget Name */}
-                  <div>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Название
-                    </label>
-                    <input
-                      type="text"
-                      value={budgetName}
-                      onChange={handleNameChange}
-                      placeholder="Название бюджета"
-                      className={cn(
-                        'w-full px-2.5 py-1.5 text-xs',
-                        'bg-slate-800/50 border border-slate-700',
-                        'rounded text-slate-200',
-                        'placeholder:text-slate-600',
-                        'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
-                        'transition-colors'
-                      )}
-                      disabled={isCreating}
-                    />
-                  </div>
-                </div>
-
-                {/* Right column */}
-                <div className="space-y-3">
-                  {/* Amount */}
-                  <div>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Сумма
-                    </label>
-                    <div className="relative">
+                {/* Two column layout for name, amount, comment */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Left column */}
+                  <div className="space-y-3">
+                    {/* Budget Name */}
+                    <div>
+                      <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                        Название
+                      </label>
                       <input
                         type="text"
-                        inputMode="decimal"
-                        value={amountString}
-                        onChange={handleAmountChange}
-                        onBlur={handleAmountBlur}
-                        placeholder="0"
+                        value={budgetName}
+                        onChange={handleNameChange}
+                        placeholder="Название бюджета"
                         className={cn(
-                          'w-full px-2.5 py-1.5 pr-8 text-xs text-right',
+                          'w-full px-2.5 py-1.5 text-xs',
                           'bg-slate-800/50 border border-slate-700',
-                          'rounded text-slate-200 font-mono',
+                          'rounded text-slate-200',
                           'placeholder:text-slate-600',
                           'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
                           'transition-colors'
                         )}
                         disabled={isCreating}
                       />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
-                        BYN
-                      </span>
                     </div>
                   </div>
 
-                  {/* Comment */}
-                  <div className="flex flex-col">
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Комментарий
-                    </label>
-                    <textarea
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Необязательно..."
-                      rows={3}
-                      className={cn(
-                        'w-full px-2.5 py-1.5 text-xs flex-1',
-                        'bg-slate-800/50 border border-slate-700',
-                        'rounded text-slate-200 resize-none',
-                        'placeholder:text-slate-600',
-                        'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
-                        'transition-colors'
-                      )}
-                      disabled={isCreating}
-                    />
+                  {/* Right column */}
+                  <div className="space-y-3">
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                        Сумма
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={amountString}
+                          onChange={handleAmountChange}
+                          onBlur={handleAmountBlur}
+                          placeholder="0"
+                          className={cn(
+                            'w-full px-2.5 py-1.5 pr-8 text-xs text-right',
+                            'bg-slate-800/50 border border-slate-700',
+                            'rounded text-slate-200 font-mono',
+                            'placeholder:text-slate-600',
+                            'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                            'transition-colors'
+                          )}
+                          disabled={isCreating}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
+                          BYN
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                </div>
+
+                {/* Comment - full width */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    Комментарий
+                  </label>
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Необязательно..."
+                    rows={2}
+                    className={cn(
+                      'w-full px-2.5 py-1.5 text-xs',
+                      'bg-slate-800/50 border border-slate-700',
+                      'rounded text-slate-200 resize-none',
+                      'placeholder:text-slate-600',
+                      'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                      'transition-colors'
+                    )}
+                    disabled={isCreating}
+                  />
                 </div>
               </div>
             )}

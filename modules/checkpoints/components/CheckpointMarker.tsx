@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useRef, useLayoutEffect } from 'react'
-import { format, parseISO, differenceInDays } from 'date-fns'
+import { parseISO, differenceInDays, format } from 'date-fns'
 import type { Checkpoint } from '../actions/checkpoints'
 import type { TimelineRange } from '@/modules/resource-graph/types'
 import {
@@ -45,24 +45,6 @@ interface CheckpointMarkersProps {
   sectionId: string
   /** Высота строки (адаптивная) */
   rowHeight?: number
-}
-
-// ============================================================================
-// Status Colors
-// ============================================================================
-
-const STATUS_COLORS: Record<Checkpoint['status'], string> = {
-  pending: '#eab308',        // yellow-500
-  overdue: '#ef4444',        // red-500
-  completed_late: '#f97316', // orange-500
-  completed: '#22c55e',      // green-500
-}
-
-const STATUS_LABELS: Record<Checkpoint['status'], string> = {
-  pending: 'Ожидает',
-  overdue: 'Просрочен',
-  completed_late: 'Выполнен с опозданием',
-  completed: 'Выполнен',
 }
 
 /**
@@ -281,11 +263,12 @@ function CheckpointMarkerSvg({
 
   // Зависимый чекпоинт - тот, у которого owner секция !== текущая секция
   const isDependant = checkpoint.section_id !== sectionId
+  const isCompleted = checkpoint.status === 'completed' || checkpoint.status === 'completed_late'
 
-  // Цвет берётся из типа чекпоинта (или серый для зависимых)
-  const baseColor = isDependant ? '#6B7280' : (checkpoint.color || '#6B7280')
+  // Цвет: серый для зависимых и выполненных, иначе цвет типа
+  const baseColor = isDependant ? '#6B7280' : isCompleted ? '#9CA3AF' : (checkpoint.color || '#6B7280')
   const rgb = hexToRgb(baseColor)
-  const bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isDependant ? 0.1 : 0.15})` : 'rgba(107, 114, 128, 0.1)'
+  const bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isDependant ? 0.1 : isCompleted ? 0.12 : 0.15})` : 'rgba(107, 114, 128, 0.1)'
 
   return (
     <g transform={`translate(${x}, ${y})`}>
@@ -324,6 +307,20 @@ function CheckpointMarkerSvg({
             />
           </div>
         </foreignObject>
+        {/* Зелёная галочка для выполненных чекпоинтов */}
+        {isCompleted && !isDependant && (
+          <g transform={`translate(${MARKER_RADIUS - 3}, ${-MARKER_RADIUS + 1})`}>
+            <circle cx={0} cy={0} r={4} fill="#22c55e" />
+            <path
+              d="M -2 0 L -0.5 1.5 L 2 -1.5"
+              stroke="white"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </g>
+        )}
       </g>
     </g>
   )
@@ -365,19 +362,17 @@ function CheckpointTooltipWrapper({
 
   // Зависимый чекпоинт - тот, у которого owner секция !== текущая секция
   const isDependant = checkpoint.section_id !== sectionId
+  const isCompleted = checkpoint.status === 'completed' || checkpoint.status === 'completed_late'
 
-  // Цвет берётся из типа чекпоинта
-  const typeColor = isDependant ? '#6B7280' : (checkpoint.color || '#6B7280')
+  // Цвет: серый для зависимых и выполненных, иначе цвет типа
+  const typeColor = isDependant ? '#6B7280' : isCompleted ? '#9CA3AF' : (checkpoint.color || '#6B7280')
   const linkedSections = checkpoint.linked_sections || []
 
   return (
     <Tooltip delayDuration={200}>
       <TooltipTrigger asChild>
         <div
-          className={cn(
-            "absolute pointer-events-auto cursor-pointer rounded-full transition-transform duration-200",
-            isHovered && "scale-110"
-          )}
+          className="absolute pointer-events-auto cursor-pointer"
           style={{
             left: x - MARKER_RADIUS - 4,
             top: y - MARKER_RADIUS - 4,
@@ -387,69 +382,97 @@ function CheckpointTooltipWrapper({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onClick={() => onMarkerClick?.(checkpoint)}
-        />
+        >
+          {/* Glow effect - отдельный элемент точно по размеру маркера */}
+          <div
+            className="absolute rounded-full transition-all duration-200 pointer-events-none"
+            style={{
+              left: 4,
+              top: 4,
+              width: MARKER_RADIUS * 2,
+              height: MARKER_RADIUS * 2,
+              boxShadow: isHovered ? `0 0 8px 0 ${typeColor}` : 'none',
+              transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+            }}
+          />
+        </div>
       </TooltipTrigger>
       <TooltipContent
-        side="bottom"
+        side="top"
         align="center"
-        sideOffset={8}
-        className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 shadow-xl shadow-black/40 rounded-lg px-3 py-2.5 max-w-[280px] z-[100]"
+        sideOffset={12}
+        className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 shadow-2xl shadow-black/50 rounded-lg p-0 max-w-[280px] z-[100]"
         avoidCollisions={true}
         collisionPadding={16}
       >
-        <div className="space-y-1.5">
-          <div>
-            <div className="text-sm font-medium text-white">{checkpoint.title}</div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-white/50">{checkpoint.type_name}</span>
-              {isDependant && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">
-                  зависимый
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-[11px]">
-            <span className="text-white/60 tabular-nums">
-              {format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
+        {/* Header */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/50">
+          <div
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: isCompleted ? '#22c55e' : typeColor }}
+          />
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+            Чекпоинт
+          </span>
+          {isCompleted && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 flex-shrink-0">
+              выполнен
             </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: typeColor }} />
-              <span className="text-[10px] text-white/60">{STATUS_LABELS[checkpoint.status]}</span>
+          )}
+          {isDependant && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 flex-shrink-0">
+              связь
             </span>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="px-3 py-2 space-y-2">
+          {/* Title */}
+          <div className="text-xs font-medium text-slate-200 leading-tight">
+            {checkpoint.title}
           </div>
+
+          {/* Description (Комментарий) */}
           {checkpoint.description && (
-            <div className="pt-1 border-t border-white/10">
-              <p className="text-[11px] text-white/60 leading-relaxed line-clamp-2">{checkpoint.description}</p>
-            </div>
-          )}
-          {checkpoint.completed_at && (
-            <div className="text-[10px] text-white/40">
-              Выполнен: {format(parseISO(checkpoint.completed_at), 'dd.MM.yyyy')}
-            </div>
-          )}
-          {/* Связанные разделы */}
-          {linkedSections.length > 0 && (
-            <div className="pt-1.5 border-t border-white/10">
-              <div className="text-[10px] text-amber-400/80 font-medium mb-1">
-                Связанные разделы ({linkedSections.length}):
+            <div>
+              <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-0.5">
+                Комментарий
               </div>
-              <div className="space-y-0.5">
-                {linkedSections.slice(0, 3).map((section) => (
-                  <div key={section.section_id} className="text-[10px] text-white/50 truncate">
-                    • {section.section_name}
-                  </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+                {checkpoint.description}
+              </p>
+            </div>
+          )}
+
+          {/* Linked sections as chips */}
+          {linkedSections.length > 0 && (
+            <div className="pt-1.5 border-t border-slate-700/50">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-1.5">
+                Связанные разделы
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {linkedSections.slice(0, 4).map((section) => (
+                  <span
+                    key={section.section_id}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-400/90 border border-amber-500/20 truncate max-w-[120px]"
+                    title={section.section_name}
+                  >
+                    {section.section_name}
+                  </span>
                 ))}
-                {linkedSections.length > 3 && (
-                  <div className="text-[10px] text-white/40">
-                    и ещё {linkedSections.length - 3}...
-                  </div>
+                {linkedSections.length > 4 && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-slate-700/50 text-slate-400">
+                    +{linkedSections.length - 4}
+                  </span>
                 )}
               </div>
             </div>
           )}
-          <div className="pt-1 border-t border-white/10 text-[10px] text-white/40">
-            Нажмите для редактирования
+
+          {/* Date at bottom */}
+          <div className="pt-1.5 border-t border-slate-700/50 text-[10px] text-slate-500 tabular-nums">
+            {format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
           </div>
         </div>
       </TooltipContent>

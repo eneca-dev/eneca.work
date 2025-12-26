@@ -2,13 +2,14 @@
 
 import { useMemo } from 'react'
 import { useCheckpointLinks } from '../context/CheckpointLinksContext'
+import { useUIStateStore } from '@/modules/resource-graph/stores'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const SVG_PADDING = 100
-const ARROW_OFFSET = 12  // Отступ для стрелки
+const MARKER_RADIUS = 8   // Радиус маркера чекпоинта (синхронизирован с CheckpointMarker)
 
 // ============================================================================
 // Types
@@ -42,6 +43,7 @@ interface LinkedGroup {
  */
 export function CheckpointVerticalLinks() {
   const { positions } = useCheckpointLinks()
+  const expandedSections = useUIStateStore((state) => state.expandedNodes.section)
 
   // Группируем чекпоинты по checkpoint_id
   const linkedGroups = useMemo((): LinkedGroup[] => {
@@ -71,13 +73,15 @@ export function CheckpointVerticalLinks() {
     }
 
     // Оставляем только группы с 2+ позициями и сортируем позиции по Y
+    // Исключаем группы, где хотя бы одна секция развёрнута
     return Array.from(groups.values())
       .filter(g => g.positions.length >= 2)
+      .filter(g => !g.positions.some(p => expandedSections.has(p.sectionId)))
       .map(g => ({
         ...g,
         positions: g.positions.sort((a, b) => a.y - b.y),
       }))
-  }, [positions])
+  }, [positions, expandedSections])
 
   if (linkedGroups.length === 0) {
     return null
@@ -99,17 +103,17 @@ export function CheckpointVerticalLinks() {
       <defs>
         <marker
           id="checkpoint-link-arrow"
-          markerWidth="6"
-          markerHeight="6"
-          refX="3"
-          refY="3"
+          markerWidth="5"
+          markerHeight="5"
+          refX="5"
+          refY="2.5"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
           <path
-            d="M 0 0 L 6 3 L 0 6 z"
+            d="M 0 0 L 5 2.5 L 0 5 z"
             fill="hsl(var(--muted-foreground))"
-            opacity="0.6"
+            opacity="0.5"
           />
         </marker>
       </defs>
@@ -124,9 +128,14 @@ export function CheckpointVerticalLinks() {
             {group.positions.slice(0, -1).map((pos, index) => {
               const nextPos = group.positions[index + 1]
 
-              // Линия идёт от текущей позиции к следующей (вниз)
-              const y1 = pos.y
-              const y2 = nextPos.y - ARROW_OFFSET
+              // Линия идёт от центра текущего чекпоинта к верхнему краю следующего
+              // y1 из центра - линия будет скрыта под маркером source
+              // y2 до верхнего края target - стрелка укажет на край
+              const y1 = pos.y                          // Центр source (скрыт под маркером)
+              const y2 = nextPos.y - MARKER_RADIUS      // Верхний край target
+
+              // Не рисуем линию если она слишком короткая
+              if (y2 - y1 < MARKER_RADIUS + 4) return null
 
               return (
                 <line
@@ -138,7 +147,7 @@ export function CheckpointVerticalLinks() {
                   stroke="hsl(var(--muted-foreground))"
                   strokeWidth="1"
                   strokeDasharray="4,3"
-                  opacity="0.5"
+                  opacity="0.4"
                   markerEnd="url(#checkpoint-link-arrow)"
                   className="transition-all duration-300"
                 />

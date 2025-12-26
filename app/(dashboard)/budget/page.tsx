@@ -1,11 +1,11 @@
 /**
  * Budget Management Page
  *
- * Страница управления бюджетом проекта
+ * Перенаправляет на страницу задач с вкладкой бюджетов.
  * Route: /budget
  */
 
-import { BudgetManagementPage } from '@/modules/budget-management'
+import { redirect } from 'next/navigation'
 
 export const metadata = {
   title: 'Бюджет проекта | eneca.work',
@@ -13,5 +13,6 @@ export const metadata = {
 }
 
 export default function BudgetPage() {
-  return <BudgetManagementPage />
+  // Перенаправляем на страницу задач с вкладкой бюджетов
+  redirect('/tasks')
 }

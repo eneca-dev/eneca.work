@@ -247,8 +247,8 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       {isOpen && isAuthenticated && !isBlockedRoute && (
         <FeedbackBanner
           userId={userId}
-          firstName={profile?.first_name || profile?.firstName || ""}
-          lastName={profile?.last_name || profile?.lastName || ""}
+          firstName={profile?.first_name || ""}
+          lastName={profile?.last_name || ""}
           hasDbRecord={hasDbRecord === true}
           onClose={handleClose}
           onAnswered={handleAnswered}

@@ -6,19 +6,19 @@
  * Инкапсулируют логику кеширования, загрузки данных и автоматической
  * инвалидации кеша для модуля checkpoints.
  *
- * Optimistic updates используются только для операций complete/delete.
- * Для create/update используется инвалидация кеша с перезагрузкой данных.
+ * Optimistic updates обновляют кеш sectionsBatch напрямую для мгновенного
+ * отображения изменений на resource-graph.
  *
  * @module modules/checkpoints/hooks/use-checkpoints
  */
 
+import { useCallback } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   createCacheQuery,
   createDetailCacheQuery,
-  createCacheMutation,
-  createUpdateMutation,
-  createDeleteMutation,
   queryKeys,
+  staleTimePresets,
 } from '@/modules/cache'
 
 import {
@@ -34,12 +34,11 @@ import {
   type CreateCheckpointInput,
   type UpdateCheckpointInput,
   type CompleteCheckpointInput,
-  type AuditEntry,
-  type SectionOption,
 } from '@/modules/checkpoints/actions/checkpoints'
 import { calculateCheckpointStatus } from '@/modules/checkpoints/utils/status-utils'
 
 import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
+import type { SectionsBatchData, BatchCheckpoint } from '@/modules/resource-graph/types'
 
 // ============================================================================
 // Query Hooks (чтение данных)
@@ -47,57 +46,63 @@ import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
 
 /**
  * Хук для загрузки списка чекпоинтов с фильтрацией
- *
- * ОПТИМИЗИРОВАНО: Увеличен staleTime до 5 минут, т.к. чекпоинты
- * меняются относительно редко (не каждые 30 сек).
- *
- * @example
- * ```tsx
- * const { data: checkpoints, isLoading } = useCheckpoints({ sectionId: 'uuid' })
- * ```
  */
 export const useCheckpoints = createCacheQuery({
   queryKey: (filters?: CheckpointFilters) => queryKeys.checkpoints.list(filters),
   queryFn: getCheckpoints,
-  staleTime: 'slow', // 5 минут — чекпоинты меняются редко
+  staleTime: 'slow',
 })
 
 /**
  * Хук для загрузки детальной информации о чекпоинте
- *
- * ОПТИМИЗИРОВАНО: Увеличен staleTime до 5 минут.
- *
- * @example
- * ```tsx
- * const { data: checkpoint } = useCheckpoint(checkpointId)
- * ```
  */
 export const useCheckpoint = createDetailCacheQuery({
   queryKey: (id: string) => queryKeys.checkpoints.detail(id),
   queryFn: getCheckpoint,
-  staleTime: 'slow', // 5 минут
+  staleTime: 'slow',
 })
 
 /**
- * Хук для загрузки истории изменений чекпоинта (audit trail)
- *
- * @example
- * ```tsx
- * const { data: audit } = useCheckpointAudit(checkpointId)
- * ```
+ * Хук для загрузки истории изменений чекпоинта
  */
 export const useCheckpointAudit = createDetailCacheQuery({
   queryKey: (id: string) => queryKeys.checkpoints.audit(id),
   queryFn: getCheckpointAudit,
-  staleTime: 'medium', // 5 минут — история редко меняется
+  staleTime: 'medium',
 })
 
 // ============================================================================
-// Constants
+// Utility Functions
 // ============================================================================
 
-/** Временный ID пользователя для optimistic updates (будет заменен сервером) */
-const OPTIMISTIC_USER_ID = 'optimistic-user-id' as const
+/**
+ * Обновляет кеш sectionsBatch для всех закешированных объектов
+ */
+function updateSectionsBatchCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  sectionId: string,
+  updater: (checkpoints: BatchCheckpoint[]) => BatchCheckpoint[]
+) {
+  // Находим все sectionsBatch кеши
+  const queries = queryClient.getQueriesData<SectionsBatchData>({
+    queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+  })
+
+  for (const [queryKey, data] of queries) {
+    if (!data) continue
+
+    // Проверяем есть ли данные для этой секции
+    if (data.checkpoints[sectionId] !== undefined) {
+      queryClient.setQueryData<SectionsBatchData>(queryKey, {
+        ...data,
+        checkpoints: {
+          ...data.checkpoints,
+          [sectionId]: updater(data.checkpoints[sectionId] || []),
+        },
+      })
+    }
+  }
+}
 
 // ============================================================================
 // Mutation Hooks (изменение данных)
@@ -106,123 +111,327 @@ const OPTIMISTIC_USER_ID = 'optimistic-user-id' as const
 /**
  * Хук для создания нового чекпоинта
  *
- * После успешного создания на сервере автоматически инвалидирует кеш
- * списков чекпоинтов. Чекпоинты загружаются отдельно от основных данных
- * графика, поэтому не требуется инвалидация resourceGraph.
- *
- * ОПТИМИЗИРОВАНО: Инвалидирует только списки чекпоинтов, не затрагивая
- * sections или resourceGraph (чекпоинты загружаются отдельным запросом).
- *
- * @example
- * ```tsx
- * const createMutation = useCreateCheckpoint()
- * createMutation.mutate({
- *   sectionId: 'uuid',
- *   typeId: 'exam-type-uuid',
- *   title: 'Экспертиза',
- *   checkpointDate: '2025-12-31',
- * })
- * ```
+ * Использует optimistic update для мгновенного отображения на графике.
  */
-export const useCreateCheckpoint = createCacheMutation<CreateCheckpointInput, Checkpoint>({
-  mutationFn: createCheckpoint,
-  invalidateKeys: (input) => [
-    // Инвалидируем список чекпоинтов для родительского раздела
-    queryKeys.checkpoints.bySection(input.sectionId),
-    // Инвалидируем списки для связанных разделов (если есть)
-    ...(input.linkedSectionIds || []).map(id => queryKeys.checkpoints.bySection(id)),
-    // Инвалидируем все sectionsBatch (чекпоинты грузятся в batch в resource-graph)
-    queryKeys.resourceGraph.allSectionsBatch(),
-  ],
-})
+export function useCreateCheckpoint() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: createCheckpoint,
+
+    onMutate: async (input) => {
+      // Отменяем исходящие refetch запросы
+      await queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+
+      // Создаем optimistic checkpoint
+      const optimisticCheckpoint: BatchCheckpoint = {
+        id: `optimistic-${Date.now()}`,
+        sectionId: input.sectionId,
+        typeId: input.typeId,
+        typeCode: input._optimisticTypeCode || 'custom',
+        typeName: input._optimisticTypeName || input.title,
+        isCustom: input._optimisticIsCustom ?? false,
+        icon: input.customIcon || 'Flag',
+        color: input.customColor || '#6b7280',
+        title: input.title,
+        description: input.description || null,
+        checkpointDate: input.checkpointDate,
+        completedAt: null,
+        status: 'pending',
+        statusLabel: 'Ожидается',
+        linkedSections: input._optimisticLinkedSections || [],
+        linkedSectionsCount: input._optimisticLinkedSections?.length || 0,
+      }
+
+      // Обновляем кеш sectionsBatch
+      updateSectionsBatchCache(queryClient, input.sectionId, (checkpoints) => [
+        ...checkpoints,
+        optimisticCheckpoint,
+      ])
+
+      // Также добавляем в linked секции
+      if (input.linkedSectionIds) {
+        for (const linkedSectionId of input.linkedSectionIds) {
+          updateSectionsBatchCache(queryClient, linkedSectionId, (checkpoints) => [
+            ...checkpoints,
+            { ...optimisticCheckpoint, sectionId: linkedSectionId },
+          ])
+        }
+      }
+
+      return { optimisticCheckpoint }
+    },
+
+    onError: (_error, input, context) => {
+      // Откатываем optimistic update при ошибке
+      if (context?.optimisticCheckpoint) {
+        updateSectionsBatchCache(queryClient, input.sectionId, (checkpoints) =>
+          checkpoints.filter((cp) => cp.id !== context.optimisticCheckpoint.id)
+        )
+
+        if (input.linkedSectionIds) {
+          for (const linkedSectionId of input.linkedSectionIds) {
+            updateSectionsBatchCache(queryClient, linkedSectionId, (checkpoints) =>
+              checkpoints.filter((cp) => cp.id !== context.optimisticCheckpoint.id)
+            )
+          }
+        }
+      }
+    },
+
+    onSettled: () => {
+      // Инвалидируем кеш для синхронизации с сервером
+      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+    },
+  })
+}
 
 /**
  * Хук для обновления чекпоинта
  *
- * Обновляет чекпоинт и инвалидирует кеш списков чекпоинтов.
- *
- * ОПТИМИЗИРОВАНО: Инвалидирует только detail и списки чекпоинтов,
- * не затрагивая sections или resourceGraph.
- *
- * @example
- * ```tsx
- * const updateMutation = useUpdateCheckpoint()
- * updateMutation.mutate({
- *   checkpointId: 'uuid',
- *   title: 'Новое название',
- *   checkpointDate: '2026-01-15',
- *   linkedSectionIds: ['section-1', 'section-2'],
- * })
- * ```
+ * Использует optimistic update для мгновенного отображения изменений.
  */
-export const useUpdateCheckpoint = createCacheMutation<UpdateCheckpointInput, Checkpoint>({
-  mutationFn: updateCheckpoint,
-  invalidateKeys: (input) => [
-    // Инвалидируем detail кеш чекпоинта
-    queryKeys.checkpoints.detail(input.checkpointId),
-    // Инвалидируем все списки чекпоинтов (т.к. не знаем какие секции затронуты)
-    queryKeys.checkpoints.lists(),
-    // Инвалидируем все sectionsBatch (чекпоинты грузятся в batch в resource-graph)
-    queryKeys.resourceGraph.allSectionsBatch(),
-  ],
-})
+export function useUpdateCheckpoint() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateCheckpoint,
+
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+
+      // Находим текущий чекпоинт в кеше
+      let previousCheckpoint: BatchCheckpoint | undefined
+
+      const queries = queryClient.getQueriesData<SectionsBatchData>({
+        queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+      })
+
+      for (const [, data] of queries) {
+        if (!data) continue
+        for (const checkpoints of Object.values(data.checkpoints)) {
+          const found = checkpoints.find((cp) => cp.id === input.checkpointId)
+          if (found) {
+            previousCheckpoint = found
+            break
+          }
+        }
+        if (previousCheckpoint) break
+      }
+
+      if (!previousCheckpoint) return { previousCheckpoint: undefined }
+
+      // Вычисляем новый статус
+      const newStatus = input.checkpointDate
+        ? calculateCheckpointStatus(previousCheckpoint.completedAt, input.checkpointDate)
+        : previousCheckpoint.status
+
+      // Обновляем чекпоинт во всех секциях (owner + linked)
+      const updatedCheckpoint: BatchCheckpoint = {
+        ...previousCheckpoint,
+        title: input.title ?? previousCheckpoint.title,
+        description: input.description !== undefined ? input.description : previousCheckpoint.description,
+        checkpointDate: input.checkpointDate ?? previousCheckpoint.checkpointDate,
+        icon: input._optimisticIcon ?? input.customIcon ?? previousCheckpoint.icon,
+        color: input._optimisticColor ?? input.customColor ?? previousCheckpoint.color,
+        typeId: input.typeId ?? previousCheckpoint.typeId,
+        typeName: input._optimisticTypeName ?? previousCheckpoint.typeName,
+        typeCode: input._optimisticTypeCode ?? previousCheckpoint.typeCode,
+        isCustom: input._optimisticIsCustom ?? previousCheckpoint.isCustom,
+        linkedSections: input._optimisticLinkedSections ?? previousCheckpoint.linkedSections,
+        linkedSectionsCount: input._optimisticLinkedSections?.length ?? previousCheckpoint.linkedSectionsCount,
+        status: newStatus,
+      }
+
+      // Обновляем во всех sectionsBatch кешах
+      for (const [queryKey, data] of queries) {
+        if (!data) continue
+
+        let updated = false
+        const newCheckpoints = { ...data.checkpoints }
+
+        for (const [sectionId, checkpoints] of Object.entries(newCheckpoints)) {
+          const idx = checkpoints.findIndex((cp) => cp.id === input.checkpointId)
+          if (idx !== -1) {
+            newCheckpoints[sectionId] = [
+              ...checkpoints.slice(0, idx),
+              updatedCheckpoint,
+              ...checkpoints.slice(idx + 1),
+            ]
+            updated = true
+          }
+        }
+
+        if (updated) {
+          queryClient.setQueryData<SectionsBatchData>(queryKey, {
+            ...data,
+            checkpoints: newCheckpoints,
+          })
+        }
+      }
+
+      return { previousCheckpoint }
+    },
+
+    onError: (_error, input, context) => {
+      // Откатываем при ошибке
+      if (context?.previousCheckpoint) {
+        const queries = queryClient.getQueriesData<SectionsBatchData>({
+          queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+        })
+
+        for (const [queryKey, data] of queries) {
+          if (!data) continue
+
+          const newCheckpoints = { ...data.checkpoints }
+          for (const [sectionId, checkpoints] of Object.entries(newCheckpoints)) {
+            const idx = checkpoints.findIndex((cp) => cp.id === input.checkpointId)
+            if (idx !== -1) {
+              newCheckpoints[sectionId] = [
+                ...checkpoints.slice(0, idx),
+                context.previousCheckpoint,
+                ...checkpoints.slice(idx + 1),
+              ]
+            }
+          }
+
+          queryClient.setQueryData<SectionsBatchData>(queryKey, {
+            ...data,
+            checkpoints: newCheckpoints,
+          })
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+    },
+  })
+}
 
 /**
  * Хук для отметки чекпоинта как выполненного/невыполненного
- *
- * Использует optimistic update для мгновенной реакции UI.
- * Обновляет как списки чекпоинтов, так и detail-кеш для мгновенного отклика в модалках.
- *
- * @example
- * ```tsx
- * const completeMutation = useCompleteCheckpoint()
- * completeMutation.mutate({
- *   checkpointId: 'uuid',
- *   completed: true,
- * })
- * ```
  */
-export const useCompleteCheckpoint = createUpdateMutation({
-  mutationFn: completeCheckpoint,
-  listQueryKey: queryKeys.checkpoints.lists(),
-  detailQueryKey: (input: CompleteCheckpointInput) => queryKeys.checkpoints.detail(input.checkpointId),
-  getId: (input: CompleteCheckpointInput) => input.checkpointId,
-  getItemId: (item: Checkpoint) => item.checkpoint_id,
-  merge: (item: Checkpoint, input: CompleteCheckpointInput) => {
-    const completedAt = input.completed ? new Date().toISOString() : null
-    const status = calculateCheckpointStatus(completedAt, item.checkpoint_date)
+export function useCompleteCheckpoint() {
+  const queryClient = useQueryClient()
 
-    return {
-      ...item,
-      completed_at: completedAt,
-      completed_by: input.completed ? OPTIMISTIC_USER_ID : null,
-      status,
-    }
-  },
-  // Инвалидируем sectionsBatch для синхронизации с resource-graph
-  invalidateKeys: () => [queryKeys.resourceGraph.allSectionsBatch()],
-})
+  return useMutation({
+    mutationFn: completeCheckpoint,
+
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+
+      const queries = queryClient.getQueriesData<SectionsBatchData>({
+        queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+      })
+
+      let previousCheckpoint: BatchCheckpoint | undefined
+
+      for (const [queryKey, data] of queries) {
+        if (!data) continue
+
+        const newCheckpoints = { ...data.checkpoints }
+        let updated = false
+
+        for (const [sectionId, checkpoints] of Object.entries(newCheckpoints)) {
+          const idx = checkpoints.findIndex((cp) => cp.id === input.checkpointId)
+          if (idx !== -1) {
+            previousCheckpoint = checkpoints[idx]
+            const completedAt = input.completed ? new Date().toISOString() : null
+            const status = calculateCheckpointStatus(completedAt, checkpoints[idx].checkpointDate)
+
+            newCheckpoints[sectionId] = [
+              ...checkpoints.slice(0, idx),
+              {
+                ...checkpoints[idx],
+                completedAt,
+                status,
+                statusLabel: status === 'completed' ? 'Выполнено' : status === 'completed_late' ? 'Выполнено с опозданием' : 'Ожидается',
+              },
+              ...checkpoints.slice(idx + 1),
+            ]
+            updated = true
+          }
+        }
+
+        if (updated) {
+          queryClient.setQueryData<SectionsBatchData>(queryKey, {
+            ...data,
+            checkpoints: newCheckpoints,
+          })
+        }
+      }
+
+      return { previousCheckpoint }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+    },
+  })
+}
 
 /**
  * Хук для удаления чекпоинта
- *
- * ОПТИМИЗИРОВАНО: Использует optimistic delete + инвалидацию только
- * списков чекпоинтов. Убраны sections.all и resourceGraph.all.
- *
- * @example
- * ```tsx
- * const deleteMutation = useDeleteCheckpoint()
- * deleteMutation.mutate(checkpointId)
- * ```
  */
-export const useDeleteCheckpoint = createDeleteMutation({
-  mutationFn: deleteCheckpoint,
-  listQueryKey: queryKeys.checkpoints.lists(),
-  getId: (checkpointId: string) => checkpointId,
-  getItemId: (item: Checkpoint) => item.checkpoint_id,
-  // Инвалидируем sectionsBatch для синхронизации с resource-graph
-  invalidateKeys: () => [queryKeys.resourceGraph.allSectionsBatch()],
-})
+export function useDeleteCheckpoint() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteCheckpoint,
+
+    onMutate: async (checkpointId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+
+      const queries = queryClient.getQueriesData<SectionsBatchData>({
+        queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+      })
+
+      let previousCheckpoint: BatchCheckpoint | undefined
+      let foundInSectionId: string | undefined
+
+      for (const [queryKey, data] of queries) {
+        if (!data) continue
+
+        const newCheckpoints = { ...data.checkpoints }
+        let updated = false
+
+        for (const [sectionId, checkpoints] of Object.entries(newCheckpoints)) {
+          const idx = checkpoints.findIndex((cp) => cp.id === checkpointId)
+          if (idx !== -1) {
+            previousCheckpoint = checkpoints[idx]
+            foundInSectionId = sectionId
+            newCheckpoints[sectionId] = checkpoints.filter((cp) => cp.id !== checkpointId)
+            updated = true
+          }
+        }
+
+        if (updated) {
+          queryClient.setQueryData<SectionsBatchData>(queryKey, {
+            ...data,
+            checkpoints: newCheckpoints,
+          })
+        }
+      }
+
+      return { previousCheckpoint, sectionId: foundInSectionId }
+    },
+
+    onError: (_error, checkpointId, context) => {
+      // Откатываем при ошибке
+      if (context?.previousCheckpoint && context.sectionId) {
+        updateSectionsBatchCache(queryClient, context.sectionId, (checkpoints) => [
+          ...checkpoints,
+          context.previousCheckpoint!,
+        ])
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.allSectionsBatch() })
+    },
+  })
+}
 
 // ============================================================================
 // Helper Hooks
@@ -230,62 +439,32 @@ export const useDeleteCheckpoint = createDeleteMutation({
 
 /**
  * Хук для загрузки разделов проекта
- *
- * Используется для выбора связанных разделов в CheckpointEditModal.
- * Загружает только разделы того же проекта, что и указанный раздел.
- *
- * @example
- * ```tsx
- * const { data: sections, isLoading } = useProjectSections(checkpoint.section_id)
- * ```
  */
 export const useProjectSections = createDetailCacheQuery({
   queryKey: (sectionId: string) => queryKeys.checkpoints.projectSections(sectionId),
   queryFn: getProjectSections,
-  staleTime: 'medium', // 5 минут — структура проекта меняется редко
+  staleTime: 'medium',
 })
 
 // ============================================================================
 // Prefetch Utilities
 // ============================================================================
 
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
-import { staleTimePresets } from '@/modules/cache'
-
 /**
  * Хук для prefetch чекпоинтов нескольких разделов
- *
- * Используется при раскрытии объекта для предзагрузки чекпоинтов
- * всех его разделов. Это обеспечивает мгновенное отображение маркеров.
- *
- * @example
- * ```tsx
- * const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
- *
- * useEffect(() => {
- *   if (isExpanded) {
- *     prefetchForSections(object.sections.map(s => s.id))
- *   }
- * }, [isExpanded])
- * ```
  */
 export function usePrefetchCheckpoints() {
   const queryClient = useQueryClient()
 
-  /**
-   * Prefetch чекпоинтов для списка разделов
-   */
   const prefetchForSections = useCallback(
     (sectionIds: string[]) => {
       sectionIds.forEach((sectionId) => {
         const key = queryKeys.checkpoints.list({ sectionId })
-        // Prefetch только если нет в кеше
         if (!queryClient.getQueryData(key)) {
           queryClient.prefetchQuery({
             queryKey: key,
             queryFn: () => getCheckpoints({ sectionId }),
-            staleTime: staleTimePresets.slow, // 5 минут
+            staleTime: staleTimePresets.slow,
           })
         }
       })
@@ -293,9 +472,6 @@ export function usePrefetchCheckpoints() {
     [queryClient]
   )
 
-  /**
-   * Prefetch разделов проекта для модалки (нужны для выбора связанных разделов)
-   */
   const prefetchProjectSections = useCallback(
     (sectionId: string) => {
       const key = queryKeys.checkpoints.projectSections(sectionId)
@@ -303,30 +479,67 @@ export function usePrefetchCheckpoints() {
         queryClient.prefetchQuery({
           queryKey: key,
           queryFn: () => getProjectSections(sectionId),
-          staleTime: staleTimePresets.slow, // 5 минут
+          staleTime: staleTimePresets.slow,
         })
       }
     },
     [queryClient]
   )
 
-  /**
-   * Получить чекпоинт из кеша списка (для модалки)
-   * Возвращает checkpoint если он есть в любом закешированном списке
-   */
   const getCheckpointFromCache = useCallback(
     (checkpointId: string): Checkpoint | undefined => {
-      // Получаем все закешированные списки чекпоинтов
-      const queries = queryClient.getQueriesData<{ success: boolean; data: Checkpoint[] }>({
+      // Ищем в checkpoints.lists()
+      const checkpointQueries = queryClient.getQueriesData<{ success: boolean; data: Checkpoint[] }>({
         queryKey: queryKeys.checkpoints.lists(),
       })
 
-      for (const [, data] of queries) {
+      for (const [, data] of checkpointQueries) {
         if (data?.success && data.data) {
           const found = data.data.find((cp) => cp.checkpoint_id === checkpointId)
           if (found) return found
         }
       }
+
+      // Ищем в sectionsBatch и конвертируем
+      const batchQueries = queryClient.getQueriesData<SectionsBatchData>({
+        queryKey: queryKeys.resourceGraph.allSectionsBatch(),
+      })
+
+      for (const [, data] of batchQueries) {
+        if (!data) continue
+        for (const checkpoints of Object.values(data.checkpoints)) {
+          const found = checkpoints.find((cp) => cp.id === checkpointId)
+          if (found) {
+            // Конвертируем BatchCheckpoint в Checkpoint
+            // linkedSections уже использует snake_case (BatchLinkedSection)
+            return {
+              checkpoint_id: found.id,
+              section_id: found.sectionId,
+              type_id: found.typeId,
+              type_code: found.typeCode,
+              type_name: found.typeName,
+              is_custom: found.isCustom,
+              title: found.title || '',
+              description: found.description,
+              checkpoint_date: found.checkpointDate,
+              icon: found.icon,
+              color: found.color,
+              completed_at: found.completedAt,
+              completed_by: null,
+              status: found.status,
+              status_label: found.statusLabel,
+              created_by: null,
+              created_at: '',
+              updated_at: '',
+              section_responsible: null,
+              project_manager: null,
+              linked_sections: found.linkedSections,
+              linked_sections_count: found.linkedSectionsCount,
+            }
+          }
+        }
+      }
+
       return undefined
     },
     [queryClient]

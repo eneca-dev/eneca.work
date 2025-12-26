@@ -1,26 +1,26 @@
 # Модуль бюджетов (budgets)
 
-Система плановых бюджетов для разделов, объектов, стадий и проектов.
+Система плановых бюджетов для разделов, объектов, стадий и проектов с поддержкой иерархии родительских бюджетов.
 
 ## Статус реализации
 
 ### ✅ Выполнено
 
 #### БД — Таблицы
-- `budget_types` — справочник типов бюджетов (Основной, Премиальный, Дополнительный)
-- `budgets` — основная таблица с полиморфной связью (entity_type + entity_id) и FK на тип (budget_type_id)
+- `budget_types` — справочник типов бюджетов (управляется централизованно через миграции)
+- `budgets` — основная таблица с полиморфной связью (entity_type + entity_id), FK на тип (budget_type_id) и родительский бюджет (parent_budget_id)
 - `budget_versions` — история изменений сумм с версионированием
 - `work_logs.budget_id` — привязка расходов к бюджетам
 
 #### БД — Views
-- `v_cache_budgets_current` — активные бюджеты с суммой, расходом, типом
+- `v_cache_budgets_current` — активные бюджеты с суммой, расходом, типом и информацией о родителе
 - `v_cache_section_budget_summary` — сводка по разделам
 - `v_cache_budget_types` — типы с количеством использований
 
 #### БД — RLS-политики
 | Таблица | SELECT | INSERT | UPDATE | DELETE |
 |---------|--------|--------|--------|--------|
-| `budget_types` | Все авторизованные | budgets.manage_types | budgets.manage_types | budgets.manage_types |
+| `budget_types` | Все авторизованные | — (только миграции) | — (только миграции) | — (только миграции) |
 | `budgets` | По ролям* | budgets.create | budgets.edit | budgets.delete |
 | `budget_versions` | Наследует от budgets | budgets.edit | budgets.edit | — |
 
@@ -37,7 +37,8 @@
 | `budgets.create` | admin, subdivision_head, department_head, project_manager |
 | `budgets.edit` | admin, subdivision_head, department_head, project_manager |
 | `budgets.delete` | admin |
-| `budgets.manage_types` | admin |
+
+**Примечание:** Типы бюджетов управляются централизованно через миграции, UI для управления типами удалён.
 
 ### ✅ Этап 5: Server Actions и Cache
 - [x] Query keys в `modules/cache/keys/query-keys.ts`
@@ -81,14 +82,21 @@ budget_types            budgets                    budget_versions
 ├── color              ├── entity_id              ├── planned_amount
 ├── description        ├── name                   ├── effective_from
 ├── is_active          ├── budget_type_id FK      ├── effective_to
-├── created_at         ├── is_active              ├── comment
-        ↓              ├── created_by             ├── created_by
-                       ├── created_at             ├── created_at
-                       ├── updated_at
-                               ↓
-                       work_logs
-                       ├── budget_id FK (nullable)
-                       └── ...
+├── created_at         ├── parent_budget_id FK ←──┐ ├── comment
+        ↓              ├── is_active              │ ├── created_by
+                       ├── created_by             │ ├── created_at
+                       ├── created_at             │
+                       ├── updated_at             │
+                               ↓                  │
+                       work_logs                  │ (self-reference)
+                       ├── budget_id FK (nullable)│
+                       └── ...                    │
+                                                  │
+Иерархия сущностей:                               │
+section → object → stage → project               │
+    └─────────────────────────────────────────────┘
+    parent_budget_id ссылается на бюджет того же типа
+    выше по иерархии сущностей
 ```
 
 ## Ключевые концепции
@@ -99,10 +107,32 @@ budget_types            budgets                    budget_versions
 type BudgetEntityType = 'section' | 'object' | 'stage' | 'project'
 ```
 
+### Иерархия родительских бюджетов
+Бюджет может иметь родительский бюджет того же типа выше по иерархии:
+- Section → Object → Stage → Project
+- При создании бюджета автоматически ищутся кандидаты на родителя
+- Родитель выбирается автоматически (ближайший) или вручную
+
+```typescript
+// Пример: бюджет раздела с родителем на уровне объекта
+{
+  entity_type: 'section',
+  entity_id: 'section-123',
+  budget_type_id: 'type-abc',
+  parent_budget_id: 'budget-456', // бюджет того же типа на уровне object
+}
+```
+
 ### Версионирование
 Каждое изменение суммы создаёт новую версию:
 - Текущая версия: `effective_to IS NULL`
 - При изменении: закрываем старую (`effective_to = today`), создаём новую
+
+### Типы бюджетов
+Типы управляются централизованно через миграции:
+- Пользователи не могут создавать/редактировать типы через UI
+- Новые типы добавляются только через SQL-миграции
+- Каждый бюджет обязательно привязан к одному типу
 
 ### Расчёт расхода
 Фактический расход считается из `work_logs`:
@@ -155,9 +185,26 @@ function CreateBudgetForm({ sectionId }: { sectionId: string }) {
       entity_id: sectionId,
       name: data.name,
       planned_amount: data.amount,
-      tag_ids: data.tagIds,
+      budget_type_id: data.budgetTypeId,      // обязательно
+      parent_budget_id: data.parentBudgetId,  // опционально
     })
   }
+}
+```
+
+### Поиск родительских бюджетов
+```typescript
+import { useFindParentBudgetCandidates } from '@/modules/budgets'
+
+function ParentBudgetSelector({ entityType, entityId, budgetTypeId }) {
+  const { data: candidates, isLoading } = useFindParentBudgetCandidates(
+    entityType,
+    entityId,
+    budgetTypeId
+  )
+
+  // candidates отсортированы по близости (ближайший родитель первым)
+  // Например для section: [object budget, stage budget, project budget]
 }
 ```
 

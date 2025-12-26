@@ -3,6 +3,7 @@
  *
  * Загружает все опции фильтров для страницы Задачи
  * Объединяет опции из resource-graph (org + project + tags)
+ * С учётом разрешений пользователя (filter-permissions)
  */
 
 'use client'
@@ -16,6 +17,11 @@ import {
 import { getOrgStructure, getProjectStructure, getProjectTags } from '@/modules/resource-graph/actions'
 import type { FilterOption } from '@/modules/inline-filter'
 import type { OrgStructure, ProjectStructure, ProjectTag } from '@/modules/resource-graph/types'
+import {
+  useFilterContext,
+  useFilteredOptions,
+  getLockedFilters,
+} from '@/modules/filter-permissions'
 
 // ============================================================================
 // Base Structure Hooks
@@ -47,13 +53,18 @@ const useProjectTags = createSimpleCacheQuery<ProjectTag[]>({
  * Загружает все опции фильтров для страницы Задачи
  *
  * Включает: подразделения, отделы, команды, ответственных, проекты, метки
+ * Фильтрует опции на основе scope пользователя (filter-permissions)
  */
 export function useTasksFilterOptions() {
   const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()
   const { data: projectStructure, isLoading: loadingProject } = useProjectStructure()
   const { data: tags, isLoading: loadingTags } = useProjectTags()
 
-  const options = useMemo<FilterOption[]>(() => {
+  // 🔒 Получаем контекст разрешений
+  const { data: filterContext, isLoading: loadingContext } = useFilterContext()
+
+  // Собираем все опции без фильтрации
+  const allOptions = useMemo<FilterOption[]>(() => {
     const result: FilterOption[] = []
 
     // Подразделения
@@ -101,8 +112,20 @@ export function useTasksFilterOptions() {
     return result
   }, [orgStructure, projectStructure, tags])
 
+  // 🔒 Фильтруем опции по scope пользователя
+  const filteredOptions = useFilteredOptions(allOptions, filterContext)
+
+  // 🔒 Получаем список заблокированных фильтров для UI
+  const lockedFilters = useMemo(
+    () => getLockedFilters(filterContext),
+    [filterContext]
+  )
+
   return {
-    options,
-    isLoading: loadingOrg || loadingProject || loadingTags,
+    options: filteredOptions,
+    allOptions, // Для отладки
+    filterContext,
+    lockedFilters,
+    isLoading: loadingOrg || loadingProject || loadingTags || loadingContext,
   }
 }

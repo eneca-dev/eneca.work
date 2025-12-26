@@ -52,6 +52,11 @@ export interface BudgetCurrent {
   type_name: string | null
   type_color: string | null
   type_description: string | null
+  // Родительский бюджет
+  parent_budget_id: string | null
+  parent_name: string | null
+  parent_entity_type: BudgetEntityType | null
+  parent_entity_id: string | null
 }
 
 // Версия бюджета (история)
@@ -91,6 +96,16 @@ export interface CreateBudgetInput {
   planned_amount: number
   comment?: string
   budget_type_id: string // ОБЯЗАТЕЛЬНОЕ поле
+  parent_budget_id?: string | null // Родительский бюджет (опционально)
+}
+
+// Иерархия сущности для поиска родительского бюджета
+export interface EntityHierarchy {
+  entityType: BudgetEntityType
+  entityId: string
+  objectId: string | null
+  stageId: string | null
+  projectId: string | null
 }
 
 export interface UpdateBudgetAmountInput {

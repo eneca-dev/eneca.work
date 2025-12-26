@@ -8,14 +8,15 @@ interface PermissionsState {
   isLoading: boolean
   error: string | null
   lastUpdated: Date | null
-  
+
   // Методы
   setPermissions: (permissions: string[]) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
   reset: () => void
-  
+  clearPermissions: () => void  // Alias для reset, используется AuthProvider
+
   // Проверки разрешений
   hasPermission: (permission: string) => boolean
   hasAnyPermission: (permissions: string[]) => boolean
@@ -98,7 +99,12 @@ export const usePermissionsStore = create<PermissionsState>()(
       reset: () => {
         set(initialState)
       },
-      
+
+      // Alias для reset — используется AuthProvider при logout
+      clearPermissions: () => {
+        set(initialState)
+      },
+
       // Проверки разрешений
       hasPermission: (permission: string) => {
         const { permissions } = get()

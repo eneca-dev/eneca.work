@@ -566,6 +566,18 @@ For detailed module-specific documentation, refer to individual module READMEs:
 - `modules/chat/README.md` - Chat system architecture
 - `modules/notifications/README.md` - Notification system
 - `modules/planning/README.md` - Planning module (resource allocation, Gantt chart)
+- `modules/budgets/README.md` - Budget system (parent hierarchy, versioning)
+
+### 📝 Обязательное обновление README
+
+**ВАЖНО:** При внесении изменений в модуль **ВСЕГДА** обновляй соответствующий `README.md`:
+
+- Добавление новых хуков/actions → документируй API и примеры использования
+- Изменение схемы БД → обнови раздел "Схема данных"
+- Новая функциональность → добавь в "Ключевые концепции"
+- Изменение permissions → обнови таблицу RLS/Permissions
+
+Это обеспечивает актуальность документации для всей команды.
 
 ## Additional Resources
 

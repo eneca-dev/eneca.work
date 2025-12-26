@@ -22,6 +22,11 @@ export interface CreateCheckpointInput {
   customIcon?: string | null
   customColor?: string | null
   linkedSectionIds?: string[] // Дополнительные связанные разделы
+  // Только для optimistic update (не отправляются на сервер)
+  _optimisticTypeName?: string
+  _optimisticTypeCode?: string
+  _optimisticIsCustom?: boolean
+  _optimisticLinkedSections?: Array<{ section_id: string; section_name: string; object_id: string | null }>
 }
 
 /** Input для обновления чекпоинта */
@@ -37,6 +42,10 @@ export interface UpdateCheckpointInput {
   // Только для optimistic update (не отправляются на сервер)
   _optimisticIcon?: string
   _optimisticColor?: string
+  _optimisticTypeName?: string
+  _optimisticTypeCode?: string
+  _optimisticIsCustom?: boolean
+  _optimisticLinkedSections?: Array<{ section_id: string; section_name: string; object_id: string | null }>
 }
 
 /** Input для отметки выполнения */

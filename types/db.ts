@@ -662,6 +662,7 @@ export type Database = {
           entity_type: Database["public"]["Enums"]["budget_entity_type"]
           is_active: boolean
           name: string
+          parent_budget_id: string | null
           updated_at: string
         }
         Insert: {
@@ -673,6 +674,7 @@ export type Database = {
           entity_type: Database["public"]["Enums"]["budget_entity_type"]
           is_active?: boolean
           name: string
+          parent_budget_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -684,6 +686,7 @@ export type Database = {
           entity_type?: Database["public"]["Enums"]["budget_entity_type"]
           is_active?: boolean
           name?: string
+          parent_budget_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -707,6 +710,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_cache_budgets_current"
             referencedColumns: ["type_id"]
+          },
+          {
+            foreignKeyName: "budgets_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_budgets_current"
+            referencedColumns: ["budget_id"]
           },
         ]
       }
@@ -2384,6 +2401,8 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start: string | null
           decomposition_stage_status_id: string | null
+          external_id: string | null
+          external_source: string | null
           stage_status_id: string | null
           updated_at: string | null
         }
@@ -2399,6 +2418,8 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          external_id?: string | null
+          external_source?: string | null
           stage_status_id?: string | null
           updated_at?: string | null
         }
@@ -2414,6 +2435,8 @@ export type Database = {
           decomposition_stage_section_id?: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          external_id?: string | null
+          external_source?: string | null
           stage_status_id?: string | null
           updated_at?: string | null
         }
@@ -4604,6 +4627,7 @@ export type Database = {
           is_hourly: boolean | null
           is_service: boolean
           last_name: string
+          must_change_password: boolean | null
           position_id: string
           salary: number | null
           subdivision_id: string | null
@@ -4623,6 +4647,7 @@ export type Database = {
           is_hourly?: boolean | null
           is_service?: boolean
           last_name: string
+          must_change_password?: boolean | null
           position_id: string
           salary?: number | null
           subdivision_id?: string | null
@@ -4642,6 +4667,7 @@ export type Database = {
           is_hourly?: boolean | null
           is_service?: boolean
           last_name?: string
+          must_change_password?: boolean | null
           position_id?: string
           salary?: number | null
           subdivision_id?: string | null
@@ -10334,6 +10360,12 @@ export type Database = {
           entity_type: Database["public"]["Enums"]["budget_entity_type"] | null
           is_active: boolean | null
           name: string | null
+          parent_budget_id: string | null
+          parent_entity_id: string | null
+          parent_entity_type:
+            | Database["public"]["Enums"]["budget_entity_type"]
+            | null
+          parent_name: string | null
           planned_amount: number | null
           remaining_amount: number | null
           spent_amount: number | null
@@ -10348,7 +10380,22 @@ export type Database = {
           version_created_by: string | null
           version_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "budgets_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_budgets_current"
+            referencedColumns: ["budget_id"]
+          },
+        ]
       }
       v_cache_projects: {
         Row: {
@@ -12002,8 +12049,6 @@ export type Database = {
           decomposition_item_order: number | null
           decomposition_item_planned_due_date: string | null
           decomposition_item_planned_hours: number | null
-          decomposition_item_actual_hours: number | null
-          decomposition_item_cpi: number | null
           decomposition_item_progress: number | null
           decomposition_item_status_id: string | null
           decomposition_item_work_category_id: string | null

@@ -2,19 +2,17 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { useLocalStorage } from "usehooks-ts"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List, FileText, LineChart, Columns3 } from "lucide-react"
-import { createClient } from "@/utils/supabase/client"
+import { LogOut, Home, ChevronLeft, BarChart, Users, MessageSquare, FolderOpen, CalendarDays, List, FileText, LineChart, Columns3 } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
+import { useAuthContext } from "@/modules/auth"
 
 interface SidebarProps {
   user: {
@@ -27,71 +25,9 @@ interface SidebarProps {
   handleLogout?: () => void
 }
 
-interface ListItemProps {
-  label: string
-  icon: any
-  active: boolean
-  collapsed: boolean
-}
-
-function ListItem({ label, icon: Icon, active, collapsed }: ListItemProps) {
-  return (
-    <Button
-      variant="ghost"
-      className={cn(
-        "w-full p-2",
-        collapsed ? "justify-center" : "justify-start",
-        active ? "bg-primary/5 text-primary" : "text-muted-foreground",
-      )}
-    >
-      <Icon className="mr-2 h-4 w-4" />
-      {!collapsed && label}
-    </Button>
-  )
-}
-
-interface UserAvatarInternalProps {
-  avatarUrl: string | null
-  name: string | null
-  email: string | null
-  size: "sm" | "md" | "lg"
-  className?: string
-}
-
-function UserAvatarInternal({ avatarUrl, name, email, size, className }: UserAvatarInternalProps) {
-  let avatarSize = "h-8 w-8"
-  let avatarFontSize = "text-sm"
-
-  switch (size) {
-    case "sm":
-      avatarSize = "h-6 w-6"
-      avatarFontSize = "text-xs"
-      break
-    case "md":
-      avatarSize = "h-8 w-8"
-      avatarFontSize = "text-sm"
-      break
-    case "lg":
-      avatarSize = "h-10 w-10"
-      avatarFontSize = "text-base"
-      break
-  }
-
-  return (
-    <Avatar className={cn(avatarSize, className)}>
-      {avatarUrl ? (
-        <AvatarImage src={avatarUrl || "/placeholder.svg"} alt={name || "Avatar"} />
-      ) : (
-        <AvatarFallback className={avatarFontSize}>{name ? name[0] : email ? email[0] : "U"}</AvatarFallback>
-      )}
-    </Avatar>
-  )
-}
-
 export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
+  const { signOut } = useAuthContext()
 
   // Получаем данные из store
   const { id: userId, name: storeName, email: storeEmail, profile } = useUserStore()
@@ -101,7 +37,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   const [accessCheckDone, setAccessCheckDone] = useState(false)
 
   useEffect(() => {
-    // Проверяем только один раз при появлении userId
     if (!userId || accessCheckDone) {
       if (!userId) {
         setHasAnalyticsAccess(false)
@@ -122,13 +57,9 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
           }
         })
 
-        // Проверяем, не был ли запрос отменен
-        if (abortController.signal.aborted) {
-          return
-        }
+        if (abortController.signal.aborted) return
 
         if (!response.ok) {
-          console.error('Failed to check analytics access:', response.status)
           if (!abortController.signal.aborted) {
             setHasAnalyticsAccess(false)
             setAccessCheckDone(true)
@@ -138,16 +69,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
 
         const data = await response.json()
 
-        // Проверяем еще раз перед обновлением состояния
         if (!abortController.signal.aborted) {
           setHasAnalyticsAccess(data.hasAccess)
           setAccessCheckDone(true)
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          return
-        }
-        console.error('Error checking analytics access:', error)
+        if (error instanceof Error && error.name === 'AbortError') return
         if (!abortController.signal.aborted) {
           setHasAnalyticsAccess(false)
           setAccessCheckDone(true)
@@ -155,97 +82,39 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       }
     }
 
-    // Добавляем небольшую задержку для дебаунса
-    timeoutId = setTimeout(() => {
-      checkAnalyticsAccess()
-    }, 100)
+    timeoutId = setTimeout(checkAnalyticsAccess, 100)
 
     return () => {
       clearTimeout(timeoutId)
       abortController.abort()
     }
-  }, [userId, accessCheckDone])  // Используем данные из store, если они есть, иначе из props
+  }, [userId, accessCheckDone])
+
+  // Данные для отображения — приоритет: store > props > defaults
   const displayName = storeName || user.name || "Пользователь"
   const displayEmail = storeEmail || user.email || ""
   const avatarUrl = profile?.avatar_url || null
 
-  // Локальное состояние для localStorage данных
-  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
-  const [localDisplayName, setLocalDisplayName] = useState<string | null>(null)
-  const [localDisplayEmail, setLocalDisplayEmail] = useState<string | null>(null)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    
-    const storedAvatarUrl = localStorage.getItem("avatarUrl")
-    const storedDisplayName = localStorage.getItem("displayName")
-    const storedDisplayEmail = localStorage.getItem("displayEmail")
-
-    if (storedAvatarUrl) {
-      setLocalAvatarUrl(storedAvatarUrl)
-    }
-    if (storedDisplayName) {
-      setLocalDisplayName(storedDisplayName)
-    }
-    if (storedDisplayEmail) {
-      setLocalDisplayEmail(storedDisplayEmail)
-    }
-  }, [])
-
+  // Обработчик выхода — использует AuthProvider
   const handleLogoutInternal = async () => {
     if (handleLogout) {
       handleLogout()
-    } else {
-      await supabase.auth.signOut()
-
-      router.push("/auth/login")
+      return
     }
+    // signOut из AuthProvider очистит все stores и сделает редирект
+    await signOut()
   }
 
   const menuItems = [
-    {
-      title: "Главная",
-      href: "/dashboard",
-      icon: Home,
-    },
-    {
-      title: "Проекты",
-      href: "/dashboard/projects",
-      icon: FolderOpen,
-    },
-    {
-      title: "Планирование",
-      href: "/dashboard/planning",
-      icon: CalendarDays,
-    },
-    {
-      title: "Канбан",
-      href: "/dashboard/kanban",
-      icon: Columns3,
-    },
-    {
-      title: "Заметки",
-      href: "/dashboard/notions",
-      icon: List,
-    },
-    {
-      title: "Отчёты",
-      href: "/dashboard/reports",
-      icon: BarChart,
-    },
-
+    { title: "Главная", href: "/dashboard", icon: Home },
+    { title: "Проекты", href: "/dashboard/projects", icon: FolderOpen },
+    { title: "Планирование", href: "/dashboard/planning", icon: CalendarDays },
+    { title: "Канбан", href: "/dashboard/kanban", icon: Columns3 },
+    { title: "Заметки", href: "/dashboard/notions", icon: List },
+    { title: "Отчёты", href: "/dashboard/reports", icon: BarChart },
   ]
 
-  const isSettingsActive = pathname === "/dashboard/settings"
   const isUsersActiveInternal = isUsersActive ?? pathname === "/dashboard/users"
-  const isDebugActive = pathname === "/dashboard/debug"
-  const isReportActive = pathname === "/dashboard/report"
-
-  // Используем локальные данные только после монтирования
-  const finalAvatarUrl = mounted ? (localAvatarUrl || avatarUrl) : avatarUrl
-  const finalDisplayName = mounted ? (localDisplayName || displayName) : displayName
-  const finalDisplayEmail = mounted ? (localDisplayEmail || displayEmail) : displayEmail
 
   return (
     <div
@@ -286,7 +155,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-          {/* Notifications Bell for collapsed state */}
           {collapsed && (
             <div className="flex justify-center">
               <NotificationBell collapsed={collapsed} />
@@ -317,7 +185,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
           </ul>
         </nav>
 
-        {/* Аналитика (только для авторизованных пользователей) */}
+        {/* Аналитика */}
         {hasAnalyticsAccess && (
           <div className="px-2 mt-2">
             <Link
@@ -377,21 +245,19 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         <div className="border-t border-gray-200 dark:border-gray-700 p-4">
           <div className={cn("flex items-center", collapsed ? "flex-col space-y-2" : "space-x-3")}>
             <UserAvatar
-              avatarUrl={finalAvatarUrl}
-              name={finalDisplayName}
-              email={finalDisplayEmail}
+              avatarUrl={avatarUrl}
+              name={displayName}
+              email={displayEmail}
               size="md"
               className="flex-shrink-0"
             />
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="list-item-title truncate dark:text-gray-200">{finalDisplayName}</p>
-                <p className="metadata truncate">{finalDisplayEmail}</p>
+                <p className="list-item-title truncate dark:text-gray-200">{displayName}</p>
+                <p className="metadata truncate">{displayEmail}</p>
               </div>
             )}
           </div>
-
-
 
           {collapsed ? (
             <div className="mt-4 flex flex-col items-center space-y-2">
@@ -415,7 +281,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
                 <ThemeToggle />
-                
+
                 <Link href="/dashboard/users">
                   <Button
                     variant={isUsersActiveInternal ? "secondary" : "ghost"}
@@ -425,7 +291,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
                     <Users className={`h-4 w-4 ${isUsersActiveInternal ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
-                
+
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogoutInternal}>
                   <LogOut className="h-4 w-4" />
                 </Button>
@@ -436,4 +302,4 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       </div>
     </div>
   )
-} 
+}

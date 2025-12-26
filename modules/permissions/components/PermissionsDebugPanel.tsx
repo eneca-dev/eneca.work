@@ -43,7 +43,7 @@ export function PermissionsDebugPanel() {
             <strong>Пользователь:</strong> {userId || 'Не авторизован'}
           </div>
           <div>
-            <strong>Роль:</strong> {profile?.roleId || profile?.role_id || 'Не назначена'}
+            <strong>Роль:</strong> {profile?.role_id || 'Не назначена'}
           </div>
           <div>
             <strong>Разрешений:</strong> {permissions.length}

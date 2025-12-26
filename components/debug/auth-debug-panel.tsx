@@ -81,21 +81,22 @@ export function AuthDebugPanel() {
             if (needsUpdate) {
               console.log("Обновляем данные в хранилище, т.к. они не соответствуют или устарели");
               
-              // Преобразуем профиль в тип UserProfile
+              // Преобразуем профиль в тип UserProfile (snake_case)
               const profileForStore = profileData ? {
-                firstName: profileData.first_name ?? null,
-                lastName: profileData.last_name ?? null,
-                departmentId: profileData.department_id ?? null,
-                teamId: profileData.team_id ?? null,
-                positionId: profileData.position_id ?? null,
-                categoryId: profileData.category_id ?? null,
-                workFormat: profileData.work_format ?? null,
+                first_name: profileData.first_name ?? null,
+                last_name: profileData.last_name ?? null,
+                department_id: profileData.department_id ?? null,
+                team_id: profileData.team_id ?? null,
+                position_id: profileData.position_id ?? null,
+                category_id: profileData.category_id ?? null,
+                work_format: profileData.work_format ?? null,
                 salary: profileData.salary !== undefined && profileData.salary !== null ? Number(profileData.salary) : null,
-                isHourly: profileData.is_hourly !== undefined && profileData.is_hourly !== null ? Boolean(profileData.is_hourly) : null,
-                employmentRate: profileData.employment_rate !== undefined && profileData.employment_rate !== null ? Number(profileData.employment_rate) : null,
+                is_hourly: profileData.is_hourly !== undefined && profileData.is_hourly !== null ? Boolean(profileData.is_hourly) : null,
+                employment_rate: profileData.employment_rate !== undefined && profileData.employment_rate !== null ? Number(profileData.employment_rate) : null,
                 city: profileData.city ?? null,
                 country: profileData.country ?? null,
-                roleId: profileData.role_id ?? null
+                role_id: profileData.role_id ?? null,
+                avatar_url: profileData.avatar_url ?? null
               } : null;
               
               console.log("Преобразованный профиль для хранилища:", profileForStore);
@@ -110,8 +111,8 @@ export function AuthDebugPanel() {
               
               console.log('Итоговые данные для хранилища:', userDataToStore);
               
-              // Сохраняем roleId и разрешения, если они есть
-              const roleId = userState.profile?.roleId;
+              // Сохраняем role_id и разрешения, если они есть
+              const roleId = userState.profile?.role_id;
               // УДАЛЕНО: const permissions = userState.permissions;
               
               // Обновляем профиль пользователя
@@ -247,7 +248,7 @@ export function AuthDebugPanel() {
                     <div className="rounded border p-3 text-sm space-y-2">
                       <div className="flex justify-between">
                         <span className="font-medium text-muted-foreground">RoleId:</span>
-                        <Badge variant="outline">{userState.profile?.roleId || "Не назначена"}</Badge>
+                        <Badge variant="outline">{userState.profile?.role_id || "Не назначена"}</Badge>
                       </div>
                       <div className="text-muted-foreground italic text-xs">
                         Разрешения теперь управляются через permissions модуль

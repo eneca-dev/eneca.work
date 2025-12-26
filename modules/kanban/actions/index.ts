@@ -12,6 +12,8 @@ import type { ActionResult, PaginatedActionResult } from '@/modules/cache'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import type { KanbanSection, KanbanStage, StageStatus } from '../types'
 import { transformRowsToKanbanSections } from '../utils/transform-rows-to-kanban'
+import { getFilterContext } from '@/modules/filter-permissions/server'
+import { applyMandatoryFilters } from '@/modules/filter-permissions/utils'
 
 // ============================================================================
 // Types
@@ -45,11 +47,17 @@ export async function getKanbanSections(
   try {
     const supabase = await createClient()
 
+    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
+    const filterContext = await getFilterContext()
+    const secureFilters = filterContext
+      ? applyMandatoryFilters(filters || {}, filterContext)
+      : filters || {}
+
     // Build query
     let query = supabase.from('v_resource_graph').select('*')
 
     // Apply tag filter first (requires subquery to get project IDs)
-    const tagValues = filters?.['tag_id']
+    const tagValues = secureFilters?.['tag_id']
     if (tagValues) {
       const tagArray = Array.isArray(tagValues) ? tagValues : [tagValues]
       if (tagArray.length > 0) {
@@ -105,7 +113,7 @@ export async function getKanbanSections(
     }
 
     // Apply subdivision filter (by name or UUID)
-    const subdivisionId = filters?.['subdivision_id']
+    const subdivisionId = secureFilters?.['subdivision_id']
     if (subdivisionId && typeof subdivisionId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -119,7 +127,7 @@ export async function getKanbanSections(
     }
 
     // Apply department filter (by name or UUID)
-    const departmentId = filters?.['department_id']
+    const departmentId = secureFilters?.['department_id']
     if (departmentId && typeof departmentId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -133,7 +141,7 @@ export async function getKanbanSections(
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = filters?.['team_id']
+    const teamId = secureFilters?.['team_id']
     if (teamId && typeof teamId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -172,7 +180,7 @@ export async function getKanbanSections(
     }
 
     // Apply responsible filter (by name or UUID)
-    const responsibleId = filters?.['responsible_id']
+    const responsibleId = secureFilters?.['responsible_id']
     if (responsibleId && typeof responsibleId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -186,7 +194,7 @@ export async function getKanbanSections(
     }
 
     // Apply project filter (by name or UUID)
-    const projectId = filters?.['project_id']
+    const projectId = secureFilters?.['project_id']
     if (projectId && typeof projectId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -246,11 +254,17 @@ export async function getKanbanSectionsPaginated(
 
     const supabase = await createClient()
 
+    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
+    const filterContext = await getFilterContext()
+    const secureFilters = filterContext
+      ? applyMandatoryFilters(filters || {}, filterContext)
+      : filters || {}
+
     // Build query
     let query = supabase.from('v_resource_graph').select('*')
 
     // Apply tag filter first (requires subquery to get project IDs)
-    const tagValues = filters?.['tag_id']
+    const tagValues = secureFilters?.['tag_id']
     if (tagValues) {
       const tagArray = Array.isArray(tagValues) ? tagValues : [tagValues]
       if (tagArray.length > 0) {
@@ -314,7 +328,7 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply subdivision filter (by name or UUID)
-    const subdivisionId = filters?.['subdivision_id']
+    const subdivisionId = secureFilters?.['subdivision_id']
     if (subdivisionId && typeof subdivisionId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -328,7 +342,7 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply department filter (by name or UUID)
-    const departmentId = filters?.['department_id']
+    const departmentId = secureFilters?.['department_id']
     if (departmentId && typeof departmentId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -342,7 +356,7 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = filters?.['team_id']
+    const teamId = secureFilters?.['team_id']
     if (teamId && typeof teamId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -385,7 +399,7 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply responsible filter (by name or UUID)
-    const responsibleId = filters?.['responsible_id']
+    const responsibleId = secureFilters?.['responsible_id']
     if (responsibleId && typeof responsibleId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -399,7 +413,7 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply project filter (by name or UUID)
-    const projectId = filters?.['project_id']
+    const projectId = secureFilters?.['project_id']
     if (projectId && typeof projectId === 'string') {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(

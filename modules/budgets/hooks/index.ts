@@ -23,6 +23,7 @@ import {
   getBudgetVersions,
   getSectionBudgetSummary,
   getBudgetTypes,
+  findParentBudgetCandidates,
   createBudget,
   updateBudgetAmount,
   deactivateBudget,
@@ -34,6 +35,7 @@ import type {
   BudgetFilters,
   SectionBudgetSummary,
   BudgetType,
+  BudgetEntityType,
   CreateBudgetInput,
   UpdateBudgetAmountInput,
 } from '../types'
@@ -128,6 +130,51 @@ export const useBudgetTypes = createSimpleCacheQuery<BudgetType[]>({
   queryFn: getBudgetTypes,
   staleTime: staleTimePresets.static, // 10 минут - типы редко меняются
 })
+
+// Параметры для поиска родительских бюджетов
+interface ParentCandidatesParams {
+  entityType: BudgetEntityType
+  entityId: string
+  budgetTypeId: string
+}
+
+/**
+ * Хук для поиска кандидатов на родительский бюджет
+ * Ищет бюджеты того же типа выше по иерархии (object → stage → project)
+ *
+ * @example
+ * const { data: candidates, isLoading } = useFindParentBudgetCandidates('section', sectionId, budgetTypeId)
+ */
+export const useFindParentBudgetCandidatesQuery = createCacheQuery<
+  BudgetCurrent[],
+  ParentCandidatesParams | undefined
+>({
+  queryKey: (params) =>
+    params
+      ? queryKeys.budgets.parentCandidates(params.entityType, params.entityId, params.budgetTypeId)
+      : queryKeys.budgets.parentCandidates('', '', ''),
+  queryFn: async (params) => {
+    if (!params) return { success: true, data: [] }
+    return findParentBudgetCandidates(params.entityType, params.entityId, params.budgetTypeId)
+  },
+  staleTime: staleTimePresets.fast,
+})
+
+// Wrapper для удобного использования с отдельными параметрами
+export function useFindParentBudgetCandidates(
+  entityType: BudgetEntityType | undefined,
+  entityId: string | undefined,
+  budgetTypeId: string | undefined
+) {
+  const params: ParentCandidatesParams | undefined =
+    entityType && entityId && budgetTypeId
+      ? { entityType, entityId, budgetTypeId }
+      : undefined
+
+  return useFindParentBudgetCandidatesQuery(params, {
+    enabled: !!entityType && !!entityId && !!budgetTypeId,
+  })
+}
 
 // ============================================================================
 // Mutation Hooks

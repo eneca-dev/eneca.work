@@ -9,6 +9,8 @@ import type {
   UpdateBudgetAmountInput,
   SectionBudgetSummary,
   BudgetType,
+  BudgetEntityType,
+  EntityHierarchy,
 } from '../types'
 
 // ============================================================================
@@ -197,6 +199,155 @@ export async function getBudgetTypes(): Promise<ActionResult<BudgetType[]>> {
   }
 }
 
+/**
+ * Получить иерархию сущности (section → object → stage → project)
+ */
+export async function getEntityHierarchy(
+  entityType: BudgetEntityType,
+  entityId: string
+): Promise<ActionResult<EntityHierarchy>> {
+  try {
+    const supabase = await createClient()
+
+    const hierarchy: EntityHierarchy = {
+      entityType,
+      entityId,
+      objectId: null,
+      stageId: null,
+      projectId: null,
+    }
+
+    if (entityType === 'project') {
+      hierarchy.projectId = entityId
+      return { success: true, data: hierarchy }
+    }
+
+    if (entityType === 'stage') {
+      // Stage → Project
+      const { data: stage } = await supabase
+        .from('stages')
+        .select('stage_id, project_id')
+        .eq('stage_id', entityId)
+        .single()
+
+      if (stage) {
+        hierarchy.stageId = stage.stage_id
+        hierarchy.projectId = stage.project_id
+      }
+      return { success: true, data: hierarchy }
+    }
+
+    if (entityType === 'object') {
+      // Object → Stage → Project
+      const { data: object } = await supabase
+        .from('objects')
+        .select('object_id, object_stage_id, object_project_id')
+        .eq('object_id', entityId)
+        .single()
+
+      if (object) {
+        hierarchy.objectId = object.object_id
+        hierarchy.stageId = object.object_stage_id
+        hierarchy.projectId = object.object_project_id
+      }
+      return { success: true, data: hierarchy }
+    }
+
+    if (entityType === 'section') {
+      // Section → Object → Stage → Project (используем view_section_hierarchy)
+      const { data: section } = await supabase
+        .from('view_section_hierarchy')
+        .select('section_id, object_id, stage_id, project_id')
+        .eq('section_id', entityId)
+        .single()
+
+      if (section) {
+        hierarchy.objectId = section.object_id
+        hierarchy.stageId = section.stage_id
+        hierarchy.projectId = section.project_id
+      }
+      return { success: true, data: hierarchy }
+    }
+
+    return { success: true, data: hierarchy }
+  } catch (error) {
+    console.error('[getEntityHierarchy] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+    }
+  }
+}
+
+/**
+ * Найти кандидатов на родительский бюджет (того же типа, выше по иерархии)
+ */
+export async function findParentBudgetCandidates(
+  entityType: BudgetEntityType,
+  entityId: string,
+  budgetTypeId: string
+): Promise<ActionResult<BudgetCurrent[]>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем иерархию сущности
+    const hierarchyResult = await getEntityHierarchy(entityType, entityId)
+    if (!hierarchyResult.success) {
+      return { success: false, error: hierarchyResult.error }
+    }
+
+    const hierarchy = hierarchyResult.data
+
+    // Собираем ID родительских сущностей и их типы
+    const parentEntities: Array<{ type: BudgetEntityType; id: string }> = []
+
+    // Порядок поиска: object → stage → project (от ближайшего к дальнему)
+    if (entityType === 'section' && hierarchy.objectId) {
+      parentEntities.push({ type: 'object', id: hierarchy.objectId })
+    }
+    if ((entityType === 'section' || entityType === 'object') && hierarchy.stageId) {
+      parentEntities.push({ type: 'stage', id: hierarchy.stageId })
+    }
+    if (hierarchy.projectId && entityType !== 'project') {
+      parentEntities.push({ type: 'project', id: hierarchy.projectId })
+    }
+
+    if (parentEntities.length === 0) {
+      return { success: true, data: [] }
+    }
+
+    // Ищем бюджеты того же типа у родительских сущностей
+    const parentIds = parentEntities.map((p) => p.id)
+
+    const { data, error } = await supabase
+      .from('v_cache_budgets_current')
+      .select('*')
+      .eq('budget_type_id', budgetTypeId)
+      .in('entity_id', parentIds)
+      .eq('is_active', true)
+
+    if (error) {
+      console.error('[findParentBudgetCandidates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Сортируем по иерархии (ближайший родитель первым)
+    const sorted = (data as BudgetCurrent[]).sort((a, b) => {
+      const aIndex = parentEntities.findIndex((p) => p.id === a.entity_id)
+      const bIndex = parentEntities.findIndex((p) => p.id === b.entity_id)
+      return aIndex - bIndex
+    })
+
+    return { success: true, data: sorted }
+  } catch (error) {
+    console.error('[findParentBudgetCandidates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+    }
+  }
+}
+
 // ============================================================================
 // Write Actions
 // ============================================================================
@@ -223,7 +374,8 @@ export async function createBudget(
         entity_type: input.entity_type,
         entity_id: input.entity_id,
         name: input.name,
-        budget_type_id: input.budget_type_id, // Обязательное поле
+        budget_type_id: input.budget_type_id,
+        parent_budget_id: input.parent_budget_id || null,
         created_by: user.id,
       })
       .select()
