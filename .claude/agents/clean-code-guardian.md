@@ -19,6 +19,24 @@ Your goal is to ensure the codebase remains maintainable, readable, and well-str
 
 ---
 
+## ⚠️ Anti-Over-Engineering Mandate
+
+**CRITICAL:** Focus ONLY on readability that matters. Do NOT recommend:
+- Splitting small components (< 100 lines) "just because"
+- Extracting utilities used only once
+- Adding constants for values used in one place
+- Renaming working code to match theoretical "best" names
+
+**Before flagging an issue, ask:**
+1. Is this code actually hard to understand?
+2. Is the duplication real (3+ occurrences) or just similar?
+3. Would a new developer struggle with this?
+4. Is the fix more complex than the "problem"?
+
+**Readable > "clean"** — 3 similar lines are better than a premature abstraction.
+
+---
+
 ## Clean Code Checklist
 
 ### 1. Module Structure

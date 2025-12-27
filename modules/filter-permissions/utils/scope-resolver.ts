@@ -17,7 +17,6 @@ import type {
   FilterScopeLevel,
   FilterScopePermission,
 } from '../types'
-import { PERMISSION_PRIORITY, PERMISSION_TO_SCOPE } from '../types'
 
 export interface ScopeContext {
   // Орг. структура пользователя
@@ -150,73 +149,4 @@ function determineScopeLevel(
 
   // Fallback
   return 'team'
-}
-
-/**
- * Получить наивысший приоритет permission из списка
- */
-export function getHighestPermission(
-  permissions: FilterScopePermission[]
-): FilterScopePermission | null {
-  if (permissions.length === 0) return null
-
-  return permissions.reduce((highest, current) =>
-    PERMISSION_PRIORITY[current] < PERMISSION_PRIORITY[highest]
-      ? current
-      : highest
-  )
-}
-
-/**
- * Проверяет, может ли пользователь видеть данные указанного scope
- */
-export function canAccessScope(
-  userScope: FilterScope,
-  targetSubdivisionId?: string,
-  targetDepartmentId?: string,
-  targetTeamId?: string,
-  targetProjectId?: string
-): boolean {
-  // Admin видит всё
-  if (userScope.level === 'all') return true
-
-  // Проверяем по проектам (ортогонально)
-  if (userScope.projectIds?.length) {
-    if (targetProjectId && userScope.projectIds.includes(targetProjectId)) {
-      return true
-    }
-  }
-
-  // Проверяем по орг. структуре
-  switch (userScope.level) {
-    case 'subdivision':
-      if (
-        targetSubdivisionId &&
-        userScope.subdivisionIds?.includes(targetSubdivisionId)
-      ) {
-        return true
-      }
-      break
-
-    case 'department':
-      if (
-        targetDepartmentId &&
-        userScope.departmentIds?.includes(targetDepartmentId)
-      ) {
-        return true
-      }
-      break
-
-    case 'team':
-      if (targetTeamId && userScope.teamIds?.includes(targetTeamId)) {
-        return true
-      }
-      break
-
-    case 'projects':
-      // Только проекты, уже проверили выше
-      break
-  }
-
-  return false
 }

@@ -9,7 +9,7 @@
 
 import { ChevronRight, FolderKanban, Layers, Box, FileText, ListTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { BudgetBars } from './BudgetBars'
+import { BudgetCell } from './BudgetCell'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 
 // ============================================================================
@@ -65,7 +65,7 @@ export function BudgetRow({ node, level, expanded, onToggle }: BudgetRowProps) {
       {/* Main row */}
       <div
         className={cn(
-          'flex items-center gap-3 px-3 py-2 border-b border-border/50',
+          'group flex items-center gap-3 px-3 py-2 border-b border-border/50',
           'hover:bg-muted/30 transition-colors',
           level === 0 && 'bg-muted/20'
         )}
@@ -113,9 +113,15 @@ export function BudgetRow({ node, level, expanded, onToggle }: BudgetRowProps) {
           </span>
         )}
 
-        {/* Budget bars */}
-        <div className="w-48 shrink-0">
-          <BudgetBars budgets={node.aggregatedBudgets} compact />
+        {/* Budget cell with edit/create */}
+        <div className="w-56 shrink-0">
+          <BudgetCell
+            budgets={node.budgets}
+            entityType={node.entityType}
+            entityId={node.id}
+            entityName={node.name}
+            compact
+          />
         </div>
       </div>
 

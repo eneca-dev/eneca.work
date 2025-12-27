@@ -53,7 +53,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [Код...]
 
-🤖 Агенты:
+🤖 Агенты (выбираются автоматически по типу изменений):
+- Server Action → Cache Guardian, Security Guardian
+- Компонент > 50 строк → Clean Code Guardian, Next.js Guardian
+- Форма → Forms Guardian
+- Store → Zustand Guardian
+- Миграция → DB Architect
+- Модалка → Modal Architect
+
+Пример:
 - Cache Guardian: ✅ / ⚠️ [исправлено]
 - Clean Code Guardian: ✅ / ⚠️ [исправлено]
 
@@ -105,10 +113,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Этап 1: ...
 - Этап 2: ...
 
-🤖 Pragmatic Architect:
-- Необходимость: ✅
-- Простота: ✅ / ⚠️ [замечания]
-- Существующие решения: ✅ / ⚠️
+🤖 Pragmatic Architect (ОБЯЗАТЕЛЬНО на этой фазе):
+- Необходимость: ✅ — Эта фича действительно нужна?
+- Простота: ✅ / ⚠️ — Нет ли over-engineering?
+- Существующие решения: ✅ / ⚠️ — Можно переиспользовать что-то?
+
+🤖 DB Architect (если планируются изменения БД):
+- Схема: ✅ / ⚠️ — Нормализация, типы данных
+- Индексы: ✅ / ⚠️ — Нужны ли дополнительные?
 
 Подтверди план или внеси корректировки.
 ```
@@ -133,9 +145,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [Код...]
 
-🤖 Проверка агентами:
-- Cache Guardian: ✅ / ⚠️ [исправлено]
-- Clean Code Guardian: ✅ / ⚠️ [исправлено]
+🤖 Обязательные агенты после реализации:
+
+| Что написано | Агенты для вызова |
+|--------------|-------------------|
+| Server Action | Cache Guardian, Security Guardian, TypeScript Guardian |
+| Компонент > 50 строк | Clean Code Guardian, Next.js Guardian |
+| Форма | Forms Guardian |
+| Store | Zustand Guardian |
+| Миграция | DB Architect |
+| Модалка | Modal Architect |
+| Realtime подписка | Realtime Guardian |
+
+Пример отчёта:
+- Cache Guardian: ✅ ActionResult, правильные ключи
+- Security Guardian: ✅ Auth check присутствует
+- TypeScript Guardian: ⚠️ Исправлено: убран any в строке 42
 
 Запусти `npm run build` и проверь.
 ```
@@ -181,29 +206,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 📍 ПАЙПЛАЙН: Фаза 3 — Финальная проверка
 
-🤖 Pragmatic Architect: ✅ Архитектура
-🤖 Cache Guardian: ✅ Actions/Hooks
-🤖 Clean Code Guardian: ✅ Структура/Naming/TS
+🤖 Финальный аудит (обязательные):
+- Security Guardian: ✅ — Безопасность всей фичи
+- Cache Guardian: ✅ — Правильность data flow
+- Performance Guardian: ✅ — N+1, memo, bundle size
+- TypeScript Guardian: ✅ — Строгая типизация
+
+🤖 По необходимости:
+- Sentry Guardian: ✅ — Если нужен мониторинг
+- Dead Code Hunter: ✅ — Очистка от мусора
+
+**Финальный чек-лист:**
+- [ ] npm run build проходит без ошибок
+- [ ] Все агенты дали ✅
+- [ ] README модуля обновлён
 
 Фича готова к PR.
 ```
 
 ---
 
-## 🤖 Агенты (docs/agents/)
+## 🤖 Агенты (.claude/agents/)
 
-| Агент | Задача | Когда вызывать |
-|-------|--------|----------------|
-| **Pragmatic Architect** | Проверка на over-engineering | Фаза 1, Фаза 2.1 (планирование) |
-| **DB Architect** | Ревью схемы БД, проектирование миграций | При изменении схемы, новых таблицах/views, оптимизации |
-| **Cache Guardian** | Валидация actions/hooks | После написания actions/hooks |
-| **Clean Code Guardian** | Структура, naming, TS | После создания компонентов > 50 строк |
-| **Sentry Guardian** | Мониторинг и трейсинг | Фаза 3 или по запросу ("add logging") |
-| **Modal Architect** | Дизайн модальных окон | При создании/изменении модалок |
+### Полный список агентов
 
-### Приоритеты при конфликтах:
+| Категория | Агент | Задача | Триггеры |
+|-----------|-------|--------|----------|
+| **Безопасность** | Security Guardian | Auth, XSS, SQL injection, RLS, env | Pre-deploy, Server Actions, auth фичи |
+| **Типизация** | TypeScript Guardian | `any`, generics, type guards, strict | Новый модуль, после db:types, рефакторинг |
+| **Архитектура** | Pragmatic Architect | Over-engineering, YAGNI, complexity | Фаза 1, Фаза 2.1, планирование фичи |
+| **Архитектура** | Clean Code Guardian | Структура, naming, DRY, размер | Компоненты > 50 строк, новый модуль |
+| **Архитектура** | Next.js Guardian | Server/Client, metadata, routing | Новая страница, компонент архитектура |
+| **Данные** | Cache Guardian | TanStack Query, Server Actions, keys | Новые actions/hooks, "данные не обновляются" |
+| **Данные** | DB Architect | PostgreSQL, migrations, views, indexes | Новые таблицы, миграции, performance |
+| **Данные** | Realtime Guardian | Subscriptions, cleanup, memory leaks | Новые подписки, memory issues |
+| **State** | Zustand Guardian | Store patterns, selectors, scope | Новый store, re-render issues |
+| **State** | Forms Guardian | React Hook Form + Zod validation | Новая форма, form bugs |
+| **Performance** | Performance Guardian | N+1, memo, useMemo, bundle size | Большие списки, "page is slow", pre-deploy |
+| **Performance** | Dead Code Hunter | Unused exports, orphan files, logs | Sprint cleanup, перед рефакторингом |
+| **UI/UX** | Modal Architect | Modal design, Resource Graph style | Новая модалка, дизайн модалок |
+| **UI/UX** | UI/UX Advisor | Auto-save, skeletons, interaction | UI планирование, UX улучшения |
+| **Мониторинг** | Sentry Guardian | Spans, error capture, tracing | "Add logging", Фаза 3, debugging |
+
+### Автоматические триггеры для агентов
+
+| Событие | Агенты для вызова |
+|---------|-------------------|
+| Новый Server Action | Cache Guardian, Security Guardian, TypeScript Guardian |
+| Новый компонент > 50 строк | Clean Code Guardian, Next.js Guardian |
+| Новая форма | Forms Guardian |
+| Новый store | Zustand Guardian |
+| Новая миграция | DB Architect |
+| Новая модалка | Modal Architect |
+| Pre-deploy | Security Guardian, Performance Guardian |
+| Memory issues | Realtime Guardian, Performance Guardian |
+
+### Приоритеты при конфликтах
+
 ```
-Cache Guardian > Clean Code Guardian > Pragmatic Architect
+Security Guardian > Cache Guardian > Performance Guardian > Clean Code Guardian
 ```
 Если агенты дают противоречивые рекомендации, следуй приоритету выше.
 
@@ -214,6 +275,115 @@ Cache Guardian > Clean Code Guardian > Pragmatic Architect
 - **НЕ переходи дальше** без подтверждения разработчика
 - **ВСЕГДА вызывай агентов** после написания кода
 - **ВСЕГДА показывай** на каком шаге находишься
+
+---
+
+## Module Audit Pipeline (полная проверка модуля)
+
+### Триггеры:
+- Команда "Проведи полный аудит модуля"
+- Pre-PR review
+- После крупного рефакторинга
+- Подозрение на проблемы в модуле
+
+### Порядок вызова агентов:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MODULE AUDIT PIPELINE                       │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  1. 🔒 Security Guardian     ← Критично, первым делом   │
+│     Auth, XSS, SQL injection, RLS, env exposure         │
+│                                                          │
+│  2. 📊 Cache Guardian        ← Архитектура данных       │
+│     Server Actions, hooks, query keys                    │
+│                                                          │
+│  3. 📘 TypeScript Guardian   ← Типизация                │
+│     any, generics, type guards                           │
+│                                                          │
+│  4. ⚡ Performance Guardian  ← N+1, memo, bundle        │
+│     Оптимизация производительности                       │
+│                                                          │
+│  5. 🔷 Next.js Guardian      ← App Router patterns      │
+│     Server/Client, metadata                              │
+│                                                          │
+│  6. 🧹 Clean Code Guardian   ← Структура, naming        │
+│     DRY, размер компонентов                              │
+│                                                          │
+│  7. 🐻 Zustand Guardian      ← Если есть stores         │
+│     State patterns, selectors                            │
+│                                                          │
+│  8. 📝 Forms Guardian        ← Если есть формы          │
+│     RHF + Zod validation                                 │
+│                                                          │
+│  9. 📡 Realtime Guardian     ← Если есть подписки       │
+│     Subscriptions, cleanup                               │
+│                                                          │
+│  10. 🗑️ Dead Code Hunter     ← Финальная очистка        │
+│      Unused exports, orphan files                        │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Шаблон ответа:
+
+**Начало аудита:**
+```
+📍 MODULE AUDIT: Начало проверки модуля
+
+**Модуль:** modules/[name]/
+**Файлов:** ~N
+**Содержит:** actions / hooks / stores / forms / realtime
+
+Начинаю полную проверку...
+```
+
+**Отчёт по каждому агенту:**
+```
+🤖 [Название агента]: ✅ Passed / ⚠️ N issues
+
+[Если issues:]
+1. `file.ts:42` — описание проблемы
+2. `file.ts:88` — описание проблемы
+
+[Рекомендации по исправлению]
+```
+
+**Финальный отчёт:**
+```
+📍 MODULE AUDIT: Результаты
+
+**Модуль:** modules/[name]/
+
+| Агент | Статус | Issues |
+|-------|--------|--------|
+| Security Guardian | ✅/⚠️ | N |
+| Cache Guardian | ✅/⚠️ | N |
+| TypeScript Guardian | ✅/⚠️ | N |
+| Performance Guardian | ✅/⚠️ | N |
+| Next.js Guardian | ✅/⚠️ | N |
+| Clean Code Guardian | ✅/⚠️ | N |
+| Zustand Guardian | ✅/⚠️/⏭️ | N |
+| Forms Guardian | ✅/⚠️/⏭️ | N |
+| Realtime Guardian | ✅/⚠️/⏭️ | N |
+| Dead Code Hunter | ✅/⚠️ | N |
+
+**Критичные проблемы:** N
+**Рекомендации:** N
+
+[Детали критичных проблем и план исправления]
+```
+
+### Опции аудита:
+
+| Команда | Описание |
+|---------|----------|
+| `Полный аудит модуля X` | Все 10 агентов |
+| `Security audit модуля X` | Только Security Guardian |
+| `Performance audit модуля X` | Performance + Dead Code |
+| `Data audit модуля X` | Cache + Realtime + DB |
+| `Quick audit модуля X` | Security + Cache + TypeScript |
 
 ---
 

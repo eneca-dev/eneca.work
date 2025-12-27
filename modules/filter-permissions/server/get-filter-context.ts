@@ -6,10 +6,12 @@
  * Загружает permissions из БД и вычисляет scope на их основе.
  */
 
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/utils/supabase/server'
 import { resolveFilterScope } from '../utils/scope-resolver'
 import type { UserFilterContext, FilterScopePermission } from '../types'
 import { getPrimaryRole } from '../types'
+import type { ActionResult } from '@/modules/cache'
 
 /** Все filter scope permissions */
 const FILTER_SCOPE_PERMISSIONS: FilterScopePermission[] = [
@@ -24,69 +26,67 @@ const FILTER_SCOPE_PERMISSIONS: FilterScopePermission[] = [
  * Получает контекст фильтрации для текущего пользователя.
  * Загружает permissions из БД и вычисляет scope на их основе.
  */
-export async function getFilterContext(): Promise<UserFilterContext | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export async function getFilterContext(): Promise<ActionResult<UserFilterContext | null>> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return null
-  }
+    if (!user) {
+      return { success: true, data: null }
+    }
 
-  // 1. Получаем данные пользователя из view_users
-  const { data: profile, error: profileError } = await supabase
-    .from('view_users')
-    .select(
+    // 1. Получаем данные пользователя из view_users
+    const { data: profile, error: profileError } = await supabase
+      .from('view_users')
+      .select(
+        `
+        user_id,
+        team_id,
+        team_name,
+        department_id,
+        department_name,
+        subdivision_id,
+        subdivision_name,
+        is_active
       `
-      user_id,
-      team_id,
-      team_name,
-      department_id,
-      department_name,
-      subdivision_id,
-      subdivision_name
-    `
-    )
-    .eq('user_id', user.id)
-    .single()
+      )
+      .eq('user_id', user.id)
+      .single()
 
-  if (profileError || !profile) {
-    console.error('Failed to load user profile:', profileError)
-    return null
-  }
+    if (profileError || !profile) {
+      Sentry.captureException(profileError, {
+        extra: { context: 'getFilterContext', step: 'loadProfile' },
+      })
+      return { success: false, error: 'Не удалось загрузить профиль пользователя' }
+    }
 
-  // 2. Получаем роли пользователя
-  const { data: userRoles, error: rolesError } = await supabase
-    .from('user_roles')
-    .select(
+    // Проверяем что профиль активен
+    if (!profile.is_active) {
+      return { success: false, error: 'Профиль пользователя неактивен' }
+    }
+
+    // 2. Получаем роли пользователя
+    const { data: userRoles, error: rolesError } = await supabase
+      .from('user_roles')
+      .select(
+        `
+        role:roles(name)
       `
-      role:roles(name)
-    `
-    )
-    .eq('user_id', user.id)
+      )
+      .eq('user_id', user.id)
 
-  if (rolesError) {
-    console.error('Failed to load user roles:', rolesError)
-  }
+    if (rolesError) {
+      Sentry.captureException(rolesError, {
+        extra: { context: 'getFilterContext', step: 'loadRoles' },
+      })
+    }
 
   const roles =
     userRoles?.map((r) => (r.role as { name: string }).name) || ['user']
 
-  // 3. Получаем filter permissions пользователя через role_permissions
-  const { data: permissionsData, error: permError } = await supabase
-    .from('role_permissions')
-    .select(
-      `
-      permission:permissions(name)
-    `
-    )
-    .in(
-      'role_id',
-      userRoles?.map((r) => (r.role as { name: string; id?: string }).id) || []
-    )
-
-  // Альтернативный запрос - через join с user_roles
+  // 3. Получаем filter permissions пользователя
   const { data: userPermissions } = await supabase.rpc('get_user_permissions', {
     p_user_id: user.id,
   })
@@ -218,28 +218,37 @@ export async function getFilterContext(): Promise<UserFilterContext | null> {
     managedProjectIds,
   })
 
-  return {
-    userId: user.id,
-    roles,
-    primaryRole: getPrimaryRole(roles),
-    filterPermissions,
+    return {
+      success: true,
+      data: {
+        userId: user.id,
+        roles,
+        primaryRole: getPrimaryRole(roles),
+        filterPermissions,
 
-    ownTeamId: profile.team_id,
-    ownTeamName: profile.team_name || '',
-    ownDepartmentId: profile.department_id,
-    ownDepartmentName: profile.department_name || '',
-    ownSubdivisionId: profile.subdivision_id,
-    ownSubdivisionName: profile.subdivision_name || '',
+        ownTeamId: profile.team_id,
+        ownTeamName: profile.team_name || '',
+        ownDepartmentId: profile.department_id,
+        ownDepartmentName: profile.department_name || '',
+        ownSubdivisionId: profile.subdivision_id,
+        ownSubdivisionName: profile.subdivision_name || '',
 
-    leadTeamId,
-    leadTeamName,
-    headDepartmentId,
-    headDepartmentName,
-    headSubdivisionId,
-    headSubdivisionName,
-    managedProjectIds,
-    managedProjectNames,
+        leadTeamId,
+        leadTeamName,
+        headDepartmentId,
+        headDepartmentName,
+        headSubdivisionId,
+        headSubdivisionName,
+        managedProjectIds,
+        managedProjectNames,
 
-    scope,
+        scope,
+      },
+    }
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: { context: 'getFilterContext' },
+    })
+    return { success: false, error: 'Ошибка загрузки контекста фильтрации' }
   }
 }

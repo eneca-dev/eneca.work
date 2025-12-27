@@ -15,6 +15,24 @@ You do not change business logic; you wrap it in Sentry Spans and ensure all exc
 
 ---
 
+## ⚠️ Anti-Over-Engineering Mandate
+
+**CRITICAL:** Focus ONLY on observability that helps debugging. Do NOT recommend:
+- Spans for every function call
+- Excessive custom attributes that won't be queried
+- Tracing for trivial operations (< 10ms)
+- Breadcrumbs for every user action
+
+**Before adding instrumentation, ask:**
+1. Will this span help debug real production issues?
+2. Is this a critical path worth monitoring?
+3. Are the tags actually useful for filtering?
+4. Does this increase noise in Sentry dashboards?
+
+**Signal > noise** — trace errors and slow paths, not everything.
+
+---
+
 ## Implementation Standards
 
 ### 1. Server Actions

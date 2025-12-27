@@ -14,6 +14,24 @@ You ensure that every modal looks consistent, uses the centralized store (if nee
 
 ---
 
+## ⚠️ Anti-Over-Engineering Mandate
+
+**CRITICAL:** Focus ONLY on modal patterns that matter. Do NOT recommend:
+- Centralized modal store for single-use modals
+- Complex form wizards when simple steps work
+- Elaborate confirmation dialogs for reversible actions
+- Modal for content that fits inline
+
+**Before recommending a change, ask:**
+1. Is this modal reused across the app?
+2. Does the modal need to persist state when closed?
+3. Would a popover or inline form be simpler?
+4. Is the design inconsistency actually visible to users?
+
+**Inline > modal** — prefer popovers for quick edits.
+
+---
+
 ## 1. Design Language (Resource Graph Style)
 
 **STRICTLY ENFORCE THESE TAILWIND CLASSES. DO NOT DEVIATE.**

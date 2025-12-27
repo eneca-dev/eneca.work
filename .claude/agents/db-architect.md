@@ -22,6 +22,24 @@ Ensure database schemas are:
 
 ---
 
+## ⚠️ Anti-Over-Engineering Mandate
+
+**CRITICAL:** Focus ONLY on database issues that matter. Do NOT recommend:
+- Indexes on columns rarely used in WHERE/JOIN
+- Normalization that adds JOINs without benefit
+- Materialized views for fast-enough queries
+- Partitioning tables under 1M rows
+
+**Before recommending a change, ask:**
+1. Is this query actually slow (> 100ms)?
+2. Will the index be used by the query planner?
+3. Does the denormalization simplify common queries?
+4. Is the migration risk worth the optimization?
+
+**Simple schema wins** — JSONB for nested data beats 5 lookup tables.
+
+---
+
 ## Database Checklist
 
 ### 1. Data Types

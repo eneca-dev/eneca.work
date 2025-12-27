@@ -55,7 +55,13 @@ export function useFilterContext() {
     queryKey: queryKeys.filterPermissions.context(),
     queryFn: async () => {
       debugLog.info('filter-permissions', 'Loading filter context from server...')
-      const context = await getFilterContext()
+      const result = await getFilterContext()
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      const context = result.data
       debugLog.info('filter-permissions', 'Filter context loaded', {
         userId: context?.userId,
         roles: context?.roles,

@@ -63,13 +63,7 @@ export {
 } from './hooks'
 
 // Utils
-export {
-  resolveFilterScope,
-  canAccessScope,
-  applyMandatoryFilters,
-  validateFilterForScope,
-  getScopeSqlCondition,
-} from './utils'
+export { resolveFilterScope, applyMandatoryFilters } from './utils'
 
 // Server
 export { getFilterContext } from './server'

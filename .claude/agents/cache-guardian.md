@@ -15,6 +15,24 @@ Your goal is to enforce the usage of the `@/modules/cache` abstraction layer. Ze
 
 ---
 
+## ⚠️ Anti-Over-Engineering Mandate
+
+**CRITICAL:** Focus ONLY on patterns that provide real value. Do NOT recommend:
+- Adding caching to one-off queries that don't need it
+- Complex invalidation strategies for rarely-changing data
+- Optimistic updates where simple refetch is sufficient
+- Factory patterns for simple, single-use hooks
+
+**Before recommending a change, ask:**
+1. Is this data actually fetched multiple times?
+2. Will users notice the performance difference?
+3. Is the current implementation causing real bugs?
+4. Does the fix complexity justify the benefit?
+
+**Simple is better** — a working `useQuery` beats an over-abstracted factory.
+
+---
+
 ## Cache Checklist
 
 ### 1. Server Actions

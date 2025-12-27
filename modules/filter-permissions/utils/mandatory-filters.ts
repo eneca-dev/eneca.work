@@ -6,7 +6,7 @@
  */
 
 import type { FilterQueryParams } from '@/modules/inline-filter'
-import type { FilterScope, UserFilterContext } from '../types'
+import type { UserFilterContext } from '../types'
 import { debugLog, debugGroup } from '@/lib/debug-logger'
 
 /**
@@ -123,104 +123,4 @@ export function applyMandatoryFilters(
   })
 
   return mandatoryFilters
-}
-
-/**
- * Проверяет, является ли фильтр валидным для данного scope
- */
-export function validateFilterForScope(
-  filterKey: string,
-  filterValue: string | string[],
-  scope: FilterScope
-): boolean {
-  // Admin может всё
-  if (scope.level === 'all') return true
-
-  const values = Array.isArray(filterValue) ? filterValue : [filterValue]
-
-  switch (filterKey) {
-    case 'subdivision_id':
-      // Можно фильтровать только если scope = subdivision
-      if (scope.level !== 'subdivision') return false
-      return values.every((v) => scope.subdivisionIds?.includes(v))
-
-    case 'department_id':
-      // Можно если scope = subdivision или department
-      if (!['subdivision', 'department'].includes(scope.level)) return false
-      if (scope.level === 'department') {
-        return values.every((v) => scope.departmentIds?.includes(v))
-      }
-      // Для subdivision - нужно проверить что отдел входит в подразделение
-      // (это делается на уровне БД)
-      return true
-
-    case 'team_id':
-      // Можно если scope = subdivision, department или team
-      if (!['subdivision', 'department', 'team'].includes(scope.level)) {
-        return false
-      }
-      if (scope.level === 'team') {
-        return values.every((v) => scope.teamIds?.includes(v))
-      }
-      return true
-
-    case 'project_id':
-      // Если есть проектный scope - проверяем
-      if (scope.projectIds?.length) {
-        return values.every((v) => scope.projectIds?.includes(v))
-      }
-      // Если нет проектного scope - можно любой проект
-      // (фильтрация будет по сотрудникам орг. структуры)
-      return true
-
-    default:
-      // Остальные фильтры (ответственный, метка) - всегда разрешены
-      return true
-  }
-}
-
-/**
- * Генерирует SQL условие для scope
- * Используется в RLS политиках
- */
-export function getScopeSqlCondition(
-  scope: FilterScope,
-  tableAlias: string = ''
-): string {
-  const prefix = tableAlias ? `${tableAlias}.` : ''
-
-  if (scope.level === 'all') {
-    return 'TRUE'
-  }
-
-  const conditions: string[] = []
-
-  // Орг. структура
-  if (scope.subdivisionIds?.length) {
-    const ids = scope.subdivisionIds.map((id) => `'${id}'`).join(', ')
-    conditions.push(`${prefix}subdivision_id IN (${ids})`)
-  }
-
-  if (scope.departmentIds?.length) {
-    const ids = scope.departmentIds.map((id) => `'${id}'`).join(', ')
-    conditions.push(`${prefix}department_id IN (${ids})`)
-  }
-
-  if (scope.teamIds?.length) {
-    const ids = scope.teamIds.map((id) => `'${id}'`).join(', ')
-    conditions.push(`${prefix}team_id IN (${ids})`)
-  }
-
-  // Проекты (ортогонально)
-  if (scope.projectIds?.length) {
-    const ids = scope.projectIds.map((id) => `'${id}'`).join(', ')
-    conditions.push(`${prefix}project_id IN (${ids})`)
-  }
-
-  if (conditions.length === 0) {
-    return 'FALSE' // Нет доступа
-  }
-
-  // Объединяем OR (комбинация ролей)
-  return `(${conditions.join(' OR ')})`
 }
