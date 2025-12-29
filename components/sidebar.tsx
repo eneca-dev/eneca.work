@@ -229,11 +229,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       href: "/dashboard/notions",
       icon: List,
     },
-    {
-      title: "Отчёты",
-      href: "/dashboard/reports",
-      icon: BarChart,
-    },
+    // TEMPORARILY HIDDEN: Reports menu item
+    // {
+    //   title: "Отчёты",
+    //   href: "/dashboard/reports",
+    //   icon: BarChart,
+    // },
 
   ]
 
