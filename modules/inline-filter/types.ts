@@ -70,6 +70,8 @@ export interface FilterOption {
   name: string
   /** К какому ключу относится ('подразделение', 'проект', etc.) */
   key: string
+  /** ID родительской сущности (для иерархической фильтрации) */
+  parentId?: string
 }
 
 /**

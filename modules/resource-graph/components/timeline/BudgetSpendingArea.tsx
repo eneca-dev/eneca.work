@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { parseISO, format, addDays } from 'date-fns'
+import { getTodayMinsk } from '@/lib/timezone-utils'
 import type { BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -81,8 +82,7 @@ export function BudgetSpendingArea({
     const lastDataDate = parseISO(sortedSpending[sortedSpending.length - 1].date)
 
     // График идёт до сегодняшнего дня (или до последней даты данных, если она позже)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = getTodayMinsk()
     const endDate = lastDataDate > today ? lastDataDate : today
 
     const result: PointData[] = []

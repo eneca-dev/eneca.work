@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { format, parseISO } from 'date-fns'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -185,7 +186,7 @@ export function DecompositionStageRow({
 
   // Merge historical snapshots with today's calculated value
   const mergedStageReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     // If no data for calculation — return historical as is
     if (!stageStats.hasData) {
@@ -552,8 +553,8 @@ export function DecompositionStageRow({
         onClose={() => setIsLoadingModalOpen(false)}
         sectionId={sectionId}
         stageId={stage.id}
-        defaultStartDate={stage.startDate || new Date().toISOString().split('T')[0]}
-        defaultEndDate={stage.finishDate || new Date().toISOString().split('T')[0]}
+        defaultStartDate={stage.startDate || formatMinskDate(getTodayMinsk())}
+        defaultEndDate={stage.finishDate || formatMinskDate(getTodayMinsk())}
         onSuccess={onWorkLogCreated}
       />
 

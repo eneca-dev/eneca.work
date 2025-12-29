@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ChevronRight, Calendar, Loader2, Flag } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
@@ -133,7 +134,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
 
   // Объединяем исторические снэпшоты секции с сегодняшним расчётом
   const mergedSectionReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = formatMinskDate(getTodayMinsk())
 
     if (sectionTodayReadiness === null) {
       return section.actualReadiness
@@ -153,8 +154,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
 
   // Сегодняшние показатели для sidebar
   const todayIndicators = useMemo(() => {
-    const today = new Date()
-    const todayStr = format(today, 'yyyy-MM-dd')
+    const today = getTodayMinsk()
+    const todayStr = formatMinskDate(today)
 
     // Проверяем, находится ли сегодня в периоде раздела
     let isTodayInSection = false

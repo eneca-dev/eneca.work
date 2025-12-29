@@ -24,6 +24,7 @@ export interface BudgetInfo {
   type_name: string | null
   type_color: string | null
   parent_budget_id: string | null
+  parent_planned_amount: number // Сумма родительского бюджета для расчёта %
   is_active: boolean
 }
 

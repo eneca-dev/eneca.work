@@ -12,8 +12,8 @@ import type { ActionResult, PaginatedActionResult } from '@/modules/cache'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import type { KanbanSection, KanbanStage, StageStatus } from '../types'
 import { transformRowsToKanbanSections } from '../utils/transform-rows-to-kanban'
-import { getFilterContext } from '@/modules/filter-permissions/server'
-import { applyMandatoryFilters } from '@/modules/filter-permissions/utils'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
 
 // ============================================================================
 // Types
@@ -48,10 +48,9 @@ export async function getKanbanSections(
     const supabase = await createClient()
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContext = await getFilterContext()
-    const secureFilters = filterContext
-      ? applyMandatoryFilters(filters || {}, filterContext)
-      : filters || {}
+    const filterContextResult = await getFilterContext()
+    const filterContext = filterContextResult.success ? filterContextResult.data : null
+    const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
 
     // Build query
     let query = supabase.from('v_resource_graph').select('*')
@@ -255,10 +254,9 @@ export async function getKanbanSectionsPaginated(
     const supabase = await createClient()
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContext = await getFilterContext()
-    const secureFilters = filterContext
-      ? applyMandatoryFilters(filters || {}, filterContext)
-      : filters || {}
+    const filterContextResult = await getFilterContext()
+    const filterContext = filterContextResult.success ? filterContextResult.data : null
+    const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
 
     // Build query
     let query = supabase.from('v_resource_graph').select('*')

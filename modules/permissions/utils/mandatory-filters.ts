@@ -3,38 +3,64 @@
  *
  * Принудительно добавляет ограничения к фильтрам на основе scope пользователя.
  * Это второй уровень защиты (после UI), работает на уровне Server Actions.
+ *
+ * SECURITY: При отсутствии контекста или scope — блокируем доступ полностью.
  */
 
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import type { UserFilterContext } from '../types'
-import { debugLog, debugGroup } from '@/lib/debug-logger'
+
+/**
+ * UUID который гарантированно не существует в БД.
+ * Используется для блокировки запросов при отсутствии контекста.
+ */
+const BLOCKING_UUID = '00000000-0000-0000-0000-000000000000'
 
 /**
  * Применяет обязательные фильтры на основе scope пользователя.
  * Возвращает модифицированные фильтры с принудительными ограничениями.
  *
+ * SECURITY: При отсутствии контекста возвращает blocking filter,
+ * который гарантированно не вернёт данных.
+ *
  * @param userFilters - Фильтры, переданные пользователем
- * @param filterContext - Контекст разрешений пользователя
+ * @param filterContext - Контекст разрешений пользователя (может быть null)
  * @returns Фильтры с применёнными ограничениями
  */
 export function applyMandatoryFilters(
   userFilters: FilterQueryParams,
-  filterContext: UserFilterContext
+  filterContext: UserFilterContext | null
 ): FilterQueryParams {
+  // SECURITY: Блокируем доступ при отсутствии контекста
+  if (!filterContext) {
+    console.error('[SECURITY] applyMandatoryFilters: filterContext is null — BLOCKING')
+    return {
+      ...userFilters,
+      team_id: BLOCKING_UUID,
+    }
+  }
+
   const { scope } = filterContext
 
-  debugGroup('Mandatory Filters', () => {
-    debugLog.info('mandatory-filters', 'Applying mandatory filters', {
-      scopeLevel: scope.level,
-      userFilters,
-      userId: filterContext.userId,
-      primaryRole: filterContext.primaryRole,
-    })
-  })
+  // SECURITY: Блокируем доступ при отсутствии scope
+  if (!scope) {
+    console.error('[SECURITY] applyMandatoryFilters: scope is undefined — BLOCKING')
+    return {
+      ...userFilters,
+      team_id: BLOCKING_UUID,
+    }
+  }
 
-  // Admin - никаких ограничений
+  // Admin - никаких ограничений, но проверяем permission
   if (scope.level === 'all') {
-    debugLog.info('mandatory-filters', 'Admin scope - no restrictions applied')
+    // SECURITY: Дополнительная проверка что у пользователя есть admin permission
+    if (!filterContext.filterPermissions?.includes('filters.scope.all')) {
+      console.error('[SECURITY] applyMandatoryFilters: Admin scope claimed without permission — BLOCKING')
+      return {
+        ...userFilters,
+        team_id: BLOCKING_UUID,
+      }
+    }
     return userFilters
   }
 
@@ -108,19 +134,9 @@ export function applyMandatoryFilters(
     ) {
       // Проект не в списке управляемых - удаляем фильтр
       // (будет применён орг. фильтр)
-      debugLog.warn('mandatory-filters', 'Project access denied, removing filter', {
-        requestedProject,
-        allowedProjects: scope.projectIds,
-      })
       delete mandatoryFilters.project_id
     }
   }
-
-  debugLog.info('mandatory-filters', 'Mandatory filters applied', {
-    originalFilters: userFilters,
-    resultFilters: mandatoryFilters,
-    scopeLevel: scope.level,
-  })
 
   return mandatoryFilters
 }

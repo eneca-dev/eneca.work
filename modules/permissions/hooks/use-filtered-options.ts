@@ -11,24 +11,31 @@ import type { FilterOption } from '@/modules/inline-filter'
 import type { UserFilterContext, FilterScope } from '../types'
 
 /**
+ * Контекст иерархии для фильтрации (опционально)
+ * Позволяет фильтровать дочерние элементы по родительским
+ */
+export interface HierarchyContext {
+  /** Map: departmentId → subdivisionId */
+  departmentToSubdivision?: Map<string, string>
+  /** Map: teamId → departmentId */
+  teamToDepartment?: Map<string, string>
+  /** Map: employeeId → teamId */
+  employeeToTeam?: Map<string, string>
+}
+
+/**
  * Фильтрует опции автокомплита на основе scope пользователя.
  * Пользователь видит только опции, которые соответствуют его области видимости.
  *
- * @param allOptions - Все доступные опции
+ * @param allOptions - Все доступные опции (с parentId для иерархии)
  * @param filterContext - Контекст фильтрации пользователя
+ * @param hierarchy - Опциональный контекст иерархии для глубокой фильтрации
  * @returns Отфильтрованные опции
- *
- * @example
- * ```tsx
- * const { data: filterContext } = useFilterContext()
- * const filteredOptions = useFilteredOptions(allOptions, filterContext)
- *
- * return <InlineFilter options={filteredOptions} ... />
- * ```
  */
 export function useFilteredOptions(
   allOptions: FilterOption[],
-  filterContext: UserFilterContext | null | undefined
+  filterContext: UserFilterContext | null | undefined,
+  hierarchy?: HierarchyContext
 ): FilterOption[] {
   return useMemo(() => {
     if (!filterContext) return []
@@ -38,10 +45,61 @@ export function useFilteredOptions(
     // Admin видит всё
     if (scope.level === 'all') return allOptions
 
+    // Строим множества разрешённых ID для каждого уровня
+    const allowedIds = buildAllowedIds(allOptions, scope, hierarchy)
+
     return allOptions.filter((option) => {
-      return isOptionAllowedForScope(option, scope, filterContext)
+      return isOptionAllowedForScope(option, scope, filterContext, allowedIds)
     })
-  }, [allOptions, filterContext])
+  }, [allOptions, filterContext, hierarchy])
+}
+
+/**
+ * Строит множества разрешённых ID на основе scope и иерархии
+ */
+function buildAllowedIds(
+  allOptions: FilterOption[],
+  scope: FilterScope,
+  hierarchy?: HierarchyContext
+): {
+  subdivisions: Set<string>
+  departments: Set<string>
+  teams: Set<string>
+  employees: Set<string>
+} {
+  const subdivisions = new Set(scope.subdivisionIds || [])
+  const departments = new Set(scope.departmentIds || [])
+  const teams = new Set(scope.teamIds || [])
+  const employees = new Set<string>()
+
+  // Для subdivision scope: находим все отделы этого подразделения
+  if (scope.level === 'subdivision' && subdivisions.size > 0) {
+    for (const option of allOptions) {
+      if (option.key === 'отдел' && option.parentId && subdivisions.has(option.parentId)) {
+        departments.add(option.id)
+      }
+    }
+  }
+
+  // Для subdivision/department scope: находим все команды этих отделов
+  if ((scope.level === 'subdivision' || scope.level === 'department') && departments.size > 0) {
+    for (const option of allOptions) {
+      if (option.key === 'команда' && option.parentId && departments.has(option.parentId)) {
+        teams.add(option.id)
+      }
+    }
+  }
+
+  // Для всех уровней кроме projects: находим сотрудников из разрешённых команд
+  if (scope.level !== 'projects' && teams.size > 0) {
+    for (const option of allOptions) {
+      if (option.key === 'ответственный' && option.parentId && teams.has(option.parentId)) {
+        employees.add(option.id)
+      }
+    }
+  }
+
+  return { subdivisions, departments, teams, employees }
 }
 
 /**
@@ -50,13 +108,19 @@ export function useFilteredOptions(
 function isOptionAllowedForScope(
   option: FilterOption,
   scope: FilterScope,
-  context: UserFilterContext
+  context: UserFilterContext,
+  allowedIds: {
+    subdivisions: Set<string>
+    departments: Set<string>
+    teams: Set<string>
+    employees: Set<string>
+  }
 ): boolean {
   switch (option.key) {
     case 'подразделение':
       // Подразделение можно выбирать только если scope = subdivision
       if (scope.level === 'subdivision') {
-        return scope.subdivisionIds?.includes(option.id) ?? false
+        return allowedIds.subdivisions.has(option.id)
       }
       // Ниже по иерархии - не показываем выбор подразделения
       return false
@@ -64,11 +128,11 @@ function isOptionAllowedForScope(
     case 'отдел':
       // Отдел можно выбирать на уровне subdivision или department
       if (scope.level === 'subdivision') {
-        // Показываем все отделы подразделения (фильтрация на сервере)
-        return true
+        // Показываем только отделы из разрешённых подразделений
+        return allowedIds.departments.has(option.id)
       }
       if (scope.level === 'department') {
-        return scope.departmentIds?.includes(option.id) ?? false
+        return allowedIds.departments.has(option.id)
       }
       // Ниже по иерархии - не показываем выбор отдела
       return false
@@ -76,14 +140,26 @@ function isOptionAllowedForScope(
     case 'команда':
       // Команду можно выбирать на уровне subdivision, department или team
       if (scope.level === 'subdivision' || scope.level === 'department') {
-        // Показываем все команды (фильтрация на сервере)
-        return true
+        // Показываем только команды из разрешённых отделов
+        return allowedIds.teams.has(option.id)
       }
       if (scope.level === 'team') {
-        return scope.teamIds?.includes(option.id) ?? false
+        return allowedIds.teams.has(option.id)
       }
       // На уровне projects - не показываем выбор команды
       return false
+
+    case 'ответственный':
+      // Фильтруем сотрудников по разрешённым командам
+      if (scope.level === 'projects') {
+        // Для project scope - показываем всех (фильтрация на сервере)
+        return true
+      }
+      // Для орг. ролей - только сотрудники из разрешённых команд
+      if (allowedIds.employees.size > 0) {
+        return allowedIds.employees.has(option.id)
+      }
+      return true
 
     case 'проект':
       // Если есть проектный scope - только управляемые проекты
@@ -91,12 +167,6 @@ function isOptionAllowedForScope(
         return scope.projectIds.includes(option.id)
       }
       // Для орг. ролей - показываем все проекты
-      // (фильтрация будет по сотрудникам)
-      return true
-
-    case 'ответственный':
-      // Ответственный всегда доступен для фильтрации внутри scope
-      // TODO: можно добавить фильтрацию по team/department
       return true
 
     case 'метка':

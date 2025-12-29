@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import {
   ChevronRight,
   FolderKanban,
@@ -683,7 +684,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   // Объединяем исторические снэпшоты с сегодняшним рассчитанным значением
   // Это позволяет графику обновляться при изменении прогресса задач
   const mergedStageReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     // Если нет данных для расчёта — возвращаем исторические как есть
     if (!stageStats.hasData) {
@@ -1141,7 +1142,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 
   // Объединяем исторические снэпшоты секции с сегодняшним расчётом
   const mergedSectionReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     // Если нет данных для расчёта — возвращаем исторические как есть
     if (sectionTodayReadiness === null) {
@@ -1181,8 +1182,8 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 
   // Сегодняшние показатели для sidebar
   const todayIndicators = useMemo(() => {
-    const today = new Date()
-    const todayStr = format(today, 'yyyy-MM-dd')
+    const today = getTodayMinsk()
+    const todayStr = formatMinskDate(today)
 
     // Проверяем, находится ли сегодня в периоде раздела
     let isTodayInSection = false

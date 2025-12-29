@@ -132,12 +132,13 @@ export function BudgetsHierarchy({ nodes, className }: BudgetsHierarchyProps) {
         </div>
 
         {/* Column headers */}
-        <div className="flex items-center gap-3 px-3 py-1.5 border-b bg-muted/20 text-xs font-medium text-muted-foreground">
-          <div className="w-5" /> {/* Expand button space */}
-          <div className="w-4" /> {/* Icon space */}
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/20 text-xs font-medium text-muted-foreground">
+          <div className="w-5 shrink-0" /> {/* Expand button space */}
+          <div className="w-14 shrink-0 text-center">Тип</div>
           <div className="flex-1">Название</div>
-          <div className="w-16 text-right">Часы</div>
-          <div className="w-56">Бюджеты</div>
+          <div className="w-20 shrink-0 text-center">Распред.</div>
+          <div className="w-14 shrink-0 text-right">Часы</div>
+          <div className="w-56 shrink-0">Бюджеты</div>
         </div>
 
         {/* Scrollable content */}

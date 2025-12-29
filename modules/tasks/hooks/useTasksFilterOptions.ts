@@ -21,7 +21,7 @@ import {
   useFilterContext,
   useFilteredOptions,
   getLockedFilters,
-} from '@/modules/filter-permissions'
+} from '@/modules/permissions'
 
 // ============================================================================
 // Base Structure Hooks
@@ -63,39 +63,54 @@ export function useTasksFilterOptions() {
   // 🔒 Получаем контекст разрешений
   const { data: filterContext, isLoading: loadingContext } = useFilterContext()
 
-  // Собираем все опции без фильтрации
+  // Собираем все опции с parent IDs для иерархической фильтрации
   const allOptions = useMemo<FilterOption[]>(() => {
     const result: FilterOption[] = []
 
-    // Подразделения
+    // Подразделения (без parent)
     if (orgStructure?.subdivisions) {
       for (const item of orgStructure.subdivisions) {
         result.push({ id: item.id, name: item.name, key: 'подразделение' })
       }
     }
 
-    // Отделы
+    // Отделы (parent = subdivisionId)
     if (orgStructure?.departments) {
       for (const item of orgStructure.departments) {
-        result.push({ id: item.id, name: item.name, key: 'отдел' })
+        result.push({
+          id: item.id,
+          name: item.name,
+          key: 'отдел',
+          parentId: item.subdivisionId || undefined,
+        })
       }
     }
 
-    // Команды
+    // Команды (parent = departmentId)
     if (orgStructure?.teams) {
       for (const item of orgStructure.teams) {
-        result.push({ id: item.id, name: item.name, key: 'команда' })
+        result.push({
+          id: item.id,
+          name: item.name,
+          key: 'команда',
+          parentId: item.departmentId || undefined,
+        })
       }
     }
 
-    // Ответственные (сотрудники)
+    // Ответственные (parent = teamId)
     if (orgStructure?.employees) {
       for (const item of orgStructure.employees) {
-        result.push({ id: item.id, name: item.name, key: 'ответственный' })
+        result.push({
+          id: item.id,
+          name: item.name,
+          key: 'ответственный',
+          parentId: item.teamId || undefined,
+        })
       }
     }
 
-    // Проекты
+    // Проекты (без parent в контексте орг структуры)
     if (projectStructure?.projects) {
       for (const item of projectStructure.projects) {
         result.push({ id: item.id, name: item.name, key: 'проект' })

@@ -9,7 +9,8 @@
 
 import { useMemo, useCallback, useRef } from 'react'
 import { ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
-import { addDays, startOfDay } from 'date-fns'
+import { addDays } from 'date-fns'
+import { getTodayMinsk } from '@/lib/timezone-utils'
 import { useResourceGraphData, useCompanyCalendarEvents } from '../hooks'
 import { useDisplaySettingsStore, useFiltersStore, useUIStateStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,7 @@ const DAYS_AFTER_TODAY = 150  // 5 месяцев вперёд
 const TOTAL_DAYS = DAYS_BEFORE_TODAY + DAYS_AFTER_TODAY
 
 function calculateTimelineRange(): TimelineRange {
-  const today = startOfDay(new Date())
+  const today = getTodayMinsk()
   const start = addDays(today, -DAYS_BEFORE_TODAY)
   const end = addDays(today, DAYS_AFTER_TODAY - 1)
   return { start, end, totalDays: TOTAL_DAYS }

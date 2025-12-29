@@ -24,9 +24,10 @@ import type {
   BatchBudget,
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
-import { getFilterContext } from '@/modules/filter-permissions/server'
-import { applyMandatoryFilters } from '@/modules/filter-permissions/utils'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
 
 // ============================================================================
 // Query Actions
@@ -48,10 +49,9 @@ export async function getResourceGraphData(
     const supabase = await createClient()
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContext = await getFilterContext()
-    const secureFilters = filterContext
-      ? applyMandatoryFilters(filters || {}, filterContext)
-      : filters || {}
+    const filterContextResult = await getFilterContext()
+    const filterContext = filterContextResult.success ? filterContextResult.data : null
+    const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
 
     // Build query
     let query = supabase
@@ -895,7 +895,7 @@ export async function getStageReadinessForSection(
     }
 
     // Добавляем сегодняшнюю готовность, рассчитанную на лету
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     for (const stage of stages || []) {
       const stageId = stage.decomposition_stage_id
@@ -1990,7 +1990,7 @@ export async function getSectionsBatchData(
     }
 
     // Добавляем сегодняшнюю готовность на лету
-    const today = new Date().toISOString().split('T')[0]
+    const today = formatMinskDate(getTodayMinsk())
     for (const stage of stagesResult.data || []) {
       const sectionId = stage.decomposition_stage_section_id
       const stageId = stage.decomposition_stage_id

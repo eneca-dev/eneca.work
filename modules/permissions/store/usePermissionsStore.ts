@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { checkPermission, checkAnyPermission, checkAllPermissions, getPermissionLevel } from '../utils/permissionUtils'
+import type { FilterScope, OrgContext } from '../types'
 
 interface PermissionsState {
   // Состояние
@@ -9,8 +10,14 @@ interface PermissionsState {
   error: string | null
   lastUpdated: Date | null
 
+  // Filter scope & org context (unified permissions)
+  filterScope: FilterScope | null
+  orgContext: OrgContext | null
+
   // Методы
   setPermissions: (permissions: string[]) => void
+  setFilterScope: (scope: FilterScope | null) => void
+  setOrgContext: (context: OrgContext | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
@@ -25,10 +32,12 @@ interface PermissionsState {
 }
 
 const initialState = {
-  permissions: [],
+  permissions: [] as string[],
   isLoading: false,
-  error: null,
-  lastUpdated: null
+  error: null as string | null,
+  lastUpdated: null as Date | null,
+  filterScope: null as FilterScope | null,
+  orgContext: null as OrgContext | null,
 }
 
 export const usePermissionsStore = create<PermissionsState>()(
@@ -82,8 +91,15 @@ export const usePermissionsStore = create<PermissionsState>()(
         })
       },
 
-      // УДАЛЕНО: setFromRole больше не нужен - разрешения загружаются из БД
-      
+      // Filter scope & org context setters
+      setFilterScope: (scope: FilterScope | null) => {
+        set({ filterScope: scope })
+      },
+
+      setOrgContext: (context: OrgContext | null) => {
+        set({ orgContext: context })
+      },
+
       setLoading: (loading: boolean) => {
         set({ isLoading: loading })
       },
@@ -138,11 +154,32 @@ export const usePermissionsLoading = () => usePermissionsStore(state => state.is
 export const usePermissionsError = () => usePermissionsStore(state => state.error)
 
 // Хелперы для проверки разрешений
-export const useHasPermission = (permission: string) => 
+export const useHasPermission = (permission: string) =>
   usePermissionsStore(state => state.hasPermission(permission))
 
-export const useHasAnyPermission = (permissions: string[]) => 
+export const useHasAnyPermission = (permissions: string[]) =>
   usePermissionsStore(state => state.hasAnyPermission(permissions))
 
-export const usePermissionLevel = (module: string) => 
+export const usePermissionLevel = (module: string) =>
   usePermissionsStore(state => state.getPermissionLevel(module))
+
+// === Unified Permissions Selectors ===
+
+/** Селектор для filter scope */
+export const selectFilterScope = (state: PermissionsState) => state.filterScope
+
+/** Селектор для org context */
+export const selectOrgContext = (state: PermissionsState) => state.orgContext
+
+/** Проверка на admin */
+export const selectIsAdmin = (state: PermissionsState) =>
+  state.permissions.includes('hierarchy.is_admin')
+
+/** Хук для получения filter scope */
+export const useFilterScope = () => usePermissionsStore(selectFilterScope)
+
+/** Хук для получения org context */
+export const useOrgContext = () => usePermissionsStore(selectOrgContext)
+
+/** Хук для проверки admin */
+export const useIsAdmin = () => usePermissionsStore(selectIsAdmin)

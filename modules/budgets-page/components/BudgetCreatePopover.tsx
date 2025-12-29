@@ -97,9 +97,9 @@ export function BudgetCreatePopover({
   )
   const { mutate: createBudget, isPending: isCreating } = useCreateBudget()
 
-  // Активные типы бюджетов
+  // Активные типы бюджетов (исключаем "Основной" — он создаётся автоматически)
   const activeTypes = useMemo(
-    () => budgetTypes.filter((t) => t.is_active),
+    () => budgetTypes.filter((t) => t.is_active && t.name !== MAIN_BUDGET_TYPE_NAME),
     [budgetTypes]
   )
 
@@ -109,14 +109,7 @@ export function BudgetCreatePopover({
     [activeTypes, selectedTypeId]
   )
 
-  // Проверка на "Основной" бюджет
-  const hasExistingMainBudget = useMemo(
-    () => existingBudgets.some((b) => b.type_name === MAIN_BUDGET_TYPE_NAME && b.is_active),
-    [existingBudgets]
-  )
-
-  const isMainBudgetType = selectedType?.name === MAIN_BUDGET_TYPE_NAME
-  const canCreateMainBudget = !hasExistingMainBudget || !isMainBudgetType
+  // "Основной" бюджет создаётся автоматически, проверка не нужна
 
   // Выбранный родитель
   const selectedParent = useMemo(
@@ -129,8 +122,8 @@ export function BudgetCreatePopover({
 
   // Валидация формы
   const isFormValid = useMemo(() => {
-    return selectedTypeId !== '' && amount > 0 && canCreateMainBudget
-  }, [selectedTypeId, amount, canCreateMainBudget])
+    return selectedTypeId !== '' && amount > 0
+  }, [selectedTypeId, amount])
 
   // Сброс при открытии/закрытии
   useEffect(() => {
@@ -265,24 +258,20 @@ export function BudgetCreatePopover({
                 <div className="flex flex-wrap gap-1">
                   {activeTypes.map((type) => {
                     const isSelected = selectedTypeId === type.type_id
-                    const isMain = type.name === MAIN_BUDGET_TYPE_NAME
-                    const isDisabled = isMain && hasExistingMainBudget
 
                     return (
                       <button
                         key={type.type_id}
                         type="button"
-                        disabled={isDisabled}
                         onClick={() => setSelectedTypeId(type.type_id)}
                         className={cn(
                           'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium',
                           'border transition-all duration-150',
                           isSelected
                             ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                            : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-300',
-                          isDisabled && 'opacity-40 cursor-not-allowed'
+                            : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-300'
                         )}
-                        title={isDisabled ? 'Уже существует' : type.name}
+                        title={type.name}
                       >
                         <div
                           className="w-2 h-2 rounded-full"

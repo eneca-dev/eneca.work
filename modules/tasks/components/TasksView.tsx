@@ -17,6 +17,7 @@ import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { ResourceGraphInternal } from '@/modules/resource-graph/components/ResourceGraph'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
+import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 
 // ============================================================================
 // Tab Configuration
@@ -138,6 +139,9 @@ export function TasksView() {
           />
         )}
       </div>
+
+      {/* Debug Panel - только в dev режиме */}
+      {process.env.NODE_ENV === 'development' && <PermissionsDebugPanel />}
     </div>
   )
 }

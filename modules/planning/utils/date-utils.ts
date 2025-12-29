@@ -1,6 +1,6 @@
 import type { CalendarEvent } from "@/modules/calendar/types"
 import { addDays } from 'date-fns'
-import { formatMinskDate, getMinskDayOfWeek, getMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate, isTodayMinsk, getTodayMinsk } from '@/lib/timezone-utils'
 
 export const isWeekend = (date: Date) => {
   // ✅ Определяем день недели в часовом поясе Минска
@@ -8,14 +8,10 @@ export const isWeekend = (date: Date) => {
   return day === 0 || day === 6 // 0 - воскресенье, 6 - суббота
 }
 
-// Функция для определения, является ли дата сегодняшней
+// Функция для определения, является ли дата сегодняшней (в часовом поясе Минска)
 export const isToday = (date: Date) => {
-  const today = new Date()
-  return (
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-  )
+  // ✅ Используем timezone-aware проверку
+  return isTodayMinsk(date)
 }
 
 // Функция группировки дат по месяцам
@@ -134,25 +130,23 @@ export const generateTimeUnits = (
 
 // Функция для получения текущей даты с началом в понедельник текущей недели
 export const getCurrentWeekStart = () => {
-  const today = new Date()
-  // ✅ Используем день недели в часовом поясе Минска
+  // ✅ Используем сегодняшнюю дату в часовом поясе Минска
+  const today = getTodayMinsk()
   const day = getMinskDayOfWeek(today)
-  const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Если сегодня воскресенье, то -6, иначе +1
-
-  // Создаем новый объект Date, чтобы не мутировать исходный
-  const weekStart = new Date(today)
-  weekStart.setDate(diff)
-  return weekStart
+  // Если сегодня воскресенье (0), то -6 дней, иначе -(day-1) дней до понедельника
+  const daysToSubtract = day === 0 ? 6 : day - 1
+  return addDays(today, -daysToSubtract)
 }
 
-// Функция для определения, является ли дата первым днем месяца
+// Функция для определения, является ли дата первым днем месяца (в часовом поясе Минска)
 export const isFirstDayOfMonth = (date: Date) => {
-  return date.getDate() === 1
+  // ✅ Используем день месяца в часовом поясе Минска
+  return getMinskDate(date) === 1
 }
 
-// Add this function to check if a date is the last day of the month
+// Функция для определения, является ли дата последним днем месяца (в часовом поясе Минска)
 export const isLastDayOfMonth = (date: Date) => {
-  const nextDay = new Date(date)
-  nextDay.setDate(date.getDate() + 1)
-  return nextDay.getMonth() !== date.getMonth()
+  // ✅ Используем addDays для перехода к следующему дню и проверяем месяц в Minsk TZ
+  const nextDay = addDays(date, 1)
+  return getMinskDate(nextDay) === 1
 }

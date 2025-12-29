@@ -1,17 +1,17 @@
 /**
  * Budget Amount Edit Component
  *
- * Компактный inline click-to-edit для редактирования плановой суммы бюджета.
- * Использует цветные точки с тултипами вместо текстовых лейблов.
+ * Inline редактор с двумя полями: сумма (BYN) и процент (%).
+ * Поля всегда видимы и редактируемы. При вводе в одно — автоматически рассчитывается другое.
+ * Процент рассчитывается от parent_planned_amount.
  */
 
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount } from '@/modules/budgets'
-import { formatAmount } from '../utils'
 import {
   Tooltip,
   TooltipContent,
@@ -33,8 +33,10 @@ interface BudgetAmountEditProps {
   color: string
   /** Название типа */
   label: string
-  /** Процент освоения */
+  /** Процент освоения (от своего planned_amount) */
   spentPercentage: number
+  /** Сумма родительского бюджета для расчёта % */
+  parentPlannedAmount: number
   /** Компактный режим */
   compact?: boolean
 }
@@ -53,11 +55,27 @@ function parseAmount(value: string): number {
 }
 
 /**
- * Форматирует число для input
+ * Форматирует число для display (с разделителями тысяч)
  */
-function formatInputAmount(amount: number): string {
-  if (amount === 0) return ''
-  return new Intl.NumberFormat('ru-RU').format(amount)
+function formatDisplayAmount(amount: number): string {
+  if (amount === 0) return '0'
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount)
+}
+
+/**
+ * Рассчитывает процент от родителя
+ */
+function calculatePercentage(amount: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((amount / parentAmount) * 100 * 10) / 10 // 1 знак после запятой
+}
+
+/**
+ * Рассчитывает сумму от процента
+ */
+function calculateAmount(percentage: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((percentage / 100) * parentAmount)
 }
 
 // ============================================================================
@@ -71,114 +89,102 @@ export function BudgetAmountEdit({
   color,
   label,
   spentPercentage,
+  parentPlannedAmount,
   compact,
 }: BudgetAmountEditProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [inputValue, setInputValue] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  // Локальные значения для редактирования
+  const [localAmount, setLocalAmount] = useState(formatDisplayAmount(currentAmount))
+  const [localPercent, setLocalPercent] = useState(
+    parentPlannedAmount > 0 ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
+  )
+  const [activeField, setActiveField] = useState<'amount' | 'percent' | null>(null)
+
+  const amountRef = useRef<HTMLInputElement>(null)
+  const percentRef = useRef<HTMLInputElement>(null)
 
   const { mutate: updateAmount, isPending } = useUpdateBudgetAmount()
 
-  // Ограничиваем процент для визуализации
+  const hasParent = parentPlannedAmount > 0
+
+  // Sync с внешними данными когда они меняются
+  useEffect(() => {
+    if (activeField === null) {
+      setLocalAmount(formatDisplayAmount(currentAmount))
+      setLocalPercent(
+        hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
+      )
+    }
+  }, [currentAmount, parentPlannedAmount, hasParent, activeField])
+
+  // Ограничиваем процент освоения для визуализации
   const visualPercentage = Math.min(spentPercentage, 100)
   const isOverBudget = spentPercentage > 100
 
-  // Auto-focus и select при входе в режим редактирования
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+  // Изменение суммы → пересчёт процента
+  const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^\d]/g, '')
+    setLocalAmount(raw)
+
+    const newAmount = parseAmount(raw)
+    if (hasParent && newAmount >= 0) {
+      const newPercent = calculatePercentage(newAmount, parentPlannedAmount)
+      setLocalPercent(newPercent.toString())
     }
-  }, [isEditing])
+  }, [hasParent, parentPlannedAmount])
 
-  // Обработка начала редактирования
-  const handleStartEdit = useCallback(() => {
-    setInputValue(formatInputAmount(currentAmount))
-    setIsEditing(true)
-  }, [currentAmount])
+  // Изменение процента → пересчёт суммы
+  const handlePercentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^\d,\.]/g, '')
+    setLocalPercent(raw)
 
-  // Сохранение
-  const handleSubmit = useCallback(() => {
-    const newAmount = parseAmount(inputValue)
+    const newPercent = parseFloat(raw.replace(',', '.')) || 0
+    if (hasParent && newPercent >= 0) {
+      const newAmount = calculateAmount(newPercent, parentPlannedAmount)
+      setLocalAmount(formatDisplayAmount(newAmount))
+    }
+  }, [hasParent, parentPlannedAmount])
 
-    if (newAmount > 0 && newAmount !== currentAmount) {
+  // Сохранение при blur
+  const handleSave = useCallback(() => {
+    const newAmount = parseAmount(localAmount)
+
+    if (newAmount >= 0 && newAmount !== currentAmount) {
       updateAmount({
         budget_id: budgetId,
         planned_amount: newAmount,
       })
     }
 
-    setIsEditing(false)
-  }, [inputValue, currentAmount, budgetId, updateAmount])
-
-  // Отмена
-  const handleCancel = useCallback(() => {
-    setInputValue('')
-    setIsEditing(false)
-  }, [])
+    setActiveField(null)
+  }, [localAmount, currentAmount, budgetId, updateAmount])
 
   // Обработка клавиш
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        handleSubmit()
+        handleSave()
+        ;(e.target as HTMLInputElement).blur()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        handleCancel()
+        // Сброс к исходным значениям
+        setLocalAmount(formatDisplayAmount(currentAmount))
+        setLocalPercent(
+          hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
+        )
+        setActiveField(null)
+        ;(e.target as HTMLInputElement).blur()
       }
     },
-    [handleSubmit, handleCancel]
+    [handleSave, currentAmount, hasParent, parentPlannedAmount]
   )
-
-  // Режим редактирования
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-1.5">
-        {/* Color dot */}
-        <div
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ backgroundColor: color }}
-        />
-
-        {/* Progress bar (disabled while editing) */}
-        <div className="flex-1 bg-muted/30 rounded-full overflow-hidden h-1.5">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${visualPercentage}%`,
-              backgroundColor: isOverBudget ? '#ef4444' : color,
-              opacity: 0.5,
-            }}
-          />
-        </div>
-
-        {/* Input */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value.replace(/[^\d\s,\.]/g, ''))}
-          onBlur={handleSubmit}
-          onKeyDown={handleKeyDown}
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            'w-20 h-5 px-1.5 text-[11px] tabular-nums rounded border text-right',
-            'bg-background border-primary/50 outline-none',
-            'focus:ring-1 focus:ring-primary/30'
-          )}
-          placeholder="Сумма"
-        />
-      </div>
-    )
-  }
 
   // Tooltip content
   const tooltipContent = (
     <div className="text-[11px] space-y-0.5">
       <div className="font-medium">{label}</div>
       <div className="text-muted-foreground">
-        Освоено: {formatAmount(spentAmount)} / {formatAmount(currentAmount)} BYN
+        Освоено: {formatDisplayAmount(spentAmount)} / {formatDisplayAmount(currentAmount)} BYN
       </div>
       <div className={cn(
         'font-mono',
@@ -189,9 +195,8 @@ export function BudgetAmountEdit({
     </div>
   )
 
-  // Режим просмотра
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1">
       {/* Color dot with tooltip */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
@@ -203,18 +208,18 @@ export function BudgetAmountEdit({
             style={{ backgroundColor: color }}
           />
         </TooltipTrigger>
-        <TooltipContent side="left" className="max-w-48">
+        <TooltipContent side="left" className="max-w-52">
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
 
-      {/* Progress bar */}
+      {/* Mini progress bar */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
           <div
             className={cn(
-              'flex-1 bg-muted/30 rounded-full overflow-hidden cursor-help',
-              compact ? 'h-1' : 'h-1.5'
+              'w-8 bg-muted/30 rounded-full overflow-hidden cursor-help shrink-0',
+              'h-[3px]'
             )}
           >
             <div
@@ -229,44 +234,72 @@ export function BudgetAmountEdit({
             />
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-48">
+        <TooltipContent side="top" className="max-w-52">
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
 
-      {/* Editable amount */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          handleStartEdit()
-        }}
-        disabled={isPending}
-        className={cn(
-          'text-[11px] tabular-nums shrink-0 px-1 rounded transition-colors',
-          'hover:bg-muted cursor-pointer',
-          'focus:outline-none focus:ring-1 focus:ring-primary/30',
-          isPending && 'opacity-50'
+      {/* Amount input - always visible */}
+      <div className="relative">
+        <input
+          ref={amountRef}
+          type="text"
+          inputMode="numeric"
+          value={localAmount}
+          onChange={handleAmountChange}
+          onFocus={() => setActiveField('amount')}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+          disabled={isPending}
+          className={cn(
+            'w-24 h-6 px-2 pr-7 text-xs tabular-nums rounded border text-right',
+            'bg-transparent border-border/50 outline-none',
+            'hover:border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
+            'transition-colors',
+            isPending && 'opacity-50',
+            isOverBudget && 'text-destructive'
+          )}
+          placeholder="0"
+        />
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/60 pointer-events-none">
+          BYN
+        </span>
+        {isPending && (
+          <Loader2 className="absolute right-7 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />
         )}
-        title="Нажмите для редактирования"
-      >
-        {isPending ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <span className={isOverBudget ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-            {formatAmount(currentAmount)}
-          </span>
-        )}
-      </button>
+      </div>
 
-      {/* Spent percentage - compact */}
-      <span
-        className={cn(
-          'text-[10px] tabular-nums shrink-0 w-7 text-right',
-          isOverBudget ? 'text-destructive' : 'text-muted-foreground/70'
-        )}
-      >
-        {spentPercentage}%
-      </span>
+      {/* Percent input - only if has parent */}
+      {hasParent ? (
+        <div className="relative">
+          <input
+            ref={percentRef}
+            type="text"
+            inputMode="decimal"
+            value={localPercent}
+            onChange={handlePercentChange}
+            onFocus={() => setActiveField('percent')}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            disabled={isPending}
+            className={cn(
+              'w-16 h-6 px-2 pr-4 text-xs tabular-nums rounded border text-right',
+              'bg-transparent border-border/50 outline-none',
+              'hover:border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
+              'transition-colors',
+              isPending && 'opacity-50'
+            )}
+            placeholder="0"
+          />
+          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/60 pointer-events-none">
+            %
+          </span>
+        </div>
+      ) : (
+        <span className="w-16 text-center text-[10px] text-muted-foreground/40">—</span>
+      )}
     </div>
   )
 }

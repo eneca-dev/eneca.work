@@ -10366,6 +10366,7 @@ export type Database = {
             | Database["public"]["Enums"]["budget_entity_type"]
             | null
           parent_name: string | null
+          parent_planned_amount: number | null
           planned_amount: number | null
           remaining_amount: number | null
           spent_amount: number | null
@@ -19997,6 +19998,13 @@ export type Database = {
         Args: { p_section_id: string }
         Returns: number
       }
+      can_access_loading: {
+        Args: {
+          p_loading: Database["public"]["Tables"]["loadings"]["Row"]
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       can_view_project_budget: {
         Args: { project_uuid: string }
         Returns: boolean
@@ -20028,6 +20036,13 @@ export type Database = {
         Returns: Json
       }
       execute_sql: { Args: { sql_query: string }; Returns: Json }
+      find_parent_budget_id: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: Database["public"]["Enums"]["budget_entity_type"]
+        }
+        Returns: string
+      }
       fix_entire_organizational_system: {
         Args: never
         Returns: {
@@ -20129,7 +20144,20 @@ export type Database = {
           planned_hours: number
         }[]
       }
+      get_user_headed_department_id: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      get_user_headed_subdivision_id: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
       get_user_id_by_email: { Args: { email_param: string }; Returns: string }
+      get_user_led_team_id: { Args: { p_user_id: string }; Returns: string }
+      get_user_managed_project_ids: {
+        Args: { p_user_id: string }
+        Returns: string[]
+      }
       get_user_notifications_filtered: {
         Args: {
           p_include_archived?: boolean
@@ -20245,6 +20273,10 @@ export type Database = {
       }
       user_has_permission: {
         Args: { p_permission_name: string; p_user_id: string }
+        Returns: boolean
+      }
+      user_has_role: {
+        Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
       }
       verify_project_deleted: {

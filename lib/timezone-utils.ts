@@ -27,9 +27,10 @@ export function parseMinskDate(dateString: string): Date {
   // Удаляем время если есть, берем только дату
   const dateOnly = dateString.split('T')[0]
 
-  // Добавляем "Z" чтобы строка интерпретировалась как UTC (независимо от браузера)
-  // Затем toZonedTime конвертирует UTC → Minsk timezone
-  return toZonedTime(`${dateOnly}T00:00:00Z`, MINSK_TZ)
+  // Парсим компоненты даты и создаём Date в UTC
+  // Это гарантирует что "2025-12-29" → Date с внутренним временем 2025-12-29T00:00:00Z
+  const [year, month, day] = dateOnly.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
 }
 
 /**
@@ -74,6 +75,19 @@ export function getTodayMinsk(): Date {
   const now = new Date()
   const minskDateStr = formatInTimeZone(now, MINSK_TZ, 'yyyy-MM-dd')
   return parseMinskDate(minskDateStr)
+}
+
+/**
+ * Проверяет, является ли дата сегодняшней в часовом поясе Минска
+ *
+ * @param date - Date объект для проверки
+ * @returns true если дата соответствует сегодняшнему дню в Минске
+ *
+ * @example
+ * isTodayMinsk(someDate) // → true/false
+ */
+export function isTodayMinsk(date: Date): boolean {
+  return formatMinskDate(date) === formatMinskDate(getTodayMinsk())
 }
 
 /**

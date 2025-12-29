@@ -6,7 +6,7 @@
 
 import { addDays, differenceInDays, startOfWeek, endOfWeek } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { formatMinskDate, getMinskDayOfWeek } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk } from '@/lib/timezone-utils'
 import type {
   TimelineRange,
   TimelineScale,
@@ -36,7 +36,7 @@ import { DEFAULT_MONTHS_RANGE } from '../constants'
  * @returns Диапазон временной шкалы
  */
 export function createTimelineRange(
-  start: Date = new Date(),
+  start: Date = getTodayMinsk(),
   months: number = DEFAULT_MONTHS_RANGE
 ): TimelineRange {
   const end = addDays(start, months * 30)

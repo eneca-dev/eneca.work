@@ -86,6 +86,7 @@ export function BudgetCell({
           color={budget.type_color || '#6b7280'}
           label={budget.type_name || budget.name}
           spentPercentage={budget.spent_percentage}
+          parentPlannedAmount={budget.parent_planned_amount}
           compact={compact}
         />
       ))}

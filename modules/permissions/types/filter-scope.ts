@@ -106,6 +106,9 @@ export interface UserFilterContext {
   /** Основная роль (для отображения) */
   primaryRole: string
 
+  /** Все permissions пользователя (для unified permissions store) */
+  permissions: string[]
+
   /** Filter scope permissions пользователя (из БД) */
   filterPermissions: FilterScopePermission[]
 

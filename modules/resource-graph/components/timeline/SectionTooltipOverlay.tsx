@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { differenceInDays, parseISO, format, addDays, isWithinInterval } from 'date-fns'
+import { getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessCheckpoint, ReadinessPoint, BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
@@ -123,8 +124,7 @@ export function SectionTooltipOverlay({
         budgetSpent = exactBudget.spent
       } else if (sortedBudget.length > 0) {
         const firstBudget = parseISO(sortedBudget[0].date)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const today = getTodayMinsk()
         // Показываем значение от первой даты данных до сегодня
         if (dayDate >= firstBudget && dayDate <= today) {
           // Ступенчатая интерполяция — последнее известное значение

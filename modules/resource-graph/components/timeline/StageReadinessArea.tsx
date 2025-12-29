@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { parseISO, addDays, format, subDays } from 'date-fns'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH } from '../../constants'
@@ -191,7 +192,7 @@ export function StageReadinessArea({
   // Вычисляем прирост за сегодня (относительно вчера)
   const todayDelta = useMemo(() => {
     if (points.length < 2) return null
-    const today = format(new Date(), 'yyyy-MM-dd')
+    const today = formatMinskDate(getTodayMinsk())
     const todayPoint = points.find(p => p.date === today)
     if (todayPoint?.delta !== null && todayPoint?.delta !== undefined) {
       return todayPoint.delta
@@ -375,8 +376,9 @@ export function StageReadinessArea({
 export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null {
   if (!snapshots || snapshots.length === 0) return null
 
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+  const todayDate = getTodayMinsk()
+  const today = formatMinskDate(todayDate)
+  const yesterday = formatMinskDate(subDays(todayDate, 1))
 
   // Сортируем
   const sorted = [...snapshots].sort((a, b) =>

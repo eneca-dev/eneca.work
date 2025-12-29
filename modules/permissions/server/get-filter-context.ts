@@ -86,24 +86,30 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
   const roles =
     userRoles?.map((r) => (r.role as { name: string }).name) || ['user']
 
-  // 3. Получаем filter permissions пользователя
+  // 3. Получаем permissions пользователя
   const { data: userPermissions } = await supabase.rpc('get_user_permissions', {
     p_user_id: user.id,
   })
+
+  // Сохраняем все permissions для unified permissions store
+  let allPermissions: string[] = []
 
   // Фильтруем только filter scope permissions
   let filterPermissions: FilterScopePermission[] = []
 
   if (userPermissions?.length) {
-    filterPermissions = userPermissions
-      .map((p: { permission_name: string }) => p.permission_name)
-      .filter((name: string): name is FilterScopePermission =>
+    // RPC get_user_permissions returns text[] directly (array of permission names)
+    allPermissions = userPermissions as string[]
+
+    // Только filter scope permissions
+    filterPermissions = allPermissions.filter(
+      (name): name is FilterScopePermission =>
         FILTER_SCOPE_PERMISSIONS.includes(name as FilterScopePermission)
-      )
+    )
   }
 
   // Fallback: если RPC не работает, получаем permissions напрямую
-  if (filterPermissions.length === 0) {
+  if (allPermissions.length === 0) {
     const { data: directPerms } = await supabase
       .from('user_roles')
       .select(
@@ -131,7 +137,11 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
           }
         }
       }
-      filterPermissions = Array.from(permNames).filter(
+      // Сохраняем все permissions
+      allPermissions = Array.from(permNames)
+
+      // Фильтруем только filter scope
+      filterPermissions = allPermissions.filter(
         (name): name is FilterScopePermission =>
           FILTER_SCOPE_PERMISSIONS.includes(name as FilterScopePermission)
       )
@@ -224,6 +234,7 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
         userId: user.id,
         roles,
         primaryRole: getPrimaryRole(roles),
+        permissions: allPermissions, // Все permissions для unified store
         filterPermissions,
 
         ownTeamId: profile.team_id,

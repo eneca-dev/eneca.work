@@ -40,6 +40,7 @@ function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
     type_name: budget.type_name,
     type_color: budget.type_color,
     parent_budget_id: budget.parent_budget_id,
+    parent_planned_amount: budget.parent_planned_amount,
     is_active: budget.is_active,
   }
 }

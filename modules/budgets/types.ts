@@ -57,6 +57,7 @@ export interface BudgetCurrent {
   parent_name: string | null
   parent_entity_type: BudgetEntityType | null
   parent_entity_id: string | null
+  parent_planned_amount: number // Сумма родительского бюджета для расчёта %
 }
 
 // Версия бюджета (история)
