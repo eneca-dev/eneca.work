@@ -196,7 +196,7 @@ export function BudgetAmountEdit({
   )
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-2">
       {/* Color dot with tooltip */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
@@ -213,13 +213,76 @@ export function BudgetAmountEdit({
         </TooltipContent>
       </Tooltip>
 
-      {/* Mini progress bar */}
+      {/* Amount input - borderless */}
+      <div className="relative">
+        <input
+          ref={amountRef}
+          type="text"
+          inputMode="numeric"
+          value={localAmount}
+          onChange={handleAmountChange}
+          onFocus={() => setActiveField('amount')}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+          disabled={isPending}
+          className={cn(
+            'w-20 h-6 px-1 pr-7 text-xs tabular-nums text-right',
+            'bg-transparent border-0 outline-none',
+            'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+            'transition-colors',
+            isPending && 'opacity-50',
+            isOverBudget && 'text-destructive',
+            !isOverBudget && 'text-slate-200'
+          )}
+          placeholder="0"
+        />
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 pointer-events-none">
+          BYN
+        </span>
+        {isPending && (
+          <Loader2 className="absolute right-7 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />
+        )}
+      </div>
+
+      {/* Percent input - borderless, only if has parent */}
+      {hasParent ? (
+        <div className="relative">
+          <input
+            ref={percentRef}
+            type="text"
+            inputMode="decimal"
+            value={localPercent}
+            onChange={handlePercentChange}
+            onFocus={() => setActiveField('percent')}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            disabled={isPending}
+            className={cn(
+              'w-12 h-6 px-1 pr-4 text-xs tabular-nums text-right',
+              'bg-transparent border-0 outline-none',
+              'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+              'transition-colors text-slate-400',
+              isPending && 'opacity-50'
+            )}
+            placeholder="0"
+          />
+          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 pointer-events-none">
+            %
+          </span>
+        </div>
+      ) : (
+        <span className="w-12 text-center text-[10px] text-slate-600">—</span>
+      )}
+
+      {/* Mini progress bar - moved to right */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
           <div
             className={cn(
-              'w-8 bg-muted/30 rounded-full overflow-hidden cursor-help shrink-0',
-              'h-[3px]'
+              'w-10 bg-slate-800 rounded-full overflow-hidden cursor-help shrink-0',
+              'h-[4px]'
             )}
           >
             <div
@@ -238,68 +301,6 @@ export function BudgetAmountEdit({
           {tooltipContent}
         </TooltipContent>
       </Tooltip>
-
-      {/* Amount input - always visible */}
-      <div className="relative">
-        <input
-          ref={amountRef}
-          type="text"
-          inputMode="numeric"
-          value={localAmount}
-          onChange={handleAmountChange}
-          onFocus={() => setActiveField('amount')}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          onClick={(e) => e.stopPropagation()}
-          disabled={isPending}
-          className={cn(
-            'w-24 h-6 px-2 pr-7 text-xs tabular-nums rounded border text-right',
-            'bg-transparent border-border/50 outline-none',
-            'hover:border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
-            'transition-colors',
-            isPending && 'opacity-50',
-            isOverBudget && 'text-destructive'
-          )}
-          placeholder="0"
-        />
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/60 pointer-events-none">
-          BYN
-        </span>
-        {isPending && (
-          <Loader2 className="absolute right-7 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />
-        )}
-      </div>
-
-      {/* Percent input - only if has parent */}
-      {hasParent ? (
-        <div className="relative">
-          <input
-            ref={percentRef}
-            type="text"
-            inputMode="decimal"
-            value={localPercent}
-            onChange={handlePercentChange}
-            onFocus={() => setActiveField('percent')}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            onClick={(e) => e.stopPropagation()}
-            disabled={isPending}
-            className={cn(
-              'w-16 h-6 px-2 pr-4 text-xs tabular-nums rounded border text-right',
-              'bg-transparent border-border/50 outline-none',
-              'hover:border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
-              'transition-colors',
-              isPending && 'opacity-50'
-            )}
-            placeholder="0"
-          />
-          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/60 pointer-events-none">
-            %
-          </span>
-        </div>
-      ) : (
-        <span className="w-16 text-center text-[10px] text-muted-foreground/40">—</span>
-      )}
     </div>
   )
 }

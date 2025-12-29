@@ -396,6 +396,18 @@ export const queryKeys = {
     /** Детали шаблона по ID */
     detail: (id: string) => [...queryKeys.decTemplates.details(), id] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Departments Timeline (таймлайн отделов)
+  // -------------------------------------------------------------------------
+  departmentsTimeline: {
+    all: ['departments-timeline'] as const,
+    lists: () => [...queryKeys.departmentsTimeline.all, 'list'] as const,
+    /** Список отделов с фильтрами */
+    list: (filters?: Record<string, unknown>) => [...queryKeys.departmentsTimeline.lists(), filters] as const,
+    /** Данные актуальности команд */
+    freshness: () => [...queryKeys.departmentsTimeline.all, 'freshness'] as const,
+  },
 } as const
 
 // ============================================================================

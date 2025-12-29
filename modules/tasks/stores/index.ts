@@ -18,7 +18,7 @@ import {
 // View Mode Types
 // ============================================================================
 
-export type TasksViewMode = 'kanban' | 'timeline' | 'budgets'
+export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments'
 
 // ============================================================================
 // Unified Filter Config (объединение resource-graph + kanban)

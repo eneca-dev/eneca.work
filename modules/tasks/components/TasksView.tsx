@@ -8,7 +8,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LayoutGrid, GanttChart, Wallet, Lock } from 'lucide-react'
+import { LayoutGrid, GanttChart, Wallet, Lock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
@@ -17,6 +17,7 @@ import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { ResourceGraphInternal } from '@/modules/resource-graph/components/ResourceGraph'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
+import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 
 // ============================================================================
@@ -32,6 +33,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { id: 'kanban', label: 'Канбан', icon: LayoutGrid },
   { id: 'timeline', label: 'График', icon: GanttChart },
+  { id: 'departments', label: 'Отделы', icon: Users },
   { id: 'budgets', label: 'Бюджеты', icon: Wallet },
 ]
 
@@ -129,6 +131,11 @@ export function TasksView() {
             filterString={filterString}
             queryParams={queryParams}
             filterConfig={TASKS_FILTER_CONFIG}
+          />
+        )}
+        {viewMode === 'departments' && (
+          <DepartmentsTimelineInternal
+            queryParams={queryParams}
           />
         )}
         {viewMode === 'budgets' && (

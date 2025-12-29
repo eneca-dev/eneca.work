@@ -18,7 +18,7 @@ import type {
   AggregatedBudgetsByType,
   BudgetsAnalyticsData,
 } from '../types'
-import type { Project, Stage, ProjectObject, Section, DecompositionStage } from '@/modules/resource-graph/types'
+import type { Project, Stage, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
 import type { BudgetCurrent } from '@/modules/budgets/types'
 
 // ============================================================================
@@ -114,12 +114,36 @@ function collectAllBudgets(node: HierarchyNode): BudgetInfo[] {
 // ============================================================================
 
 /**
+ * Преобразует DecompositionItem в HierarchyNode
+ */
+function transformDecompositionItem(item: DecompositionItem): HierarchyNode {
+  return {
+    id: item.id,
+    name: item.description,
+    type: 'decomposition_item',
+    budgets: [], // Items не имеют бюджетов напрямую
+    aggregatedBudgets: [],
+    plannedHours: item.plannedHours,
+    children: [],
+    entityType: 'section', // decomposition_item не имеет своего entity_type в budgets
+    workCategory: item.workCategoryName,
+    difficulty: item.difficulty ? {
+      abbr: item.difficulty.abbr,
+      name: item.difficulty.name,
+    } : null,
+  }
+}
+
+/**
  * Преобразует DecompositionStage в HierarchyNode
  */
 function transformDecompositionStage(
   stage: DecompositionStage,
   budgetsMap: Map<string, BudgetInfo[]>
 ): HierarchyNode {
+  // Трансформируем items в дочерние узлы
+  const children = stage.items.map(item => transformDecompositionItem(item))
+
   // Плановые часы = сумма plannedHours всех items
   const plannedHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
 
@@ -132,7 +156,7 @@ function transformDecompositionStage(
     budgets: nodeBudgets,
     aggregatedBudgets: aggregateBudgetsByType(nodeBudgets),
     plannedHours,
-    children: [],
+    children,
     entityType: 'section', // decomposition_stage не имеет своего entity_type в budgets
   }
 }

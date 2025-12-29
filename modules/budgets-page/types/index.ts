@@ -47,7 +47,7 @@ export interface AggregatedBudgetsByType {
 /**
  * Тип узла иерархии
  */
-export type HierarchyNodeType = 'project' | 'stage' | 'object' | 'section' | 'decomposition_stage'
+export type HierarchyNodeType = 'project' | 'stage' | 'object' | 'section' | 'decomposition_stage' | 'decomposition_item'
 
 /**
  * Узел иерархии с бюджетами
@@ -62,7 +62,7 @@ export interface HierarchyNode {
   budgets: BudgetInfo[]
   /** Агрегированные бюджеты по типам (для прогресс-баров) */
   aggregatedBudgets: AggregatedBudgetsByType[]
-  /** Плановые часы (для этапов/разделов) */
+  /** Плановые часы (для этапов/разделов/items) */
   plannedHours?: number
   /** Фактические часы (из work_logs) */
   actualHours?: number
@@ -70,6 +70,13 @@ export interface HierarchyNode {
   children: HierarchyNode[]
   /** Entity type для создания бюджета */
   entityType: BudgetEntityType
+  /** Тип работ (только для decomposition_item) */
+  workCategory?: string | null
+  /** Сложность (только для decomposition_item) */
+  difficulty?: {
+    abbr: string | null
+    name: string | null
+  } | null
 }
 
 // ============================================================================

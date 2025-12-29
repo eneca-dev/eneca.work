@@ -1,0 +1,120 @@
+/**
+ * Hours Input Component
+ *
+ * Inline редактор плановых часов для задач.
+ */
+
+'use client'
+
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { cn } from '@/lib/utils'
+
+interface HoursInputProps {
+  /** Текущее значение часов */
+  value: number
+  /** Callback при изменении */
+  onChange?: (newValue: number) => void
+  /** Только для чтения */
+  readOnly?: boolean
+  /** Показывать серым если 0 */
+  dimIfZero?: boolean
+  /** Выделить жирным */
+  bold?: boolean
+  /** CSS класс */
+  className?: string
+}
+
+export function HoursInput({
+  value,
+  onChange,
+  readOnly = false,
+  dimIfZero = true,
+  bold = false,
+  className,
+}: HoursInputProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [localValue, setLocalValue] = useState(value.toString())
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync с внешним значением
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalValue(value.toString())
+    }
+  }, [value, isEditing])
+
+  // Focus при входе в режим редактирования
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  const handleClick = useCallback(() => {
+    if (!readOnly && onChange) {
+      setIsEditing(true)
+    }
+  }, [readOnly, onChange])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^\d]/g, '')
+    setLocalValue(raw)
+  }, [])
+
+  const handleSave = useCallback(() => {
+    const newValue = parseInt(localValue, 10) || 0
+    if (newValue !== value && onChange) {
+      onChange(newValue)
+    }
+    setIsEditing(false)
+  }, [localValue, value, onChange])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave()
+    } else if (e.key === 'Escape') {
+      setLocalValue(value.toString())
+      setIsEditing(false)
+    }
+  }, [handleSave, value])
+
+  const displayValue = new Intl.NumberFormat('ru-RU').format(value)
+  const isZero = value === 0
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          'w-14 h-5 px-1 text-[12px] tabular-nums text-right',
+          'bg-slate-800 border border-slate-600 rounded outline-none',
+          'focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30',
+          className
+        )}
+      />
+    )
+  }
+
+  return (
+    <span
+      onClick={handleClick}
+      className={cn(
+        'text-[12px] tabular-nums cursor-default',
+        isZero && dimIfZero && 'text-slate-600',
+        !isZero && 'text-slate-300',
+        bold && !isZero && 'font-medium text-slate-200',
+        !readOnly && onChange && 'cursor-pointer hover:text-cyan-400',
+        className
+      )}
+    >
+      {displayValue}
+    </span>
+  )
+}
