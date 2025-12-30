@@ -161,8 +161,6 @@ export function StageReadinessArea({
     }
   }, [stageStartDate, stageEndDate, range.start, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG paths для заливки и линии
   const baseY = rowHeight * 0.85
   const { areaPath, linePath } = useMemo(() => {
@@ -203,6 +201,9 @@ export function StageReadinessArea({
 
   // Уникальный ID для градиента
   const gradientId = `stageReadinessGradient-${Math.random().toString(36).substr(2, 9)}`
+
+  // Ранний выход ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <TooltipProvider delayDuration={100}>
