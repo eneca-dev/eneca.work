@@ -206,6 +206,9 @@ export function StageReadinessArea({
   // Early return ПОСЛЕ всех хуков
   if (points.length === 0) return null
 
+  // Ранний выход ПОСЛЕ всех хуков
+  if (points.length === 0) return null
+
   return (
     <TooltipProvider delayDuration={100}>
       <div
