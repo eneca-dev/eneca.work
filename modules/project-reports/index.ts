@@ -6,13 +6,13 @@
  *
  * @example
  * ```tsx
- * import { ProjectReportsRow, useStageReports, useSaveStageReport } from '@/modules/project-reports'
+ * import { ProjectReportsRow, useProjectReports, useSaveProjectReport } from '@/modules/project-reports'
  *
- * function MyComponent({ stageId }) {
- *   const { data: reports } = useStageReports(stageId, { enabled: true })
- *   const saveMutation = useSaveStageReport()
+ * function MyComponent({ projectId }) {
+ *   const { data: reports } = useProjectReports(projectId, { enabled: true })
+ *   const saveMutation = useSaveProjectReport()
  *
- *   return <ProjectReportsRow stageId={stageId} stageName="Stage 1" ... />
+ *   return <ProjectReportsRow projectId={projectId} projectName="Project 1" ... />
  * }
  * ```
  */
@@ -28,10 +28,10 @@ export type { ProjectReport } from './types'
 // ============================================================================
 
 export {
-  useStageReports,
-  useStageMetrics,
-  useSaveStageReport,
-  useDeleteStageReport,
+  useProjectReports,
+  useProjectMetrics,
+  useSaveProjectReport,
+  useDeleteProjectReport,
 } from './hooks'
 
 // ============================================================================
@@ -39,10 +39,10 @@ export {
 // ============================================================================
 
 export {
-  getStageReports,
-  calculateStageMetrics,
-  upsertStageReport,
-  deleteStageReport,
+  getProjectReports,
+  calculateProjectMetrics,
+  upsertProjectReport,
+  deleteProjectReport,
 } from './actions'
 
 // ============================================================================

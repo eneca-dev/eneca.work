@@ -7,9 +7,10 @@
 
 'use client'
 
+import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { BudgetCell } from './BudgetCell'
+import { BudgetInlineEdit } from './BudgetInlineEdit'
 import { HoursInput } from './HoursInput'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 
@@ -71,22 +72,6 @@ const NODE_LABEL_COLORS: Record<HierarchyNodeType, string> = {
 // ============================================================================
 
 /**
- * Вычисляет процент распределённого бюджета среди детей
- */
-function calculateDistributedPercentage(node: HierarchyNode): number | null {
-  if (node.children.length === 0) return null
-
-  const nodePlanned = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
-  if (nodePlanned <= 0) return null
-
-  const childrenPlanned = node.children.reduce((sum, child) => {
-    return sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0)
-  }, 0)
-
-  return Math.round((childrenPlanned / nodePlanned) * 100)
-}
-
-/**
  * Форматирует число с разделителями тысяч
  */
 function formatNumber(value: number): string {
@@ -109,7 +94,7 @@ function collectChildIds(node: HierarchyNode): string[] {
 // Main Component
 // ============================================================================
 
-export function BudgetRow({
+export const BudgetRow = React.memo(function BudgetRow({
   node,
   level,
   expanded,
@@ -121,7 +106,6 @@ export function BudgetRow({
 }: BudgetRowProps) {
   const hasChildren = node.children.length > 0
   const isExpanded = expanded[node.id] ?? false
-  const distributedPct = calculateDistributedPercentage(node)
 
   // Определяем тип строки
   const isSection = node.type === 'section'
@@ -146,9 +130,19 @@ export function BudgetRow({
   // Выделенный бюджет (сумма planned_amount всех бюджетов)
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
 
-  // Сравнение: разница между расчётным и выделенным
-  const budgetDiff = calcBudget !== null ? allocatedBudget - calcBudget : null
-  const isOverBudget = budgetDiff !== null && budgetDiff < 0
+  // Распределено (сумма выделенных бюджетов всех детей рекурсивно)
+  const calculateDistributedBudget = (n: HierarchyNode): number => {
+    if (n.children.length === 0) {
+      return n.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
+    }
+    return n.children.reduce((sum, child) => sum + calculateDistributedBudget(child), 0)
+  }
+  const distributedBudget = node.children.length > 0 ? calculateDistributedBudget(node) : allocatedBudget
+
+  // Сравнение: перебор если выделено меньше чем расчётный
+  const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
+  // Распределено больше чем выделено
+  const isOverDistributed = distributedBudget > allocatedBudget
 
   // Метка типа
   const typeLabel = NODE_LABELS[node.type]
@@ -207,7 +201,7 @@ export function BudgetRow({
       <div className={rowStyles}>
         {/* ===== НАИМЕНОВАНИЕ ===== */}
         <div
-          className="flex items-center gap-2 min-w-[300px] w-[300px] px-2 shrink-0"
+          className="flex items-center gap-2 min-w-[400px] w-[400px] px-2 shrink-0"
           style={{ paddingLeft: `${8 + indent}px` }}
         >
           {/* Expand/collapse button */}
@@ -314,92 +308,62 @@ export function BudgetRow({
 
         {/* ===== СТАВКА ===== */}
         <div className="flex items-center shrink-0 border-l border-slate-700/30">
-          <div className="w-[92px] px-2 text-right">
-            {(isSection || isTopLevel) && (
+          <div className="w-[72px] px-2 text-right">
+            {isSection && (
               <span className="text-[11px] text-slate-500 tabular-nums">
-                {hourlyRate} BYN
+                {hourlyRate}
               </span>
             )}
           </div>
         </div>
 
-        {/* ===== СРАВНЕНИЕ: Расчётный / Выделенный ===== */}
-        <div className="flex items-center shrink-0 border-l border-slate-700/30">
-          <div className="w-[180px] px-2 text-right">
-            {calcBudget !== null && calcBudget > 0 ? (
-              <span className="text-[12px] tabular-nums">
+        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный ===== */}
+        <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-slate-700/30">
+          <div className="w-full flex items-center">
+            {/* Расчётный */}
+            <div className="w-[80px] px-1 text-right">
+              {calcBudget !== null && calcBudget > 0 ? (
                 <span className={cn(
+                  'text-[12px] tabular-nums',
                   isSection || isTopLevel ? 'text-cyan-400 font-medium' : 'text-cyan-400/70'
                 )}>
                   {formatNumber(Math.round(calcBudget))}
                 </span>
-                <span className="text-slate-600 mx-1">/</span>
+              ) : (
+                <span className="text-[12px] text-slate-600 tabular-nums">—</span>
+              )}
+            </div>
+            {/* Слеш */}
+            <div className="w-[10px] text-center">
+              <span className="text-[11px] text-slate-700">/</span>
+            </div>
+            {/* Распределено */}
+            <div className="w-[80px] px-1 text-center">
+              {distributedBudget > 0 ? (
                 <span className={cn(
-                  'font-medium',
-                  isOverBudget ? 'text-red-400' : 'text-emerald-400'
+                  'text-[12px] tabular-nums font-medium',
+                  isOverDistributed ? 'text-red-400' : 'text-slate-300'
                 )}>
-                  {allocatedBudget > 0 ? formatNumber(allocatedBudget) : '0'}
+                  {formatNumber(distributedBudget)}
                 </span>
-              </span>
-            ) : allocatedBudget > 0 ? (
-              <span className="text-[12px] tabular-nums">
-                <span className="text-slate-600">—</span>
-                <span className="text-slate-600 mx-1">/</span>
-                <span className="text-emerald-400 font-medium">
-                  {formatNumber(allocatedBudget)}
-                </span>
-              </span>
-            ) : (
-              <span className="text-[12px] text-slate-600 tabular-nums">—</span>
-            )}
-          </div>
-        </div>
-
-        {/* ===== РАСПРЕДЕЛЕНИЕ БЮДЖЕТА ===== */}
-        <div className="flex items-center flex-1 min-w-[280px] shrink-0 border-l border-slate-700/30">
-          {/* Визуальный отступ иерархии */}
-          <div
-            className="shrink-0 h-full flex items-center"
-            style={{ width: `${Math.min(indent / 2, 24)}px` }}
-          >
-            {indent > 0 && (
-              <div
-                className={cn(
-                  'w-px h-4',
-                  isSection ? 'bg-teal-500/30' :
-                  isTopLevel ? 'bg-amber-500/20' :
-                  'bg-slate-700/50'
-                )}
+              ) : (
+                <span className="text-[12px] text-slate-600 tabular-nums">—</span>
+              )}
+            </div>
+            {/* Слеш */}
+            <div className="w-[10px] text-center">
+              <span className="text-[11px] text-slate-700">/</span>
+            </div>
+            {/* Выделенный - inline редактирование */}
+            <div className="flex-1 px-1">
+              <BudgetInlineEdit
+                budgets={node.budgets}
+                entityType={node.entityType}
+                entityId={node.id}
+                entityName={node.name}
+                isOverBudget={isOverBudget}
               />
-            )}
-          </div>
-
-          {/* % распределения среди детей */}
-          <div className="w-12 text-right pr-2">
-            {distributedPct !== null && (
-              <span
-                className={cn(
-                  'text-[11px] tabular-nums font-medium',
-                  distributedPct === 0
-                    ? 'text-slate-600'
-                    : distributedPct > 100
-                      ? 'text-red-400'
-                      : 'text-slate-200'
-                )}
-              >
-                {distributedPct}%
-              </span>
-            )}
-          </div>
-
-          {/* Бюджеты по типам */}
-          <div className="flex-1 pl-1">
-            <BudgetCell
-              budgets={node.budgets}
-              entityType={node.entityType}
-              entityId={node.id}
-              entityName={node.name}
-            />
+            </div>
           </div>
         </div>
       </div>
@@ -421,4 +385,4 @@ export function BudgetRow({
         ))}
     </>
   )
-}
+})

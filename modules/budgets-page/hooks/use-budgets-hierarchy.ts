@@ -26,21 +26,31 @@ import type { BudgetCurrent } from '@/modules/budgets/types'
 // ============================================================================
 
 /**
- * Преобразует BudgetCurrent в BudgetInfo
+ * Преобразует BudgetCurrent (V2) в BudgetInfo
  */
 function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
   return {
     budget_id: budget.budget_id,
     name: budget.name,
-    planned_amount: budget.planned_amount,
-    spent_amount: budget.spent_amount,
+    // Основные суммы
+    planned_amount: budget.total_amount,
+    spent_amount: budget.total_spent,
     remaining_amount: budget.remaining_amount,
     spent_percentage: budget.spent_percentage,
-    type_id: budget.type_id,
-    type_name: budget.type_name,
-    type_color: budget.type_color,
+    // Части бюджета (V2)
+    main_part_id: budget.main_part_id,
+    main_amount: budget.main_amount,
+    main_spent: budget.main_spent,
+    premium_part_id: budget.premium_part_id,
+    premium_amount: budget.premium_amount,
+    premium_spent: budget.premium_spent,
+    // Deprecated fields (для обратной совместимости)
+    type_id: budget.main_part_id, // Используем main_part_id
+    type_name: 'Основной', // Всегда показываем основную часть
+    type_color: '#1E7260', // Основной цвет
+    // Родитель
     parent_budget_id: budget.parent_budget_id,
-    parent_planned_amount: budget.parent_planned_amount,
+    parent_planned_amount: budget.parent_total_amount || 0,
     is_active: budget.is_active,
   }
 }

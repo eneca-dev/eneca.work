@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ProjectReportModal } from '@/modules/modals'
-import { useStageReports, useSaveStageReport, useDeleteStageReport } from '../hooks'
+import { useProjectReports, useSaveProjectReport, useDeleteProjectReport } from '../hooks'
 import type { ProjectReport } from '../types'
 import type { DayCell } from '@/modules/resource-graph/components/timeline/TimelineHeader'
 import type { TimelineRange } from '@/modules/resource-graph/types'
@@ -34,9 +34,8 @@ const MAX_COMMENT_PREVIEW_LENGTH = 60
 // ============================================================================
 
 interface ProjectReportsRowProps {
-  stageId: string
+  projectId: string
   projectName: string
-  stageName: string
   dayCells: DayCell[]
   depth: number
   range: TimelineRange
@@ -51,9 +50,8 @@ interface ProjectReportsRowProps {
  * В строке "Отчеты" показываются маленькие точки на датах отчетов
  */
 export function ProjectReportsRow({
-  stageId,
+  projectId,
   projectName,
-  stageName,
   dayCells,
   depth,
   range,
@@ -65,8 +63,8 @@ export function ProjectReportsRow({
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
   // Data fetching
-  const { data: reports, isLoading } = useStageReports(stageId, { enabled: true })
-  const saveMutation = useSaveStageReport()
+  const { data: reports, isLoading } = useProjectReports(projectId, { enabled: true })
+  const saveMutation = useSaveProjectReport()
   const reportCount = reports?.length ?? 0
 
   // Рассчитываем позиции маркеров отчетов (используем Минское время)
@@ -214,7 +212,6 @@ export function ProjectReportsRow({
               key={report.id}
               report={report}
               projectName={projectName}
-              stageName={stageName}
               dayCells={dayCells}
               depth={depth + 1}
               timelineWidth={timelineWidth}
@@ -230,13 +227,12 @@ export function ProjectReportsRow({
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={() => setIsCreateModalOpen(false)}
-        stageId={stageId}
+        projectId={projectId}
         projectName={projectName}
-        stageName={stageName}
         mode="create"
         onSave={async (data) => {
           await saveMutation.mutateAsync({
-            stageId,
+            projectId,
             comment: data.comment,
           })
         }}
@@ -358,7 +354,6 @@ function ReportDotMarker({ report, x }: ReportDotMarkerProps) {
 interface ProjectReportItemRowProps {
   report: ProjectReport
   projectName: string
-  stageName: string
   dayCells: DayCell[]
   depth: number
   timelineWidth: number
@@ -369,16 +364,14 @@ interface ProjectReportItemRowProps {
 function ProjectReportItemRow({
   report,
   projectName,
-  stageName,
   dayCells,
   depth,
   timelineWidth,
   totalWidth,
-  range,
 }: ProjectReportItemRowProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const saveMutation = useSaveStageReport()
-  const deleteMutation = useDeleteStageReport()
+  const saveMutation = useSaveProjectReport()
+  const deleteMutation = useDeleteProjectReport()
 
   // Краткий текст отчета
   const shortComment =
@@ -520,9 +513,8 @@ function ProjectReportItemRow({
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSuccess={() => setIsEditModalOpen(false)}
-        stageId={report.stageId}
+        projectId={report.projectId}
         projectName={projectName}
-        stageName={stageName}
         mode="edit"
         editData={{
           reportId: report.id,
@@ -535,7 +527,7 @@ function ProjectReportItemRow({
         }}
         onSave={async (data) => {
           await saveMutation.mutateAsync({
-            stageId: report.stageId,
+            projectId: report.projectId,
             comment: data.comment,
             reportId: data.reportId,
           })
@@ -543,7 +535,7 @@ function ProjectReportItemRow({
         onDelete={async () => {
           await deleteMutation.mutateAsync({
             reportId: report.id,
-            stageId: report.stageId,
+            projectId: report.projectId,
           })
         }}
       />

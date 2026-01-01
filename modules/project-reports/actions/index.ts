@@ -17,12 +17,12 @@ import { transformProfileToCreatedBy } from '../utils/profile-transform'
 // ============================================================================
 
 /**
- * Получить все отчеты для стадии
- * @param stageId - ID стадии
+ * Получить все отчеты для проекта
+ * @param projectId - ID проекта
  * @returns Массив отчетов с информацией об авторах
  */
-export async function getStageReports(
-  stageId: string
+export async function getProjectReports(
+  projectId: string
 ): Promise<ActionResult<ProjectReport[]>> {
   try {
     const supabase = await createClient()
@@ -32,7 +32,7 @@ export async function getStageReports(
       .from('project_reports')
       .select(`
         report_id,
-        stage_id,
+        project_id,
         comment,
         actual_readiness,
         planned_readiness,
@@ -46,11 +46,11 @@ export async function getStageReports(
           avatar_url
         )
       `)
-      .eq('stage_id', stageId)
+      .eq('project_id', projectId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('[getStageReports] Supabase error:', error)
+      console.error('[getProjectReports] Supabase error:', error)
       return { success: false, error: error.message }
     }
 
@@ -67,7 +67,7 @@ export async function getStageReports(
 
       return {
         id: row.report_id,
-        stageId: row.stage_id,
+        projectId: row.project_id,
         comment: row.comment,
         actualReadiness: row.actual_readiness,
         plannedReadiness: row.planned_readiness,
@@ -80,7 +80,7 @@ export async function getStageReports(
 
     return { success: true, data: reports }
   } catch (error) {
-    console.error('[getStageReports] Error:', error)
+    console.error('[getProjectReports] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка загрузки отчетов',
@@ -89,12 +89,12 @@ export async function getStageReports(
 }
 
 /**
- * Рассчитать метрики стадии на текущий момент
- * @param stageId - ID стадии
+ * Рассчитать метрики проекта на текущий момент
+ * @param projectId - ID проекта
  * @returns Метрики: actualReadiness, plannedReadiness, budgetSpent
  */
-export async function calculateStageMetrics(
-  stageId: string
+export async function calculateProjectMetrics(
+  projectId: string
 ): Promise<ActionResult<{
   actualReadiness: number
   plannedReadiness: number
@@ -105,7 +105,7 @@ export async function calculateStageMetrics(
     // Используем дату по Минскому времени
     const today = formatMinskDate(new Date())
 
-    // Получаем данные из view v_resource_graph для всех секций стадии
+    // Получаем данные из view v_resource_graph для всех секций проекта
     const { data: rows, error } = await supabase
       .from('v_resource_graph')
       .select(`
@@ -116,10 +116,10 @@ export async function calculateStageMetrics(
         decomposition_item_progress,
         decomposition_item_planned_hours
       `)
-      .eq('stage_id', stageId)
+      .eq('project_id', projectId)
 
     if (error) {
-      console.error('[calculateStageMetrics] Query error:', error)
+      console.error('[calculateProjectMetrics] Query error:', error)
       return { success: false, error: error.message }
     }
 
@@ -238,22 +238,22 @@ export async function calculateStageMetrics(
       },
     }
   } catch (error) {
-    console.error('[calculateStageMetrics] Error:', error)
+    console.error('[calculateProjectMetrics] Error:', error)
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : 'Ошибка расчета метрик стадии',
+        error instanceof Error ? error.message : 'Ошибка расчета метрик проекта',
     }
   }
 }
 
 /**
- * Создать или обновить отчет к стадии
+ * Создать или обновить отчет к проекту
  * @param input - Данные отчета
  * @returns Созданный или обновленный отчет
  */
-export async function upsertStageReport(
-  input: { reportId?: string; stageId: string; comment: string }
+export async function upsertProjectReport(
+  input: { reportId?: string; projectId: string; comment: string }
 ): Promise<ActionResult<ProjectReport>> {
   try {
     const supabase = await createClient()
@@ -284,7 +284,7 @@ export async function upsertStageReport(
         .eq('report_id', input.reportId)
         .select(`
           report_id,
-          stage_id,
+          project_id,
           comment,
           actual_readiness,
           planned_readiness,
@@ -301,7 +301,7 @@ export async function upsertStageReport(
         .single()
 
       if (error) {
-        console.error('[upsertStageReport] Update error:', error)
+        console.error('[upsertProjectReport] Update error:', error)
         return { success: false, error: error.message }
       }
 
@@ -311,7 +311,7 @@ export async function upsertStageReport(
         success: true,
         data: {
           id: data.report_id,
-          stageId: data.stage_id,
+          projectId: data.project_id,
           comment: data.comment,
           actualReadiness: data.actual_readiness,
           plannedReadiness: data.planned_readiness,
@@ -323,9 +323,9 @@ export async function upsertStageReport(
       }
     } else {
       // INSERT - Рассчитываем метрики при создании отчета
-      const metricsResult = await calculateStageMetrics(input.stageId)
+      const metricsResult = await calculateProjectMetrics(input.projectId)
       if (!metricsResult.success) {
-        console.error('[upsertStageReport] Metrics calculation failed:', metricsResult.error)
+        console.error('[upsertProjectReport] Metrics calculation failed:', metricsResult.error)
         // Продолжаем с нулевыми метриками, если расчет не удался
       }
 
@@ -336,7 +336,7 @@ export async function upsertStageReport(
       const { data, error } = await supabase
         .from('project_reports')
         .insert({
-          stage_id: input.stageId,
+          project_id: input.projectId,
           comment: input.comment,
           created_by: user.id,
           actual_readiness: metrics.actualReadiness,
@@ -345,7 +345,7 @@ export async function upsertStageReport(
         })
         .select(`
           report_id,
-          stage_id,
+          project_id,
           comment,
           actual_readiness,
           planned_readiness,
@@ -362,7 +362,7 @@ export async function upsertStageReport(
         .single()
 
       if (error) {
-        console.error('[upsertStageReport] Insert error:', error)
+        console.error('[upsertProjectReport] Insert error:', error)
         return { success: false, error: error.message }
       }
 
@@ -372,7 +372,7 @@ export async function upsertStageReport(
         success: true,
         data: {
           id: data.report_id,
-          stageId: data.stage_id,
+          projectId: data.project_id,
           comment: data.comment,
           actualReadiness: data.actual_readiness,
           plannedReadiness: data.planned_readiness,
@@ -384,7 +384,7 @@ export async function upsertStageReport(
       }
     }
   } catch (error) {
-    console.error('[upsertStageReport] Error:', error)
+    console.error('[upsertProjectReport] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка сохранения отчета',
@@ -393,12 +393,12 @@ export async function upsertStageReport(
 }
 
 /**
- * Удалить отчет к стадии
- * @param input - ID отчета и стадии (для инвалидации кеша)
+ * Удалить отчет к проекту
+ * @param input - ID отчета и проекта (для инвалидации кеша)
  * @returns Результат удаления
  */
-export async function deleteStageReport(
-  input: { reportId: string; stageId: string }
+export async function deleteProjectReport(
+  input: { reportId: string; projectId: string }
 ): Promise<ActionResult<void>> {
   try {
     const supabase = await createClient()
@@ -417,13 +417,13 @@ export async function deleteStageReport(
       .eq('report_id', input.reportId)
 
     if (error) {
-      console.error('[deleteStageReport] Error:', error)
+      console.error('[deleteProjectReport] Error:', error)
       return { success: false, error: error.message }
     }
 
     return { success: true, data: undefined }
   } catch (error) {
-    console.error('[deleteStageReport] Error:', error)
+    console.error('[deleteProjectReport] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка удаления отчета',

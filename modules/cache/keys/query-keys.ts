@@ -266,6 +266,11 @@ export const queryKeys = {
     list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
     details: () => [...queryKeys.budgets.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
+    /** Полная информация о бюджете с частями (v_budgets_full) */
+    full: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'full'] as const,
+    /** История изменений бюджета */
+    history: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'history'] as const,
+    /** @deprecated Use history instead */
     versions: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'versions'] as const,
     byEntity: (entityType: string, entityId: string) =>
       [...queryKeys.budgets.all, 'entity', entityType, entityId] as const,
@@ -292,8 +297,8 @@ export const queryKeys = {
     lists: () => [...queryKeys.projectReports.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.projectReports.lists(), filters] as const,
     details: () => [...queryKeys.projectReports.all, 'detail'] as const,
-    /** Reports для конкретной стадии */
-    detail: (stageId: string) => [...queryKeys.projectReports.details(), stageId] as const,
+    /** Reports для конкретного проекта */
+    detail: (projectId: string) => [...queryKeys.projectReports.details(), projectId] as const,
   },
 
   // -------------------------------------------------------------------------

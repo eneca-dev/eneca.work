@@ -4,19 +4,17 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { X, MessageSquareText, Loader2, Trash2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { BaseModalProps } from '../../types'
-import { useStageMetrics } from '@/modules/project-reports'
+import { useProjectMetrics } from '@/modules/project-reports'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface ProjectReportModalProps extends BaseModalProps {
-  /** ID стадии */
-  stageId: string
+  /** ID проекта */
+  projectId: string
   /** Название проекта для отображения */
   projectName: string
-  /** Название стадии для отображения */
-  stageName: string
   /** Режим работы модалки */
   mode: 'create' | 'edit'
   /** Данные для редактирования (только для mode='edit') */
@@ -46,9 +44,8 @@ export function ProjectReportModal({
   isOpen,
   onClose,
   onSuccess,
-  stageId,
+  projectId,
   projectName,
-  stageName,
   mode,
   editData,
   onSave,
@@ -62,7 +59,7 @@ export function ProjectReportModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Load current metrics (for create mode)
-  const { data: currentMetrics, isLoading: metricsLoading } = useStageMetrics(stageId, {
+  const { data: currentMetrics, isLoading: metricsLoading } = useProjectMetrics(projectId, {
     enabled: isOpen && mode === 'create',
   })
 
@@ -189,8 +186,8 @@ export function ProjectReportModal({
                 {mode === 'create' ? 'Создать отчет' : 'Редактировать отчет'}
               </span>
               <span className="text-[10px] text-slate-500">·</span>
-              <span className="text-[10px] text-slate-400 truncate max-w-[300px]" title={`${projectName} - ${stageName}`}>
-                Проект: {projectName} · Стадия: {stageName}
+              <span className="text-[10px] text-slate-400 truncate max-w-[300px]" title={projectName}>
+                Проект: {projectName}
               </span>
             </div>
             <button
@@ -262,7 +259,7 @@ export function ProjectReportModal({
               {/* Right column - Metrics */}
               <div className="flex flex-col">
                 <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                  {mode === 'create' ? 'Показатели стадии (текущие)' : 'Показатели стадии'}
+                  {mode === 'create' ? 'Показатели проекта (текущие)' : 'Показатели проекта'}
                 </label>
 
                 {metricsLoading && mode === 'create' ? (

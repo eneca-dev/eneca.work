@@ -13,10 +13,10 @@ import {
 } from '@/modules/cache'
 
 import {
-  getStageReports,
-  upsertStageReport,
-  deleteStageReport,
-  calculateStageMetrics,
+  getProjectReports,
+  upsertProjectReport,
+  deleteProjectReport,
+  calculateProjectMetrics,
 } from '../actions'
 
 import type { ProjectReport } from '../types'
@@ -26,41 +26,41 @@ import type { ProjectReport } from '../types'
 // ============================================================================
 
 /**
- * Хук для получения отчетов к стадии
+ * Хук для получения отчетов к проекту
  *
- * Загружается лениво при развороте стадии (enabled: true).
+ * Загружается лениво при развороте проекта (enabled: true).
  * Данные кешируются навечно, обновляются только через Realtime.
  *
- * @param stageId - ID стадии
+ * @param projectId - ID проекта
  * @param options - { enabled: boolean } - включить загрузку
  *
  * @example
- * const { data: reports, isLoading } = useStageReports(stageId, { enabled: isExpanded })
+ * const { data: reports, isLoading } = useProjectReports(projectId, { enabled: isExpanded })
  */
-export const useStageReports = createDetailCacheQuery<ProjectReport[]>({
-  queryKey: (stageId) => queryKeys.projectReports.detail(stageId),
-  queryFn: getStageReports,
+export const useProjectReports = createDetailCacheQuery<ProjectReport[]>({
+  queryKey: (projectId) => queryKeys.projectReports.detail(projectId),
+  queryFn: getProjectReports,
   staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
 })
 
 /**
- * Хук для получения текущих метрик стадии
+ * Хук для получения текущих метрик проекта
  *
  * Загружает метрики на текущий момент (не snapshot).
  *
- * @param stageId - ID стадии
+ * @param projectId - ID проекта
  * @param options - { enabled: boolean } - включить загрузку
  *
  * @example
- * const { data: metrics } = useStageMetrics(stageId, { enabled: true })
+ * const { data: metrics } = useProjectMetrics(projectId, { enabled: true })
  */
-export const useStageMetrics = createDetailCacheQuery<{
+export const useProjectMetrics = createDetailCacheQuery<{
   actualReadiness: number
   plannedReadiness: number
   budgetSpent: number
 }>({
-  queryKey: (stageId) => [...queryKeys.projectReports.all, 'metrics', stageId] as const,
-  queryFn: calculateStageMetrics,
+  queryKey: (projectId) => [...queryKeys.projectReports.all, 'metrics', projectId] as const,
+  queryFn: calculateProjectMetrics,
   staleTime: 0, // Всегда свежие данные
 })
 
@@ -69,35 +69,35 @@ export const useStageMetrics = createDetailCacheQuery<{
 // ============================================================================
 
 /**
- * Хук для создания/обновления отчета к стадии
+ * Хук для создания/обновления отчета к проекту
  *
- * Автоматически инвалидирует кеш отчетов стадии.
+ * Автоматически инвалидирует кеш отчетов проекта.
  *
  * @example
- * const saveMutation = useSaveStageReport()
- * saveMutation.mutate({ stageId: 'xxx', comment: 'Текст отчета' })
+ * const saveMutation = useSaveProjectReport()
+ * saveMutation.mutate({ projectId: 'xxx', comment: 'Текст отчета' })
  */
-export const useSaveStageReport = createCacheMutation({
-  mutationFn: upsertStageReport,
+export const useSaveProjectReport = createCacheMutation({
+  mutationFn: upsertProjectReport,
   invalidateKeys: (input) => [
-    queryKeys.projectReports.detail(input.stageId),
+    queryKeys.projectReports.detail(input.projectId),
     queryKeys.projectReports.all, // Ensure list refresh
   ],
 })
 
 /**
- * Хук для удаления отчета к стадии
+ * Хук для удаления отчета к проекту
  *
- * Автоматически инвалидирует кеш отчетов стадии.
+ * Автоматически инвалидирует кеш отчетов проекта.
  *
  * @example
- * const deleteMutation = useDeleteStageReport()
- * deleteMutation.mutate({ reportId: 'xxx', stageId: 'yyy' })
+ * const deleteMutation = useDeleteProjectReport()
+ * deleteMutation.mutate({ reportId: 'xxx', projectId: 'yyy' })
  */
-export const useDeleteStageReport = createCacheMutation({
-  mutationFn: deleteStageReport,
+export const useDeleteProjectReport = createCacheMutation({
+  mutationFn: deleteProjectReport,
   invalidateKeys: (input) => [
-    queryKeys.projectReports.detail(input.stageId),
+    queryKeys.projectReports.detail(input.projectId),
     queryKeys.projectReports.all, // Ensure list refresh
   ],
 })

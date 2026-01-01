@@ -3,3 +3,4 @@
  */
 
 export { BudgetsViewInternal } from './BudgetsViewInternal'
+export { BudgetPartsEditor } from './BudgetPartsEditor'

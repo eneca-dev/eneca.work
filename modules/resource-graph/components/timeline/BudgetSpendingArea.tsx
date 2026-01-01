@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useId } from 'react'
 import { parseISO, format, addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
 import type { BudgetSpendingPoint, TimelineRange } from '../../types'
@@ -133,8 +133,6 @@ export function BudgetSpendingArea({
     return result
   }, [spending, range.start, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG paths
   const baseY = rowHeight * 0.85
   const { areaPath, linePath, isOverspend } = useMemo(() => {
@@ -155,18 +153,22 @@ export function BudgetSpendingArea({
       linePath += ` L ${points[i].x} ${points[i].y}`
     }
 
-    const isOverspend = points[points.length - 1].percentage > 100
+    const isOverspend = points.length > 0 && points[points.length - 1].percentage > 100
 
     return { areaPath, linePath, isOverspend }
   }, [points, baseY])
 
   // Находим последнюю точку для отображения текущего значения
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
   const mainColor = isOverspend ? OVERSPEND_COLOR : BUDGET_COLOR
 
-  // Уникальный ID для паттерна (чтобы не конфликтовать между компонентами)
-  const patternId = `budgetStripes-${Math.random().toString(36).slice(2, 9)}`
-  const gradientId = `budgetGradient-${Math.random().toString(36).slice(2, 9)}`
+  // Уникальный ID для паттерна (React useId для стабильности)
+  const uniqueId = useId()
+  const patternId = `budgetStripes-${uniqueId}`
+  const gradientId = `budgetGradient-${uniqueId}`
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div

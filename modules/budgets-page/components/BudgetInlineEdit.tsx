@@ -1,0 +1,269 @@
+/**
+ * Budget Inline Edit Component
+ *
+ * Компактный inline редактор суммы бюджета и % от родителя.
+ * Используется в колонке "Выделенный" таблицы бюджетов.
+ */
+
+'use client'
+
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { Loader2, Plus, PieChart } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
+import type { BudgetEntityType } from '@/modules/budgets/types'
+import type { BudgetInfo } from '../types'
+import { BudgetPartsEditor } from './BudgetPartsEditor'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface BudgetInlineEditProps {
+  /** Бюджеты узла */
+  budgets: BudgetInfo[]
+  /** Тип сущности */
+  entityType: BudgetEntityType
+  /** ID сущности */
+  entityId: string
+  /** Название сущности */
+  entityName: string
+  /** Подсветка перерасхода */
+  isOverBudget?: boolean
+  /** Компактный режим */
+  compact?: boolean
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function parseAmount(value: string): number {
+  const cleaned = value.replace(/\s/g, '').replace(',', '.')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? 0 : num
+}
+
+function formatNumber(value: number): string {
+  if (value === 0) return '0'
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)
+}
+
+function calculatePercentage(amount: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((amount / parentAmount) * 100 * 10) / 10
+}
+
+function calculateAmount(percentage: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((percentage / 100) * parentAmount)
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export function BudgetInlineEdit({
+  budgets,
+  entityType,
+  entityId,
+  entityName,
+  isOverBudget = false,
+  compact = false,
+}: BudgetInlineEditProps) {
+  // Берём первый активный бюджет (в V2 один бюджет на сущность)
+  const budget = budgets.find((b) => b.is_active)
+  const hasBudget = !!budget
+
+  // Родительский бюджет
+  const parentAmount = budget?.parent_planned_amount || 0
+  const hasParent = parentAmount > 0
+
+  // Локальные значения
+  const [localAmount, setLocalAmount] = useState('')
+  const [localPercent, setLocalPercent] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+
+  // Hooks
+  const { mutate: updateAmount, isPending: isUpdating } = useUpdateBudgetAmount()
+  const { mutate: createBudget, isPending: isCreating } = useCreateBudget()
+
+  // Синхронизация с внешними данными
+  useEffect(() => {
+    if (!isEditing && budget) {
+      setLocalAmount(formatNumber(budget.planned_amount))
+      if (hasParent) {
+        setLocalPercent(calculatePercentage(budget.planned_amount, parentAmount).toString())
+      }
+    }
+  }, [budget, isEditing, hasParent, parentAmount])
+
+  // Изменение суммы
+  const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^\d]/g, '')
+    setLocalAmount(raw)
+
+    const newAmount = parseAmount(raw)
+    if (hasParent && newAmount >= 0) {
+      setLocalPercent(calculatePercentage(newAmount, parentAmount).toString())
+    }
+  }, [hasParent, parentAmount])
+
+  // Изменение процента
+  const handlePercentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^\d,\.]/g, '')
+    setLocalPercent(raw)
+
+    const newPercent = parseFloat(raw.replace(',', '.')) || 0
+    if (hasParent && newPercent >= 0) {
+      setLocalAmount(formatNumber(calculateAmount(newPercent, parentAmount)))
+    }
+  }, [hasParent, parentAmount])
+
+  // Сохранение
+  const handleSave = useCallback(() => {
+    const newAmount = parseAmount(localAmount)
+
+    if (budget && newAmount >= 0 && newAmount !== budget.planned_amount) {
+      updateAmount({
+        budget_id: budget.budget_id,
+        total_amount: newAmount,
+      })
+    }
+
+    setIsEditing(false)
+  }, [localAmount, budget, updateAmount])
+
+  // Создание бюджета
+  const handleCreate = useCallback(() => {
+    createBudget({
+      entity_type: entityType,
+      entity_id: entityId,
+      name: 'Бюджет',
+      total_amount: 0,
+    })
+  }, [createBudget, entityType, entityId])
+
+  // Обработка клавиш
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSave()
+      ;(e.target as HTMLInputElement).blur()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      if (budget) {
+        setLocalAmount(formatNumber(budget.planned_amount))
+        if (hasParent) {
+          setLocalPercent(calculatePercentage(budget.planned_amount, parentAmount).toString())
+        }
+      }
+      setIsEditing(false)
+      ;(e.target as HTMLInputElement).blur()
+    }
+  }, [handleSave, budget, hasParent, parentAmount])
+
+  // Если нет бюджета - показываем кнопку создания
+  if (!hasBudget) {
+    return (
+      <button
+        onClick={handleCreate}
+        disabled={isCreating}
+        className={cn(
+          'flex items-center gap-1 px-1.5 py-0.5 rounded',
+          'text-[10px] text-slate-500 hover:text-slate-300',
+          'hover:bg-slate-800 transition-colors',
+          'opacity-0 group-hover:opacity-100'
+        )}
+        title={`Создать бюджет для: ${entityName}`}
+      >
+        {isCreating ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <>
+            <Plus className="w-3 h-3" />
+            <span>Бюджет</span>
+          </>
+        )}
+      </button>
+    )
+  }
+
+  const isPending = isUpdating || isCreating
+
+  return (
+    <div className="flex items-center gap-1">
+      {/* Сумма */}
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={localAmount}
+          onChange={handleAmountChange}
+          onFocus={() => setIsEditing(true)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+          disabled={isPending}
+          className={cn(
+            'w-[70px] h-5 px-1 text-[11px] tabular-nums text-right',
+            'bg-transparent border-0 outline-none',
+            'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+            'transition-colors',
+            isPending && 'opacity-50',
+            isOverBudget ? 'text-red-400 font-medium' : 'text-emerald-400 font-medium'
+          )}
+          placeholder="0"
+        />
+        {isPending && (
+          <Loader2 className="absolute right-1 top-1/2 -translate-y-1/2 h-2.5 w-2.5 animate-spin text-slate-500" />
+        )}
+      </div>
+
+      {/* Процент от родителя */}
+      {hasParent && (
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={localPercent}
+            onChange={handlePercentChange}
+            onFocus={() => setIsEditing(true)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            disabled={isPending}
+            className={cn(
+              'w-[40px] h-5 px-1 pr-3 text-[10px] tabular-nums text-right',
+              'bg-transparent border-0 outline-none',
+              'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+              'transition-colors text-slate-400',
+              isPending && 'opacity-50'
+            )}
+            placeholder="0"
+          />
+          <span className="absolute right-1 text-[9px] text-slate-500 pointer-events-none">%</span>
+        </div>
+      )}
+
+      {/* Кнопка частей */}
+      <BudgetPartsEditor
+        budgetId={budget.budget_id}
+        totalAmount={budget.planned_amount}
+        trigger={
+          <button
+            className={cn(
+              'p-0.5 rounded text-slate-600 hover:text-slate-400',
+              'hover:bg-slate-800 transition-colors',
+              'opacity-0 group-hover:opacity-100'
+            )}
+            title="Части бюджета"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PieChart className="w-3 h-3" />
+          </button>
+        }
+      />
+    </div>
+  )
+}

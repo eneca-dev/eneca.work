@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useId } from 'react'
 import { parseISO, addDays, format, subDays } from 'date-fns'
 import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
@@ -161,8 +161,6 @@ export function StageReadinessArea({
     }
   }, [stageStartDate, stageEndDate, range.start, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG paths для заливки и линии
   const baseY = rowHeight * 0.85
   const { areaPath, linePath } = useMemo(() => {
@@ -187,7 +185,7 @@ export function StageReadinessArea({
   }, [points, baseY])
 
   // Последняя точка для отображения текущего значения и прироста
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
 
   // Вычисляем прирост за сегодня (относительно вчера)
   const todayDelta = useMemo(() => {
@@ -201,8 +199,12 @@ export function StageReadinessArea({
     return lastPoint?.delta ?? null
   }, [points, lastPoint])
 
-  // Уникальный ID для градиента
-  const gradientId = `stageReadinessGradient-${Math.random().toString(36).substr(2, 9)}`
+  // Уникальный ID для градиента (React useId для стабильности)
+  const uniqueId = useId()
+  const gradientId = `stageReadiness-${uniqueId}`
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <TooltipProvider delayDuration={100}>

@@ -44,8 +44,6 @@ export function PlannedReadinessArea({
       .filter((p) => p.x >= 0 && p.x <= timelineWidth)
   }, [checkpoints, range, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG path для пунктирной линии
   const linePath = useMemo(() => {
     if (points.length < 1) return ''
@@ -58,6 +56,9 @@ export function PlannedReadinessArea({
 
     return path
   }, [points])
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div

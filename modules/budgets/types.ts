@@ -1,78 +1,178 @@
 /**
- * Типы для модуля бюджетов
+ * Типы для модуля бюджетов (V2)
  *
- * После выполнения `npm run db:types` здесь будут импорты из @/types/db
+ * Новая система бюджетов:
+ * - Один бюджет на сущность
+ * - Разбивка на части (main, premium, custom)
+ * - Отслеживание расходов по частям
+ * - Workflow согласования для premium части
  */
 
-// Тип сущности для полиморфной связи
-export type BudgetEntityType = 'section' | 'object' | 'stage' | 'project'
+import type { Database } from '@/types/db'
 
-// Тип бюджета (из view v_cache_budget_types)
-export interface BudgetType {
-  type_id: string
-  name: string
-  color: string
-  description: string | null
-  is_active: boolean
-  created_at: string
-  usage_count: number
+// ============================================================================
+// Database Types
+// ============================================================================
+
+export type BudgetsV2Row = Database['public']['Tables']['budgets_v2']['Row']
+export type BudgetsV2Insert = Database['public']['Tables']['budgets_v2']['Insert']
+export type BudgetsV2Update = Database['public']['Tables']['budgets_v2']['Update']
+
+export type BudgetPartsRow = Database['public']['Tables']['budget_parts']['Row']
+export type BudgetPartsInsert = Database['public']['Tables']['budget_parts']['Insert']
+export type BudgetPartsUpdate = Database['public']['Tables']['budget_parts']['Update']
+
+export type BudgetExpensesRow = Database['public']['Tables']['budget_expenses']['Row']
+export type BudgetExpensesInsert = Database['public']['Tables']['budget_expenses']['Insert']
+
+export type BudgetHistoryRow = Database['public']['Tables']['budget_history']['Row']
+
+// Enum types
+export type BudgetEntityType = Database['public']['Enums']['budget_entity_type']
+export type BudgetPartType = Database['public']['Enums']['budget_part_type']
+
+// ============================================================================
+// View Types
+// ============================================================================
+
+export type BudgetV2View = Database['public']['Views']['v_cache_budgets_v2']['Row']
+export type BudgetFullView = Database['public']['Views']['v_budgets_full']['Row']
+export type BudgetHierarchyView = Database['public']['Views']['v_budget_hierarchy']['Row']
+
+// ============================================================================
+// Domain Types
+// ============================================================================
+
+/**
+ * Часть бюджета (main, premium, custom)
+ */
+export interface BudgetPart {
+  part_id: string
+  part_type: BudgetPartType
+  custom_name: string | null
+  percentage: number | null
+  fixed_amount: number | null
+  calculated_amount: number
+  requires_approval: boolean
+  approval_threshold: number | null
+  color: string | null
+  spent_amount: number
+  remaining_amount: number
+  spent_percentage: number
 }
 
-// Тип бюджета в составе бюджета (упрощённый)
-export interface BudgetTypeRef {
-  type_id: string
-  name: string
-  color: string
-  description: string | null
-}
-
-// Бюджет с текущей версией (из view v_cache_budgets_current)
+/**
+ * Бюджет с текущими данными (из view v_cache_budgets_v2)
+ */
 export interface BudgetCurrent {
   budget_id: string
   entity_type: BudgetEntityType
   entity_id: string
   name: string
+  total_amount: number
   is_active: boolean
-  created_by: string
+  parent_budget_id: string | null
   created_at: string
   updated_at: string
-  // Текущая версия
-  version_id: string
-  planned_amount: number
-  effective_from: string
-  version_comment: string | null
-  version_created_by: string
-  version_created_at: string
-  // Расчётные поля
-  spent_amount: number
+  // Main part
+  main_part_id: string | null
+  main_amount: number | null
+  main_spent: number
+  // Premium part
+  premium_part_id: string | null
+  premium_amount: number | null
+  premium_spent: number
+  // Totals
+  total_spent: number
   remaining_amount: number
   spent_percentage: number
-  // Тип бюджета (один, не массив)
-  type_id: string | null
-  type_name: string | null
-  type_color: string | null
-  type_description: string | null
-  // Родительский бюджет
+  // Parent
+  parent_name: string | null
+  parent_total_amount: number | null
+}
+
+/**
+ * Полная информация о бюджете с частями (из view v_budgets_full)
+ */
+export interface BudgetFull {
+  budget_id: string
+  entity_type: BudgetEntityType
+  entity_id: string
+  name: string
+  description: string | null
+  total_amount: number
+  is_active: boolean
   parent_budget_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // Parent info
   parent_name: string | null
   parent_entity_type: BudgetEntityType | null
   parent_entity_id: string | null
-  parent_planned_amount: number // Сумма родительского бюджета для расчёта %
+  parent_total_amount: number | null
+  // Parts as JSONB array
+  parts: BudgetPart[]
+  // Totals
+  total_spent: number
+  remaining_amount: number
+  spent_percentage: number
+  pending_expenses_count: number
+  children_count: number
 }
 
-// Версия бюджета (история)
-export interface BudgetVersion {
-  version_id: string
+/**
+ * Иерархия бюджетов (из view v_budget_hierarchy)
+ */
+export interface BudgetHierarchy {
   budget_id: string
-  planned_amount: number
-  effective_from: string
-  effective_to: string | null
-  comment: string | null
-  created_by: string
+  entity_type: BudgetEntityType
+  entity_id: string
+  name: string
+  total_amount: number
+  parent_budget_id: string | null
+  level: number
+  path: string[]
+  distributed_amount: number
+  is_over_distributed: boolean
+}
+
+/**
+ * Расход бюджета
+ */
+export interface BudgetExpense {
+  expense_id: string
+  budget_id: string
+  part_id: string | null
+  amount: number
+  description: string | null
+  expense_date: string
+  work_log_id: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  approved_by: string | null
+  approved_at: string | null
+  rejection_reason: string | null
+  created_by: string | null
   created_at: string
 }
 
-// Сводка бюджетов по разделу (из view v_cache_section_budget_summary)
+/**
+ * История изменений бюджета
+ */
+export interface BudgetHistoryEntry {
+  history_id: string
+  budget_id: string
+  change_type: 'created' | 'amount_changed' | 'parts_changed' | 'status_changed'
+  previous_state: Record<string, unknown> | null
+  new_state: Record<string, unknown> | null
+  comment: string | null
+  changed_by: string | null
+  changed_at: string
+}
+
+/**
+ * Сводка бюджетов по разделу (из view v_cache_section_budget_summary)
+ */
 export interface SectionBudgetSummary {
   section_id: string
   section_name: string
@@ -90,48 +190,82 @@ export interface SectionBudgetSummary {
 // Input types для mutations
 // ============================================================================
 
+/**
+ * Создание нового бюджета
+ */
 export interface CreateBudgetInput {
   entity_type: BudgetEntityType
   entity_id: string
-  name: string
-  planned_amount: number
-  comment?: string
-  budget_type_id: string // ОБЯЗАТЕЛЬНОЕ поле
-  parent_budget_id?: string | null // Родительский бюджет (опционально)
+  name?: string
+  total_amount: number
+  description?: string
+  parent_budget_id?: string | null
 }
 
-// Иерархия сущности для поиска родительского бюджета
+/**
+ * Создание части бюджета
+ */
+export interface CreateBudgetPartInput {
+  budget_id: string
+  part_type: BudgetPartType
+  custom_name?: string
+  fixed_amount?: number
+  percentage?: number
+  requires_approval?: boolean
+  approval_threshold?: number
+  color?: string
+}
+
+/**
+ * Обновление суммы бюджета
+ */
+export interface UpdateBudgetAmountInput {
+  budget_id: string
+  total_amount: number
+  comment?: string
+}
+
+/**
+ * Обновление части бюджета
+ */
+export interface UpdateBudgetPartInput {
+  part_id: string
+  fixed_amount?: number
+  percentage?: number
+  requires_approval?: boolean
+  approval_threshold?: number
+}
+
+/**
+ * Создание расхода
+ */
+export interface CreateExpenseInput {
+  budget_id: string
+  part_id?: string
+  amount: number
+  description?: string
+  expense_date?: string
+  work_log_id?: string
+}
+
+/**
+ * Одобрение/отклонение расхода
+ */
+export interface ApproveExpenseInput {
+  expense_id: string
+  approved: boolean
+  rejection_reason?: string
+}
+
+/**
+ * Иерархия сущности для поиска родительского бюджета
+ */
 export interface EntityHierarchy {
   entityType: BudgetEntityType
   entityId: string
   objectId: string | null
   stageId: string | null
   projectId: string | null
-}
-
-export interface UpdateBudgetAmountInput {
-  budget_id: string
-  planned_amount: number
-  comment?: string
-}
-
-export interface UpdateBudgetTypeInput {
-  budget_id: string
-  budget_type_id: string | null
-}
-
-export interface CreateBudgetTypeInput {
-  name: string
-  color?: string
-  description?: string
-}
-
-export interface UpdateBudgetTypeInput {
-  type_id: string
-  name?: string
-  color?: string
-  description?: string
-  is_active?: boolean
 }
 
 // ============================================================================
@@ -142,5 +276,4 @@ export interface BudgetFilters {
   entity_type?: BudgetEntityType
   entity_id?: string
   is_active?: boolean
-  budget_type_id?: string
 }

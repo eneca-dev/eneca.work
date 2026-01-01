@@ -8,6 +8,7 @@ import { StageRow } from './StageRow'
 import { ProjectStatusTags } from '../shared'
 import { useProjectTagsMap } from '../../../hooks'
 import { useRowExpanded } from '../../../stores'
+import { ProjectReportsRow } from '@/modules/project-reports'
 
 // ============================================================================
 // Project Row (Top Level)
@@ -24,7 +25,8 @@ interface ProjectRowProps {
  */
 export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
   const { isExpanded, toggle } = useRowExpanded('project', project.id)
-  const hasChildren = project.stages.length > 0
+  // Всегда показываем кнопку развёртывания (отчёты могут быть даже без стадий)
+  const hasChildren = true
 
   // Fetch project tags (cached, single request for all projects)
   const { data: tagsMap } = useProjectTagsMap()
@@ -48,6 +50,16 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
       dayCells={dayCells}
       range={range}
     >
+      {/* Project Reports Row - на уровне проекта */}
+      <ProjectReportsRow
+        projectId={project.id}
+        projectName={project.name}
+        dayCells={dayCells}
+        depth={1}
+        range={range}
+      />
+
+      {/* Stages */}
       {project.stages.map((stage) => (
         <StageRow
           key={stage.id}

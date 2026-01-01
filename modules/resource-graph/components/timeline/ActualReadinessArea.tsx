@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useId } from 'react'
 import { parseISO, addDays, format } from 'date-fns'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
@@ -92,8 +92,6 @@ export function ActualReadinessArea({
     return result
   }, [snapshots, range.start, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG paths для заливки и линии
   const baseY = rowHeight * 0.85
   const { areaPath, linePath } = useMemo(() => {
@@ -118,7 +116,13 @@ export function ActualReadinessArea({
   }, [points, baseY])
 
   // Находим последнюю точку для отображения текущего значения
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
+
+  // Уникальный ID для градиента (React 18+ useId для SSR-safe уникальности)
+  const gradientId = useId()
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div
@@ -131,7 +135,7 @@ export function ActualReadinessArea({
       >
         {/* Градиентная заливка синим */}
         <defs>
-          <linearGradient id="actualReadinessGradient" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`actualReadiness-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
             <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.08} />
           </linearGradient>
@@ -141,7 +145,7 @@ export function ActualReadinessArea({
         {areaPath && (
           <path
             d={areaPath}
-            fill="url(#actualReadinessGradient)"
+            fill={`url(#actualReadiness-${gradientId})`}
           />
         )}
 

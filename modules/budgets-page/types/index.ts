@@ -1,10 +1,10 @@
 /**
  * Budgets Page Module - Types
  *
- * Типы для отображения иерархии с бюджетами
+ * Типы для отображения иерархии с бюджетами (V2)
  */
 
-import type { BudgetEntityType } from '@/modules/budgets/types'
+import type { BudgetEntityType, BudgetPartType } from '@/modules/budgets/types'
 
 // ============================================================================
 // Budget Info Types
@@ -16,15 +16,36 @@ import type { BudgetEntityType } from '@/modules/budgets/types'
 export interface BudgetInfo {
   budget_id: string
   name: string
+  /** Общая сумма бюджета (total_amount) */
   planned_amount: number
+  /** Сумма расходов */
   spent_amount: number
+  /** Остаток */
   remaining_amount: number
+  /** Процент освоения */
   spent_percentage: number
+  /** ID основной части (main) */
+  main_part_id: string | null
+  /** Сумма основной части */
+  main_amount: number | null
+  /** Расходы основной части */
+  main_spent: number
+  /** ID премиальной части */
+  premium_part_id: string | null
+  /** Сумма премиальной части */
+  premium_amount: number | null
+  /** Расходы премиальной части */
+  premium_spent: number
+  /** @deprecated используй main_part_id и main_amount */
   type_id: string | null
+  /** @deprecated используй part_type */
   type_name: string | null
+  /** @deprecated используй part colors */
   type_color: string | null
+  /** ID родительского бюджета */
   parent_budget_id: string | null
-  parent_planned_amount: number // Сумма родительского бюджета для расчёта %
+  /** Сумма родительского бюджета для расчёта % */
+  parent_planned_amount: number
   is_active: boolean
 }
 

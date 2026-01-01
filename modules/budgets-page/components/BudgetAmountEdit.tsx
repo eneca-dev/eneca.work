@@ -4,12 +4,14 @@
  * Inline редактор с двумя полями: сумма (BYN) и процент (%).
  * Поля всегда видимы и редактируемы. При вводе в одно — автоматически рассчитывается другое.
  * Процент рассчитывается от parent_planned_amount.
+ *
+ * Включает кнопку для открытия BudgetPartsEditor (управление частями бюджета).
  */
 
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount } from '@/modules/budgets'
 import {
@@ -17,6 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { BudgetPartsEditor } from './BudgetPartsEditor'
 
 // ============================================================================
 // Types
@@ -39,6 +42,8 @@ interface BudgetAmountEditProps {
   parentPlannedAmount: number
   /** Компактный режим */
   compact?: boolean
+  /** Скрыть цветную точку */
+  hideColorDot?: boolean
 }
 
 // ============================================================================
@@ -91,6 +96,7 @@ export function BudgetAmountEdit({
   spentPercentage,
   parentPlannedAmount,
   compact,
+  hideColorDot = false,
 }: BudgetAmountEditProps) {
   // Локальные значения для редактирования
   const [localAmount, setLocalAmount] = useState(formatDisplayAmount(currentAmount))
@@ -196,22 +202,24 @@ export function BudgetAmountEdit({
   )
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Color dot with tooltip */}
-      <Tooltip delayDuration={200}>
-        <TooltipTrigger asChild>
-          <div
-            className={cn(
-              'w-2 h-2 rounded-full shrink-0 cursor-help',
-              'ring-1 ring-transparent hover:ring-foreground/20 transition-shadow'
-            )}
-            style={{ backgroundColor: color }}
-          />
-        </TooltipTrigger>
-        <TooltipContent side="left" className="max-w-52">
-          {tooltipContent}
-        </TooltipContent>
-      </Tooltip>
+    <div className="flex items-center gap-2 w-full">
+      {/* Color dot with tooltip - скрываем если hideColorDot */}
+      {!hideColorDot && (
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0 cursor-help',
+                'ring-1 ring-transparent hover:ring-foreground/20 transition-shadow'
+              )}
+              style={{ backgroundColor: color }}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="left" className="max-w-52">
+            {tooltipContent}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       {/* Amount input - borderless */}
       <div className="relative">
@@ -245,8 +253,8 @@ export function BudgetAmountEdit({
         )}
       </div>
 
-      {/* Percent input - borderless, only if has parent */}
-      {hasParent ? (
+      {/* Percent input - only if has parent */}
+      {hasParent && (
         <div className="relative">
           <input
             ref={percentRef}
@@ -272,16 +280,36 @@ export function BudgetAmountEdit({
             %
           </span>
         </div>
-      ) : (
-        <span className="w-12 text-center text-[10px] text-slate-600">—</span>
       )}
 
-      {/* Mini progress bar - moved to right */}
+      {/* Spacer для прижатия прогресс-бара к правому краю */}
+      <div className="flex-1" />
+
+      {/* Parts editor button */}
+      <BudgetPartsEditor
+        budgetId={budgetId}
+        totalAmount={currentAmount}
+        trigger={
+          <button
+            className={cn(
+              'p-1 rounded text-slate-500 hover:text-slate-300',
+              'hover:bg-slate-800 transition-colors',
+              'opacity-0 group-hover:opacity-100'
+            )}
+            title="Управление частями"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PieChart className="w-3 h-3" />
+          </button>
+        }
+      />
+
+      {/* Mini progress bar - прижат к правому краю */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
           <div
             className={cn(
-              'w-10 bg-slate-800 rounded-full overflow-hidden cursor-help shrink-0',
+              'w-16 bg-slate-800 rounded-full overflow-hidden cursor-help shrink-0',
               'h-[4px]'
             )}
           >

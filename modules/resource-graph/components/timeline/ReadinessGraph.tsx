@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useId } from 'react'
 import { differenceInDays, parseISO } from 'date-fns'
 import type { ReadinessCheckpoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
@@ -44,29 +44,46 @@ export function ReadinessGraph({
       .filter((p) => p.x >= 0 && p.x <= timelineWidth)
   }, [checkpoints, range, timelineWidth])
 
+  // Создаём SVG paths
+  const { linePath, areaPath } = useMemo(() => {
+    if (points.length === 0) return { linePath: '', areaPath: '' }
+
+    const linePath = points
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .join(' ')
+
+    const areaPath =
+      points.length > 1
+        ? `${linePath} L ${points[points.length - 1].x} ${SECTION_ROW_HEIGHT * 0.85} L ${points[0].x} ${SECTION_ROW_HEIGHT * 0.85} Z`
+        : ''
+
+    return { linePath, areaPath }
+  }, [points])
+
+  // Уникальный ID для градиента
+  const gradientId = useId()
+
+  // Early return ПОСЛЕ всех хуков
   if (points.length === 0) return null
-
-  // Создаём SVG path для линии
-  const linePath = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-    .join(' ')
-
-  // Создаём path для заливки под графиком
-  const areaPath =
-    points.length > 1
-      ? `${linePath} L ${points[points.length - 1].x} ${SECTION_ROW_HEIGHT * 0.85} L ${points[0].x} ${SECTION_ROW_HEIGHT * 0.85} Z`
-      : ''
 
   return (
     <svg
       className="absolute inset-0 pointer-events-none"
       style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
     >
+      {/* Градиент для заливки — сначала defs */}
+      <defs>
+        <linearGradient id={`readiness-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+          <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
+        </linearGradient>
+      </defs>
+
       {/* Заливка под графиком */}
       {areaPath && (
         <path
           d={areaPath}
-          fill="url(#readinessGradient)"
+          fill={`url(#readiness-${gradientId})`}
           opacity={0.3}
         />
       )}
@@ -93,14 +110,6 @@ export function ReadinessGraph({
           strokeWidth={1.5}
         />
       ))}
-
-      {/* Градиент для заливки */}
-      <defs>
-        <linearGradient id="readinessGradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-          <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
-        </linearGradient>
-      </defs>
     </svg>
   )
 }
