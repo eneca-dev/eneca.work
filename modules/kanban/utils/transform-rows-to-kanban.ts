@@ -103,11 +103,9 @@ export function transformRowsToKanbanSections(
               lastName: row.section_responsible_last_name || '',
             }
           : null,
-        // Context from parent hierarchy
+        // Context from parent hierarchy (Project → Object → Section)
         projectId: row.project_id || '',
         projectName: row.project_name || '',
-        stageId: row.stage_id || '',
-        stageName: row.stage_name || '',
         objectId: row.object_id || '',
         objectName: row.object_name || '',
         // Stages will be added below

@@ -14,9 +14,9 @@ import type { Database } from '@/types/db'
 // Database Types
 // ============================================================================
 
-export type BudgetsV2Row = Database['public']['Tables']['budgets_v2']['Row']
-export type BudgetsV2Insert = Database['public']['Tables']['budgets_v2']['Insert']
-export type BudgetsV2Update = Database['public']['Tables']['budgets_v2']['Update']
+export type BudgetsV2Row = Database['public']['Tables']['budgets']['Row']
+export type BudgetsV2Insert = Database['public']['Tables']['budgets']['Insert']
+export type BudgetsV2Update = Database['public']['Tables']['budgets']['Update']
 
 export type BudgetPartsRow = Database['public']['Tables']['budget_parts']['Row']
 export type BudgetPartsInsert = Database['public']['Tables']['budget_parts']['Insert']
@@ -35,7 +35,7 @@ export type BudgetPartType = Database['public']['Enums']['budget_part_type']
 // View Types
 // ============================================================================
 
-export type BudgetV2View = Database['public']['Views']['v_cache_budgets_v2']['Row']
+export type BudgetV2View = Database['public']['Views']['v_cache_budgets']['Row']
 export type BudgetFullView = Database['public']['Views']['v_budgets_full']['Row']
 export type BudgetHierarchyView = Database['public']['Views']['v_budget_hierarchy']['Row']
 
@@ -62,7 +62,7 @@ export interface BudgetPart {
 }
 
 /**
- * Бюджет с текущими данными (из view v_cache_budgets_v2)
+ * Бюджет с текущими данными (из view v_cache_budgets)
  */
 export interface BudgetCurrent {
   budget_id: string
@@ -259,12 +259,12 @@ export interface ApproveExpenseInput {
 
 /**
  * Иерархия сущности для поиска родительского бюджета
+ * Примечание: stage исключён из иерархии бюджетов
  */
 export interface EntityHierarchy {
   entityType: BudgetEntityType
   entityId: string
   objectId: string | null
-  stageId: string | null
   projectId: string | null
 }
 

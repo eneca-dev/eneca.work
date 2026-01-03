@@ -4,7 +4,8 @@
  * Утилиты форматирования для отображения данных в Timeline
  */
 
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 // ============================================================================
 // Hours Formatting
@@ -58,7 +59,7 @@ export function formatBudgetAmount(amount: number): string {
 export function formatDateShort(dateStr: string | null): string {
   if (!dateStr) return '—'
   try {
-    return format(parseISO(dateStr), 'dd.MM')
+    return format(parseMinskDate(dateStr), 'dd.MM')
   } catch {
     return '—'
   }
@@ -74,7 +75,7 @@ export function formatDateShort(dateStr: string | null): string {
 export function formatDateFull(dateStr: string | null): string {
   if (!dateStr) return '—'
   try {
-    return format(parseISO(dateStr), 'dd.MM.yyyy')
+    return format(parseMinskDate(dateStr), 'dd.MM.yyyy')
   } catch {
     return '—'
   }
@@ -101,16 +102,17 @@ export function formatRate(rate: number): string {
 
 /**
  * Получение инициалов из имени и фамилии
+ * Формат: ФИ (Фамилия + Имя) - соответствует формату в БД
  *
  * @example
- * getInitials('Иван', 'Петров') // "ИП"
+ * getInitials('Иван', 'Петров') // "ПИ"
  * getInitials(null, 'Петров') // "П"
  * getInitials(null, null) // "?"
  */
 export function getInitials(firstName: string | null, lastName: string | null): string {
   const first = firstName?.charAt(0)?.toUpperCase() || ''
   const last = lastName?.charAt(0)?.toUpperCase() || ''
-  return first + last || '?'
+  return last + first || '?'
 }
 
 // ============================================================================

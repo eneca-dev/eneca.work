@@ -1,6 +1,8 @@
 # Модуль бюджетов (budgets)
 
-Система плановых бюджетов для разделов, объектов, стадий и проектов с поддержкой иерархии родительских бюджетов.
+Система плановых бюджетов для разделов, объектов и проектов с поддержкой иерархии родительских бюджетов.
+
+> **Примечание:** Стадии (stage) исключены из системы бюджетов. Иерархия: section → object → project.
 
 ## Статус реализации
 
@@ -93,10 +95,10 @@ budget_types            budgets                    budget_versions
                        └── ...                    │
                                                   │
 Иерархия сущностей:                               │
-section → object → stage → project               │
+section → object → project                        │
     └─────────────────────────────────────────────┘
     parent_budget_id ссылается на бюджет того же типа
-    выше по иерархии сущностей
+    выше по иерархии сущностей (stage исключён)
 ```
 
 ## Ключевые концепции
@@ -104,12 +106,12 @@ section → object → stage → project               │
 ### Полиморфная привязка
 Бюджет привязывается к любой сущности:
 ```typescript
-type BudgetEntityType = 'section' | 'object' | 'stage' | 'project'
+type BudgetEntityType = 'section' | 'object' | 'project'
 ```
 
 ### Иерархия родительских бюджетов
 Бюджет может иметь родительский бюджет того же типа выше по иерархии:
-- Section → Object → Stage → Project
+- Section → Object → Project (stage исключён)
 - При создании бюджета автоматически ищутся кандидаты на родителя
 - Родитель выбирается автоматически (ближайший) или вручную
 
@@ -204,7 +206,7 @@ function ParentBudgetSelector({ entityType, entityId, budgetTypeId }) {
   )
 
   // candidates отсортированы по близости (ближайший родитель первым)
-  // Например для section: [object budget, stage budget, project budget]
+  // Например для section: [object budget, project budget]
 }
 ```
 

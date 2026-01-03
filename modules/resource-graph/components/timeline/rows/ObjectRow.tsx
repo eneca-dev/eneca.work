@@ -61,7 +61,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 2
+  const depth = 1
 
   return (
     <>

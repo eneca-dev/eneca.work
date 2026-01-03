@@ -137,6 +137,8 @@ export { ProgressUpdateDialog, type ProgressUpdateDialogProps } from './componen
 // Section
 export { SectionModal, type SectionModalProps } from './components/section'
 export { SectionMetrics } from './components/section'
+export { DeleteSectionModal, type DeleteSectionModalProps } from './components/section'
+export { SectionCreateModal, type SectionCreateModalProps } from './components/section'
 
 // Stage
 export { StageModal, type StageModalProps } from './components/stage'
@@ -171,6 +173,14 @@ export {
 
 // Project Report
 export { ProjectReportModal, type ProjectReportModalProps } from './components/project-report/ProjectReportModal'
+
+// Object
+export {
+  DeleteObjectModal,
+  type DeleteObjectModalProps,
+  ObjectCreateModal,
+  type ObjectCreateModalProps,
+} from './components/object'
 
 // Global
 // export { GlobalModals } from './components/GlobalModals'

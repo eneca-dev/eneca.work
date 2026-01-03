@@ -19,16 +19,11 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useCreateBudget } from '@/modules/budgets'
-import type { BudgetEntityType } from '@/modules/budgets/types'
-import type { BudgetInfo } from '../types'
-
-// ============================================================================
-// Types
-// ============================================================================
+import type { BudgetInfo, BudgetPageEntityType } from '../types'
 
 interface BudgetCreatePopoverProps {
   /** Тип сущности */
-  entityType: BudgetEntityType
+  entityType: BudgetPageEntityType
   /** ID сущности */
   entityId: string
   /** Название сущности (для отображения) */
@@ -42,10 +37,9 @@ interface BudgetCreatePopoverProps {
 }
 
 // Названия типов сущностей на русском
-const ENTITY_TYPE_LABELS: Record<BudgetEntityType, string> = {
+const ENTITY_TYPE_LABELS: Record<BudgetPageEntityType, string> = {
   section: 'Раздел',
   object: 'Объект',
-  stage: 'Стадия',
   project: 'Проект',
 }
 

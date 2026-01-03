@@ -84,12 +84,11 @@ export type {
   ProjectStatusType,
   ViewRow,
   DbEnum,
-  // Domain types - hierarchy
+  // Domain types - hierarchy (Project → Object → Section → DecompositionStage → DecompositionItem)
   DecompositionItem,
   DecompositionStage,
   Section,
   ProjectObject,
-  Stage,
   Project,
   // Work logs
   WorkLog,

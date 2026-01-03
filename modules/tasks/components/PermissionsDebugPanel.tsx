@@ -7,8 +7,8 @@
 
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, Bug, Shield, User, Lock, Unlock, AlertTriangle, CheckCircle } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { ChevronDown, ChevronUp, Bug, Shield, User, Lock, Unlock, AlertTriangle, CheckCircle, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '@/modules/permissions/store/usePermissionsStore'
@@ -32,6 +32,21 @@ export function PermissionsDebugPanel() {
   // Filter context from server (TanStack Query)
   const { data: serverContext, isLoading: serverLoading, error: serverError } = useFilterContext()
 
+  // Database connection info
+  const dbInfo = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const isBackup = url.includes('chzoheyqiutglrmdtacr')
+    const isProduction = url.includes('gvrcbvifirhxxdnvrwlz')
+    const projectRef = url.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'unknown'
+    return {
+      url,
+      projectRef,
+      isBackup,
+      isProduction,
+      environment: isBackup ? 'BACKUP' : isProduction ? 'PRODUCTION' : 'UNKNOWN'
+    }
+  }, [])
+
   // Filter scope permissions
   const filterScopePermissions = permissions.filter((p) => p.startsWith('filters.scope.'))
   const hierarchyPermissions = permissions.filter((p) => p.startsWith('hierarchy.'))
@@ -52,7 +67,16 @@ export function PermissionsDebugPanel() {
         )}
       >
         <Bug className="h-4 w-4" />
-        <span className="text-sm font-medium">Debug Permissions</span>
+        <span className="text-sm font-medium">Debug</span>
+        {/* Database indicator */}
+        <span className={cn(
+          'px-1.5 py-0.5 rounded text-xs font-bold',
+          dbInfo.isBackup && 'bg-emerald-600 text-white',
+          dbInfo.isProduction && 'bg-red-600 text-white',
+          !dbInfo.isBackup && !dbInfo.isProduction && 'bg-amber-600 text-white'
+        )}>
+          {dbInfo.isBackup ? 'BACKUP' : dbInfo.isProduction ? 'PROD' : '???'}
+        </span>
         {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
       </button>
 
@@ -76,6 +100,32 @@ export function PermissionsDebugPanel() {
               </span>
             )}
           </div>
+
+          {/* Database Connection */}
+          <Section title="Database" icon={Database}>
+            <Row
+              label="Environment"
+              value={dbInfo.environment}
+              highlight={dbInfo.isBackup}
+              status={dbInfo.isBackup ? true : dbInfo.isProduction ? false : undefined}
+            />
+            <Row label="Project Ref" value={dbInfo.projectRef} mono />
+            <div className="mt-1">
+              {dbInfo.isBackup ? (
+                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                  Safe for development
+                </span>
+              ) : dbInfo.isProduction ? (
+                <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">
+                  PRODUCTION - Be careful!
+                </span>
+              ) : (
+                <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">
+                  Unknown environment
+                </span>
+              )}
+            </div>
+          </Section>
 
           {/* Auth State */}
           <Section title="Auth State" icon={User}>

@@ -132,7 +132,7 @@ function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount, budgetsCount 
 export function BudgetsViewInternal({
   queryParams,
 }: BudgetsViewInternalProps) {
-  const { nodes, analytics, isLoading, error } = useBudgetsHierarchy(queryParams)
+  const { nodes, analytics, isLoading, error, refetch } = useBudgetsHierarchy(queryParams)
 
   // Error state
   if (error) {
@@ -165,7 +165,7 @@ export function BudgetsViewInternal({
           />
 
           {/* Hierarchy content */}
-          <BudgetsHierarchy nodes={nodes} className="flex-1 min-h-0" />
+          <BudgetsHierarchy nodes={nodes} className="flex-1 min-h-0" onRefresh={refetch} />
         </>
       )}
     </div>

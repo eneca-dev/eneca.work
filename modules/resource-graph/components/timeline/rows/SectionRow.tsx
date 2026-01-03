@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { format } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ChevronRight, Calendar, Loader2, Flag } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
@@ -150,7 +150,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 3
+  const depth = 2
 
   // Сегодняшние показатели для sidebar
   const todayIndicators = useMemo(() => {
@@ -161,8 +161,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
     let isTodayInSection = false
     if (section.startDate && section.endDate) {
       try {
-        const start = parseISO(section.startDate)
-        const end = parseISO(section.endDate)
+        const start = parseMinskDate(section.startDate)
+        const end = parseMinskDate(section.endDate)
         isTodayInSection = today >= start && today <= end
       } catch {
         isTodayInSection = false
@@ -177,15 +177,15 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
       const sorted = [...section.readinessCheckpoints].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       )
-      const firstDate = parseISO(sorted[0].date)
-      const lastDate = parseISO(sorted[sorted.length - 1].date)
+      const firstDate = parseMinskDate(sorted[0].date)
+      const lastDate = parseMinskDate(sorted[sorted.length - 1].date)
 
       if (today >= firstDate && today <= lastDate) {
         for (let i = 0; i < sorted.length - 1; i++) {
           const left = sorted[i]
           const right = sorted[i + 1]
-          const leftDate = parseISO(left.date)
-          const rightDate = parseISO(right.date)
+          const leftDate = parseMinskDate(left.date)
+          const rightDate = parseMinskDate(right.date)
 
           if (today >= leftDate && today <= rightDate) {
             const totalDays = Math.max(1, (rightDate.getTime() - leftDate.getTime()) / (1000 * 60 * 60 * 24))

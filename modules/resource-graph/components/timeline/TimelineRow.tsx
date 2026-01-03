@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { format } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import {
   ChevronRight,
   FolderKanban,
-  Layers,
   Box,
   ListTodo,
   Calendar,
@@ -23,7 +22,6 @@ import {
 } from '@/components/ui/tooltip'
 import type {
   Project,
-  Stage,
   ProjectObject,
   Section,
   DecompositionStage,
@@ -715,7 +713,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   const formatStageDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     try {
-      return format(parseISO(dateStr), 'dd.MM')
+      return format(parseMinskDate(dateStr), 'dd.MM')
     } catch {
       return '—'
     }
@@ -1174,7 +1172,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     try {
-      return format(parseISO(dateStr), 'dd.MM')
+      return format(parseMinskDate(dateStr), 'dd.MM')
     } catch {
       return '—'
     }
@@ -1189,8 +1187,8 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
     let isTodayInSection = false
     if (section.startDate && section.endDate) {
       try {
-        const start = parseISO(section.startDate)
-        const end = parseISO(section.endDate)
+        const start = parseMinskDate(section.startDate)
+        const end = parseMinskDate(section.endDate)
         isTodayInSection = today >= start && today <= end
       } catch {
         isTodayInSection = false
@@ -1205,16 +1203,16 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
       const sorted = [...section.readinessCheckpoints].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       )
-      const firstDate = parseISO(sorted[0].date)
-      const lastDate = parseISO(sorted[sorted.length - 1].date)
+      const firstDate = parseMinskDate(sorted[0].date)
+      const lastDate = parseMinskDate(sorted[sorted.length - 1].date)
 
       if (today >= firstDate && today <= lastDate) {
         // Ищем интервал для интерполяции
         for (let i = 0; i < sorted.length - 1; i++) {
           const left = sorted[i]
           const right = sorted[i + 1]
-          const leftDate = parseISO(left.date)
-          const rightDate = parseISO(right.date)
+          const leftDate = parseMinskDate(left.date)
+          const rightDate = parseMinskDate(right.date)
 
           if (today >= leftDate && today <= rightDate) {
             const totalDays = Math.max(1, (rightDate.getTime() - leftDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -1591,63 +1589,7 @@ function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
 }
 
 // ============================================================================
-// Stage Row
-// ============================================================================
-
-interface StageRowProps {
-  stage: Stage
-  dayCells: DayCell[]
-  range: TimelineRange
-}
-
-function StageRow({ stage, dayCells, range }: StageRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const hasChildren = stage.objects.length > 0
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
-  const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 1
-
-  return (
-    <BaseRow
-      depth={depth}
-      isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
-      hasChildren={hasChildren}
-      icon={<Layers className="w-4 h-4" />}
-      label={stage.name}
-      dayCells={dayCells}
-      range={range}
-    >
-      {isExpanded && (
-        <>
-          {/* Stage Reports Row */}
-          <ProjectReportsRow
-            stageId={stage.id}
-            stageName={stage.name}
-            dayCells={dayCells}
-            depth={depth + 1}
-            range={range}
-            stageStartDate={stage.startDate}
-            stageEndDate={stage.finishDate}
-          />
-
-          {/* Objects */}
-          {stage.objects.map((obj) => (
-            <ObjectRow
-              key={obj.id}
-              object={obj}
-              dayCells={dayCells}
-              range={range}
-            />
-          ))}
-        </>
-      )}
-    </BaseRow>
-  )
-}
-
-// ============================================================================
-// Project Row (Top Level)
+// Project Row (Top Level) - Legacy, use rows/ProjectRow.tsx instead
 // ============================================================================
 
 interface ProjectRowProps {
@@ -1658,7 +1600,7 @@ interface ProjectRowProps {
 
 export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const hasChildren = project.stages.length > 0
+  const hasChildren = project.objects.length > 0
 
   return (
     <BaseRow
@@ -1671,10 +1613,10 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
       dayCells={dayCells}
       range={range}
     >
-      {project.stages.map((stage) => (
-        <StageRow
-          key={stage.id}
-          stage={stage}
+      {project.objects.map((obj) => (
+        <ObjectRow
+          key={obj.id}
+          object={obj}
           dayCells={dayCells}
           range={range}
         />

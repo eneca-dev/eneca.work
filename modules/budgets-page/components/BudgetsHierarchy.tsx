@@ -3,16 +3,18 @@
  *
  * Отображает полную иерархию проектов с бюджетами.
  * Табличный вид с группами колонок и sticky заголовками.
+ * Состояние раскрытости сохраняется в localStorage.
  */
 
 'use client'
 
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BudgetRow } from './BudgetRow'
-import type { HierarchyNode, ExpandedState } from '../types'
+import { useExpandedState } from '../hooks/use-expanded-state'
+import type { HierarchyNode } from '../types'
 
 // ============================================================================
 // Types
@@ -23,82 +25,32 @@ interface BudgetsHierarchyProps {
   nodes: HierarchyNode[]
   /** CSS класс контейнера */
   className?: string
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Собирает все ID узлов из иерархии
- */
-function collectAllNodeIds(nodes: HierarchyNode[]): string[] {
-  const ids: string[] = []
-
-  function collect(node: HierarchyNode) {
-    ids.push(node.id)
-    for (const child of node.children) {
-      collect(child)
-    }
-  }
-
-  for (const node of nodes) {
-    collect(node)
-  }
-
-  return ids
+  /** Callback для обновления данных после удаления */
+  onRefresh?: () => void
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export function BudgetsHierarchy({ nodes, className }: BudgetsHierarchyProps) {
+export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarchyProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
 
-  // По умолчанию разворачиваем первый уровень (проекты)
-  const [expanded, setExpanded] = useState<ExpandedState>(() => {
-    const initial: ExpandedState = {}
-    for (const node of nodes) {
-      initial[node.id] = true
-    }
-    return initial
-  })
+  // Состояние раскрытости с persistence в localStorage
+  const {
+    expanded,
+    toggle: handleToggle,
+    expandMultiple: handleExpandAll,
+    expandMultiple: handleAutoExpand,
+    expandAll,
+    collapseAll,
+  } = useExpandedState({ nodes })
 
-  // Toggle узла
-  const handleToggle = useCallback((nodeId: string) => {
-    setExpanded((prev) => ({
-      ...prev,
-      [nodeId]: !prev[nodeId],
-    }))
-  }, [])
-
-  // Раскрыть несколько узлов сразу (для раскрытия раздела с содержимым)
-  const handleExpandAll = useCallback((nodeIds: string[]) => {
-    setExpanded((prev) => {
-      const newExpanded = { ...prev }
-      for (const id of nodeIds) {
-        newExpanded[id] = true
-      }
-      return newExpanded
-    })
-  }, [])
-
-  // Развернуть все
-  const expandAll = useCallback(() => {
-    const allIds = collectAllNodeIds(nodes)
-    const newExpanded: ExpandedState = {}
-    for (const id of allIds) {
-      newExpanded[id] = true
-    }
-    setExpanded(newExpanded)
-  }, [nodes])
-
-  // Свернуть все
-  const collapseAll = useCallback(() => {
-    setExpanded({})
-  }, [])
+  // Callback для автоматического раскрытия узла при создании дочернего элемента
+  const handleAutoExpandNode = useCallback((nodeId: string) => {
+    handleAutoExpand([nodeId])
+  }, [handleAutoExpand])
 
   // Синхронизация горизонтального скролла
   const handleScroll = useCallback(() => {
@@ -202,8 +154,8 @@ export function BudgetsHierarchy({ nodes, className }: BudgetsHierarchyProps) {
                 </span>
               </div>
               <div className="w-[52px] py-1.5 px-1 text-right">
-                <span className="text-[10px] text-slate-500">
-                  %
+                <span className="text-[10px] text-slate-500" title="% от родителя">
+                  % род.
                 </span>
               </div>
             </div>
@@ -249,6 +201,8 @@ export function BudgetsHierarchy({ nodes, className }: BudgetsHierarchyProps) {
                 expanded={expanded}
                 onToggle={handleToggle}
                 onExpandAll={handleExpandAll}
+                onRefresh={onRefresh}
+                onAutoExpand={handleAutoExpandNode}
               />
             ))}
           </div>

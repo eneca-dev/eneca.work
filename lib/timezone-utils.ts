@@ -24,8 +24,12 @@ const MINSK_TZ = 'Europe/Minsk'
  * // → Date, корректно обработанный с учетом timezone
  */
 export function parseMinskDate(dateString: string): Date {
-  // Удаляем время если есть, берем только дату
-  const dateOnly = dateString.split('T')[0]
+  // Берём только дату (первые 10 символов: YYYY-MM-DD)
+  // Это работает для всех форматов:
+  // - "2025-12-20" (date)
+  // - "2025-12-20T00:00:00Z" (ISO timestamp)
+  // - "2025-12-20 00:00:00+00" (PostgreSQL timestamp with time zone)
+  const dateOnly = dateString.substring(0, 10)
 
   // Парсим компоненты даты и создаём Date в UTC
   // Это гарантирует что "2025-12-29" → Date с внутренним временем 2025-12-29T00:00:00Z

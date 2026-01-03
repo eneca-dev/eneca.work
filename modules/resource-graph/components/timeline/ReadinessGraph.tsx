@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useId } from 'react'
-import { differenceInDays, parseISO } from 'date-fns'
+import { differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type { ReadinessCheckpoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -27,7 +28,7 @@ export function ReadinessGraph({
 
     return checkpoints
       .map((cp) => {
-        const cpDate = parseISO(cp.date)
+        const cpDate = parseMinskDate(cp.date)
         const dayOffset = differenceInDays(cpDate, range.start)
 
         // X координата: центр ячейки дня

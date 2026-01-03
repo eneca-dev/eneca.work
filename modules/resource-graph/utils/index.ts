@@ -4,7 +4,7 @@
  * Утилиты для работы с данными графика ресурсов
  */
 
-import { addDays, differenceInDays, startOfWeek, endOfWeek } from 'date-fns'
+import { addDays, differenceInDays, startOfWeek, endOfWeek, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk } from '@/lib/timezone-utils'
 import type {
@@ -12,7 +12,6 @@ import type {
   TimelineScale,
   ResourceGraphRow,
   Project,
-  Stage,
   ProjectObject,
   Section,
   DecompositionStage,
@@ -174,7 +173,7 @@ export function getWeekBounds(date: Date): { start: Date; end: Date } {
 /**
  * Трансформирует плоские строки из v_resource_graph в иерархическую структуру
  *
- * Иерархия: Project → Stage → Object → Section → DecompositionStage → DecompositionItem
+ * Иерархия: Project → Object → Section → DecompositionStage → DecompositionItem
  *
  * @param rows - Строки из view v_resource_graph
  * @returns Массив проектов с вложенной иерархией
@@ -193,43 +192,30 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         id: row.project_id,
         name: row.project_name || '',
         status: row.project_status || null,
+        stageType: row.stage_type || null,
         manager: {
           id: row.manager_id || null,
           firstName: row.manager_first_name || null,
           lastName: row.manager_last_name || null,
           name: row.manager_name || null,
         },
-        stages: [],
-      }
-      projectsMap.set(row.project_id, project)
-    }
-
-    // Skip if no stage
-    if (!row.stage_id) continue
-
-    // Get or create stage
-    let stage = project.stages.find(s => s.id === row.stage_id)
-    if (!stage) {
-      stage = {
-        id: row.stage_id,
-        name: row.stage_name || '',
         objects: [],
       }
-      project.stages.push(stage)
+      projectsMap.set(row.project_id, project)
     }
 
     // Skip if no object
     if (!row.object_id) continue
 
     // Get or create object
-    let object = stage.objects.find(o => o.id === row.object_id)
+    let object = project.objects.find(o => o.id === row.object_id)
     if (!object) {
       object = {
         id: row.object_id,
         name: row.object_name || '',
         sections: [],
       }
-      stage.objects.push(object)
+      project.objects.push(object)
     }
 
     // Skip if no section
@@ -349,12 +335,10 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
 
   // Sort items by order
   for (const project of projectsMap.values()) {
-    for (const stage of project.stages) {
-      for (const object of stage.objects) {
-        for (const section of object.sections) {
-          for (const decompStage of section.decompositionStages) {
-            decompStage.items.sort((a, b) => a.order - b.order)
-          }
+    for (const object of project.objects) {
+      for (const section of object.sections) {
+        for (const decompStage of section.decompositionStages) {
+          decompStage.items.sort((a, b) => a.order - b.order)
         }
       }
     }

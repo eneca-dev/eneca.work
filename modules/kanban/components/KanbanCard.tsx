@@ -457,21 +457,36 @@ export function KanbanCard({
           <div className="flex -space-x-2">
             {uniqueCategories.length > 0 ? (
               uniqueCategories.map((category, idx) => (
-                <Avatar
-                  key={idx}
-                  className="h-8 w-8 border-2 border-background"
-                >
-                  <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-medium">
-                    {category?.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <TooltipProvider key={idx}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Avatar className="h-8 w-8 border-2 border-background cursor-default">
+                        <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-medium">
+                          {category?.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className="text-xs">{category}</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))
             ) : (
-              <Avatar className="h-8 w-8 border-2 border-background">
-                <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
-                  {stage.name.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Avatar className="h-8 w-8 border-2 border-background cursor-default">
+                      <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
+                        {stage.name.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span className="text-xs">{stage.name}</span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
 

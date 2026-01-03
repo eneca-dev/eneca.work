@@ -7,11 +7,19 @@
 
 'use client'
 
-import React from 'react'
-import { ChevronRight } from 'lucide-react'
+import React, { useState } from 'react'
+import { ChevronRight, Trash2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
 import { HoursInput } from './HoursInput'
+import { ItemHoursEdit } from './ItemHoursEdit'
+import { ItemDifficultySelect } from './ItemDifficultySelect'
+import { ItemCategorySelect } from './ItemCategorySelect'
+import { DeleteObjectModal, ObjectCreateModal, SectionCreateModal, DeleteSectionModal } from '@/modules/modals'
+import { StageInlineCreate } from './StageInlineCreate'
+import { StageInlineDelete } from './StageInlineDelete'
+import { ItemInlineCreate } from './ItemInlineCreate'
+import { ItemInlineDelete } from './ItemInlineDelete'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 
 // ============================================================================
@@ -35,6 +43,16 @@ interface BudgetRowProps {
   insideSection?: boolean
   /** Приведённые часы родителя (для расчёта % от общих) */
   parentAdjustedHours?: number
+  /** Выделенный бюджет родителя (для расчёта % от родительского бюджета) */
+  parentAllocatedBudget?: number
+  /** Распределённый бюджет родителя (fallback для расчёта %) */
+  parentDistributedBudget?: number
+  /** Callback для обновления данных после удаления */
+  onRefresh?: () => void
+  /** ID текущего раздела (для создания items в stages) */
+  currentSectionId?: string
+  /** Callback для автоматического раскрытия при создании */
+  onAutoExpand?: (nodeId: string) => void
 }
 
 // ============================================================================
@@ -50,17 +68,36 @@ const HOURS_ADJUSTMENT_FACTOR = 1.2
 /** Полные названия типов узлов */
 const NODE_LABELS: Record<HierarchyNodeType, string> = {
   project: 'Проект',
-  stage: 'Стадия',
   object: 'Объект',
   section: 'Раздел',
   decomposition_stage: 'Этап',
   decomposition_item: '',
 }
 
+/** Сокращения стадий проекта */
+const STAGE_ABBREVIATIONS: Record<string, string> = {
+  'Стадия А': 'А',
+  'Стадия П': 'П',
+  'Стадия ПП': 'ПП',
+  'Стадия Р': 'Р',
+  'Стадия С': 'С',
+  'Э': 'Э',
+  'Базовая стадия (РУО)': 'РУО',
+  'Основные проекты': 'ОП',
+  'Отпуск': 'ОТП',
+  'Отчетная стадия': 'ОТЧ',
+  'Прочие работы': 'ПР',
+}
+
+/** Получить сокращение стадии */
+function getStageAbbreviation(stageName: string | null | undefined): string | null {
+  if (!stageName) return null
+  return STAGE_ABBREVIATIONS[stageName] || stageName.slice(0, 3).toUpperCase()
+}
+
 /** Цвета для бейджей типов */
 const NODE_LABEL_COLORS: Record<HierarchyNodeType, string> = {
   project: 'bg-amber-500/20 text-amber-400',
-  stage: 'bg-blue-500/20 text-blue-400',
   object: 'bg-violet-500/20 text-violet-400',
   section: 'bg-teal-500/20 text-teal-400',
   decomposition_stage: 'bg-slate-600/30 text-slate-400',
@@ -102,8 +139,26 @@ export const BudgetRow = React.memo(function BudgetRow({
   onExpandAll,
   hourlyRate = MOCK_HOURLY_RATE,
   insideSection = false,
-  parentAdjustedHours = 0
+  parentAdjustedHours = 0,
+  parentAllocatedBudget = 0,
+  parentDistributedBudget = 0,
+  onRefresh,
+  currentSectionId,
+  onAutoExpand,
 }: BudgetRowProps) {
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [sectionCreateModalOpen, setSectionCreateModalOpen] = useState(false)
+  const [sectionDeleteModalOpen, setSectionDeleteModalOpen] = useState(false)
+  const [stageCreateOpen, setStageCreateOpen] = useState(false)
+  const [itemCreateOpen, setItemCreateOpen] = useState(false)
+
+  // Callback для успешного создания - раскрываем родителя
+  const handleCreateSuccess = () => {
+    onAutoExpand?.(node.id)
+    onRefresh?.()
+  }
+
   const hasChildren = node.children.length > 0
   const isExpanded = expanded[node.id] ?? false
 
@@ -111,7 +166,7 @@ export const BudgetRow = React.memo(function BudgetRow({
   const isSection = node.type === 'section'
   const isDecompStage = node.type === 'decomposition_stage'
   const isItem = node.type === 'decomposition_item'
-  const isTopLevel = node.type === 'project' || node.type === 'stage' || node.type === 'object'
+  const isTopLevel = node.type === 'project' || node.type === 'object'
 
   // Плановые часы
   const plannedHours = node.plannedHours || 0
@@ -119,25 +174,21 @@ export const BudgetRow = React.memo(function BudgetRow({
   // Приведённые часы = плановые * К
   const adjustedHours = plannedHours * HOURS_ADJUSTMENT_FACTOR
 
-  // % от общих (доля в родительских часах)
-  const percentOfParent = parentAdjustedHours > 0 && adjustedHours > 0
-    ? Math.round((adjustedHours / parentAdjustedHours) * 100)
-    : null
-
   // Расчётный бюджет = приведённые часы * ставка
   const calcBudget = adjustedHours > 0 ? adjustedHours * hourlyRate : null
 
   // Выделенный бюджет (сумма planned_amount всех бюджетов)
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
 
-  // Распределено (сумма выделенных бюджетов всех детей рекурсивно)
-  const calculateDistributedBudget = (n: HierarchyNode): number => {
-    if (n.children.length === 0) {
-      return n.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
-    }
-    return n.children.reduce((sum, child) => sum + calculateDistributedBudget(child), 0)
-  }
-  const distributedBudget = node.children.length > 0 ? calculateDistributedBudget(node) : allocatedBudget
+  // % часов от родителя (доля приведённых часов от родительских)
+  const percentOfParentHours = parentAdjustedHours > 0
+    ? Math.round((adjustedHours / parentAdjustedHours) * 100)
+    : null
+
+  // Распределено (сумма выделенных бюджетов только прямых детей)
+  const distributedBudget = node.children.length > 0
+    ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
+    : allocatedBudget
 
   // Сравнение: перебор если выделено меньше чем расчётный
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
@@ -148,36 +199,32 @@ export const BudgetRow = React.memo(function BudgetRow({
   const typeLabel = NODE_LABELS[node.type]
   const labelColor = NODE_LABEL_COLORS[node.type]
 
-  // Полная иерархия отступов
+  // Полная иерархия отступов (без stage — объекты напрямую под проектом)
   const INDENT_MAP: Record<HierarchyNodeType, number> = {
     project: 0,
-    stage: 16,
-    object: 32,
-    section: 48,
-    decomposition_stage: 64,
-    decomposition_item: 80,
+    object: 16,
+    section: 32,
+    decomposition_stage: 48,
+    decomposition_item: 64,
   }
   const indent = INDENT_MAP[node.type]
 
   // Стили строки в зависимости от типа
   const isProject = node.type === 'project'
-  const isStageLevel = node.type === 'stage'
   const isObject = node.type === 'object'
 
   const rowStyles = cn(
     'group flex items-center border-b transition-colors',
     // Проект - самый верхний уровень
     isProject && 'bg-slate-800/50 border-slate-700 hover:bg-slate-800/70',
-    // Стадия
-    isStageLevel && 'bg-slate-850/40 border-slate-700/70 hover:bg-slate-800/50',
     // Объект
-    isObject && 'bg-slate-900/50 border-slate-700/60 hover:bg-slate-900/70',
+    isObject && 'bg-slate-900/50 border-slate-700 hover:bg-slate-900/70',
     // Разделы - бирюзовый оттенок с левой полоской
-    isSection && 'bg-teal-950/40 border-slate-700/60 hover:bg-teal-950/60 border-l-2 border-l-teal-500/50',
-    // Этапы декомпозиции внутри раздела - чуть выделены
-    isDecompStage && insideSection && 'bg-slate-800/30 border-slate-800/50 hover:bg-slate-800/50',
-    // Задачи внутри раздела - самый тёмный фон
-    isItem && insideSection && 'bg-slate-900/60 border-slate-800/30 hover:bg-slate-900/80',
+    isSection && 'bg-teal-950/40 border-slate-700 hover:bg-teal-950/60 border-l-2 border-l-teal-500/50',
+    // Этапы декомпозиции внутри раздела
+    isDecompStage && insideSection && 'bg-slate-800/30 border-slate-700/60 hover:bg-slate-800/50',
+    // Задачи внутри раздела
+    isItem && insideSection && 'bg-slate-900/60 border-slate-700/60 hover:bg-slate-900/80',
     // Высота строки
     'min-h-[32px]'
   )
@@ -235,6 +282,16 @@ export const BudgetRow = React.memo(function BudgetRow({
             </span>
           )}
 
+          {/* Stage badge for projects */}
+          {isProject && node.stageName && (
+            <span
+              className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-500/20 text-purple-400"
+              title={node.stageName}
+            >
+              ст. {getStageAbbreviation(node.stageName)}
+            </span>
+          )}
+
           {/* Name */}
           <span
             className={cn(
@@ -244,18 +301,126 @@ export const BudgetRow = React.memo(function BudgetRow({
               isItem && 'text-slate-400',
               isTopLevel && 'font-medium text-slate-200'
             )}
-            title={node.name}
+            title={node.stageName ? `${node.stageName}: ${node.name}` : node.name}
           >
             {node.name}
           </span>
+
+          {/* Create object button for projects (appears on hover) */}
+          {isProject && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setCreateModalOpen(true)
+              }}
+              className="opacity-0 group-hover:opacity-100 ml-auto p-1 rounded hover:bg-amber-500/20 text-slate-500 hover:text-amber-400 transition-all"
+              title="Добавить объект"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {/* Object buttons: create section + delete (appear on hover) */}
+          {isObject && (
+            <div className="opacity-0 group-hover:opacity-100 ml-auto flex items-center gap-0.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSectionCreateModalOpen(true)
+                }}
+                className="p-1 rounded hover:bg-teal-500/20 text-slate-500 hover:text-teal-400 transition-all"
+                title="Добавить раздел"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteModalOpen(true)
+                }}
+                className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-all"
+                title="Удалить объект"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Section buttons: create stage + delete (appear on hover) */}
+          {isSection && (
+            <div className="opacity-0 group-hover:opacity-100 ml-auto flex items-center gap-0.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setStageCreateOpen(true)
+                }}
+                className="p-1 rounded hover:bg-slate-600/50 text-slate-500 hover:text-slate-300 transition-all"
+                title="Добавить этап"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSectionDeleteModalOpen(true)
+                }}
+                className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-all"
+                title="Удалить раздел"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Stage buttons: create item + delete (appear on hover) */}
+          {isDecompStage && (
+            <div className="opacity-0 group-hover:opacity-100 ml-auto flex items-center gap-0.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setItemCreateOpen(true)
+                }}
+                className="p-1 rounded hover:bg-slate-600/50 text-slate-500 hover:text-slate-300 transition-all"
+                title="Добавить задачу"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <StageInlineDelete
+                stageId={node.id}
+                stageName={node.name}
+                onSuccess={onRefresh}
+              />
+            </div>
+          )}
+
+          {/* Item: category selector + delete button */}
+          {isItem && (
+            <div className="ml-auto flex items-center gap-1">
+              <ItemCategorySelect
+                itemId={node.id}
+                categoryId={node.workCategoryId || null}
+                categoryName={node.workCategoryName || null}
+                onSuccess={onRefresh}
+              />
+              <div className="opacity-0 group-hover:opacity-100">
+                <ItemInlineDelete
+                  itemId={node.id}
+                  itemName={node.name}
+                  onSuccess={onRefresh}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ===== КАТЕГОРИЯ (сложность) ===== */}
         <div className="w-10 shrink-0 flex items-center justify-center">
-          {isItem && node.difficulty?.abbr && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-500/20 text-orange-400">
-              {node.difficulty.abbr}
-            </span>
+          {isItem && (
+            <ItemDifficultySelect
+              itemId={node.id}
+              difficulty={node.difficulty || null}
+              onSuccess={onRefresh}
+            />
           )}
         </div>
 
@@ -264,11 +429,10 @@ export const BudgetRow = React.memo(function BudgetRow({
           {/* Плановые часы */}
           <div className="w-[72px] px-2 text-right">
             {isItem ? (
-              <HoursInput
+              <ItemHoursEdit
+                itemId={node.id}
                 value={plannedHours}
-                dimIfZero
-                // TODO: подключить мутацию для обновления
-                // onChange={(newValue) => updateItemHours(node.id, newValue)}
+                onSuccess={onRefresh}
               />
             ) : (
               <HoursInput
@@ -294,11 +458,11 @@ export const BudgetRow = React.memo(function BudgetRow({
             )}
           </div>
 
-          {/* % от общих (доля в родительских часах) */}
+          {/* % от родителя (доля часов от родительских) */}
           <div className="w-[52px] px-1 text-right">
-            {percentOfParent !== null ? (
+            {percentOfParentHours !== null ? (
               <span className="text-[11px] tabular-nums text-slate-500">
-                {percentOfParent}%
+                {percentOfParentHours}%
               </span>
             ) : (
               <span className="text-[11px] text-slate-700">—</span>
@@ -381,8 +545,87 @@ export const BudgetRow = React.memo(function BudgetRow({
             hourlyRate={hourlyRate}
             insideSection={isSection || insideSection}
             parentAdjustedHours={adjustedHours}
+            parentAllocatedBudget={allocatedBudget}
+            parentDistributedBudget={distributedBudget}
+            onRefresh={onRefresh}
+            currentSectionId={isSection ? node.id : currentSectionId}
+            onAutoExpand={onAutoExpand}
           />
         ))}
+
+      {/* Inline stage creation (for sections) */}
+      {isSection && stageCreateOpen && (
+        <div
+          className="flex items-center border-b border-slate-800/50 bg-slate-800/30 min-h-[32px]"
+          style={{ paddingLeft: `${8 + 48}px` }}
+        >
+          <StageInlineCreate
+            sectionId={node.id}
+            sectionName={node.name}
+            onCancel={() => setStageCreateOpen(false)}
+            onSuccess={handleCreateSuccess}
+          />
+        </div>
+      )}
+
+      {/* Inline item creation (for stages) */}
+      {isDecompStage && itemCreateOpen && currentSectionId && (
+        <div
+          className="flex items-center border-b border-slate-800/30 bg-slate-900/50 min-h-[32px]"
+          style={{ paddingLeft: `${8 + 64}px` }}
+        >
+          <ItemInlineCreate
+            stageId={node.id}
+            sectionId={currentSectionId}
+            onCancel={() => setItemCreateOpen(false)}
+            onSuccess={handleCreateSuccess}
+          />
+        </div>
+      )}
+
+      {/* Create Object Modal (for projects) */}
+      {isProject && (
+        <ObjectCreateModal
+          isOpen={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          projectId={node.id}
+          projectName={node.name}
+          onSuccess={onRefresh}
+        />
+      )}
+
+      {/* Delete Object Modal */}
+      {isObject && (
+        <DeleteObjectModal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          objectId={node.id}
+          objectName={node.name}
+          onSuccess={onRefresh}
+        />
+      )}
+
+      {/* Create Section Modal (for objects) */}
+      {isObject && (
+        <SectionCreateModal
+          isOpen={sectionCreateModalOpen}
+          onClose={() => setSectionCreateModalOpen(false)}
+          objectId={node.id}
+          objectName={node.name}
+          onSuccess={onRefresh}
+        />
+      )}
+
+      {/* Delete Section Modal */}
+      {isSection && (
+        <DeleteSectionModal
+          isOpen={sectionDeleteModalOpen}
+          onClose={() => setSectionDeleteModalOpen(false)}
+          sectionId={node.id}
+          sectionName={node.name}
+          onSuccess={onRefresh}
+        />
+      )}
     </>
   )
 })

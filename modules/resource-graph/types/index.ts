@@ -34,7 +34,7 @@ export type ProjectStatusType = DbEnum<'project_status_enum'>
 
 /**
  * Элемент декомпозиции (самый нижний уровень)
- * Project → Stage → Object → Section → DecompositionStage → DecompositionItem
+ * Project → Object → Section → DecompositionStage → DecompositionItem
  */
 export interface DecompositionItem {
   id: string
@@ -65,7 +65,7 @@ export interface DecompositionItem {
 
 /**
  * Этап декомпозиции
- * Project → Stage → Object → Section → DecompositionStage
+ * Project → Object → Section → DecompositionStage
  */
 export interface DecompositionStage {
   id: string
@@ -181,7 +181,7 @@ export interface Loading {
 
 /**
  * Раздел проекта
- * Project → Stage → Object → Section
+ * Project → Object → Section
  */
 export interface Section {
   id: string
@@ -212,22 +212,12 @@ export interface Section {
 
 /**
  * Объект проекта
- * Project → Stage → Object
+ * Project → Object
  */
 export interface ProjectObject {
   id: string
   name: string
   sections: Section[]
-}
-
-/**
- * Стадия проекта
- * Project → Stage
- */
-export interface Stage {
-  id: string
-  name: string
-  objects: ProjectObject[]
 }
 
 /**
@@ -238,6 +228,8 @@ export interface Project {
   id: string
   name: string
   status: ProjectStatusType | null
+  /** Тип стадии проекта (поле, не отдельный уровень) */
+  stageType: string | null
   manager: {
     id: string | null
     firstName: string | null
@@ -246,7 +238,8 @@ export interface Project {
   }
   /** Теги проекта (загружаются отдельно через useProjectTagsMap) */
   tags?: ProjectTag[]
-  stages: Stage[]
+  /** Объекты проекта (напрямую, без уровня Stage) */
+  objects: ProjectObject[]
 }
 
 // ============================================================================
@@ -339,7 +332,6 @@ export interface DisplaySettings {
 /** Тип узла дерева */
 export type TreeNodeType =
   | 'project'
-  | 'stage'
   | 'object'
   | 'section'
   | 'decomposition_stage'
@@ -370,8 +362,7 @@ export interface OrgStructure {
 export interface ProjectStructure {
   managers: Array<{ id: string; name: string }>
   projects: Array<{ id: string; name: string; managerId: string | null }>
-  stages: Array<{ id: string; name: string; projectId: string | null }>
-  objects: Array<{ id: string; name: string; stageId: string | null }>
+  objects: Array<{ id: string; name: string; projectId: string | null }>
   sections: Array<{ id: string; name: string; objectId: string | null }>
 }
 

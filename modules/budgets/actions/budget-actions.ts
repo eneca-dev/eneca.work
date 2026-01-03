@@ -32,7 +32,8 @@ export type ActionResult<T> =
 // ============================================================================
 
 const CreateBudgetSchema = z.object({
-  entity_type: z.enum(['project', 'stage', 'object', 'section']),
+  // stage исключён — стадия теперь параметр проекта, а не отдельная сущность
+  entity_type: z.enum(['project', 'object', 'section']),
   entity_id: z.string().uuid('Некорректный ID сущности'),
   name: z.string().max(255).optional(),
   total_amount: z.number().min(0, 'Сумма не может быть отрицательной'),
@@ -85,7 +86,7 @@ const ApproveExpenseSchema = z.object({
 // ============================================================================
 
 /**
- * Получить список бюджетов с фильтрами (из v_cache_budgets_v2)
+ * Получить список бюджетов с фильтрами (из v_cache_budgets)
  */
 export async function getBudgets(
   filters?: BudgetFilters
@@ -93,7 +94,7 @@ export async function getBudgets(
   try {
     const supabase = await createClient()
 
-    let query = supabase.from('v_cache_budgets_v2').select('*')
+    let query = supabase.from('v_cache_budgets').select('*')
 
     if (filters?.entity_type) {
       query = query.eq('entity_type', filters.entity_type)
@@ -135,7 +136,7 @@ export async function getBudgetsByEntity(
 }
 
 /**
- * Получить бюджет по ID (из v_cache_budgets_v2)
+ * Получить бюджет по ID (из v_cache_budgets)
  */
 export async function getBudgetById(
   budgetId: string
@@ -144,7 +145,7 @@ export async function getBudgetById(
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('v_cache_budgets_v2')
+      .from('v_cache_budgets')
       .select('*')
       .eq('budget_id', budgetId)
       .maybeSingle()
@@ -296,7 +297,8 @@ export async function getSectionBudgetSummary(
 
 
 /**
- * Получить иерархию сущности (section → object → stage → project)
+ * Получить иерархию сущности (section → object → project)
+ * Примечание: stage исключён из иерархии бюджетов
  */
 export async function getEntityHierarchy(
   entityType: BudgetEntityType,
@@ -309,7 +311,6 @@ export async function getEntityHierarchy(
       entityType,
       entityId,
       objectId: null,
-      stageId: null,
       projectId: null,
     }
 
@@ -318,30 +319,15 @@ export async function getEntityHierarchy(
       return { success: true, data: hierarchy }
     }
 
-    if (entityType === 'stage') {
-      const { data: stage } = await supabase
-        .from('stages')
-        .select('stage_id, stage_project_id')
-        .eq('stage_id', entityId)
-        .single()
-
-      if (stage) {
-        hierarchy.stageId = stage.stage_id
-        hierarchy.projectId = stage.stage_project_id
-      }
-      return { success: true, data: hierarchy }
-    }
-
     if (entityType === 'object') {
       const { data: object } = await supabase
         .from('objects')
-        .select('object_id, object_stage_id, object_project_id')
+        .select('object_id, object_project_id')
         .eq('object_id', entityId)
         .single()
 
       if (object) {
         hierarchy.objectId = object.object_id
-        hierarchy.stageId = object.object_stage_id
         hierarchy.projectId = object.object_project_id
       }
       return { success: true, data: hierarchy }
@@ -350,13 +336,12 @@ export async function getEntityHierarchy(
     if (entityType === 'section') {
       const { data: section } = await supabase
         .from('view_section_hierarchy')
-        .select('section_id, object_id, stage_id, project_id')
+        .select('section_id, object_id, project_id')
         .eq('section_id', entityId)
         .single()
 
       if (section) {
         hierarchy.objectId = section.object_id
-        hierarchy.stageId = section.stage_id
         hierarchy.projectId = section.project_id
       }
       return { success: true, data: hierarchy }
@@ -391,13 +376,11 @@ export async function findParentBudget(
     const hierarchy = hierarchyResult.data
 
     // Собираем ID родительских сущностей и их типы (от ближайшего к дальнему)
+    // Иерархия: section → object → project (stage исключён)
     const parentEntities: Array<{ type: BudgetEntityType; id: string }> = []
 
     if (entityType === 'section' && hierarchy.objectId) {
       parentEntities.push({ type: 'object', id: hierarchy.objectId })
-    }
-    if ((entityType === 'section' || entityType === 'object') && hierarchy.stageId) {
-      parentEntities.push({ type: 'stage', id: hierarchy.stageId })
     }
     if (hierarchy.projectId && entityType !== 'project') {
       parentEntities.push({ type: 'project', id: hierarchy.projectId })
@@ -410,7 +393,7 @@ export async function findParentBudget(
     // Ищем бюджет у родительских сущностей (в порядке приоритета)
     for (const parent of parentEntities) {
       const { data, error } = await supabase
-        .from('v_cache_budgets_v2')
+        .from('v_cache_budgets')
         .select('*')
         .eq('entity_type', parent.type)
         .eq('entity_id', parent.id)
@@ -473,7 +456,7 @@ export async function createBudget(
 
     // 1. Создаём бюджет
     const { data: budget, error: budgetError } = await supabase
-      .from('budgets_v2')
+      .from('budgets')
       .insert({
         entity_type: input.entity_type,
         entity_id: input.entity_id,
@@ -504,7 +487,7 @@ export async function createBudget(
     if (partError) {
       console.error('[createBudget] Part insert error:', partError)
       // Откатываем создание бюджета
-      await supabase.from('budgets_v2').delete().eq('budget_id', budget.budget_id)
+      await supabase.from('budgets').delete().eq('budget_id', budget.budget_id)
       return { success: false, error: partError.message }
     }
 
@@ -563,7 +546,7 @@ export async function updateBudgetAmount(
 
     // 1. Обновляем total_amount бюджета
     const { error: updateError } = await supabase
-      .from('budgets_v2')
+      .from('budgets')
       .update({
         total_amount: input.total_amount,
         updated_at: new Date().toISOString(),
@@ -900,10 +883,15 @@ export async function approveExpense(
 
 /**
  * Деактивировать бюджет (soft delete)
+ *
+ * Проверяет целостность данных:
+ * - Нельзя деактивировать если есть активные дочерние бюджеты
+ * - Предупреждение если есть approved расходы (но разрешаем)
  */
 export async function deactivateBudget(
-  budgetId: string
-): Promise<ActionResult<{ success: boolean }>> {
+  budgetId: string,
+  options?: { force?: boolean }
+): Promise<ActionResult<{ success: boolean; warning?: string }>> {
   try {
     // Валидация входных данных
     if (!budgetId || !z.string().uuid().safeParse(budgetId).success) {
@@ -918,8 +906,54 @@ export async function deactivateBudget(
       return { success: false, error: 'Пользователь не авторизован' }
     }
 
+    // Проверка 1: Есть ли активные дочерние бюджеты
+    const { data: children, error: childrenError } = await supabase
+      .from('budgets')
+      .select('budget_id, name')
+      .eq('parent_budget_id', budgetId)
+      .eq('is_active', true)
+
+    if (childrenError) {
+      console.error('[deactivateBudget] Children check error:', childrenError)
+      return { success: false, error: 'Ошибка проверки дочерних бюджетов' }
+    }
+
+    if (children && children.length > 0) {
+      const childNames = children.map(c => c.name).join(', ')
+      return {
+        success: false,
+        error: `Нельзя деактивировать бюджет: есть ${children.length} активных дочерних бюджетов (${childNames}). Сначала деактивируйте их.`,
+      }
+    }
+
+    // Проверка 2: Есть ли approved расходы (предупреждение, но не блокируем)
+    let warning: string | undefined
+    const { data: expenses, error: expensesError } = await supabase
+      .from('budget_expenses')
+      .select('expense_id')
+      .eq('budget_id', budgetId)
+      .eq('status', 'approved')
+
+    if (!expensesError && expenses && expenses.length > 0) {
+      warning = `Бюджет имеет ${expenses.length} подтверждённых расходов. История будет сохранена.`
+    }
+
+    // Записываем в историю перед деактивацией
+    const currentResult = await getBudgetById(budgetId)
+    if (currentResult.success) {
+      await supabase.from('budget_history').insert({
+        budget_id: budgetId,
+        change_type: 'status_changed',
+        previous_state: { is_active: true },
+        new_state: { is_active: false },
+        comment: 'Бюджет деактивирован',
+        changed_by: user.id,
+      })
+    }
+
+    // Выполняем деактивацию
     const { error } = await supabase
-      .from('budgets_v2')
+      .from('budgets')
       .update({ is_active: false })
       .eq('budget_id', budgetId)
 
@@ -928,9 +962,75 @@ export async function deactivateBudget(
       return { success: false, error: error.message }
     }
 
-    return { success: true, data: { success: true } }
+    return { success: true, data: { success: true, warning } }
   } catch (error) {
     console.error('[deactivateBudget] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+    }
+  }
+}
+
+/**
+ * Очистить бюджет (обнулить сумму вместо удаления)
+ *
+ * Используется когда нужно "удалить" бюджет но сохранить историю.
+ * Обнуляет total_amount и все части.
+ */
+export async function clearBudget(
+  budgetId: string,
+  comment?: string
+): Promise<ActionResult<BudgetCurrent>> {
+  try {
+    // Валидация входных данных
+    if (!budgetId || !z.string().uuid().safeParse(budgetId).success) {
+      return { success: false, error: 'Некорректный ID бюджета' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { success: false, error: 'Пользователь не авторизован' }
+    }
+
+    // Получаем текущее состояние
+    const currentResult = await getBudgetById(budgetId)
+    if (!currentResult.success) {
+      return currentResult
+    }
+
+    const previousAmount = currentResult.data.total_amount
+
+    // Обнуляем total_amount (части пересчитаются автоматически через триггер)
+    const { error: updateError } = await supabase
+      .from('budgets')
+      .update({
+        total_amount: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('budget_id', budgetId)
+
+    if (updateError) {
+      console.error('[clearBudget] Update error:', updateError)
+      return { success: false, error: updateError.message }
+    }
+
+    // Записываем в историю
+    await supabase.from('budget_history').insert({
+      budget_id: budgetId,
+      change_type: 'amount_changed',
+      previous_state: { total_amount: previousAmount },
+      new_state: { total_amount: 0 },
+      comment: comment || 'Бюджет очищен',
+      changed_by: user.id,
+    })
+
+    return getBudgetById(budgetId)
+  } catch (error) {
+    console.error('[clearBudget] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',

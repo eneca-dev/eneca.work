@@ -12,7 +12,7 @@ import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
-import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
+import { DeleteSectionModal } from '@/modules/modals'
 import SectionDecomposition2Tab from '@/modules/decomposition2/components/SectionDecomposition2Tab'
 
 interface SectionPanelProps {

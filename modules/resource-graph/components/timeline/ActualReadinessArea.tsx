@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useId } from 'react'
-import { parseISO, addDays, format } from 'date-fns'
+import { addDays, format } from 'date-fns'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -50,8 +51,13 @@ export function ActualReadinessArea({
     }
 
     // Границы данных
-    const firstDataDate = parseISO(sortedSnapshots[0].date)
-    const lastDataDate = parseISO(sortedSnapshots[sortedSnapshots.length - 1].date)
+    // Используем parseMinskDate для консистентности с range.start
+    const firstDataDate = parseMinskDate(sortedSnapshots[0].date)
+    const lastDataDate = parseMinskDate(sortedSnapshots[sortedSnapshots.length - 1].date)
+
+    // График идёт до сегодняшнего дня (или до последней даты данных, если она позже)
+    const today = getTodayMinsk()
+    const endDate = lastDataDate > today ? lastDataDate : today
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
@@ -64,8 +70,8 @@ export function ActualReadinessArea({
       const dayDate = addDays(range.start, i)
       const dateKey = format(dayDate, 'yyyy-MM-dd')
 
-      // Пропускаем дни до/после данных
-      if (dayDate < firstDataDate || dayDate > lastDataDate) continue
+      // Пропускаем дни до первых данных или после сегодня
+      if (dayDate < firstDataDate || dayDate > endDate) continue
 
       let value: number
       let isInterpolated = false

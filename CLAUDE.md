@@ -238,7 +238,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Архитектура** | Clean Code Guardian | Структура, naming, DRY, размер | Компоненты > 50 строк, новый модуль |
 | **Архитектура** | Next.js Guardian | Server/Client, metadata, routing | Новая страница, компонент архитектура |
 | **Данные** | Cache Guardian | TanStack Query, Server Actions, keys | Новые actions/hooks, "данные не обновляются" |
-| **Данные** | DB Architect | PostgreSQL, migrations, views, indexes | Новые таблицы, миграции, performance |
+| **Данные** | DB Architect | PostgreSQL schema, migrations, views, indexes | Новые таблицы, миграции, performance |
 | **Данные** | Realtime Guardian | Subscriptions, cleanup, memory leaks | Новые подписки, memory issues |
 | **State** | Zustand Guardian | Store patterns, selectors, scope | Новый store, re-render issues |
 | **State** | Forms Guardian | React Hook Form + Zod validation | Новая форма, form bugs |
@@ -512,17 +512,19 @@ The application heavily relies on PostgreSQL views for data aggregation and busi
 
 The planning module follows this hierarchical structure:
 ```
-Проект (Project)
-  └─ Стадия (Stage)
-      └─ Объект (Object)
-          └─ Раздел (Section)
-              └─ Этап декомпозиции (Decomposition Stage)
-                  └─ Декомпозиция (Decomposition - not used in modals)
+Проект (Project) ← stage_id — параметр проекта, НЕ отдельная таблица в иерархии
+  └─ Объект (Object)
+      └─ Раздел (Section)
+          └─ Этап декомпозиции (Decomposition Stage)
+              └─ Декомпозиция (Decomposition - not used in modals)
 ```
 
+- **Stage (Стадия)** — это **параметр проекта** (`projects.stage_id`), а не уровень иерархии
 - **Loadings** (загрузки) are assigned at the **Decomposition Stage** level
 - Each loading connects: Employee + Decomposition Stage + Date Range + Rate
 - The decomposition layer exists in the data model but is not exposed in UI modals
+
+> **🚫 ЗАПРЕЩЕНО:** Создавать новые фичи, где Stage (Стадия) используется как отдельный уровень иерархии или отдельная таблица. Stage — это всегда атрибут проекта (`projects.stage_id`), фильтр или группировка, но НЕ родительская сущность для Object/Section.
 
 ### Database Types (`types/db.ts`)
 

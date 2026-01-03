@@ -618,6 +618,115 @@ interface FilterQueryParams {
 
 ---
 
+## Работа с датами
+
+### Часовой пояс
+
+Все даты в модуле обрабатываются в часовом поясе **Europe/Minsk (UTC+3)**:
+
+```typescript
+import { getTodayMinsk, formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
+
+// Получить сегодняшнюю дату в Минске
+const today = getTodayMinsk() // Date object
+
+// Форматировать timestamp из БД
+const formatted = formatMinskDate(new Date(isoString))
+
+// Парсить строку "YYYY-MM-DD"
+const date = parseMinskDate('2024-01-15')
+```
+
+### Диапазон временной шкалы (TimelineRange)
+
+Timeline охватывает **180 дней**: 30 дней назад + 150 дней вперёд от сегодня.
+
+```typescript
+interface TimelineRange {
+  start: Date  // today - 30 days
+  end: Date    // today + 150 days
+}
+
+// Создание диапазона
+const range = createTimelineRange() // использует getTodayMinsk()
+```
+
+### Логика продления графиков до сегодня
+
+Графики фактической готовности и расходов бюджета **всегда продлеваются до сегодняшнего дня**, даже если последняя точка данных раньше:
+
+```typescript
+// В ActualReadinessArea.tsx и BudgetSpendingArea.tsx:
+const firstDataDate = parseMinskDate(sortedData[0].date)
+const lastDataDate = parseMinskDate(sortedData[sortedData.length - 1].date)
+
+// График идёт до сегодня (или до последней даты данных, если она позже)
+const today = getTodayMinsk()
+const endDate = lastDataDate > today ? lastDataDate : today
+
+// При итерации пропускаем дни вне диапазона
+if (dayDate < firstDataDate || dayDate > endDate) continue
+```
+
+**Почему это важно:**
+- Без этой логики график заканчивается на последней дате данных
+- Если сегодня 1 января, а последние данные 30 декабря — график не дойдёт до зелёной линии "сегодня"
+- С этой логикой график всегда достигает текущего дня
+
+### Step Interpolation (ступеньки)
+
+Графики строятся **без линейной интерполяции** — используется ступенчатая логика:
+
+```typescript
+// Если на дату нет данных, используем последнее известное значение
+if (exactValue !== undefined) {
+  value = exactValue
+  lastKnownValue = exactValue
+} else {
+  // Ступенька: сохраняем предыдущее значение
+  value = lastKnownValue
+  isInterpolated = true
+}
+```
+
+**Визуально:** линия идёт горизонтально до следующей точки данных, затем резко меняет значение.
+
+### Компоненты графиков
+
+| Компонент | Описание | Продление до сегодня |
+|-----------|----------|---------------------|
+| `PlannedReadinessArea` | Плановая готовность (пунктир) | ❌ Нет — рисуется только по checkpoints |
+| `ActualReadinessArea` | Фактическая готовность (синяя область) | ✅ Да |
+| `BudgetSpendingArea` | Расходы бюджета (оранжевая область) | ✅ Да |
+| `StageReadinessArea` | Готовность этапа декомпозиции | ❌ Нет — по данным snapshots |
+
+### Даты в данных
+
+```typescript
+// Формат дат в снэпшотах и чекпоинтах
+interface ReadinessPoint {
+  date: string   // 'YYYY-MM-DD' (ISO без времени)
+  value: number  // 0-100
+}
+
+// Формат в budget_spending
+interface BudgetSpendingPoint {
+  date: string      // 'YYYY-MM-DD'
+  spent: number     // Накопленная сумма
+  percentage: number // % от бюджета
+}
+```
+
+### Типичные проблемы
+
+| Проблема | Причина | Решение |
+|----------|---------|---------|
+| График не доходит до сегодня | Нет логики `endDate = max(lastDataDate, today)` | Добавить продление до сегодня |
+| Даты смещены на день | Неправильный парсинг timezone | Использовать `parseMinskDate()` |
+| Данные не отображаются | Даты в БД вне диапазона timeline | Проверить range.start/end |
+
+---
+
 ## Утилиты
 
 ```typescript

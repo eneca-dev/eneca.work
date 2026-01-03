@@ -157,7 +157,7 @@ export function BudgetAmountEdit({
     if (newAmount >= 0 && newAmount !== currentAmount) {
       updateAmount({
         budget_id: budgetId,
-        planned_amount: newAmount,
+        total_amount: newAmount,
       })
     }
 

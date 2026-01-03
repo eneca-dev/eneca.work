@@ -156,13 +156,15 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       // При изменении бюджета обновляем данные графика ресурсов
       queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
     ],
   },
   {
-    table: 'budget_versions',
+    table: 'budget_parts',
     invalidateKeys: [
-      // При изменении версии бюджета (суммы) обновляем данные графика ресурсов
+      // При изменении частей бюджета (сумм) обновляем данные
       queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
     ],
   },
 

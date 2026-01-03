@@ -233,7 +233,7 @@ export function CheckpointEditModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100]">
+    <div className="fixed inset-0 z-50">
       {/* Overlay - блокирует все клики */}
       <div
         className="absolute inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm"

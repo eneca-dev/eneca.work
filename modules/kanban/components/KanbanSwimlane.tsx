@@ -221,7 +221,7 @@ export function KanbanSwimlane({
             </button>
           </div>
           <p className="text-xs text-muted-foreground/70 truncate mt-0.5">
-            {section.projectName} • {section.stageName} • {section.objectName}
+            {section.projectName} • {section.objectName}
           </p>
         </div>
 

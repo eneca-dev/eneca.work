@@ -191,6 +191,9 @@ export async function updateDecompositionItem(
 
 /**
  * Удалить задачу декомпозиции
+ *
+ * Проверяет целостность данных:
+ * - Нельзя удалить если есть активные loadings (нагрузки сотрудников)
  */
 export async function deleteDecompositionItem(
   itemId: string
@@ -202,6 +205,24 @@ export async function deleteDecompositionItem(
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return { success: false, error: 'Не авторизован' }
+    }
+
+    // Проверка: Есть ли loadings привязанные к этому элементу
+    const { count: loadingsCount, error: loadingsError } = await supabase
+      .from('loadings')
+      .select('*', { count: 'exact', head: true })
+      .eq('loading_decomposition_item_id', itemId)
+
+    if (loadingsError) {
+      console.error('[deleteDecompositionItem] Loadings check error:', loadingsError)
+      // Не блокируем, возможно поле не существует (FK может быть на stage, не item)
+    }
+
+    if (loadingsCount && loadingsCount > 0) {
+      return {
+        success: false,
+        error: `Нельзя удалить задачу: на неё назначено ${loadingsCount} нагрузок. Сначала удалите нагрузки.`,
+      }
     }
 
     const { error } = await supabase
@@ -373,6 +394,9 @@ export async function bulkCreateDecompositionItems(
 
 /**
  * Массовое удаление задач декомпозиции
+ *
+ * Проверяет целостность данных:
+ * - Нельзя удалить если есть loadings на любую из задач
  */
 export async function bulkDeleteDecompositionItems(
   itemIds: string[]
@@ -388,6 +412,26 @@ export async function bulkDeleteDecompositionItems(
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return { success: false, error: 'Не авторизован' }
+    }
+
+    // Проверка: Есть ли loadings привязанные к любой из задач
+    const { data: loadings, error: loadingsError } = await supabase
+      .from('loadings')
+      .select('loading_decomposition_item_id')
+      .in('loading_decomposition_item_id', itemIds)
+      .limit(10)
+
+    if (loadingsError) {
+      console.error('[bulkDeleteDecompositionItems] Loadings check error:', loadingsError)
+      // Не блокируем, возможно поле не существует
+    }
+
+    if (loadings && loadings.length > 0) {
+      const blockedCount = new Set(loadings.map(l => l.loading_decomposition_item_id)).size
+      return {
+        success: false,
+        error: `Нельзя удалить: ${blockedCount} из ${itemIds.length} задач имеют назначенные нагрузки. Сначала удалите нагрузки.`,
+      }
     }
 
     const { error, count } = await supabase

@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { format, parseISO } from 'date-fns'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { format } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -89,7 +89,7 @@ export function DecompositionStageRow({
   const hasChildren = stage.items.length > 0
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 4
+  const depth = 3
 
   // Mutation for updating loading dates
   const updateLoadingDates = useUpdateLoadingDates()
@@ -212,7 +212,7 @@ export function DecompositionStageRow({
   const formatStageDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     try {
-      return format(parseISO(dateStr), 'dd.MM')
+      return format(parseMinskDate(dateStr), 'dd.MM')
     } catch {
       return '—'
     }

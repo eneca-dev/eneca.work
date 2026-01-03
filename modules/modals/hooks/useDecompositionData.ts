@@ -81,12 +81,10 @@ function findSectionInCache(
     if (!projects) continue
 
     for (const project of projects) {
-      for (const stage of project.stages) {
-        for (const obj of stage.objects) {
-          for (const section of obj.sections) {
-            if (section.id === sectionId) {
-              return section
-            }
+      for (const obj of project.objects) {
+        for (const section of obj.sections) {
+          if (section.id === sectionId) {
+            return section
           }
         }
       }

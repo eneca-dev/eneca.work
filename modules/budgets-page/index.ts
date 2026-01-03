@@ -25,6 +25,7 @@ export type {
   AggregatedBudgetsByType,
   HierarchyNode,
   HierarchyNodeType,
+  BudgetPageEntityType,
   BudgetsAnalyticsData,
   ExpandedState,
   BudgetsViewInternalProps,

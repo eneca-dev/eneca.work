@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useResourceGraphData } from '@/modules/resource-graph'
 import { useBudgets } from '@/modules/budgets'
 import type { FilterQueryParams } from '@/modules/inline-filter'
@@ -18,7 +18,7 @@ import type {
   AggregatedBudgetsByType,
   BudgetsAnalyticsData,
 } from '../types'
-import type { Project, Stage, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
+import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
 import type { BudgetCurrent } from '@/modules/budgets/types'
 
 // ============================================================================
@@ -126,18 +126,25 @@ function collectAllBudgets(node: HierarchyNode): BudgetInfo[] {
 /**
  * Преобразует DecompositionItem в HierarchyNode
  */
-function transformDecompositionItem(item: DecompositionItem): HierarchyNode {
+function transformDecompositionItem(
+  item: DecompositionItem,
+  budgetsMap: Map<string, BudgetInfo[]>
+): HierarchyNode {
+  const nodeBudgets = budgetsMap.get(`decomposition_item:${item.id}`) || []
+
   return {
     id: item.id,
     name: item.description,
     type: 'decomposition_item',
-    budgets: [], // Items не имеют бюджетов напрямую
-    aggregatedBudgets: [],
+    budgets: nodeBudgets,
+    aggregatedBudgets: aggregateBudgetsByType(nodeBudgets),
     plannedHours: item.plannedHours,
     children: [],
-    entityType: 'section', // decomposition_item не имеет своего entity_type в budgets
-    workCategory: item.workCategoryName,
+    entityType: 'decomposition_item',
+    workCategoryId: item.workCategoryId,
+    workCategoryName: item.workCategoryName,
     difficulty: item.difficulty ? {
+      id: item.difficulty.id,
       abbr: item.difficulty.abbr,
       name: item.difficulty.name,
     } : null,
@@ -152,23 +159,28 @@ function transformDecompositionStage(
   budgetsMap: Map<string, BudgetInfo[]>
 ): HierarchyNode {
   // Трансформируем items в дочерние узлы
-  const children = stage.items.map(item => transformDecompositionItem(item))
+  const children = stage.items.map(item => transformDecompositionItem(item, budgetsMap))
 
   // Плановые часы = сумма plannedHours всех items
   const plannedHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
 
   const nodeBudgets = budgetsMap.get(`decomposition_stage:${stage.id}`) || []
 
-  return {
+  const node: HierarchyNode = {
     id: stage.id,
     name: stage.name,
     type: 'decomposition_stage',
     budgets: nodeBudgets,
-    aggregatedBudgets: aggregateBudgetsByType(nodeBudgets),
+    aggregatedBudgets: [],
     plannedHours,
     children,
-    entityType: 'section', // decomposition_stage не имеет своего entity_type в budgets
+    entityType: 'decomposition_stage',
   }
+
+  // Агрегируем бюджеты вверх (включая детей)
+  node.aggregatedBudgets = aggregateBudgetsUpward(node)
+
+  return node
 }
 
 /**
@@ -236,45 +248,16 @@ function transformObject(
 }
 
 /**
- * Преобразует Stage в HierarchyNode
- */
-function transformStage(
-  stage: Stage,
-  budgetsMap: Map<string, BudgetInfo[]>
-): HierarchyNode {
-  const children = stage.objects.map(object =>
-    transformObject(object, budgetsMap)
-  )
-
-  const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
-
-  const nodeBudgets = budgetsMap.get(`stage:${stage.id}`) || []
-
-  const node: HierarchyNode = {
-    id: stage.id,
-    name: stage.name,
-    type: 'stage',
-    budgets: nodeBudgets,
-    aggregatedBudgets: [],
-    plannedHours,
-    children,
-    entityType: 'stage',
-  }
-
-  node.aggregatedBudgets = aggregateBudgetsUpward(node)
-
-  return node
-}
-
-/**
  * Преобразует Project в HierarchyNode
+ * Иерархия: Project → Object → Section → DecompositionStage
  */
 function transformProject(
   project: Project,
   budgetsMap: Map<string, BudgetInfo[]>
 ): HierarchyNode {
-  const children = project.stages.map(stage =>
-    transformStage(stage, budgetsMap)
+  // Объекты напрямую под проектом (без промежуточного уровня Stage)
+  const children = project.objects.map(object =>
+    transformObject(object, budgetsMap)
   )
 
   const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
@@ -285,6 +268,7 @@ function transformProject(
     id: project.id,
     name: project.name,
     type: 'project',
+    stageName: project.stageType,
     budgets: nodeBudgets,
     aggregatedBudgets: [],
     plannedHours,
@@ -397,6 +381,8 @@ export interface UseBudgetsHierarchyResult {
   isLoading: boolean
   /** Ошибка */
   error: Error | null
+  /** Функция для обновления данных */
+  refetch: () => void
 }
 
 /**
@@ -419,6 +405,7 @@ export function useBudgetsHierarchy(
     data: projects,
     isLoading: projectsLoading,
     error: projectsError,
+    refetch: refetchProjects,
   } = useResourceGraphData(filters || {})
 
   // Загружаем все активные бюджеты
@@ -426,7 +413,14 @@ export function useBudgetsHierarchy(
     data: budgets,
     isLoading: budgetsLoading,
     error: budgetsError,
+    refetch: refetchBudgets,
   } = useBudgets({ is_active: true })
+
+  // Функция для обновления всех данных
+  const refetch = useCallback(() => {
+    refetchProjects()
+    refetchBudgets()
+  }, [refetchProjects, refetchBudgets])
 
   // Создаём Map для быстрого поиска бюджетов по entity
   const budgetsMap = useMemo(() => {
@@ -480,5 +474,6 @@ export function useBudgetsHierarchy(
     analytics,
     isLoading: projectsLoading || budgetsLoading,
     error: projectsError || budgetsError || null,
+    refetch,
   }
 }

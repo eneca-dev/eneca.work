@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState, useId } from 'react'
-import { parseISO, addDays, format, subDays } from 'date-fns'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { addDays, format, subDays } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH } from '../../constants'
@@ -70,9 +70,9 @@ export function StageReadinessArea({
       snapshotMap.set(snap.date, snap.value)
     }
 
-    // Границы данных
-    const firstDataDate = parseISO(sortedSnapshots[0].date)
-    const lastDataDate = parseISO(sortedSnapshots[sortedSnapshots.length - 1].date)
+    // Границы данных (используем parseMinskDate для консистентности с range.start)
+    const firstDataDate = parseMinskDate(sortedSnapshots[0].date)
+    const lastDataDate = parseMinskDate(sortedSnapshots[sortedSnapshots.length - 1].date)
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
@@ -122,8 +122,8 @@ export function StageReadinessArea({
   const plannedLine = useMemo(() => {
     if (!stageStartDate || !stageEndDate) return null
 
-    const stageStart = parseISO(stageStartDate)
-    const stageEnd = parseISO(stageEndDate)
+    const stageStart = parseMinskDate(stageStartDate)
+    const stageEnd = parseMinskDate(stageEndDate)
     const stageDuration = Math.max(1, Math.ceil((stageEnd.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)))
 
     const graphHeight = rowHeight * 0.75
@@ -152,7 +152,7 @@ export function StageReadinessArea({
       stageDuration,
       // Функция для расчёта планового значения на конкретную дату
       getPlannedValue: (dateStr: string): number | null => {
-        const date = parseISO(dateStr)
+        const date = parseMinskDate(dateStr)
         if (date < stageStart) return 0
         if (date > stageEnd) return 100
         const daysPassed = (date.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)
@@ -292,7 +292,7 @@ export function StageReadinessArea({
             <TooltipContent side="top" className="text-xs">
               <div className="space-y-1">
                 <div className="text-muted-foreground text-[10px]">
-                  {format(parseISO(point.date), 'd MMMM', { locale: ru })}
+                  {format(parseMinskDate(point.date), 'd MMMM', { locale: ru })}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium" style={{ color }}>

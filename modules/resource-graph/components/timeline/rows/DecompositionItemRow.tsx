@@ -99,7 +99,7 @@ export function DecompositionItemRow({
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 5
+  const depth = 4
 
   // Прогресс (0-100)
   const progress = item.progress ?? 0

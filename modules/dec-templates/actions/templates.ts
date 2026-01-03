@@ -229,7 +229,11 @@ export async function createTemplate(input: {
 }
 
 /**
- * Удалить шаблон
+ * Деактивировать шаблон (soft delete)
+ *
+ * Использует soft delete (is_active = false) вместо hard delete,
+ * чтобы сохранить историю и не нарушить целостность данных.
+ *
  * Auth: RLS (не нужен user.id)
  */
 export async function removeTemplate(input: {
@@ -238,9 +242,25 @@ export async function removeTemplate(input: {
   try {
     const supabase = await createClient()
 
+    // Проверяем что шаблон существует
+    const { data: template, error: checkError } = await supabase
+      .from('dec_templates')
+      .select('id, is_active')
+      .eq('id', input.templateId)
+      .single()
+
+    if (checkError || !template) {
+      return { success: false, error: 'Шаблон не найден' }
+    }
+
+    if (!template.is_active) {
+      return { success: false, error: 'Шаблон уже деактивирован' }
+    }
+
+    // Soft delete: устанавливаем is_active = false
     const { error } = await supabase
       .from('dec_templates')
-      .delete()
+      .update({ is_active: false })
       .eq('id', input.templateId)
 
     if (error) {

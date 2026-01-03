@@ -317,7 +317,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
         {/* Name */}
         <span className="text-[11px] text-muted-foreground truncate flex-1 min-w-0" title={budget.name}>
-          {budget.type_name || budget.name}
+          {budget.name}
         </span>
 
         {/* Amount */}

@@ -20,6 +20,8 @@ interface HoursInputProps {
   dimIfZero?: boolean
   /** Выделить жирным */
   bold?: boolean
+  /** Подсветить белым (для редактируемых полей) */
+  highlighted?: boolean
   /** CSS класс */
   className?: string
 }
@@ -30,6 +32,7 @@ export function HoursInput({
   readOnly = false,
   dimIfZero = true,
   bold = false,
+  highlighted = false,
   className,
 }: HoursInputProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -108,7 +111,8 @@ export function HoursInput({
       className={cn(
         'text-[12px] tabular-nums cursor-default',
         isZero && dimIfZero && 'text-slate-600',
-        !isZero && 'text-slate-300',
+        !isZero && !highlighted && 'text-slate-400',
+        !isZero && highlighted && 'text-slate-100',
         bold && !isZero && 'font-medium text-slate-200',
         !readOnly && onChange && 'cursor-pointer hover:text-cyan-400',
         className

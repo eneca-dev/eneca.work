@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
@@ -109,6 +109,22 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
+  // Auto-scroll to today on mount
+  useEffect(() => {
+    // Позиция "сегодня" на timeline (DAYS_BEFORE_TODAY дней от начала)
+    const todayScrollPosition = DAYS_BEFORE_TODAY * DAY_CELL_WIDTH
+
+    // Небольшая задержка чтобы DOM успел отрисоваться
+    requestAnimationFrame(() => {
+      if (headerScrollRef.current) {
+        headerScrollRef.current.scrollLeft = todayScrollPosition
+      }
+      if (contentScrollRef.current) {
+        contentScrollRef.current.scrollLeft = todayScrollPosition
+      }
+    })
+  }, []) // Один раз при монтировании
+
   // UI state
   const { collapseAll, expandAll } = useUIStateStore()
 
@@ -121,7 +137,6 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
 
     const nodesByType: Partial<Record<import('../types').TreeNodeType, string[]>> = {
       project: [],
-      stage: [],
       object: [],
       section: [],
       decomposition_stage: [],
@@ -129,15 +144,12 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
 
     data.forEach((project) => {
       nodesByType.project!.push(project.id)
-      project.stages.forEach((stage) => {
-        nodesByType.stage!.push(stage.id)
-        stage.objects.forEach((obj) => {
-          nodesByType.object!.push(obj.id)
-          obj.sections.forEach((section) => {
-            nodesByType.section!.push(section.id)
-            section.decompositionStages.forEach((ds) => {
-              nodesByType.decomposition_stage!.push(ds.id)
-            })
+      project.objects.forEach((obj) => {
+        nodesByType.object!.push(obj.id)
+        obj.sections.forEach((section) => {
+          nodesByType.section!.push(section.id)
+          section.decompositionStages.forEach((ds) => {
+            nodesByType.decomposition_stage!.push(ds.id)
           })
         })
       })
@@ -298,6 +310,22 @@ export function ResourceGraph() {
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
+  // Auto-scroll to today on mount
+  useEffect(() => {
+    // Позиция "сегодня" на timeline (DAYS_BEFORE_TODAY дней от начала)
+    const todayScrollPosition = DAYS_BEFORE_TODAY * DAY_CELL_WIDTH
+
+    // Небольшая задержка чтобы DOM успел отрисоваться
+    requestAnimationFrame(() => {
+      if (headerScrollRef.current) {
+        headerScrollRef.current.scrollLeft = todayScrollPosition
+      }
+      if (contentScrollRef.current) {
+        contentScrollRef.current.scrollLeft = todayScrollPosition
+      }
+    })
+  }, []) // Один раз при монтировании
+
   // Filters store
   const { filterString, setFilterString } = useFiltersStore()
   const { settings } = useDisplaySettingsStore()
@@ -321,7 +349,6 @@ export function ResourceGraph() {
 
     const nodesByType: Partial<Record<import('../types').TreeNodeType, string[]>> = {
       project: [],
-      stage: [],
       object: [],
       section: [],
       decomposition_stage: [],
@@ -329,15 +356,12 @@ export function ResourceGraph() {
 
     data.forEach((project) => {
       nodesByType.project!.push(project.id)
-      project.stages.forEach((stage) => {
-        nodesByType.stage!.push(stage.id)
-        stage.objects.forEach((obj) => {
-          nodesByType.object!.push(obj.id)
-          obj.sections.forEach((section) => {
-            nodesByType.section!.push(section.id)
-            section.decompositionStages.forEach((ds) => {
-              nodesByType.decomposition_stage!.push(ds.id)
-            })
+      project.objects.forEach((obj) => {
+        nodesByType.object!.push(obj.id)
+        obj.sections.forEach((section) => {
+          nodesByType.section!.push(section.id)
+          section.decompositionStages.forEach((ds) => {
+            nodesByType.decomposition_stage!.push(ds.id)
           })
         })
       })

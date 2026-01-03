@@ -28,6 +28,7 @@ import {
   updateBudgetPart,
   deleteBudgetPart,
   deactivateBudget,
+  clearBudget,
 } from '../actions/budget-actions'
 
 import type {
@@ -117,7 +118,8 @@ interface ParentBudgetParams {
 
 /**
  * Хук для поиска родительского бюджета в иерархии
- * Ищет ближайший бюджет выше по иерархии (object → stage → project)
+ * Ищет ближайший бюджет выше по иерархии (object → project)
+ * Примечание: stage исключён из иерархии бюджетов
  *
  * @example
  * const { data: parent, isLoading } = useFindParentBudget('section', sectionId)
@@ -193,14 +195,42 @@ export const useUpdateBudgetAmount = createCacheMutation<UpdateBudgetAmountInput
 /**
  * Хук для деактивации бюджета (soft delete)
  *
+ * Проверяет целостность данных:
+ * - Нельзя деактивировать если есть активные дочерние бюджеты
+ * - Предупреждает если есть approved расходы
+ *
  * @example
  * const { mutate: deactivate, isPending } = useDeactivateBudget()
  * deactivate(budgetId)
  */
-export const useDeactivateBudget = createCacheMutation<string, { success: boolean }>({
+export const useDeactivateBudget = createCacheMutation<string, { success: boolean; warning?: string }>({
   mutationFn: deactivateBudget,
   invalidateKeys: () => [
     queryKeys.budgets.all,
+    queryKeys.budgets.sectionSummary(),
+  ],
+})
+
+/**
+ * Хук для очистки бюджета (обнуление вместо удаления)
+ *
+ * Используется когда нужно "удалить" бюджет но сохранить историю.
+ * Обнуляет total_amount и все части.
+ *
+ * @example
+ * const { mutate: clear, isPending } = useClearBudget()
+ * clear({ budgetId: 'budget-id', comment: 'Причина обнуления' })
+ */
+export const useClearBudget = createCacheMutation<
+  { budgetId: string; comment?: string },
+  BudgetCurrent
+>({
+  mutationFn: ({ budgetId, comment }) => clearBudget(budgetId, comment),
+  invalidateKeys: (input) => [
+    queryKeys.budgets.lists(),
+    queryKeys.budgets.detail(input.budgetId),
+    queryKeys.budgets.full(input.budgetId),
+    queryKeys.budgets.history(input.budgetId),
     queryKeys.budgets.sectionSummary(),
   ],
 })

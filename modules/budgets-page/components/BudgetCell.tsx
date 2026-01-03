@@ -11,8 +11,7 @@ import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BudgetAmountEdit } from './BudgetAmountEdit'
 import { BudgetCreatePopover } from './BudgetCreatePopover'
-import type { BudgetEntityType } from '@/modules/budgets/types'
-import type { BudgetInfo } from '../types'
+import type { BudgetInfo, BudgetPageEntityType } from '../types'
 
 // ============================================================================
 // Types
@@ -22,7 +21,7 @@ interface BudgetCellProps {
   /** Индивидуальные бюджеты узла */
   budgets: BudgetInfo[]
   /** Тип сущности */
-  entityType: BudgetEntityType
+  entityType: BudgetPageEntityType
   /** ID сущности */
   entityId: string
   /** Название сущности */

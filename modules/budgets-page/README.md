@@ -37,16 +37,17 @@ import { BudgetsViewInternal } from '@/modules/budgets-page'
 
 Модуль объединяет данные из двух существующих хуков:
 
-1. **useResourceGraphData** - иерархия проектов (project → stage → object → section → decomposition_stage)
+1. **useResourceGraphData** - иерархия проектов (project → object → section → decomposition_stage)
 2. **useBudgets** - все активные бюджеты
 
 ### Связь бюджетов с иерархией
 
 Бюджеты привязываются к узлам через `entity_type` и `entity_id`:
 - `project:uuid` → проект
-- `stage:uuid` → стадия
 - `object:uuid` → объект
 - `section:uuid` → раздел
+
+> **Note:** Стадия (stage) теперь является параметром проекта, а не отдельным уровнем иерархии.
 
 ## Типы
 
@@ -56,12 +57,12 @@ import { BudgetsViewInternal } from '@/modules/budgets-page'
 interface HierarchyNode {
   id: string
   name: string
-  type: 'project' | 'stage' | 'object' | 'section' | 'decomposition_stage'
+  type: 'project' | 'object' | 'section' | 'decomposition_stage' | 'decomposition_item'
   budgets: BudgetInfo[]           // Собственные бюджеты узла
   aggregatedBudgets: AggregatedBudgetsByType[]  // Агрегированные (включая детей)
   plannedHours?: number
   children: HierarchyNode[]
-  entityType: BudgetEntityType
+  entityType: BudgetPageEntityType  // 'project' | 'object' | 'section' (без 'stage')
 }
 ```
 

@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO, format, addDays, isWithinInterval } from 'date-fns'
-import { getTodayMinsk } from '@/lib/timezone-utils'
+import { differenceInDays, format, addDays, isWithinInterval } from 'date-fns'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessCheckpoint, ReadinessPoint, BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
@@ -55,8 +55,8 @@ export function SectionTooltipOverlay({
   const dayMetrics = useMemo(() => {
     if (!sectionStartDate || !sectionEndDate) return []
 
-    const sectionStart = parseISO(sectionStartDate)
-    const sectionEnd = parseISO(sectionEndDate)
+    const sectionStart = parseMinskDate(sectionStartDate)
+    const sectionEnd = parseMinskDate(sectionEndDate)
 
     // Создаём Maps для быстрого поиска
     const plannedMap = new Map<string, number>()
@@ -108,8 +108,8 @@ export function SectionTooltipOverlay({
         actualReadiness = exactActual
       } else if (sortedActual.length > 0) {
         // Интерполируем только если дата в пределах данных
-        const firstActual = parseISO(sortedActual[0].date)
-        const lastActual = parseISO(sortedActual[sortedActual.length - 1].date)
+        const firstActual = parseMinskDate(sortedActual[0].date)
+        const lastActual = parseMinskDate(sortedActual[sortedActual.length - 1].date)
         if (dayDate >= firstActual && dayDate <= lastActual) {
           actualReadiness = interpolateValue(dayDate, sortedActual)
         }
@@ -123,7 +123,7 @@ export function SectionTooltipOverlay({
         budgetPercent = exactBudget.percent
         budgetSpent = exactBudget.spent
       } else if (sortedBudget.length > 0) {
-        const firstBudget = parseISO(sortedBudget[0].date)
+        const firstBudget = parseMinskDate(sortedBudget[0].date)
         const today = getTodayMinsk()
         // Показываем значение от первой даты данных до сегодня
         if (dayDate >= firstBudget && dayDate <= today) {
@@ -183,7 +183,7 @@ interface DayTooltipProps {
 
 function DayTooltip({ day }: DayTooltipProps) {
   const left = day.dayIndex * DAY_CELL_WIDTH
-  const formattedDate = format(parseISO(day.date), 'd MMMM', { locale: ru })
+  const formattedDate = format(parseMinskDate(day.date), 'd MMMM', { locale: ru })
 
   return (
     <Tooltip>
@@ -286,7 +286,7 @@ function interpolateValue(
   let rightPoint: { date: string; value: number } | null = null
 
   for (const point of points) {
-    const pointDate = parseISO(point.date)
+    const pointDate = parseMinskDate(point.date)
     if (pointDate <= date) {
       leftPoint = point
     }
@@ -300,8 +300,8 @@ function interpolateValue(
   if (leftPoint && !rightPoint) return leftPoint.value
   if (!leftPoint || !rightPoint) return null
 
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
+  const leftDate = parseMinskDate(leftPoint.date)
+  const rightDate = parseMinskDate(rightPoint.date)
   const totalDays = differenceInDays(rightDate, leftDate)
   if (totalDays === 0) return leftPoint.value
 
@@ -321,7 +321,7 @@ function getLastKnownBudget(
   let lastKnown: BudgetSpendingPoint | null = null
 
   for (const point of points) {
-    const pointDate = parseISO(point.date)
+    const pointDate = parseMinskDate(point.date)
     if (pointDate <= date) {
       lastKnown = point
     } else {

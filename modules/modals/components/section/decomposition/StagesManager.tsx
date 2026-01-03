@@ -289,7 +289,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         })
         toast({
           title: 'Ошибка',
-          description: 'Не удалось удалить этап',
+          description: error instanceof Error ? error.message : 'Не удалось удалить этап',
           variant: 'destructive',
         })
       }

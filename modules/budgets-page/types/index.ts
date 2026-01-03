@@ -67,8 +67,15 @@ export interface AggregatedBudgetsByType {
 
 /**
  * Тип узла иерархии
+ * Note: stage удалён — стадия теперь параметр проекта, а не отдельный уровень иерархии
  */
-export type HierarchyNodeType = 'project' | 'stage' | 'object' | 'section' | 'decomposition_stage' | 'decomposition_item'
+export type HierarchyNodeType = 'project' | 'object' | 'section' | 'decomposition_stage' | 'decomposition_item'
+
+/**
+ * Типы сущностей бюджета
+ * Включает: project, object, section, decomposition_stage, decomposition_item
+ */
+export type BudgetPageEntityType = BudgetEntityType
 
 /**
  * Узел иерархии с бюджетами
@@ -79,6 +86,8 @@ export interface HierarchyNode {
   type: HierarchyNodeType
   /** Код раздела (АР, КР, ОВ) - только для sections */
   code?: string
+  /** Стадия проекта (только для project) */
+  stageName?: string | null
   /** Бюджеты этого узла */
   budgets: BudgetInfo[]
   /** Агрегированные бюджеты по типам (для прогресс-баров) */
@@ -90,11 +99,14 @@ export interface HierarchyNode {
   /** Дочерние узлы */
   children: HierarchyNode[]
   /** Entity type для создания бюджета */
-  entityType: BudgetEntityType
-  /** Тип работ (только для decomposition_item) */
-  workCategory?: string | null
+  entityType: BudgetPageEntityType
+  /** ID типа работ (только для decomposition_item) */
+  workCategoryId?: string | null
+  /** Название типа работ (только для decomposition_item) */
+  workCategoryName?: string | null
   /** Сложность (только для decomposition_item) */
   difficulty?: {
+    id: string | null
     abbr: string | null
     name: string | null
   } | null

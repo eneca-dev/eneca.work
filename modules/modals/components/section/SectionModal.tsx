@@ -14,6 +14,7 @@ import {
   FileText,
   ListTodo,
   Target,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -28,6 +29,7 @@ import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
 import { DateRangeInput } from './DateRangeInput'
 import { OverviewTab, TasksTab, ReadinessTab } from './tabs'
+import { DeleteSectionModal } from './DeleteSectionModal'
 
 // ============================================================================
 // Constants
@@ -149,6 +151,7 @@ export function SectionModal({
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -469,6 +472,20 @@ export function SectionModal({
                       : null
                   }
                 />
+
+                {/* Delete button */}
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+                    'text-xs text-slate-500 hover:text-red-400',
+                    'hover:bg-red-500/10',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Удалить раздел</span>
+                </button>
               </div>
             </div>
 
@@ -559,6 +576,19 @@ export function SectionModal({
           </Tabs.Root>
         </div>
       </FocusScope.Root>
+
+      {/* Delete Section Modal */}
+      <DeleteSectionModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        sectionId={sectionId}
+        sectionName={section.name}
+        onSuccess={() => {
+          setIsDeleteModalOpen(false)
+          onClose()
+          onSuccess?.()
+        }}
+      />
     </>
   )
 }

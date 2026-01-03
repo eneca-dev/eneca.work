@@ -64,11 +64,9 @@ export interface KanbanSection {
     firstName: string
     lastName: string
   } | null
-  // Контекст
+  // Контекст (иерархия: Project → Object → Section)
   projectId: string
   projectName: string
-  stageId: string
-  stageName: string
   objectId: string
   objectName: string
   // Этапы в этом разделе

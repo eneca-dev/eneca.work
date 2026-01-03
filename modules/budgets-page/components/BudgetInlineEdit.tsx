@@ -11,8 +11,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Loader2, Plus, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
-import type { BudgetEntityType } from '@/modules/budgets/types'
-import type { BudgetInfo } from '../types'
+import type { BudgetInfo, BudgetPageEntityType } from '../types'
 import { BudgetPartsEditor } from './BudgetPartsEditor'
 
 // ============================================================================
@@ -23,7 +22,7 @@ interface BudgetInlineEditProps {
   /** Бюджеты узла */
   budgets: BudgetInfo[]
   /** Тип сущности */
-  entityType: BudgetEntityType
+  entityType: BudgetPageEntityType
   /** ID сущности */
   entityId: string
   /** Название сущности */

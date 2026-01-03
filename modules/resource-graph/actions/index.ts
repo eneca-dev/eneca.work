@@ -189,10 +189,9 @@ export async function getResourceGraphData(
       }
     }
 
-    // Order for consistent hierarchy
+    // Order for consistent hierarchy (Project → Object → Section → DecompositionStage → Item)
     query = query
       .order('project_name')
-      .order('stage_name')
       .order('object_name')
       .order('section_name')
       .order('decomposition_stage_order')
@@ -250,10 +249,9 @@ export async function getUserWorkload(
         )
     }
 
-    // Order for consistent hierarchy
+    // Order for consistent hierarchy (Project → Object → Section → DecompositionStage → Item)
     query = query
       .order('project_name')
-      .order('stage_name')
       .order('object_name')
       .order('section_name')
       .order('decomposition_stage_order')
@@ -623,7 +621,7 @@ export async function getWorkLogsForSection(
   try {
     const supabase = await createClient()
 
-    // Получаем work_logs через join с decomposition_items, profiles и budgets
+    // Получаем work_logs через join с decomposition_items и profiles
     const { data, error } = await supabase
       .from('work_logs')
       .select(`
@@ -634,6 +632,7 @@ export async function getWorkLogsForSection(
         work_log_amount,
         work_log_description,
         work_log_created_by,
+        budget_id,
         decomposition_items!inner (
           decomposition_item_section_id
         ),
@@ -641,14 +640,6 @@ export async function getWorkLogsForSection(
           user_id,
           first_name,
           last_name
-        ),
-        budgets (
-          budget_id,
-          name,
-          budget_types (
-            name,
-            color
-          )
         )
       `)
       .eq('decomposition_items.decomposition_item_section_id', sectionId)
@@ -662,7 +653,6 @@ export async function getWorkLogsForSection(
     // Трансформируем данные в WorkLog[]
     const workLogs: WorkLog[] = (data || []).map(row => {
       const profile = row.profiles as { user_id: string; first_name: string | null; last_name: string | null } | null
-      const budget = row.budgets as { budget_id: string; name: string; budget_types: { name: string; color: string } | null } | null
 
       return {
         id: row.work_log_id,
@@ -680,10 +670,10 @@ export async function getWorkLogsForSection(
             : null,
         },
         budget: {
-          id: budget?.budget_id || '',
-          name: budget?.name || 'Без бюджета',
-          typeName: budget?.budget_types?.name || null,
-          typeColor: budget?.budget_types?.color || null,
+          id: row.budget_id || '',
+          name: 'Бюджет',
+          typeName: null,
+          typeColor: null,
         },
       }
     })
@@ -1690,6 +1680,7 @@ export async function getSectionsBatchData(
           work_log_amount,
           work_log_description,
           work_log_created_by,
+          budget_id,
           decomposition_items!inner (
             decomposition_item_section_id
           ),
@@ -1697,14 +1688,6 @@ export async function getSectionsBatchData(
             user_id,
             first_name,
             last_name
-          ),
-          budgets (
-            budget_id,
-            name,
-            budget_types (
-              name,
-              color
-            )
           )
         `)
         .in('decomposition_items.decomposition_item_section_id', sectionIds)
@@ -1782,19 +1765,19 @@ export async function getSectionsBatchData(
         .in('section_id', sectionIds),
 
       // 5. Budgets для всех секций (опционально по permissions)
+      // V2: используем v_cache_budgets, budget_types больше нет
       includeBudgets
         ? supabase
-            .from('v_cache_budgets_current')
+            .from('v_cache_budgets')
             .select(`
               budget_id,
               entity_id,
               name,
-              planned_amount,
-              spent_amount,
+              total_amount,
+              total_spent,
               remaining_amount,
-              is_active,
-              type_name,
-              type_color
+              spent_percentage,
+              is_active
             `)
             .eq('entity_type', 'section')
             .in('entity_id', sectionIds)
@@ -1883,7 +1866,6 @@ export async function getSectionsBatchData(
       if (!sectionId) continue
 
       const profile = row.profiles as { user_id: string; first_name: string | null; last_name: string | null } | null
-      const budget = row.budgets as { budget_id: string; name: string; budget_types: { name: string; color: string } | null } | null
 
       if (!workLogs[sectionId]) {
         workLogs[sectionId] = []
@@ -1905,10 +1887,10 @@ export async function getSectionsBatchData(
             : null,
         },
         budget: {
-          id: budget?.budget_id || '',
-          name: budget?.name || 'Без бюджета',
-          typeName: budget?.budget_types?.name || null,
-          typeColor: budget?.budget_types?.color || null,
+          id: row.budget_id || '',
+          name: 'Бюджет',
+          typeName: null,
+          typeColor: null,
         },
       })
     }
@@ -2246,6 +2228,8 @@ export async function getSectionsBatchData(
     }
 
     // Budgets: группируем по sectionId (entity_id для entity_type='section')
+    // V2: total_amount → planned_amount, total_spent → spent_amount
+    // type_name и type_color больше не используются (V2 не имеет budget_types)
     const budgets: Record<string, BatchBudget[]> = {}
     for (const sectionId of sectionIds) {
       budgets[sectionId] = []
@@ -2259,10 +2243,11 @@ export async function getSectionsBatchData(
         budgets[sectionId] = []
       }
 
-      const planned_amount = Number(row.planned_amount) || 0
-      const spent_amount = Number(row.spent_amount) || 0
+      // V2 mapping: total_amount → planned_amount, total_spent → spent_amount
+      const planned_amount = Number(row.total_amount) || 0
+      const spent_amount = Number(row.total_spent) || 0
       const remaining_amount = Number(row.remaining_amount) || 0
-      const spent_percentage = planned_amount > 0 ? Math.round((spent_amount / planned_amount) * 100) : 0
+      const spent_percentage = Number(row.spent_percentage) || 0
 
       budgets[sectionId].push({
         budget_id: row.budget_id,
@@ -2271,8 +2256,8 @@ export async function getSectionsBatchData(
         spent_amount,
         remaining_amount,
         spent_percentage,
-        type_name: row.type_name,
-        type_color: row.type_color,
+        type_name: null, // V2: budget_types не используются
+        type_color: null, // V2: budget_types не используются
         is_active: row.is_active ?? true,
       })
     }

@@ -183,6 +183,11 @@ export async function updateDecompositionStage(
 
 /**
  * Удалить этап декомпозиции
+ *
+ * Проверяет целостность данных:
+ * - Нельзя удалить если есть активные loadings (нагрузки сотрудников)
+ * - Нельзя удалить если есть связанные checkpoints
+ * - Элементы декомпозиции открепляются (stage_id = null)
  */
 export async function deleteDecompositionStage(
   stageId: string
@@ -196,12 +201,35 @@ export async function deleteDecompositionStage(
       return { success: false, error: 'Не авторизован' }
     }
 
-    // Сначала обнуляем stage_id у всех items этого этапа
+    // Проверка 1: Есть ли активные loadings (нагрузки) на этом этапе
+    // Правильное имя колонки: loading_stage (не loading_decomposition_stage_id)
+    const { count: loadingsCount, error: loadingsError } = await supabase
+      .from('loadings')
+      .select('*', { count: 'exact', head: true })
+      .eq('loading_stage', stageId)
+
+    if (loadingsError) {
+      console.error('[deleteDecompositionStage] Loadings check error:', loadingsError)
+      return { success: false, error: 'Ошибка проверки нагрузок' }
+    }
+
+    if (loadingsCount && loadingsCount > 0) {
+      return {
+        success: false,
+        error: `Нельзя удалить этап: на него назначено ${loadingsCount} нагрузок сотрудников. Сначала удалите или перенесите нагрузки.`,
+      }
+    }
+
+    // Примечание: таблица section_checkpoints НЕ имеет связи с decomposition_stages
+    // (нет колонки decomposition_stage_id), поэтому проверка checkpoints не нужна
+
+    // Открепляем items от этапа (они останутся в разделе без этапа)
     await supabase
       .from('decomposition_items')
       .update({ decomposition_item_stage_id: null })
       .eq('decomposition_item_stage_id', stageId)
 
+    // Удаляем этап
     const { error } = await supabase
       .from('decomposition_stages')
       .delete()

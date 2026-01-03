@@ -2,6 +2,23 @@
  * Budgets Page Utilities
  */
 
+// Optimistic Updates
+export {
+  saveOptimisticSnapshot,
+  rollbackOptimisticUpdate,
+  updateHierarchyNode,
+  removeHierarchyNode,
+  addChildToParent,
+  createOptimisticBudget,
+  createOptimisticStage,
+  createOptimisticItem,
+  invalidateHierarchyCache,
+} from './optimistic-updates'
+
+export type { OptimisticSnapshot } from './optimistic-updates'
+
+// Format Helpers
+
 /**
  * Форматирует сумму в короткий формат
  * 1500000 → "1.5M"

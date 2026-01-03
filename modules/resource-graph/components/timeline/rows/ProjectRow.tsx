@@ -4,7 +4,7 @@ import { FolderKanban } from 'lucide-react'
 import type { Project, TimelineRange } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { BaseRow } from './BaseRow'
-import { StageRow } from './StageRow'
+import { ObjectRow } from './ObjectRow'
 import { ProjectStatusTags } from '../shared'
 import { useProjectTagsMap } from '../../../hooks'
 import { useRowExpanded } from '../../../stores'
@@ -25,7 +25,7 @@ interface ProjectRowProps {
  */
 export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
   const { isExpanded, toggle } = useRowExpanded('project', project.id)
-  // Всегда показываем кнопку развёртывания (отчёты могут быть даже без стадий)
+  // Всегда показываем кнопку развёртывания (отчёты могут быть даже без объектов)
   const hasChildren = true
 
   // Fetch project tags (cached, single request for all projects)
@@ -59,12 +59,11 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
         range={range}
       />
 
-      {/* Stages */}
-      {project.stages.map((stage) => (
-        <StageRow
-          key={stage.id}
-          stage={stage}
-          projectName={project.name}
+      {/* Objects (напрямую под проектом, без Stage) */}
+      {project.objects.map((obj) => (
+        <ObjectRow
+          key={obj.id}
+          object={obj}
           dayCells={dayCells}
           range={range}
         />
