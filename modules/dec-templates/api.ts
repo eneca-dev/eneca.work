@@ -1,6 +1,5 @@
 import { createClient } from '@/utils/supabase/client'
 import type { TemplateListItem, TemplateDetail, TemplateStage, Stage, Decomposition } from './types'
-import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 
 /**
  * Загрузить список всех шаблонов
@@ -177,14 +176,16 @@ export async function applyTemplate(
 
   const maxOrder = existingStages?.[0]?.decomposition_stage_order ?? 0
 
-  // 2.5. Определить статус для новых этапов (используем переданный или из кэша)
+  // 2.5. Определить статус для новых этапов (используем stage_statuses, не section_statuses!)
   let statusId = defaultStatusId
   if (!statusId) {
-    // Загружаем статусы из store (с кэшированием в localStorage)
-    await useSectionStatusesStore.getState().loadStatuses()
-    const statuses = useSectionStatusesStore.getState().statuses
-    const planStatus = statuses.find(s => /план/i.test(s.name))
-    statusId = planStatus?.id || statuses[0]?.id || null
+    // Загружаем статусы напрямую из stage_statuses
+    const { data: stageStatuses } = await supabase
+      .from('stage_statuses')
+      .select('id, name')
+      .order('name')
+    const planStatus = stageStatuses?.find(s => /план/i.test(s.name))
+    statusId = planStatus?.id || stageStatuses?.[0]?.id || null
   }
 
   // 3. Batch insert новых этапов
@@ -195,13 +196,13 @@ export async function applyTemplate(
     decomposition_stage_start: null,
     decomposition_stage_finish: null,
     decomposition_stage_description: null,
-    decomposition_stage_status_id: statusId
+    stage_status_id: statusId // Используем stage_status_id (не decomposition_stage_status_id!)
   }))
 
   const { data: createdStages, error: stagesError } = await supabase
     .from('decomposition_stages')
     .insert(stagesToCreate)
-    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, decomposition_stage_status_id')
+    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, stage_status_id')
 
   if (stagesError) {
     console.error('Ошибка создания этапов:', stagesError)
@@ -272,7 +273,7 @@ export async function applyTemplate(
         startDate: dbStage.decomposition_stage_start,
         endDate: dbStage.decomposition_stage_finish,
         description: dbStage.decomposition_stage_description,
-        statusId: dbStage.decomposition_stage_status_id,
+        statusId: dbStage.stage_status_id,
         decompositions
       }
     })
