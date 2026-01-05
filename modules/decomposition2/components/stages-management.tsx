@@ -1586,10 +1586,10 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
           decomposition_stage_start: null,
           decomposition_stage_finish: null,
           decomposition_stage_description: null,
-          decomposition_stage_status_id: defaultStageStatusId,
+          stage_status_id: defaultStageStatusId,
           decomposition_stage_order: nextOrder,
         })
-        .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, decomposition_stage_status_id')
+        .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, stage_status_id')
         .single();
       if (error) throw error;
       const row = data as any;
@@ -1599,7 +1599,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         startDate: row.decomposition_stage_start || null,
         endDate: row.decomposition_stage_finish || null,
         description: row.decomposition_stage_description || null,
-        statusId: row.decomposition_stage_status_id || null,
+        statusId: row.stage_status_id || null,
         responsibles: [],
         decompositions: [],
       };
@@ -1689,8 +1689,6 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       const defCategoryId = categoryNameToId.get(defCategoryName) || null;
       const defDifficultyName = difficultyOptions[0] || '';
       const defDifficultyId = defDifficultyName ? (difficultyNameToId.get(defDifficultyName) || null) : null;
-      const defStatusName = (statuses.find((s) => /план/i.test(s.name))?.name ?? statusOptions[0]) || '';
-      const defStatusId = defStatusName ? (statusNameToId.get(defStatusName) || null) : null;
 
       const { data, error } = await supabase
         .from('decomposition_items')
@@ -1702,7 +1700,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
           decomposition_item_order: nextOrder,
           decomposition_item_planned_due_date: opts?.initialCompletionDate ?? null,
           decomposition_item_responsible: null,
-          decomposition_item_status_id: defStatusId,
+          decomposition_item_status_id: null, // Статус для items не используется на фронте
           decomposition_item_progress: 0,
           decomposition_item_stage_id: stageId === '__no_stage__' ? null : stageId,
           decomposition_item_difficulty_id: defDifficultyId,
@@ -1804,7 +1802,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       if (updates.startDate !== undefined) payload.decomposition_stage_start = updates.startDate;
       if (updates.endDate !== undefined) payload.decomposition_stage_finish = updates.endDate;
       if (updates.description !== undefined) payload.decomposition_stage_description = updates.description;
-      if (updates.statusId !== undefined) payload.decomposition_stage_status_id = updates.statusId;
+      if (updates.statusId !== undefined) payload.stage_status_id = updates.statusId;
       if (Object.keys(payload).length === 0) return;
       const { error } = await supabase
         .from('decomposition_stages')
@@ -1978,7 +1976,13 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         if (line.includes('\t')) {
           return line.split('\t').map(cell => cell.trim());
         } else if (line.includes('|')) {
-          return line.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
+          // Не фильтруем пустые ячейки - сохраняем позиции колонок!
+          // Только убираем первую и последнюю пустые (от краевых |)
+          const parts = line.split('|').map(cell => cell.trim());
+          // Убираем первый и последний элемент если они пустые (от | в начале и конце строки)
+          if (parts.length > 0 && parts[0] === '') parts.shift();
+          if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
+          return parts;
         } else {
           return [line.trim()];
         }
@@ -2039,9 +2043,9 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         if (parts.length < 6) continue;
 
         const stageName = parts[0]?.trim(); // Этап
-        const description = parts[1]?.trim(); // Задача
+        const description = parts[1]?.trim() ?? ''; // Задача (может быть пустой)
 
-        if (!stageName || !description) continue;
+        if (!stageName) continue; // Только название этапа обязательно
 
         // Функция парсинга часов (обрабатывает пустые строки и прочерки)
         const parseHours = (val: string | undefined): number => {
@@ -2137,7 +2141,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
             decomposition_stage_start: x.start,
             decomposition_stage_finish: x.finish,
             decomposition_stage_order: x.order,
-            decomposition_stage_status_id: defaultStatusId,
+            stage_status_id: defaultStatusId,
           })))
           .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish');
         if (createErr) throw createErr;
@@ -2176,7 +2180,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
             decomposition_item_order: order++,
             decomposition_item_planned_due_date: null,
             decomposition_item_responsible: null,
-            decomposition_item_status_id: defaultStatusId,
+            decomposition_item_status_id: null, // Статус для items не используется на фронте
             decomposition_item_progress: Number(d.progress) || 0,
             decomposition_item_stage_id: targetStageId, // null означает "без этапа"
             decomposition_item_difficulty_id: difficultyId,
@@ -2690,7 +2694,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
             decomposition_stage_start: stage.startDate,
             decomposition_stage_finish: stage.endDate,
             decomposition_stage_description: stage.description,
-            decomposition_stage_status_id: stage.statusId,
+            stage_status_id: stage.statusId,
             decomposition_stage_order: maxOrder + 1,
           })
           .select('*')
