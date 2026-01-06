@@ -99,7 +99,7 @@ export function DepartmentRow({
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 group-hover/row:bg-muted/50"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 group-hover/row:bg-accent"
             style={{ width: SIDEBAR_WIDTH }}
           >
             {/* Left: expand icon + department name */}
@@ -144,7 +144,7 @@ export function DepartmentRow({
           </div>
 
           {/* Timeline cells */}
-          <div className="flex" style={{ width: timelineWidth }}>
+          <div className="flex relative z-0" style={{ width: timelineWidth }}>
             {dayCells.map((cell, i) => {
               const isWeekend = cell.isWeekend && !cell.isWorkday
               const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff

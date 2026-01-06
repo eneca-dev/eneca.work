@@ -8,12 +8,11 @@
 'use client'
 
 import { useMemo, useCallback, useRef, useEffect } from 'react'
-import { ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
+import { ChevronsUpDown, ChevronsDownUp, ChevronDown } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
-import { useResourceGraphData, useCompanyCalendarEvents } from '../hooks'
+import { useResourceGraphData, useCompanyCalendarEvents, usePrefetchSectionsBatch } from '../hooks'
 import { useDisplaySettingsStore, useFiltersStore, useUIStateStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
-import { Button } from '@/components/ui/button'
 import {
   Tooltip,
   TooltipContent,
@@ -126,10 +125,13 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
   }, []) // Один раз при монтировании
 
   // UI state
-  const { collapseAll, expandAll } = useUIStateStore()
+  const { collapseAll, expandAll, expandToSections } = useUIStateStore()
 
   // Data fetching with external query params
   const { data, isLoading, error } = useResourceGraphData(queryParams)
+
+  // Background prefetch of sections batch data after initial load
+  usePrefetchSectionsBatch(data, { enabled: !isLoading && !!data })
 
   // Expand all nodes in the tree (batch operation)
   const handleExpandAll = useCallback(() => {
@@ -158,6 +160,23 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
     expandAll(nodesByType)
   }, [data, expandAll])
 
+  // Expand to sections level (projects + objects only)
+  const handleExpandToSections = useCallback(() => {
+    if (!data) return
+
+    const projectIds: string[] = []
+    const objectIds: string[] = []
+
+    data.forEach((project) => {
+      projectIds.push(project.id)
+      project.objects.forEach((obj) => {
+        objectIds.push(obj.id)
+      })
+    })
+
+    expandToSections({ project: projectIds, object: objectIds })
+  }, [data, expandToSections])
+
   // Collapse all nodes
   const handleCollapseAll = useCallback(() => {
     collapseAll()
@@ -183,33 +202,43 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Структура
                 </span>
-                <TooltipProvider>
-                  <div className="flex items-center gap-1">
+                {/* Unified button group - expand controls */}
+                <TooltipProvider delayDuration={200}>
+                  <div className="flex items-center bg-muted/40 rounded-md border border-border/50">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
+                        <button
+                          className="p-1 hover:bg-muted/80 rounded-l-md transition-colors text-muted-foreground hover:text-foreground"
+                          onClick={handleExpandToSections}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">До разделов</TooltipContent>
+                    </Tooltip>
+                    <div className="w-px h-4 bg-border/50" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="p-1 hover:bg-muted/80 transition-colors text-muted-foreground hover:text-foreground"
                           onClick={handleExpandAll}
                         >
                           <ChevronsUpDown className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom">Развернуть всё</TooltipContent>
+                      <TooltipContent side="bottom" className="text-xs">Развернуть всё</TooltipContent>
                     </Tooltip>
+                    <div className="w-px h-4 bg-border/50" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
+                        <button
+                          className="p-1 hover:bg-muted/80 rounded-r-md transition-colors text-muted-foreground hover:text-foreground"
                           onClick={handleCollapseAll}
                         >
                           <ChevronsDownUp className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom">Свернуть всё</TooltipContent>
+                      <TooltipContent side="bottom" className="text-xs">Свернуть всё</TooltipContent>
                     </Tooltip>
                   </div>
                 </TooltipProvider>
@@ -329,7 +358,7 @@ export function ResourceGraph() {
   // Filters store
   const { filterString, setFilterString } = useFiltersStore()
   const { settings } = useDisplaySettingsStore()
-  const { collapseAll, expandAll } = useUIStateStore()
+  const { collapseAll, expandAll, expandToSections } = useUIStateStore()
 
   // Load filter options for autocomplete
   const { options: filterOptions, isLoading: loadingOptions } = useFilterOptions()
@@ -342,6 +371,9 @@ export function ResourceGraph() {
 
   // Data fetching - всегда загружаем данные (фильтры применяются на сервере)
   const { data, isLoading, error } = useResourceGraphData(queryParams)
+
+  // Background prefetch of sections batch data after initial load
+  usePrefetchSectionsBatch(data, { enabled: !isLoading && !!data })
 
   // Expand all nodes in the tree (batch operation)
   const handleExpandAll = useCallback(() => {
@@ -369,6 +401,23 @@ export function ResourceGraph() {
 
     expandAll(nodesByType)
   }, [data, expandAll])
+
+  // Expand to sections level (projects + objects only)
+  const handleExpandToSections = useCallback(() => {
+    if (!data) return
+
+    const projectIds: string[] = []
+    const objectIds: string[] = []
+
+    data.forEach((project) => {
+      projectIds.push(project.id)
+      project.objects.forEach((obj) => {
+        objectIds.push(obj.id)
+      })
+    })
+
+    expandToSections({ project: projectIds, object: objectIds })
+  }, [data, expandToSections])
 
   // Collapse all nodes
   const handleCollapseAll = useCallback(() => {
@@ -420,33 +469,43 @@ export function ResourceGraph() {
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Структура
                 </span>
-                <TooltipProvider>
-                  <div className="flex items-center gap-1">
+                {/* Unified button group - expand controls */}
+                <TooltipProvider delayDuration={200}>
+                  <div className="flex items-center bg-muted/40 rounded-md border border-border/50">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
+                        <button
+                          className="p-1 hover:bg-muted/80 rounded-l-md transition-colors text-muted-foreground hover:text-foreground"
+                          onClick={handleExpandToSections}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">До разделов</TooltipContent>
+                    </Tooltip>
+                    <div className="w-px h-4 bg-border/50" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="p-1 hover:bg-muted/80 transition-colors text-muted-foreground hover:text-foreground"
                           onClick={handleExpandAll}
                         >
                           <ChevronsUpDown className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom">Развернуть всё</TooltipContent>
+                      <TooltipContent side="bottom" className="text-xs">Развернуть всё</TooltipContent>
                     </Tooltip>
+                    <div className="w-px h-4 bg-border/50" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
+                        <button
+                          className="p-1 hover:bg-muted/80 rounded-r-md transition-colors text-muted-foreground hover:text-foreground"
                           onClick={handleCollapseAll}
                         >
                           <ChevronsDownUp className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom">Свернуть всё</TooltipContent>
+                      <TooltipContent side="bottom" className="text-xs">Свернуть всё</TooltipContent>
                     </Tooltip>
                   </div>
                 </TooltipProvider>

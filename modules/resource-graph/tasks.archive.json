@@ -1,0 +1,54 @@
+{
+  "$schema": "../../schemas/module-meta/tasks-archive.schema.json",
+  "moduleName": "resource-graph",
+  "archivedTasks": [
+    {
+      "id": "RG-001",
+      "title": "Исправить рендеринг вертикальных связей чекпоинтов",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "changelogEntry": "[RG-001] Исправлен рендеринг вертикальных связей чекпоинтов при expand/collapse строк",
+      "relatedFiles": [
+        "modules/checkpoints/context/CheckpointLinksContext.tsx",
+        "modules/checkpoints/components/CheckpointMarker.tsx"
+      ],
+      "solution": "Добавлен layoutVersion в CheckpointLinksContext, который инкрементируется при изменении expandedNodes. Это триггерит пересчёт позиций чекпоинтов через getBoundingClientRect() в useLayoutEffect."
+    },
+    {
+      "id": "RG-005",
+      "title": "Показатель прироста процента готовности в строке задач",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "createdAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "changelogEntry": "[RG-005] Добавлен индикатор прироста прогресса в строках задач (item_progress_history + UI бейдж)",
+      "relatedFiles": [
+        "supabase/migrations/20260105_add_item_progress_history.sql",
+        "supabase/migrations/20260105_add_progress_delta_to_resource_graph.sql",
+        "modules/resource-graph/types/index.ts",
+        "modules/resource-graph/utils/index.ts",
+        "modules/resource-graph/components/timeline/rows/DecompositionItemRow.tsx"
+      ],
+      "solution": "Создана таблица item_progress_history с триггером на decomposition_items для автоматической записи истории изменений прогресса. Добавлен LATERAL join в v_resource_graph для вычисления delta. UI бейдж отображает прирост (+5% зелёный, -2% красный)."
+    },
+    {
+      "id": "RG-014",
+      "title": "Отображение бюджета в модалке задачи и sidebar",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "changelogEntry": "[RG-014] Добавлено отображение бюджета задачи в TaskSidebar и DecompositionItemRow",
+      "relatedFiles": [
+        "modules/modals/components/task/TaskSidebar.tsx",
+        "modules/resource-graph/components/timeline/rows/DecompositionItemRow.tsx"
+      ],
+      "solution": "Бюджет задачи (из таблицы budgets с entity_type='decomposition_item') уже вычислялся в v_resource_graph. Добавлено UI отображение: 1) В TaskSidebar - полная секция с прогресс-баром, суммами и процентом, цветовой индикацией; 2) В DecompositionItemRow sidebar - компактный бейдж с иконкой Wallet и процентом расхода. Цвета: зелёный (<80%), жёлтый (80-100%), красный (>100%)."
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "departments-timeline",
+    "displayName": "Departments Timeline",
+    "description": "Таймлайн отделов, команд и сотрудников с загрузками и свежестью данных",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": "/dashboard/tasks (вкладка Отделы)",
+    "tags": ["feature", "ui", "data-layer"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для данных отделов",
+      "components/": "React компоненты (DepartmentRow, TeamRow, EmployeeRow)",
+      "components/timeline/": "Timeline компоненты",
+      "constants/": "Константы (размеры, пороги свежести)",
+      "hooks/": "React Query хуки",
+      "stores/": "Zustand store для UI состояния",
+      "types/": "TypeScript типы",
+      "utils/": "Утилиты"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "DepartmentsTimelineInternal",
+      "DepartmentRow",
+      "TeamRow",
+      "EmployeeRow",
+      "useDepartmentsData",
+      "useTeamsFreshness",
+      "useDepartmentsTimelineUIStore"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useDepartmentsData",
+      "description": "Получение иерархии отделов с командами и сотрудниками",
+      "file": "hooks/index.ts",
+      "returns": "{ data: Department[], isLoading }"
+    },
+    {
+      "name": "useTeamsFreshness",
+      "description": "Получение свежести данных по командам",
+      "file": "hooks/index.ts",
+      "returns": "{ data: TeamFreshness[] }"
+    },
+    {
+      "name": "useConfirmTeamActivity",
+      "description": "Mutation для подтверждения актуальности данных команды",
+      "file": "hooks/index.ts"
+    }
+  ],
+
+  "actions": [],
+
+  "stores": [
+    {
+      "name": "useDepartmentsTimelineUIStore",
+      "description": "UI состояние таймлайна (развёрнутые узлы)",
+      "file": "stores/index.ts",
+      "persistence": "departments-timeline-ui",
+      "state": ["expandedNodes"],
+      "actions": ["toggleNode", "expandAll", "collapseAll"]
+    }
+  ],
+
+  "components": [
+    {
+      "name": "DepartmentsTimelineInternal",
+      "description": "Главный компонент таймлайна отделов",
+      "file": "components/DepartmentsTimelineInternal.tsx",
+      "props": ["filterString?", "queryParams?"]
+    },
+    {
+      "name": "DepartmentRow",
+      "description": "Строка отдела с индикатором свежести",
+      "file": "components/timeline/DepartmentRow.tsx",
+      "props": ["department", "freshness"]
+    },
+    {
+      "name": "TeamRow",
+      "description": "Строка команды с кнопкой подтверждения актуальности",
+      "file": "components/timeline/TeamRow.tsx",
+      "props": ["team", "freshness", "onConfirm"]
+    },
+    {
+      "name": "EmployeeRow",
+      "description": "Строка сотрудника с загрузками на timeline",
+      "file": "components/timeline/EmployeeRow.tsx",
+      "props": ["employee", "loadings"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Freshness Indicator Pattern",
+      "description": "Свежесть данных показывается цветом: зелёный < 7 дней, жёлтый < 30 дней, красный > 30 дней",
+      "example": "getFreshnessColor(team.lastConfirmedAt)"
+    }
+  ],
+
+  "antipatterns": [],
+
+  "technologies": ["@tanstack/react-query", "zustand", "date-fns", "tailwindcss"],
+
+  "dependencies": {
+    "modules": ["cache", "inline-filter", "modals"],
+    "database": {
+      "tables": ["departments", "teams", "profiles", "loadings", "team_activity_confirmations"],
+      "views": ["v_departments_timeline"],
+      "enums": [],
+      "functions": []
+    }
+  },
+
+  "dependents": ["tasks"],
+
+  "cache": {
+    "queryKeys": ["departmentsTimeline.data", "departmentsTimeline.freshness"],
+    "realtimeChannels": ["loadings", "team_activity_confirmations"],
+    "invalidationRules": []
+  },
+
+  "permissions": ["departments.view", "departments.confirm_activity"],
+
+  "tasks": [
+    {
+      "id": "DT-AUDIT",
+      "title": "Full Module Audit: Departments Timeline",
+      "description": "Полный аудит модуля таймлайна отделов для подтверждения качества.\n\nОсобое внимание на корректность свежести данных и отображение загрузок сотрудников.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 4,
+      "checklist": {
+        "database": [
+          "[ ] v_departments_timeline возвращает полную иерархию",
+          "[ ] Индексы на loadings(employee_id, start_date, end_date)",
+          "[ ] Индексы на team_activity_confirmations(team_id, confirmed_at)",
+          "[ ] JOIN departments → teams → profiles оптимален"
+        ],
+        "security": [
+          "[ ] Данные фильтруются по доступным отделам пользователя",
+          "[ ] confirmTeamActivity имеет auth check",
+          "[ ] RLS policies на loadings, team_activity_confirmations",
+          "[ ] Permission check: departments.view, departments.confirm_activity"
+        ],
+        "businessLogic": [
+          "[ ] Свежесть данных считается правильно (дни с последнего подтверждения)",
+          "[ ] Цветовая индикация: зелёный < 7 дней, жёлтый < 30, красный > 30",
+          "[ ] Загрузки сотрудников отображаются на правильных датах",
+          "[ ] Агрегация загрузок по команде показывает % занятости",
+          "[ ] Подтверждение актуальности обновляет дату и цвет",
+          "[ ] Edge case: команда без сотрудников",
+          "[ ] Edge case: сотрудник без загрузок",
+          "[ ] Edge case: отдел без команд"
+        ],
+        "performance": [
+          "[ ] Загрузка страницы < 1.5 сек для 10 отделов",
+          "[ ] Раскрытие отдела/команды < 100ms",
+          "[ ] Нет лишних запросов при expand/collapse",
+          "[ ] Timeline скроллится плавно"
+        ],
+        "codeQuality": [
+          "[ ] Zustand store persists корректно",
+          "[ ] Нет `any` в типах",
+          "[ ] DepartmentRow, TeamRow, EmployeeRow < 200 строк каждый",
+          "[ ] Утилиты свежести вынесены в utils/"
+        ],
+        "cache": [
+          "[ ] queryKeys структурированы правильно",
+          "[ ] Invalidation после confirmTeamActivity",
+          "[ ] Realtime на loadings обновляет UI"
+        ]
+      },
+      "auditProcedure": [
+        "1. Открыть /dashboard/tasks, вкладка 'Отделы'",
+        "2. Проверить иерархию отделов → команд → сотрудников",
+        "3. Проверить цвета свежести (соответствуют датам)",
+        "4. Нажать 'Подтвердить актуальность' — цвет должен стать зелёным",
+        "5. Проверить загрузки сотрудников на timeline",
+        "6. Проверить работу фильтров"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": ["Initial release", "Иерархия отделов", "Индикаторы свежести данных"]
+    }
+  ]
+}

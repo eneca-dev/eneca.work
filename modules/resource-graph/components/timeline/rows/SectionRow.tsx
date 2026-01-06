@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { format } from 'date-fns'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
-import { ChevronRight, Calendar, Loader2, Flag } from 'lucide-react'
+import { ChevronRight, Flag, Wallet } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
   Tooltip,
   TooltipContent,
@@ -15,12 +13,13 @@ import {
 } from '@/components/ui/tooltip'
 import type { Section, TimelineRange, SectionsBatchData } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
-import { TimelineGrid } from '../shared'
+import { TimelineGrid, InlineDateRangeSelect } from '../shared'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { getInitials } from '../../../utils'
 import { SectionPeriodFrame } from '../SectionPeriodFrame'
 import { PlannedReadinessArea } from '../PlannedReadinessArea'
 import { ActualReadinessArea } from '../ActualReadinessArea'
 import { BudgetSpendingArea } from '../BudgetSpendingArea'
-import { BudgetsRow } from '../BudgetsRow'
 import { SectionTooltipOverlay } from '../SectionTooltipOverlay'
 import { DecompositionStageRow } from './DecompositionStageRow'
 import {
@@ -29,7 +28,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
 import { openCheckpointEdit } from '@/modules/modals'
-import { getInitials, formatDateShort } from '../../../utils'
 import { SECTION_ROW_HEIGHT, SECTION_ROW_HEIGHT_WITH_CHECKPOINTS, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 import { useRowExpanded } from '../../../stores'
 
@@ -43,6 +41,15 @@ const SectionModal = dynamic(
 import { CheckpointCreateModal } from '@/modules/modals'
 import { CheckpointMarkers } from '@/modules/checkpoints'
 import { mapBatchCheckpointToCheckpoint } from '../../../utils'
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Форматирует сумму бюджета с разделителями тысяч */
+function formatBudgetAmount(amount: number): string {
+  return amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+}
 
 // ============================================================================
 // Section Row
@@ -72,6 +79,53 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   const hasChildren = section.decompositionStages.length > 0
   const queryClient = useQueryClient()
 
+  // Оптимистичные даты для мгновенного рендеринга рамки
+  const [optimisticDates, setOptimisticDates] = useState<{
+    start: string
+    end: string
+  } | null>(null)
+
+  // Оптимистичные контрольные точки плана (0% и 100%)
+  const [optimisticPlan, setOptimisticPlan] = useState<Array<{
+    date: string
+    value: number
+  }> | null>(null)
+
+  // Эффективные даты (optimistic или реальные)
+  const effectiveStartDate = optimisticDates?.start ?? section.startDate
+  const effectiveEndDate = optimisticDates?.end ?? section.endDate
+
+  // Эффективные контрольные точки плана (optimistic или реальные)
+  const effectiveCheckpoints = optimisticPlan ?? section.readinessCheckpoints
+
+  // Callbacks для оптимистичного обновления
+  const handleOptimisticPlace = useCallback((start: string, end: string) => {
+    setOptimisticDates({ start, end })
+  }, [])
+
+  const handleOptimisticRollback = useCallback(() => {
+    setOptimisticDates(null)
+    setOptimisticPlan(null)
+  }, [])
+
+  const handleOptimisticPlan = useCallback((checkpoints: Array<{ date: string; value: number }>) => {
+    setOptimisticPlan(checkpoints)
+  }, [])
+
+  // Сбрасываем optimistic state когда приходят реальные данные
+  useEffect(() => {
+    if (section.startDate && section.endDate) {
+      setOptimisticDates(null)
+    }
+  }, [section.startDate, section.endDate])
+
+  // Сбрасываем optimistic plan когда приходят реальные чекпоинты
+  useEffect(() => {
+    if (section.readinessCheckpoints.length > 0) {
+      setOptimisticPlan(null)
+    }
+  }, [section.readinessCheckpoints])
+
   // Данные из batch (загружены в ObjectRow одним запросом)
   const workLogs = batchData?.workLogs[section.id]
   const loadings = batchData?.loadings[section.id]
@@ -96,9 +150,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
     [batchCheckpoints]
   )
 
-  // Budgets из batch данных (загружены в ObjectRow одним запросом)
-  const budgets = batchData?.budgets[section.id]
-  const budgetsLoading = batchLoading ?? false
+  // Бюджет раздела из batch данных (первый активный бюджет)
+  const sectionBudget = batchData?.budgets[section.id]?.[0] ?? null
 
   // Mutation для обновления дат раздела
   const updateSectionDates = useUpdateSectionDates()
@@ -171,10 +224,10 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
 
     if (!isTodayInSection) return null
 
-    // План: интерполируем между чекпоинтами
+    // План: интерполируем между чекпоинтами (используем effectiveCheckpoints для оптимистичного рендера)
     let planned: number | null = null
-    if (section.readinessCheckpoints.length > 0) {
-      const sorted = [...section.readinessCheckpoints].sort(
+    if (effectiveCheckpoints.length > 0) {
+      const sorted = [...effectiveCheckpoints].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       )
       const firstDate = parseMinskDate(sorted[0].date)
@@ -212,7 +265,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
       : null)
 
     return { planned, actual, budget }
-  }, [section.readinessCheckpoints, mergedSectionReadiness, section.budgetSpending, section.startDate, section.endDate])
+  }, [effectiveCheckpoints, mergedSectionReadiness, section.budgetSpending, section.startDate, section.endDate])
 
   // Вычисляем максимальное количество чекпоинтов на одну дату для адаптивной высоты
   const { hasCheckpoints, maxCheckpointsOnDate } = useMemo(() => {
@@ -252,7 +305,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2 relative',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -289,27 +342,38 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
               <div className="w-5 shrink-0" />
             )}
 
-            {/* Avatar */}
+            {/* Avatar ответственного - клик открывает модалку */}
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Avatar className="w-5 h-5 shrink-0">
-                    {section.responsible.avatarUrl ? (
-                      <AvatarImage
-                        src={section.responsible.avatarUrl}
-                        alt={section.responsible.name || 'Ответственный'}
-                      />
-                    ) : null}
-                    <AvatarFallback className="text-[9px] bg-muted">
-                      {getInitials(
-                        section.responsible.firstName,
-                        section.responsible.lastName
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsSectionModalOpen(true)
+                    }}
+                    className="shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-full transition-transform hover:scale-110"
+                  >
+                    <Avatar className="w-5 h-5">
+                      {section.responsible.avatarUrl && (
+                        <AvatarImage
+                          src={section.responsible.avatarUrl}
+                          alt={section.responsible.name || 'Ответственный'}
+                        />
                       )}
-                    </AvatarFallback>
-                  </Avatar>
+                      <AvatarFallback className="text-[9px] bg-muted">
+                        {section.responsible.id
+                          ? getInitials(section.responsible.firstName, section.responsible.lastName)
+                          : '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
-                  {section.responsible.name || 'Ответственный не указан'}
+                  <div className="space-y-0.5">
+                    <div>{section.responsible.name || 'Ответственный не указан'}</div>
+                    <div className="text-muted-foreground">Нажмите для изменения</div>
+                  </div>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -331,89 +395,138 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
             </button>
           </div>
 
-          {/* Вторая строка: Dates + Today indicators */}
-          <div className="flex items-center gap-2 pl-[26px]">
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1 shrink-0">
-              <Calendar className="w-3 h-3" />
-              {formatDateShort(section.startDate)} — {formatDateShort(section.endDate)}
-            </span>
+          {/* Вторая строка: Dates + Budget + Today indicators - CSS Grid layout */}
+          <div className="grid grid-cols-[auto_70px_1fr] items-center gap-1.5 pl-[26px]">
+            {/* Колонка 1: Даты (auto width) */}
+            <InlineDateRangeSelect
+              sectionId={section.id}
+              startDate={section.startDate}
+              endDate={section.endDate}
+              onSuccess={invalidateBatchData}
+              onOpenModal={() => setIsSectionModalOpen(true)}
+              onOptimisticPlace={handleOptimisticPlace}
+              onOptimisticRollback={handleOptimisticRollback}
+              onOptimisticPlan={handleOptimisticPlan}
+            />
 
-            {/* Сегодняшние показатели */}
-            {todayIndicators && (
-              <div className="flex items-center gap-1.5 ml-auto">
-                {todayIndicators.planned !== null && (
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-[10px] font-medium tabular-nums text-emerald-500">
-                          П:{Math.round(todayIndicators.planned)}%
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Плановая готовность на сегодня
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                {todayIndicators.actual !== null && (
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-[10px] font-medium tabular-nums text-blue-500">
-                          Ф:{Math.round(todayIndicators.actual)}%
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        <div className="space-y-1">
-                          <div>Фактическая готовность</div>
-                          {todayIndicators.planned !== null && (
-                            <div className={todayIndicators.actual >= todayIndicators.planned ? 'text-emerald-400' : 'text-amber-400'}>
-                              {todayIndicators.actual >= todayIndicators.planned
-                                ? `+${Math.round(todayIndicators.actual - todayIndicators.planned)}% к плану`
-                                : `-${Math.round(todayIndicators.planned - todayIndicators.actual)}% от плана`
-                              }
-                            </div>
-                          )}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                {todayIndicators.budget !== null && (
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="text-[10px] font-medium tabular-nums"
-                          style={{ color: todayIndicators.budget > 100 ? '#ef4444' : '#f97316' }}
-                        >
-                          Б:{Math.round(todayIndicators.budget)}%
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        <div className="space-y-1">
-                          <div>Освоение бюджета</div>
-                          {todayIndicators.budget > 100 && (
-                            <div className="text-red-400 font-medium">Превышение бюджета!</div>
-                          )}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-            )}
+            {/* Колонка 2: Бюджет (fixed 70px) */}
+            <div className="flex items-center justify-end">
+              {sectionBudget ? (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[10px] text-amber-500 flex items-center gap-0.5">
+                        <Wallet className="w-3 h-3" />
+                        {formatBudgetAmount(sectionBudget.planned_amount)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="space-y-1">
+                        <div className="font-medium">{sectionBudget.name}</div>
+                        <div>Бюджет: {sectionBudget.planned_amount.toLocaleString('ru-RU')} BYN</div>
+                        <div>Освоено: {sectionBudget.spent_amount.toLocaleString('ru-RU')} BYN ({Math.round(sectionBudget.spent_percentage)}%)</div>
+                        <div>Остаток: {sectionBudget.remaining_amount.toLocaleString('ru-RU')} BYN</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-[10px] text-muted-foreground/40 flex items-center gap-0.5">
+                  <Wallet className="w-3 h-3" />
+                  —
+                </span>
+              )}
+            </div>
+
+            {/* Колонка 3: Сегодняшние показатели (1fr, выровнены вправо) */}
+            <div className="flex items-center gap-1.5 justify-end">
+              {/* Плановая готовность */}
+              {todayIndicators?.planned !== null && todayIndicators?.planned !== undefined ? (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[10px] font-medium tabular-nums text-emerald-500">
+                        П:{Math.round(todayIndicators.planned)}%
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Плановая готовность на сегодня
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-[10px] font-medium tabular-nums text-muted-foreground/40">
+                  П:—%
+                </span>
+              )}
+              {/* Фактическая готовность */}
+              {todayIndicators?.actual !== null && todayIndicators?.actual !== undefined ? (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[10px] font-medium tabular-nums text-blue-500">
+                        Ф:{Math.round(todayIndicators.actual)}%
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="space-y-1">
+                        <div>Фактическая готовность</div>
+                        {todayIndicators.planned !== null && (
+                          <div className={todayIndicators.actual >= todayIndicators.planned ? 'text-emerald-400' : 'text-amber-400'}>
+                            {todayIndicators.actual >= todayIndicators.planned
+                              ? `+${Math.round(todayIndicators.actual - todayIndicators.planned)}% к плану`
+                              : `-${Math.round(todayIndicators.planned - todayIndicators.actual)}% от плана`
+                            }
+                          </div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-[10px] font-medium tabular-nums text-muted-foreground/40">
+                  Ф:—%
+                </span>
+              )}
+              {/* Освоение бюджета */}
+              {todayIndicators?.budget !== null && todayIndicators?.budget !== undefined ? (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="text-[10px] font-medium tabular-nums"
+                        style={{ color: todayIndicators.budget > 100 ? '#ef4444' : '#f97316' }}
+                      >
+                        Б:{Math.round(todayIndicators.budget)}%
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="space-y-1">
+                        <div>Освоение бюджета</div>
+                        {todayIndicators.budget > 100 && (
+                          <div className="text-red-400 font-medium">Превышение бюджета!</div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-[10px] font-medium tabular-nums text-muted-foreground/40">
+                  Б:—%
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Timeline area */}
-        <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
+        {/* Timeline area - isolate creates stacking context, overflow-hidden clips bleeding elements */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
 
-          {/* Рамка периода раздела - на всю высоту строки */}
+          {/* Рамка периода раздела - на всю высоту строки (оптимистичный рендер) */}
           <SectionPeriodFrame
-            startDate={section.startDate}
-            endDate={section.endDate}
+            startDate={effectiveStartDate}
+            endDate={effectiveEndDate}
             range={range}
             color={section.status.color}
             onResize={!isExpanded ? handleSectionResize : undefined}
@@ -427,9 +540,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
             )}
             style={{ height: SECTION_ROW_HEIGHT }}
           >
-            {section.readinessCheckpoints.length > 0 && (
+            {effectiveCheckpoints.length > 0 && (
               <PlannedReadinessArea
-                checkpoints={section.readinessCheckpoints}
+                checkpoints={effectiveCheckpoints}
                 range={range}
                 timelineWidth={timelineWidth}
               />
@@ -451,13 +564,13 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
           </div>
 
           <SectionTooltipOverlay
-            plannedCheckpoints={section.readinessCheckpoints}
+            plannedCheckpoints={effectiveCheckpoints}
             actualSnapshots={mergedSectionReadiness}
             budgetSpending={section.budgetSpending}
             range={range}
             timelineWidth={timelineWidth}
-            sectionStartDate={section.startDate}
-            sectionEndDate={section.endDate}
+            sectionStartDate={effectiveStartDate}
+            sectionEndDate={effectiveEndDate}
           />
 
           {/* Маркеры чекпоинтов - в верхней части строки */}
@@ -477,28 +590,31 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
       {/* Children */}
       {isExpanded && (
         <>
-          {(workLogsLoading || loadingsLoading || readinessLoading || budgetsLoading) && (
-            <div
-              className="flex items-center gap-2 px-4 py-1 text-xs text-muted-foreground border-b border-border/50"
-              style={{ paddingLeft: 8 + (depth + 1) * 16 }}
-            >
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Загрузка данных...
+          {/* Skeleton loading - показываем пустые строки пока данные грузятся */}
+          {(workLogsLoading || loadingsLoading || readinessLoading) && (
+            <div className="space-y-px">
+              {section.decompositionStages.slice(0, 3).map((stage, i) => (
+                <div
+                  key={`skeleton-${stage.id}`}
+                  className="flex border-b border-border/50 animate-pulse"
+                  style={{ height: 40, minWidth: totalWidth }}
+                >
+                  <div
+                    className="shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background flex items-center"
+                    style={{ width: SIDEBAR_WIDTH, paddingLeft: 8 + (depth + 1) * 16 }}
+                  >
+                    <div className="h-3 bg-muted/30 rounded w-24" />
+                  </div>
+                  <div className="flex-1 relative">
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 h-4 bg-muted/20 rounded"
+                      style={{ left: 50 + i * 30, width: 100 + i * 20 }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          <BudgetsRow
-            sectionId={section.id}
-            sectionName={section.name}
-            dayCells={dayCells}
-            depth={depth + 1}
-            range={range}
-            sectionStartDate={section.startDate}
-            sectionEndDate={section.endDate}
-            sectionStatusColor={section.status.color}
-            budgets={budgets}
-            budgetsLoading={budgetsLoading}
-            onRefetch={invalidateBatchData}
-          />
           {section.decompositionStages.map((stage) => (
             <DecompositionStageRow
               key={stage.id}
@@ -511,6 +627,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
               responsibles={stageResponsiblesMap?.[stage.id]}
               sectionId={section.id}
               sectionName={section.name}
+              sectionBudget={sectionBudget}
+              sectionBudgetSpending={section.budgetSpending}
               onWorkLogCreated={invalidateBatchData}
             />
           ))}

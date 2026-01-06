@@ -33,15 +33,35 @@ export type ProjectStatusType = DbEnum<'project_status_enum'>
 // ============================================================================
 
 /**
+ * Запись истории изменения прогресса
+ */
+export interface ProgressHistoryEntry {
+  /** Дата изменения (YYYY-MM-DD) */
+  date: string
+  /** Изменение прогресса (+25, -10, etc.) */
+  delta: number
+  /** Предыдущее значение прогресса (0-100) */
+  oldProgress: number
+  /** Новое значение прогресса (0-100) */
+  newProgress: number
+}
+
+/**
  * Элемент декомпозиции (самый нижний уровень)
  * Project → Object → Section → DecompositionStage → DecompositionItem
  */
 export interface DecompositionItem {
   id: string
+  /** ID этапа (для TaskSidebar) */
+  stageId: string | null
   description: string
   plannedHours: number
   plannedDueDate: string | null
   progress: number | null
+  /** Прирост прогресса за последнее обновление (+5, -2, etc.) */
+  progressDelta: number | null
+  /** История изменений прогресса (последние 30 дней) */
+  progressHistory: ProgressHistoryEntry[]
   order: number
   responsible: {
     id: string | null
@@ -61,6 +81,19 @@ export interface DecompositionItem {
   }
   workCategoryId: string | null
   workCategoryName: string | null
+  /** Бюджет задачи */
+  budget: {
+    /** ID бюджета (может быть null если бюджет не создан) */
+    id: string | null
+    /** Общая сумма бюджета */
+    total: number
+    /** Израсходовано */
+    spent: number
+    /** Остаток */
+    remaining: number
+    /** Процент расхода */
+    percentage: number
+  }
 }
 
 /**
@@ -207,6 +240,8 @@ export interface Section {
   actualReadiness: ReadinessPoint[]
   /** Расходование бюджета (накопительно по дням) */
   budgetSpending: BudgetSpendingPoint[]
+  /** Часовая ставка для расчёта бюджета (BYN/час). NULL = использовать default */
+  hourlyRate: number | null
   decompositionStages: DecompositionStage[]
 }
 

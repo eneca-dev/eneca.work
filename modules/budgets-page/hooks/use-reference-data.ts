@@ -2,90 +2,55 @@
  * Reference Data Hooks
  *
  * Хуки для загрузки справочных данных (сложности, категории работ)
+ * с использованием централизованных query keys из cache модуля.
+ *
+ * BP-007: Миграция на createSimpleCacheQuery + centralized query keys
  */
 
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
+import {
+  createSimpleCacheQuery,
+  queryKeys,
+  staleTimePresets,
+} from '@/modules/cache'
+import {
+  getDifficultyLevels,
+  getWorkCategoriesForBudgets,
+  type DifficultyLevel,
+  type WorkCategory,
+} from '../actions/reference-data'
 
 // ============================================================================
-// Types
+// Re-export Types
 // ============================================================================
 
-export interface DifficultyLevel {
-  id: string
-  abbr: string
-  name: string
-  weight: number
-}
-
-export interface WorkCategory {
-  id: string
-  name: string
-}
+export type { DifficultyLevel, WorkCategory }
 
 // ============================================================================
-// Query Keys
-// ============================================================================
-
-export const referenceDataKeys = {
-  difficulties: ['reference', 'difficulties'] as const,
-  workCategories: ['reference', 'workCategories'] as const,
-}
-
-// ============================================================================
-// Hooks
+// Hooks (BP-007: Centralized Query Keys)
 // ============================================================================
 
 /**
  * Загружает список уровней сложности
+ *
+ * Использует централизованные query keys из cache модуля
+ * и Server Actions с проверкой аутентификации.
  */
-export function useDifficultyLevels() {
-  const supabase = createClient()
-
-  return useQuery({
-    queryKey: referenceDataKeys.difficulties,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('decomposition_difficulty_levels')
-        .select('difficulty_id, difficulty_abbr, difficulty_definition, difficulty_weight')
-        .order('difficulty_weight', { ascending: true })
-
-      if (error) throw new Error(error.message)
-
-      return (data || []).map((d) => ({
-        id: d.difficulty_id,
-        abbr: d.difficulty_abbr,
-        name: d.difficulty_definition,
-        weight: d.difficulty_weight,
-      })) as DifficultyLevel[]
-    },
-    staleTime: 5 * 60 * 1000, // 5 минут - справочники редко меняются
-  })
-}
+export const useDifficultyLevels = createSimpleCacheQuery<DifficultyLevel[]>({
+  queryKey: queryKeys.difficultyLevels.list(),
+  queryFn: getDifficultyLevels,
+  staleTime: staleTimePresets.static, // 10 мин - справочники редко меняются
+})
 
 /**
  * Загружает список категорий работ
+ *
+ * Использует централизованные query keys из cache модуля
+ * и Server Actions с проверкой аутентификации.
  */
-export function useWorkCategories() {
-  const supabase = createClient()
-
-  return useQuery({
-    queryKey: referenceDataKeys.workCategories,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('work_categories')
-        .select('work_category_id, work_category_name')
-        .order('work_category_name', { ascending: true })
-
-      if (error) throw new Error(error.message)
-
-      return (data || []).map((c) => ({
-        id: c.work_category_id,
-        name: c.work_category_name,
-      })) as WorkCategory[]
-    },
-    staleTime: 5 * 60 * 1000, // 5 минут
-  })
-}
+export const useWorkCategories = createSimpleCacheQuery<WorkCategory[]>({
+  queryKey: queryKeys.workCategories.list(),
+  queryFn: getWorkCategoriesForBudgets,
+  staleTime: staleTimePresets.static, // 10 мин - справочники редко меняются
+})

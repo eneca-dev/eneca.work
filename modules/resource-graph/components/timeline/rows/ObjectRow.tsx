@@ -13,7 +13,7 @@ import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 import { usePrefetchCheckpoints } from '@/modules/checkpoints'
-import { useSectionsBatch } from '../../../hooks'
+import { useSectionsBatch, usePrefetchObjectData } from '../../../hooks'
 import { useRowExpanded } from '../../../stores'
 
 // ============================================================================
@@ -46,13 +46,19 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   // Prefetch чекпоинтов для всех разделов объекта
   const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
 
+  // Prefetch batch данных объекта
+  const prefetchObjectData = usePrefetchObjectData()
+
   // Prefetch данных при наведении на кнопку раскрытия (до клика)
   const handleMouseEnter = useCallback(() => {
     if (!isExpanded && object.sections.length > 0) {
+      // Prefetch чекпоинтов
       prefetchForSections(sectionIds)
       prefetchProjectSections(object.sections[0].id)
+      // Prefetch batch данных (workLogs, loadings, readiness, etc.)
+      prefetchObjectData(object)
     }
-  }, [isExpanded, object.sections, sectionIds, prefetchForSections, prefetchProjectSections])
+  }, [isExpanded, object, sectionIds, prefetchForSections, prefetchProjectSections, prefetchObjectData])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {
@@ -73,7 +79,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -107,8 +113,8 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           </span>
         </div>
 
-        {/* Timeline area - fixed width */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        {/* Timeline area - fixed width, isolate creates stacking context, overflow-hidden clips bleeding elements */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
           {/* Агрегированные графики объекта */}
           {aggregatedMetrics && (

@@ -2,16 +2,17 @@
  * Stage Inline Delete Component
  *
  * Инлайн удаление этапа декомпозиции с optimistic updates.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
  */
 
 'use client'
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { queryKeys } from '@/modules/cache'
 import { InlineDeleteButton } from './InlineDeleteButton'
 import { useOperationGuard } from '../hooks/use-operation-guard'
+import { deleteDecompositionStage } from '../actions/decomposition'
 import {
   saveOptimisticSnapshot,
   rollbackOptimisticUpdate,
@@ -43,7 +44,6 @@ export function StageInlineDelete({
   onSuccess,
 }: StageInlineDeleteProps) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
 
   const handleDelete = useCallback(async () => {
@@ -60,12 +60,13 @@ export function StageInlineDelete({
     )
 
     try {
-      const { error } = await supabase
-        .from('decomposition_stages')
-        .delete()
-        .eq('decomposition_stage_id', stageId)
+      // Server Action с auth check (BP-005)
+      const result = await deleteDecompositionStage({ stageId })
 
-      if (error) throw new Error(error.message)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
       if (isOperationStale(operationId)) return
 
       await invalidateHierarchyCache(queryClient)
@@ -76,7 +77,7 @@ export function StageInlineDelete({
       }
       throw err
     }
-  }, [stageId, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess])
+  }, [stageId, queryClient, startOperation, isOperationStale, isOperationCurrent, onSuccess])
 
   return (
     <InlineDeleteButton

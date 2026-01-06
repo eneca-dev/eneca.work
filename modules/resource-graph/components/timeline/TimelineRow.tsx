@@ -177,7 +177,7 @@ function BaseRow({
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20',
+            'sticky left-0 z-40',
             depth === 0 ? 'bg-card' : 'bg-background'
           )}
           style={{
@@ -402,7 +402,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
       >
         {/* Sidebar - sticky left */}
         <div
-          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -741,7 +741,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -1251,7 +1251,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,

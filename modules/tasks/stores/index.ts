@@ -82,6 +82,10 @@ interface TasksFiltersState {
   getQueryParams: () => FilterQueryParams
   /** Проверить есть ли активные фильтры */
   hasFilters: () => boolean
+  /** Обновить имя проекта в фильтре (при переименовании) */
+  updateProjectName: (oldName: string, newName: string) => void
+  /** Удалить проект из фильтра (при удалении) */
+  removeProjectFilter: (projectName: string) => void
 }
 
 export const useTasksFiltersStore = create<TasksFiltersState>()(
@@ -103,6 +107,50 @@ export const useTasksFiltersStore = create<TasksFiltersState>()(
         hasFilters: () => {
           const { filterString } = get()
           return hasActiveFilters(filterString, TASKS_FILTER_CONFIG)
+        },
+
+        updateProjectName: (oldName, newName) => {
+          const { filterString } = get()
+          if (!filterString.includes('проект:')) return
+
+          // Replace project name in filter string
+          // Handles both quoted and unquoted values
+          const patterns = [
+            new RegExp(`проект:"${oldName}"`, 'g'),
+            new RegExp(`проект:${oldName}(?=\\s|$)`, 'g'),
+          ]
+
+          let updated = filterString
+          for (const pattern of patterns) {
+            updated = updated.replace(pattern, `проект:"${newName}"`)
+          }
+
+          if (updated !== filterString) {
+            set({ filterString: updated })
+          }
+        },
+
+        removeProjectFilter: (projectName) => {
+          const { filterString } = get()
+          if (!filterString.includes('проект:')) return
+
+          // Remove project filter token
+          const patterns = [
+            new RegExp(`проект:"${projectName}"\\s*`, 'g'),
+            new RegExp(`проект:${projectName}\\s*`, 'g'),
+          ]
+
+          let updated = filterString
+          for (const pattern of patterns) {
+            updated = updated.replace(pattern, '')
+          }
+
+          // Trim extra spaces
+          updated = updated.trim().replace(/\s+/g, ' ')
+
+          if (updated !== filterString) {
+            set({ filterString: updated })
+          }
         },
       }),
       {

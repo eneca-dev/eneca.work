@@ -35,3 +35,39 @@ export function formatAmount(amount: number): string {
   }
   return amount.toFixed(0)
 }
+
+/**
+ * Парсит введённую строку в число (поддержка пробелов, запятых)
+ */
+export function parseAmount(value: string): number {
+  const cleaned = value.replace(/\s/g, '').replace(',', '.')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? 0 : num
+}
+
+/**
+ * Форматирует число с разделителями тысяч (без дробной части по умолчанию)
+ */
+export function formatNumber(value: number, decimals: number = 0): string {
+  if (value === 0) return '0'
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value)
+}
+
+/**
+ * Рассчитывает процент от родителя (с одним знаком после запятой)
+ */
+export function calculatePercentage(amount: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((amount / parentAmount) * 100 * 10) / 10
+}
+
+/**
+ * Рассчитывает сумму от процента
+ */
+export function calculateAmount(percentage: number, parentAmount: number): number {
+  if (parentAmount <= 0) return 0
+  return Math.round((percentage / 100) * parentAmount)
+}

@@ -59,13 +59,34 @@ export function InlineCreateForm({
     setIsSubmitting(true)
     setError(null)
 
-    try {
-      await onSubmit(trimmedValue)
-      onCancel()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка сохранения')
-      setIsSubmitting(false)
+    // Retry logic for "Failed to fetch" errors
+    const maxRetries = 2
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await onSubmit(trimmedValue)
+        onCancel()
+        return
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('Ошибка сохранения')
+
+        // Only retry on network errors
+        const isNetworkError = lastError.message === 'Failed to fetch' ||
+          lastError.message.includes('network') ||
+          lastError.message.includes('fetch')
+
+        if (!isNetworkError || attempt === maxRetries) {
+          break
+        }
+
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)))
+      }
     }
+
+    setError(lastError?.message || 'Ошибка сохранения')
+    setIsSubmitting(false)
   }, [value, onSubmit, onCancel])
 
   const handleKeyDown = useCallback(

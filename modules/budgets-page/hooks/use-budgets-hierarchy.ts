@@ -18,8 +18,8 @@ import type {
   AggregatedBudgetsByType,
   BudgetsAnalyticsData,
 } from '../types'
-import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
-import type { BudgetCurrent } from '@/modules/budgets/types'
+import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph'
+import type { BudgetCurrent } from '@/modules/budgets'
 
 // ============================================================================
 // Budget Transformation Helpers
@@ -27,30 +27,37 @@ import type { BudgetCurrent } from '@/modules/budgets/types'
 
 /**
  * Преобразует BudgetCurrent (V2) в BudgetInfo
+ * Note: PostgreSQL numeric приходит как string, поэтому явно конвертируем в number
  */
 function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
+  // Helper для безопасной конвертации numeric -> number
+  const toNumber = (val: number | string | null | undefined): number => {
+    if (val === null || val === undefined) return 0
+    return typeof val === 'string' ? parseFloat(val) || 0 : val
+  }
+
   return {
     budget_id: budget.budget_id,
     name: budget.name,
-    // Основные суммы
-    planned_amount: budget.total_amount,
-    spent_amount: budget.total_spent,
-    remaining_amount: budget.remaining_amount,
-    spent_percentage: budget.spent_percentage,
+    // Основные суммы (конвертируем из string в number)
+    planned_amount: toNumber(budget.total_amount),
+    spent_amount: toNumber(budget.total_spent),
+    remaining_amount: toNumber(budget.remaining_amount),
+    spent_percentage: toNumber(budget.spent_percentage),
     // Части бюджета (V2)
     main_part_id: budget.main_part_id,
-    main_amount: budget.main_amount,
-    main_spent: budget.main_spent,
+    main_amount: budget.main_amount !== null ? toNumber(budget.main_amount) : null,
+    main_spent: toNumber(budget.main_spent),
     premium_part_id: budget.premium_part_id,
-    premium_amount: budget.premium_amount,
-    premium_spent: budget.premium_spent,
+    premium_amount: budget.premium_amount !== null ? toNumber(budget.premium_amount) : null,
+    premium_spent: toNumber(budget.premium_spent),
     // Deprecated fields (для обратной совместимости)
     type_id: budget.main_part_id, // Используем main_part_id
     type_name: 'Основной', // Всегда показываем основную часть
     type_color: '#1E7260', // Основной цвет
     // Родитель
     parent_budget_id: budget.parent_budget_id,
-    parent_planned_amount: budget.parent_total_amount || 0,
+    parent_planned_amount: toNumber(budget.parent_total_amount),
     is_active: budget.is_active,
   }
 }
@@ -208,6 +215,7 @@ function transformSection(
     plannedHours,
     children,
     entityType: 'section',
+    hourlyRate: section.hourlyRate,
   }
 
   // Агрегируем бюджеты вверх (включая детей)
@@ -269,6 +277,12 @@ function transformProject(
     name: project.name,
     type: 'project',
     stageName: project.stageType,
+    projectStatus: project.status,
+    projectTags: project.tags?.map(tag => ({
+      tag_id: tag.id,
+      name: tag.name,
+      color: tag.color || '#6b7280',
+    })),
     budgets: nodeBudgets,
     aggregatedBudgets: [],
     plannedHours,

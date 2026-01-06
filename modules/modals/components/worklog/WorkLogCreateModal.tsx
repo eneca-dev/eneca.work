@@ -2,13 +2,13 @@
 
 import React, { useEffect, useMemo, useState, KeyboardEvent } from 'react'
 import { formatMinskDate } from '@/lib/timezone-utils'
-import { X, FileText, Loader2, Search, User, Wallet, AlertCircle } from 'lucide-react'
+import { X, FileText, Loader2, Search, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHasPermission } from '@/modules/permissions'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
 import { useUsers, useCurrentUser, useWorkCategories, type CachedUser } from '@/modules/cache'
-import { useBudgetsByEntity } from '@/modules/budgets'
+import { useBudgets } from '@/modules/budgets'
 import type { BaseModalProps } from '../../types'
 import { ProgressUpdateDialog } from '../progress'
 import {
@@ -49,7 +49,8 @@ export function WorkLogCreateModal({
   const { data: cachedUsers = [], isLoading: usersLoading } = useUsers()
   const { data: currentUser } = useCurrentUser()
   const { data: cachedCategories = [], isLoading: categoriesLoading } = useWorkCategories()
-  const { data: cachedBudgets = [], isLoading: budgetsLoading } = useBudgetsByEntity('section', isOpen ? sectionId : undefined)
+  // Загружаем бюджеты для автоматического выбора бюджета задачи
+  const { data: allBudgets = [] } = useBudgets({ is_active: true })
 
   // Загружаем decomposition items через хук (Server Action)
   const { data: items = [], isLoading: itemsLoading } = useDecompositionItemsForWorkLog(sectionId, {
@@ -57,15 +58,36 @@ export function WorkLogCreateModal({
   })
 
   const [selectedItemId, setSelectedItemId] = useState<string>(defaultItemId || '')
+
+  // Находим бюджет выбранной задачи (decomposition_item)
+  const itemBudget = useMemo(() => {
+    if (!selectedItemId) return null
+    return allBudgets.find(
+      (b) => b.entity_type === 'decomposition_item' && b.entity_id === selectedItemId
+    ) || null
+  }, [allBudgets, selectedItemId])
+
+  // Проверяем есть ли бюджет и достаточно ли средств
+  const hasBudget = itemBudget && itemBudget.total_amount > 0
+  const budgetRemaining = itemBudget ? itemBudget.remaining_amount : 0
+
   // Используем дату по Минскому времени для дефолтного значения
   const [workDate, setWorkDate] = useState<string>(formatMinskDate(new Date()))
   const [hours, setHours] = useState<string>('')
   const [rate, setRate] = useState<string>('')
+
+  // Вычисляем сумму отчёта и проверяем превышение бюджета
+  const workLogAmount = useMemo(() => {
+    const h = Number(hours) || 0
+    const r = Number(rate) || 0
+    return h * r
+  }, [hours, rate])
+
+  const exceedsBudget = hasBudget && workLogAmount > budgetRemaining
   const [description, setDescription] = useState<string>('')
   const [search, setSearch] = useState<string>('')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [userSearch, setUserSearch] = useState<string>('')
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('')
 
   // Состояние для диалога обновления готовности
   const [showProgressDialog, setShowProgressDialog] = useState(false)
@@ -102,7 +124,6 @@ export function WorkLogCreateModal({
       setSearch('')
       setSelectedUserId('')
       setUserSearch('')
-      setSelectedBudgetId('')
       setShowProgressDialog(false)
       setSavedItemInfo(null)
     }
@@ -128,13 +149,6 @@ export function WorkLogCreateModal({
       setRate(String(selectedUserRate))
     }
   }, [selectedUserRate])
-
-  // Автовыбор бюджета если он один
-  useEffect(() => {
-    if (cachedBudgets.length === 1 && !selectedBudgetId) {
-      setSelectedBudgetId(cachedBudgets[0].budget_id)
-    }
-  }, [cachedBudgets, selectedBudgetId])
 
   useEffect(() => {
     setSelectedItemId(defaultItemId || '')
@@ -177,26 +191,22 @@ export function WorkLogCreateModal({
     return users.find((user) => user.user_id === selectedUserId)
   }, [users, selectedUserId])
 
-  const selectedBudget = useMemo(() => {
-    return cachedBudgets.find((b) => b.budget_id === selectedBudgetId)
-  }, [cachedBudgets, selectedBudgetId])
-
   const canSave = useMemo(() => {
     const h = Number(hours)
     const r = Number(rate)
     const descOk = description.trim().length > 0
     const executorOk = !canEditExecutor || selectedUserId
     const rateOk = !isAdmin || (Number.isFinite(r) && r >= 0)
-    const budgetOk = !!selectedBudgetId // бюджет обязателен
+    const budgetOk = hasBudget // бюджет задачи должен существовать и быть > 0
     return selectedItemId && Number.isFinite(h) && h > 0 && !!workDate && descOk && executorOk && rateOk && budgetOk
-  }, [selectedItemId, hours, rate, workDate, description, isAdmin, selectedUserId, canEditExecutor, selectedBudgetId])
+  }, [selectedItemId, hours, rate, workDate, description, isAdmin, selectedUserId, canEditExecutor, hasBudget])
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && canSave && !saving) save()
   }
 
   const save = () => {
-    if (!canSave) return
+    if (!canSave || !itemBudget) return
 
     createWorkLogMutation(
       {
@@ -206,7 +216,7 @@ export function WorkLogCreateModal({
         workDate,
         hours: Number(hours),
         hourlyRate: isAdmin ? Number(rate) : Number(rate) || 0,
-        budgetId: selectedBudgetId,
+        budgetId: itemBudget.budget_id,
         executorId: canEditExecutor ? selectedUserId : undefined,
       },
       {
@@ -299,7 +309,7 @@ export function WorkLogCreateModal({
 
           {/* Body */}
           <div className="px-4 py-3">
-            {loading || budgetsLoading ? (
+            {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-slate-400 dark:text-slate-500" />
               </div>
@@ -468,83 +478,41 @@ export function WorkLogCreateModal({
                   </div>
                 )}
 
-                {/* Выбор бюджета */}
-                <div>
-                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
-                    Бюджет <span className="text-red-500">*</span>
-                  </label>
-                  {cachedBudgets.length === 0 ? (
-                    <div className="flex items-center gap-2 px-2.5 py-2 rounded border border-amber-300 dark:border-amber-600/50 bg-amber-50 dark:bg-amber-900/20">
-                      <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                      <span className="text-xs text-amber-700 dark:text-amber-400">
-                        У раздела нет активных бюджетов. Сначала создайте бюджет.
-                      </span>
-                    </div>
-                  ) : cachedBudgets.length === 1 ? (
-                    <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: selectedBudget?.type_color || '#6B7280' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
-                          {selectedBudget?.name}
-                        </div>
-                        <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                          {selectedBudget?.type_name}
-                          {selectedBudget?.planned_amount != null && (
-                            <span className="ml-2">
-                              План: {Number(selectedBudget.planned_amount).toLocaleString('ru-RU')} BYN
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Wallet className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                    </div>
-                  ) : (
-                    <select
-                      value={selectedBudgetId}
-                      onChange={(e) => setSelectedBudgetId(e.target.value)}
-                      className={cn(
-                        'w-full px-2.5 py-1.5 text-xs',
-                        'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                        'rounded text-slate-700 dark:text-slate-200',
-                        'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
-                        'transition-colors'
+                {/* Информация о бюджете задачи */}
+                {selectedItemId && (
+                  <div className={cn(
+                    'flex items-center gap-2 px-2.5 py-2 rounded border',
+                    hasBudget
+                      ? 'border-green-300 dark:border-green-600/50 bg-green-50 dark:bg-green-900/20'
+                      : 'border-amber-300 dark:border-amber-600/50 bg-amber-50 dark:bg-amber-900/20'
+                  )}>
+                    <span className={cn(
+                      'text-xs',
+                      hasBudget
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    )}>
+                      {hasBudget ? (
+                        <>
+                          Бюджет задачи: {itemBudget!.total_amount.toLocaleString('ru-RU')} BYN
+                          <span className="mx-1.5">·</span>
+                          Остаток: {budgetRemaining.toLocaleString('ru-RU')} BYN
+                        </>
+                      ) : (
+                        'У задачи нет бюджета. Сначала установите бюджет для задачи.'
                       )}
-                    >
-                      <option value="">Выберите бюджет...</option>
-                      {cachedBudgets.map((b) => {
-                        const remaining = b.planned_amount != null ? Number(b.planned_amount) - b.spent_amount : null
-                        return (
-                          <option key={b.budget_id} value={b.budget_id}>
-                            {b.name} ({b.type_name})
-                            {remaining != null && ` — Остаток: ${remaining.toLocaleString('ru-RU')} BYN`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  )}
-                  {selectedBudget && cachedBudgets.length > 1 && (
-                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: selectedBudget.type_color || '#6B7280' }}
-                      />
-                      <span>
-                        {selectedBudget.planned_amount != null && (
-                          <>
-                            План: {Number(selectedBudget.planned_amount).toLocaleString('ru-RU')} BYN
-                            <span className="mx-1.5">·</span>
-                            Потрачено: {selectedBudget.spent_amount.toLocaleString('ru-RU')} BYN
-                            <span className="mx-1.5">·</span>
-                            Остаток: {(Number(selectedBudget.planned_amount) - selectedBudget.spent_amount).toLocaleString('ru-RU')} BYN
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                    </span>
+                  </div>
+                )}
+
+                {/* Предупреждение о превышении бюджета */}
+                {exceedsBudget && (
+                  <div className="flex items-center gap-2 px-2.5 py-2 rounded border border-red-300 dark:border-red-600/50 bg-red-50 dark:bg-red-900/20">
+                    <span className="text-xs text-red-700 dark:text-red-400">
+                      ⚠️ Сумма отчёта ({workLogAmount.toLocaleString('ru-RU')} BYN) превышает остаток бюджета ({budgetRemaining.toLocaleString('ru-RU')} BYN)
+                    </span>
+                  </div>
+                )}
 
                 {/* Дата / Часы / Ставка - 3 колонки */}
                 <div className="grid grid-cols-3 gap-2.5">

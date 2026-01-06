@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
 import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
-import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin } from 'lucide-react'
+import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -20,6 +20,8 @@ import type {
   Loading,
   ReadinessPoint,
   StageResponsible,
+  BatchBudget,
+  BudgetSpendingPoint,
 } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid, ProgressCircle, PeriodBackground } from '../shared'
@@ -27,6 +29,7 @@ import { LoadingBars, calculateLoadingsRowHeight, LOADING_DRAG_TYPE, type Loadin
 import { LoadingModal, TaskCreateModal } from '@/modules/modals'
 import { StageReadinessArea, calculateTodayDelta } from '../StageReadinessArea'
 import { StageExpandedFrame } from '../StageExpandedFrame'
+import { BudgetSpendingArea } from '../BudgetSpendingArea'
 import { DecompositionItemRow } from './DecompositionItemRow'
 import { calculateStageReadiness } from './calculations'
 import {
@@ -62,6 +65,10 @@ interface DecompositionStageRowProps {
   sectionId: string
   /** Section name (for work log modal) */
   sectionName: string
+  /** Бюджет раздела (для отображения в sidebar) */
+  sectionBudget?: BatchBudget | null
+  /** История расхода бюджета раздела (для графика) */
+  sectionBudgetSpending?: BudgetSpendingPoint[]
   /** Callback after work log created */
   onWorkLogCreated?: () => void
 }
@@ -79,6 +86,8 @@ export function DecompositionStageRow({
   responsibles,
   sectionId,
   sectionName,
+  sectionBudget,
+  sectionBudgetSpending,
   onWorkLogCreated,
 }: DecompositionStageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -208,6 +217,25 @@ export function DecompositionStageRow({
     return calculateTodayDelta(mergedStageReadiness)
   }, [mergedStageReadiness])
 
+  // Filter budget spending to stage period
+  const stageBudgetSpending = useMemo(() => {
+    if (!sectionBudgetSpending || sectionBudgetSpending.length === 0) return []
+    if (!stage.startDate || !stage.finishDate) return []
+
+    const stageStart = parseMinskDate(stage.startDate)
+    const stageEnd = parseMinskDate(stage.finishDate)
+
+    return sectionBudgetSpending.filter(point => {
+      const pointDate = parseMinskDate(point.date)
+      return pointDate >= stageStart && pointDate <= stageEnd
+    })
+  }, [sectionBudgetSpending, stage.startDate, stage.finishDate])
+
+  // Format budget amount with thousand separators
+  const formatBudgetAmount = (amount: number): string => {
+    return amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+  }
+
   // Format date to DD.MM
   const formatStageDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
@@ -243,7 +271,7 @@ export function DecompositionStageRow({
         <div
           className={cn(
             'flex flex-col justify-center gap-1 shrink-0 border-r border-border px-2 relative',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -387,6 +415,27 @@ export function DecompositionStageRow({
               </button>
             )}
 
+            {/* Budget indicator */}
+            {sectionBudget && (
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-[9px] text-amber-500 flex items-center gap-0.5 shrink-0">
+                      <Wallet className="w-3 h-3" />
+                      {formatBudgetAmount(sectionBudget.planned_amount)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    <div className="space-y-1">
+                      <div className="font-medium">{sectionBudget.name}</div>
+                      <div>Бюджет: {sectionBudget.planned_amount.toLocaleString('ru-RU')} BYN</div>
+                      <div>Освоено: {sectionBudget.spent_amount.toLocaleString('ru-RU')} BYN ({Math.round(sectionBudget.spent_percentage)}%)</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* Spacer */}
             <div className="flex-1" />
 
@@ -451,8 +500,8 @@ export function DecompositionStageRow({
           </div>
         </div>
 
-        {/* Timeline area - split into two zones */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        {/* Timeline area - split into two zones, isolate for z-index containment, overflow-hidden clips bleeding elements */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
 
           {/* Period background (with resize support) */}
@@ -491,7 +540,7 @@ export function DecompositionStageRow({
             )}
           </div>
 
-          {/* Lower zone: Readiness graph (area chart) */}
+          {/* Lower zone: Readiness + Budget graphs */}
           <div
             className="absolute left-0 right-0 bottom-0 overflow-hidden"
             style={{ height: readinessZoneHeight }}
@@ -505,6 +554,14 @@ export function DecompositionStageRow({
                 color="#64748b"
                 stageStartDate={stage.startDate}
                 stageEndDate={stage.finishDate}
+              />
+            )}
+            {stageBudgetSpending.length > 0 && (
+              <BudgetSpendingArea
+                spending={stageBudgetSpending}
+                range={range}
+                timelineWidth={timelineWidth}
+                rowHeight={readinessZoneHeight}
               />
             )}
           </div>

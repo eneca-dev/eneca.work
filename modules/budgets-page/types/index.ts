@@ -4,7 +4,7 @@
  * Типы для отображения иерархии с бюджетами (V2)
  */
 
-import type { BudgetEntityType, BudgetPartType } from '@/modules/budgets/types'
+import type { BudgetEntityType, BudgetPartType } from '@/modules/budgets'
 
 // ============================================================================
 // Budget Info Types
@@ -80,6 +80,13 @@ export type BudgetPageEntityType = BudgetEntityType
 /**
  * Узел иерархии с бюджетами
  */
+/** Тег проекта */
+export interface ProjectTagInfo {
+  tag_id: string
+  name: string
+  color: string
+}
+
 export interface HierarchyNode {
   id: string
   name: string
@@ -88,6 +95,10 @@ export interface HierarchyNode {
   code?: string
   /** Стадия проекта (только для project) */
   stageName?: string | null
+  /** Статус проекта (только для project) */
+  projectStatus?: string | null
+  /** Теги проекта (только для project) */
+  projectTags?: ProjectTagInfo[]
   /** Бюджеты этого узла */
   budgets: BudgetInfo[]
   /** Агрегированные бюджеты по типам (для прогресс-баров) */
@@ -110,6 +121,8 @@ export interface HierarchyNode {
     abbr: string | null
     name: string | null
   } | null
+  /** Часовая ставка (только для section). NULL = использовать default */
+  hourlyRate?: number | null
 }
 
 // ============================================================================

@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react'
 import type { Checkpoint } from '../actions/checkpoints'
+import { useUIStateStore } from '@/modules/resource-graph/stores'
 
 // ============================================================================
 // Types
@@ -23,6 +24,8 @@ interface CheckpointLinksContextValue {
   unregisterCheckpoint: (checkpointId: string, sectionId: string) => void
   /** Все зарегистрированные позиции */
   positions: CheckpointPosition[]
+  /** Версия layout - инкрементируется при изменении expandedNodes */
+  layoutVersion: number
 }
 
 // ============================================================================
@@ -51,6 +54,10 @@ interface CheckpointLinksProviderProps {
  * ОПТИМИЗАЦИЯ: Используем useRef + Map для хранения позиций, чтобы избежать
  * cascade re-renders. useState[version] используется только для trigger
  * финального re-render когда нужно отрисовать линии.
+ *
+ * FIX RG-001: Добавлен layoutVersion который инкрементируется при изменении
+ * expandedNodes. Это заставляет CheckpointMarkerSvg пересчитывать позиции
+ * когда другие строки раскрываются/сворачиваются.
  */
 export function CheckpointLinksProvider({ children }: CheckpointLinksProviderProps) {
   // Map хранит позиции без trigger re-render при каждом изменении
@@ -58,6 +65,39 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
 
   // version увеличивается когда нужно пересчитать positions массив
   const [version, setVersion] = useState(0)
+
+  // layoutVersion инкрементируется при изменении expandedNodes
+  // Это заставляет useLayoutEffect в CheckpointMarkerSvg пересчитать позиции
+  const [layoutVersion, setLayoutVersion] = useState(0)
+
+  // Подписываемся на изменения expandedNodes
+  const expandedNodes = useUIStateStore((state) => state.expandedNodes)
+
+  // Вычисляем "fingerprint" текущего состояния expandedNodes для отслеживания изменений
+  const expandedNodesFingerprint = useMemo(() => {
+    // Суммируем размеры всех Set'ов - при любом expand/collapse сумма изменится
+    return (
+      expandedNodes.project.size +
+      expandedNodes.object.size +
+      expandedNodes.section.size +
+      expandedNodes.decomposition_stage.size +
+      expandedNodes.decomposition_item.size
+    )
+  }, [expandedNodes])
+
+  // Инкрементируем layoutVersion при изменении fingerprint
+  // Используем useEffect чтобы не блокировать рендер
+  const prevFingerprintRef = useRef(expandedNodesFingerprint)
+  useEffect(() => {
+    if (prevFingerprintRef.current !== expandedNodesFingerprint) {
+      prevFingerprintRef.current = expandedNodesFingerprint
+      // Небольшая задержка чтобы DOM успел обновиться после expand/collapse
+      const timeoutId = setTimeout(() => {
+        setLayoutVersion(v => v + 1)
+      }, 50)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [expandedNodesFingerprint])
 
   const registerCheckpoint = useCallback((position: CheckpointPosition) => {
     const key = `${position.checkpoint.checkpoint_id}-${position.sectionId}`
@@ -84,6 +124,7 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
         registerCheckpoint,
         unregisterCheckpoint,
         positions,
+        layoutVersion,
       }}
     >
       {children}

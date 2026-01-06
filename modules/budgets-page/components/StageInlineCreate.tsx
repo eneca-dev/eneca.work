@@ -2,16 +2,17 @@
  * Stage Inline Create Component
  *
  * Инлайн создание этапа декомпозиции с optimistic updates.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
  */
 
 'use client'
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { queryKeys } from '@/modules/cache'
 import { InlineCreateForm } from './InlineCreateForm'
 import { useOperationGuard } from '../hooks/use-operation-guard'
+import { createDecompositionStage } from '../actions/decomposition'
 import {
   saveOptimisticSnapshot,
   rollbackOptimisticUpdate,
@@ -48,7 +49,6 @@ export function StageInlineCreate({
   onSuccess,
 }: StageInlineCreateProps) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
 
   const handleSubmit = useCallback(
@@ -72,39 +72,27 @@ export function StageInlineCreate({
       )
 
       try {
-        // Получаем максимальный order
-        const { data: maxOrderData } = await supabase
-          .from('decomposition_stages')
-          .select('decomposition_stage_order')
-          .eq('decomposition_stage_section_id', sectionId)
-          .order('decomposition_stage_order', { ascending: false })
-          .limit(1)
+        // Server Action с auth check (BP-005)
+        const result = await createDecompositionStage({
+          sectionId,
+          name: value,
+        })
 
-        const nextOrder = (maxOrderData?.[0]?.decomposition_stage_order ?? -1) + 1
+        if (!result.success) {
+          throw new Error(result.error)
+        }
 
-        // Создаём в БД
-        const { data, error } = await supabase
-          .from('decomposition_stages')
-          .insert({
-            decomposition_stage_name: value,
-            decomposition_stage_section_id: sectionId,
-            decomposition_stage_order: nextOrder,
-          })
-          .select('decomposition_stage_id')
-          .single()
-
-        if (error) throw new Error(error.message)
         if (isOperationStale(operationId)) return
 
         // Заменяем temp ID на реальный
         queryClient.setQueriesData<HierarchyNode[]>(
           { queryKey: queryKeys.resourceGraph.all },
           (oldData) => {
-            if (!oldData || !data) return oldData
+            if (!oldData || !result.data) return oldData
             return updateHierarchyNode(
               oldData,
               (node) => node.id === tempId,
-              (node) => ({ ...node, id: data.decomposition_stage_id })
+              (node) => ({ ...node, id: result.data.decomposition_stage_id })
             )
           }
         )
@@ -118,7 +106,7 @@ export function StageInlineCreate({
         throw err
       }
     },
-    [sectionId, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess]
+    [sectionId, queryClient, startOperation, isOperationStale, isOperationCurrent, onSuccess]
   )
 
   return (

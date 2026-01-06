@@ -401,41 +401,38 @@ export function StageModal({
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Status & Period Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Status */}
-                  <div>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Статус
-                    </label>
-                    <StatusDropdown
-                      id="stage-status"
-                      value={selectedStatus}
-                      options={statusOptions}
-                      onChange={handleStatusChange}
-                      isLoading={savingField === 'statusId'}
-                      disabled={statusesLoading}
-                    />
-                  </div>
+                {/* Status */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    Статус
+                  </label>
+                  <StatusDropdown
+                    id="stage-status"
+                    value={selectedStatus}
+                    options={statusOptions}
+                    onChange={handleStatusChange}
+                    isLoading={savingField === 'statusId'}
+                    disabled={statusesLoading}
+                  />
+                </div>
 
-                  {/* Period */}
-                  <div>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                      Период
-                    </label>
-                    <DateRangeInput
-                      idPrefix="stage-date"
-                      startDate={watchedStartDate ?? null}
-                      endDate={watchedEndDate ?? null}
-                      onStartDateChange={(v) => handleDateChange('startDate', v)}
-                      onEndDateChange={(v) => handleDateChange('endDate', v)}
-                      savingField={
-                        savingField === 'startDate' || savingField === 'endDate'
-                          ? (savingField as 'startDate' | 'endDate')
-                          : null
-                      }
-                    />
-                  </div>
+                {/* Period - full width to prevent overflow */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    Период
+                  </label>
+                  <DateRangeInput
+                    idPrefix="stage-date"
+                    startDate={watchedStartDate ?? null}
+                    endDate={watchedEndDate ?? null}
+                    onStartDateChange={(v) => handleDateChange('startDate', v)}
+                    onEndDateChange={(v) => handleDateChange('endDate', v)}
+                    savingField={
+                      savingField === 'startDate' || savingField === 'endDate'
+                        ? (savingField as 'startDate' | 'endDate')
+                        : null
+                    }
+                  />
                 </div>
 
                 {/* Responsibles - Full Width */}

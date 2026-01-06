@@ -383,6 +383,13 @@ export type Database = {
             foreignKeyName: "assignments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "assignments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["project_id"]
           },
@@ -751,6 +758,13 @@ export type Database = {
             referencedColumns: ["budget_id"]
           },
           {
+            foreignKeyName: "budget_expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
+          },
+          {
             foreignKeyName: "budget_expenses_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -946,6 +960,13 @@ export type Database = {
             referencedColumns: ["budget_id"]
           },
           {
+            foreignKeyName: "budget_history_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
+          },
+          {
             foreignKeyName: "budget_history_changed_by_fkey"
             columns: ["changed_by"]
             isOneToOne: false
@@ -1116,6 +1137,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_parts_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
           },
         ]
       }
@@ -1312,6 +1340,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
           },
         ]
       }
@@ -2139,6 +2174,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "contracts_contract_project_id_fkey"
+            columns: ["contract_project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "contracts_contract_project_id_fkey"
@@ -3862,6 +3904,167 @@ export type Database = {
         }
         Relationships: []
       }
+      item_progress_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          item_id: string
+          new_progress: number
+          old_progress: number | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          item_id: string
+          new_progress: number
+          old_progress?: number | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          item_id?: string
+          new_progress?: number
+          old_progress?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "decomposition_items"
+            referencedColumns: ["decomposition_item_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["decomposition_item_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_item_actuals"
+            referencedColumns: ["decomposition_item_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_item_totals"
+            referencedColumns: ["decomposition_item_id"]
+          },
+        ]
+      }
       loadings: {
         Row: {
           is_shortage: boolean
@@ -4671,6 +4874,13 @@ export type Database = {
             foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_project_id"]
             isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_project_id"]
+            isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["project_id"]
           },
@@ -4882,13 +5092,6 @@ export type Database = {
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "v_project_sections"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "objects_object_stage_id_fkey"
-            columns: ["object_stage_id"]
-            isOneToOne: false
-            referencedRelation: "v_project_structure"
             referencedColumns: ["stage_id"]
           },
           {
@@ -5687,6 +5890,13 @@ export type Database = {
             foreignKeyName: "project_reports_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "project_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["project_id"]
           },
@@ -5793,13 +6003,6 @@ export type Database = {
             columns: ["stage_id"]
             isOneToOne: false
             referencedRelation: "v_project_sections"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "project_reports_stage_id_fkey"
-            columns: ["stage_id"]
-            isOneToOne: false
-            referencedRelation: "v_project_structure"
             referencedColumns: ["stage_id"]
           },
           {
@@ -5998,6 +6201,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_tag_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "project_tag_links_project_id_fkey"
@@ -7698,6 +7908,7 @@ export type Database = {
           section_created: string | null
           section_description: string | null
           section_end_date: string | null
+          section_hourly_rate: number | null
           section_id: string
           section_name: string
           section_object_id: string
@@ -7717,6 +7928,7 @@ export type Database = {
           section_created?: string | null
           section_description?: string | null
           section_end_date?: string | null
+          section_hourly_rate?: number | null
           section_id?: string
           section_name: string
           section_object_id: string
@@ -7736,6 +7948,7 @@ export type Database = {
           section_created?: string | null
           section_description?: string | null
           section_end_date?: string | null
+          section_hourly_rate?: number | null
           section_id?: string
           section_name?: string
           section_object_id?: string
@@ -7851,6 +8064,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sections_section_project_id_fkey"
+            columns: ["section_project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "sections_section_project_id_fkey"
@@ -8279,6 +8499,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "stages_stage_project_id_fkey"
+            columns: ["stage_project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "stages_stage_project_id_fkey"
@@ -9229,6 +9456,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "user_favorite_projects_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "user_favorite_projects_project_fk"
@@ -11184,6 +11418,13 @@ export type Database = {
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
           },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
+          },
         ]
       }
       v_cache_budget_types: {
@@ -11242,6 +11483,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
           },
         ]
       }
@@ -11865,6 +12113,13 @@ export type Database = {
             foreignKeyName: "sections_section_project_id_fkey"
             columns: ["section_project_id"]
             isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "sections_section_project_id_fkey"
+            columns: ["section_project_id"]
+            isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["project_id"]
           },
@@ -12312,6 +12567,13 @@ export type Database = {
             referencedColumns: ["budget_id"]
           },
           {
+            foreignKeyName: "budget_expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
+          },
+          {
             foreignKeyName: "budget_expenses_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -12573,6 +12835,13 @@ export type Database = {
             foreignKeyName: "stages_stage_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "stages_stage_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["project_id"]
           },
@@ -12686,81 +12955,123 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
-            referencedRelation: "stages"
-            referencedColumns: ["stage_id"]
+            referencedRelation: "projects"
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "v_cache_projects"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
-            columns: ["object_stage_id"]
-            isOneToOne: false
-            referencedRelation: "v_project_sections"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "v_project_structure"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_manager_projects"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_dashboard"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_project_tree"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_project_tree_backup"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_project_tree_timeline"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
+            columns: ["object_stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_projects_with_department_info"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_section_hierarchy"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_sections_with_loadings"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
-            foreignKeyName: "objects_object_stage_id_fkey"
+            foreignKeyName: "objects_object_project_id_fkey"
             columns: ["object_stage_id"]
             isOneToOne: false
             referencedRelation: "view_stage_employee_loadings"
-            referencedColumns: ["stage_id"]
+            referencedColumns: ["project_id"]
           },
           {
             foreignKeyName: "projects_project_manager_fkey"
@@ -12951,118 +13262,6 @@ export type Database = {
             referencedRelation: "view_stage_employee_loadings"
             referencedColumns: ["object_id"]
           },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "v_cache_projects"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "v_project_structure"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "v_resource_graph"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_employee_workloads"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_manager_projects"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_dashboard"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_summary"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_backup"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_timeline"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_projects_with_department_info"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_section_hierarchy"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_sections_with_loadings"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "stages_stage_project_id_fkey"
-            columns: ["stage_project_id"]
-            isOneToOne: false
-            referencedRelation: "view_stage_employee_loadings"
-            referencedColumns: ["project_id"]
-          },
         ]
       }
       v_resource_graph: {
@@ -13076,6 +13275,8 @@ export type Database = {
           decomposition_item_planned_due_date: string | null
           decomposition_item_planned_hours: number | null
           decomposition_item_progress: number | null
+          decomposition_item_progress_delta: number | null
+          decomposition_item_progress_history: Json | null
           decomposition_item_status_id: string | null
           decomposition_item_work_category_id: string | null
           decomposition_stage_finish: string | null
@@ -13086,6 +13287,11 @@ export type Database = {
           decomposition_stage_status_color: string | null
           decomposition_stage_status_id: string | null
           decomposition_stage_status_name: string | null
+          item_budget_id: string | null
+          item_budget_percentage: number | null
+          item_budget_remaining: number | null
+          item_budget_spent: number | null
+          item_budget_total: number | null
           item_difficulty_abbr: string | null
           item_difficulty_name: string | null
           item_responsible_first_name: string | null
@@ -13111,6 +13317,7 @@ export type Database = {
           section_department_name: string | null
           section_description: string | null
           section_end_date: string | null
+          section_hourly_rate: number | null
           section_id: string | null
           section_name: string | null
           section_readiness_checkpoints: Json | null
@@ -20590,13 +20797,6 @@ export type Database = {
             foreignKeyName: "objects_object_stage_id_fkey"
             columns: ["stage_id"]
             isOneToOne: false
-            referencedRelation: "v_project_structure"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "objects_object_stage_id_fkey"
-            columns: ["stage_id"]
-            isOneToOne: false
             referencedRelation: "view_project_tree"
             referencedColumns: ["stage_id"]
           },
@@ -20746,6 +20946,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sections_section_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_project_id"]
           },
           {
             foreignKeyName: "sections_section_project_id_fkey"
@@ -21115,6 +21322,7 @@ export type Database = {
           vacation_date: string
         }[]
       }
+      get_item_progress_delta: { Args: { p_item_id: string }; Returns: number }
       get_notification_type_counts: {
         Args: { p_include_archived?: boolean; p_user_id: string }
         Returns: {

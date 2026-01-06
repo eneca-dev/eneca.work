@@ -22,6 +22,7 @@
 // ============================================================================
 
 export { ResourceGraph, ResourceGraphTimeline } from './components'
+export { ProgressCircle } from './components/timeline/shared'
 
 // ============================================================================
 // Hooks
@@ -121,6 +122,8 @@ export {
   EMPLOYEE_COLORS,
   getEmployeeColor,
   getInitials,
+  // Progress colors
+  getProgressColor,
 } from './utils'
 
 // ============================================================================

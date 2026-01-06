@@ -40,6 +40,9 @@ export const LOADING_STATUS_COLORS = {
 /** Высота строки в пикселях */
 export const ROW_HEIGHT = 40
 
+/** Высота строки задачи с историей прогресса (расширенная) */
+export const ITEM_ROW_HEIGHT_WITH_HISTORY = 56
+
 /** Высота строки объекта (с графиками агрегации) */
 export const OBJECT_ROW_HEIGHT = 56
 

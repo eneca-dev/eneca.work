@@ -32,7 +32,7 @@ import {
   useUpdateBudgetPart,
   useDeleteBudgetPart,
 } from '@/modules/budgets'
-import type { BudgetPart, BudgetPartType } from '@/modules/budgets/types'
+import type { BudgetPart, BudgetPartType } from '@/modules/budgets'
 
 // ============================================================================
 // Types

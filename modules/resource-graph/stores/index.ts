@@ -170,6 +170,7 @@ interface UIState {
 
   // Bulk operations
   expandAll: (nodesByType: Partial<Record<TreeNodeType, string[]>>) => void
+  expandToSections: (nodesByType: { project: string[]; object: string[] }) => void
   collapseAll: (type?: TreeNodeType) => void
 
   // Selection
@@ -317,6 +318,35 @@ export const useUIStateStore = create<UIState>()(
             }
 
             return { expandedNodes: newExpandedNodes }
+          }),
+
+        // Развернуть до уровня разделов (проекты + объекты, но НЕ разделы)
+        expandToSections: (nodesByType) =>
+          set((state) => {
+            // Клонируем только project и object Sets
+            const newProjectSet = new Set(state.expandedNodes.project)
+            const newObjectSet = new Set(state.expandedNodes.object)
+
+            // Добавляем все проекты
+            for (const id of nodesByType.project) {
+              newProjectSet.add(id)
+            }
+
+            // Добавляем все объекты
+            for (const id of nodesByType.object) {
+              newObjectSet.add(id)
+            }
+
+            // Сворачиваем все разделы и этапы декомпозиции
+            return {
+              expandedNodes: {
+                ...state.expandedNodes,
+                project: newProjectSet,
+                object: newObjectSet,
+                section: new Set(),
+                decomposition_stage: new Set(),
+              },
+            }
           }),
 
         collapseAll: (type) =>

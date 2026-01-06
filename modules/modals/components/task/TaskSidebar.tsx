@@ -14,11 +14,12 @@ import {
   Target,
   User,
   Tag,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { DecompositionItem } from '@/modules/resource-graph/types'
-import { getInitials } from '@/modules/resource-graph/utils'
+import { getInitials, formatBudgetAmount } from '@/modules/resource-graph/utils'
 import type { BaseModalProps } from '../../types'
 import { useUpdateDecompositionItem } from '../../hooks'
 
@@ -517,6 +518,69 @@ export function TaskSidebar({
                   </div>
                 )}
               </div>
+
+              {/* Budget */}
+              {task.budget && task.budget.total > 0 && (
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-2">
+                    <Wallet className="w-3 h-3" />
+                    Бюджет задачи
+                  </div>
+                  <div className="space-y-1.5">
+                    {/* Progress bar */}
+                    <div className="relative h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'absolute left-0 top-0 h-full rounded-full transition-all',
+                          task.budget.percentage >= 100
+                            ? 'bg-red-500'
+                            : task.budget.percentage >= 80
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                        )}
+                        style={{ width: `${Math.min(task.budget.percentage, 100)}%` }}
+                      />
+                    </div>
+                    {/* Stats row */}
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">
+                          Израсходовано:{' '}
+                          <span
+                            className={cn(
+                              'font-medium',
+                              task.budget.percentage >= 100
+                                ? 'text-red-400'
+                                : task.budget.percentage >= 80
+                                  ? 'text-amber-400'
+                                  : 'text-emerald-400'
+                            )}
+                          >
+                            {formatBudgetAmount(task.budget.spent)}
+                          </span>
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          'font-medium tabular-nums',
+                          task.budget.percentage >= 100
+                            ? 'text-red-400'
+                            : task.budget.percentage >= 80
+                              ? 'text-amber-400'
+                              : 'text-slate-400'
+                        )}
+                      >
+                        {Math.round(task.budget.percentage)}%
+                      </span>
+                    </div>
+                    {/* Total and remaining */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Всего: {formatBudgetAmount(task.budget.total)}</span>
+                      <span>Остаток: {formatBudgetAmount(task.budget.remaining)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

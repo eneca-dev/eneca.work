@@ -143,7 +143,7 @@ export function EmployeeRow({
       >
         {/* Sidebar - sticky left */}
         <div
-          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 group-hover/employee:bg-muted/30"
+          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 group-hover/employee:bg-accent"
           style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
         >
           {/* Left: avatar + name (indented more) */}
@@ -198,7 +198,7 @@ export function EmployeeRow({
         </div>
 
         {/* Timeline cells with loading bars */}
-        <div className="flex relative" style={{ width: timelineWidth }}>
+        <div className="flex relative z-0" style={{ width: timelineWidth }}>
           {/* Loading bars overlay */}
           <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
             {barRenders.map((bar, idx) => {

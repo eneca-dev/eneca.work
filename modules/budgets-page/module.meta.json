@@ -1,0 +1,1055 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "budgets-page",
+    "displayName": "Budgets Page",
+    "description": "Отображение иерархии проектов с бюджетами, инлайн-редактирование, агрегация план/факт",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": "/dashboard/tasks (вкладка Бюджеты)",
+    "tags": ["feature", "ui", "data-layer"]
+  },
+
+  "architecture": {
+    "structure": {
+      "components/": "React компоненты (иерархия, строки, inline-редактирование)",
+      "components/BudgetsViewInternal.tsx": "Главный компонент (экспортируется)",
+      "components/BudgetsHierarchy.tsx": "Таблица иерархии с expand/collapse",
+      "components/BudgetRow.tsx": "Строка узла иерархии",
+      "components/BudgetBars.tsx": "Прогресс-бары по типам бюджетов",
+      "components/BudgetPartsEditor.tsx": "Редактор частей бюджета (main/premium)",
+      "hooks/": "React Query хуки для данных и состояния",
+      "types/": "TypeScript типы данных",
+      "utils/": "Утилиты (format, optimistic updates)",
+      "config/": "Конфигурация и константы модуля",
+      "config/constants.ts": "Константы для расчётов бюджета (ставки, коэффициенты)"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "BudgetsViewInternal",
+      "BudgetPartsEditor",
+      "useBudgetsHierarchy",
+      "useOperationGuard",
+      "useExpandedState",
+      "useDifficultyLevels",
+      "useWorkCategories",
+      "formatAmount",
+      "parseAmount",
+      "formatNumber",
+      "calculatePercentage",
+      "calculateAmount"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useBudgetsHierarchy",
+      "description": "Объединяет данные иерархии проектов и бюджетов",
+      "file": "hooks/use-budgets-hierarchy.ts",
+      "params": "FilterQueryParams?",
+      "returns": "UseBudgetsHierarchyResult { hierarchy, analytics, isLoading, error }",
+      "example": "const { hierarchy, analytics, isLoading } = useBudgetsHierarchy(queryParams)"
+    },
+    {
+      "name": "useExpandedState",
+      "description": "Управление состоянием развёрнутых узлов иерархии",
+      "file": "hooks/use-expanded-state.ts",
+      "params": "void",
+      "returns": "{ expandedState, toggleExpand, expandAll, collapseAll }",
+      "example": "const { expandedState, toggleExpand } = useExpandedState()"
+    },
+    {
+      "name": "useOperationGuard",
+      "description": "Защита от параллельных операций (prevent double-click)",
+      "file": "hooks/use-operation-guard.ts",
+      "params": "void",
+      "returns": "{ isOperating, withGuard }",
+      "example": "const { isOperating, withGuard } = useOperationGuard()"
+    },
+    {
+      "name": "useDifficultyLevels",
+      "description": "Справочник уровней сложности",
+      "file": "hooks/use-reference-data.ts",
+      "params": "void",
+      "returns": "{ data: DifficultyLevel[], isLoading }",
+      "example": "const { data: difficulties } = useDifficultyLevels()"
+    },
+    {
+      "name": "useWorkCategories",
+      "description": "Справочник категорий работ",
+      "file": "hooks/use-reference-data.ts",
+      "params": "void",
+      "returns": "{ data: WorkCategory[], isLoading }",
+      "example": "const { data: categories } = useWorkCategories()"
+    }
+  ],
+
+  "actions": [
+    {
+      "name": "createDecompositionStage",
+      "description": "Создаёт этап декомпозиции в разделе",
+      "file": "actions/decomposition.ts",
+      "input": "CreateStageInput { sectionId, name }",
+      "output": "ActionResult<CreatedStage>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "deleteDecompositionStage",
+      "description": "Удаляет этап декомпозиции",
+      "file": "actions/decomposition.ts",
+      "input": "DeleteStageInput { stageId }",
+      "output": "ActionResult<null>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "createDecompositionItem",
+      "description": "Создаёт задачу декомпозиции в этапе",
+      "file": "actions/decomposition.ts",
+      "input": "CreateItemInput { stageId, sectionId, description }",
+      "output": "ActionResult<CreatedItem>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "deleteDecompositionItem",
+      "description": "Удаляет задачу декомпозиции",
+      "file": "actions/decomposition.ts",
+      "input": "DeleteItemInput { itemId }",
+      "output": "ActionResult<null>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "updateItemPlannedHours",
+      "description": "Обновляет плановые часы задачи",
+      "file": "actions/decomposition.ts",
+      "input": "UpdateItemHoursInput { itemId, plannedHours }",
+      "output": "ActionResult<null>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "updateItemCategory",
+      "description": "Обновляет категорию работ задачи",
+      "file": "actions/decomposition.ts",
+      "input": "UpdateItemCategoryInput { itemId, categoryId }",
+      "output": "ActionResult<null>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "updateItemDifficulty",
+      "description": "Обновляет сложность задачи",
+      "file": "actions/decomposition.ts",
+      "input": "UpdateItemDifficultyInput { itemId, difficultyId }",
+      "output": "ActionResult<null>",
+      "mutates": true,
+      "validation": "Zod schema"
+    },
+    {
+      "name": "getDifficultyLevels",
+      "description": "Получает справочник уровней сложности",
+      "file": "actions/reference-data.ts",
+      "input": "void",
+      "output": "ActionResult<DifficultyLevel[]>",
+      "mutates": false
+    },
+    {
+      "name": "getWorkCategoriesForBudgets",
+      "description": "Получает справочник категорий работ",
+      "file": "actions/reference-data.ts",
+      "input": "void",
+      "output": "ActionResult<WorkCategory[]>",
+      "mutates": false
+    },
+    {
+      "name": "TODO: getBudgetsHierarchy",
+      "description": "Планируется: собственный action для загрузки иерархии с бюджетами одним запросом",
+      "file": "actions/index.ts",
+      "input": "FilterQueryParams?",
+      "output": "ActionResult<HierarchyNode[]>",
+      "mutates": false,
+      "status": "planned",
+      "note": "Сейчас используются хуки из resource-graph и budgets — нарушение архитектуры"
+    }
+  ],
+
+  "stores": [],
+
+  "components": [
+    {
+      "name": "BudgetsViewInternal",
+      "description": "Главный компонент страницы бюджетов (встраивается в TasksView)",
+      "file": "components/BudgetsViewInternal.tsx",
+      "props": ["filterString", "queryParams", "filterConfig"],
+      "example": "<BudgetsViewInternal filterString={filterString} queryParams={queryParams} filterConfig={config} />"
+    },
+    {
+      "name": "BudgetsHierarchy",
+      "description": "Таблица иерархии проектов с expand/collapse",
+      "file": "components/BudgetsHierarchy.tsx",
+      "props": ["hierarchy", "expandedState", "onToggle"]
+    },
+    {
+      "name": "BudgetRow",
+      "description": "Строка узла иерархии (project/object/section/stage/item)",
+      "file": "components/BudgetRow.tsx",
+      "props": ["node", "level", "isExpanded", "onToggle"]
+    },
+    {
+      "name": "BudgetBars",
+      "description": "Прогресс-бары по типам бюджетов (main/premium)",
+      "file": "components/BudgetBars.tsx",
+      "props": ["aggregatedBudgets"]
+    },
+    {
+      "name": "BudgetPartsEditor",
+      "description": "Редактор частей бюджета (main/premium amount)",
+      "file": "components/BudgetPartsEditor.tsx",
+      "props": ["budget", "onUpdate"]
+    },
+    {
+      "name": "BudgetCell",
+      "description": "Ячейка с информацией о бюджете (план/факт/остаток)",
+      "file": "components/BudgetCell.tsx",
+      "props": ["budget"]
+    },
+    {
+      "name": "BudgetInlineEdit",
+      "description": "Инлайн-редактирование бюджета",
+      "file": "components/BudgetInlineEdit.tsx",
+      "props": ["budget", "onSave", "onCancel"]
+    },
+    {
+      "name": "BudgetCreatePopover",
+      "description": "Popover для создания нового бюджета",
+      "file": "components/BudgetCreatePopover.tsx",
+      "props": ["entityType", "entityId", "onCreated"]
+    },
+    {
+      "name": "StageInlineCreate",
+      "description": "Инлайн-создание этапа декомпозиции",
+      "file": "components/StageInlineCreate.tsx",
+      "props": ["sectionId", "onCreated"]
+    },
+    {
+      "name": "StageInlineDelete",
+      "description": "Инлайн-удаление этапа декомпозиции",
+      "file": "components/StageInlineDelete.tsx",
+      "props": ["stageId", "onDeleted"]
+    },
+    {
+      "name": "ItemInlineCreate",
+      "description": "Инлайн-создание задачи декомпозиции",
+      "file": "components/ItemInlineCreate.tsx",
+      "props": ["stageId", "onCreated"]
+    },
+    {
+      "name": "ItemInlineDelete",
+      "description": "Инлайн-удаление задачи декомпозиции",
+      "file": "components/ItemInlineDelete.tsx",
+      "props": ["itemId", "onDeleted"]
+    },
+    {
+      "name": "ItemHoursEdit",
+      "description": "Редактирование плановых часов задачи",
+      "file": "components/ItemHoursEdit.tsx",
+      "props": ["itemId", "plannedHours", "onUpdate"]
+    },
+    {
+      "name": "ItemCategorySelect",
+      "description": "Выбор категории работ для задачи",
+      "file": "components/ItemCategorySelect.tsx",
+      "props": ["itemId", "categoryId", "onUpdate"]
+    },
+    {
+      "name": "ItemDifficultySelect",
+      "description": "Выбор сложности задачи",
+      "file": "components/ItemDifficultySelect.tsx",
+      "props": ["itemId", "difficultyId", "onUpdate"]
+    },
+    {
+      "name": "HoursInput",
+      "description": "Input для ввода часов с валидацией",
+      "file": "components/HoursInput.tsx",
+      "props": ["value", "onChange", "onBlur"]
+    },
+    {
+      "name": "InlineCreateForm",
+      "description": "Shared форма для инлайн-создания (stage/item)",
+      "file": "components/InlineCreateForm.tsx",
+      "props": ["placeholder", "onSubmit", "onCancel"]
+    },
+    {
+      "name": "InlineDeleteButton",
+      "description": "Shared кнопка удаления с подтверждением",
+      "file": "components/InlineDeleteButton.tsx",
+      "props": ["onConfirm", "isDeleting"]
+    },
+    {
+      "name": "BudgetRowExpander",
+      "description": "Иконка expand/collapse для узла иерархии",
+      "file": "components/BudgetRowExpander.tsx",
+      "props": ["indent", "hasChildren", "isExpanded", "onToggle"]
+    },
+    {
+      "name": "BudgetRowBadges",
+      "description": "Бейджи типа узла и стадии проекта",
+      "file": "components/BudgetRowBadges.tsx",
+      "props": ["nodeType", "stageName"]
+    },
+    {
+      "name": "BudgetRowHours",
+      "description": "Отображение часов (плановые / приведённые / % от родителя)",
+      "file": "components/BudgetRowHours.tsx",
+      "props": ["nodeType", "nodeId", "plannedHours", "adjustedHours", "percentOfParentHours", "onSuccess"]
+    },
+    {
+      "name": "BudgetRowActions",
+      "description": "Кнопки действий для разных типов узлов иерархии",
+      "file": "components/BudgetRowActions.tsx",
+      "props": ["nodeType", "nodeId", "nodeName", "onRefresh", "onProjectEdit", "onObjectCreate", "onObjectDelete", "onSectionCreate", "onSectionDelete", "onStageCreate", "onItemCreate", "workCategoryId", "workCategoryName"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Hierarchy Aggregation Pattern",
+      "description": "Бюджеты агрегируются снизу вверх: каждый узел показывает сумму своих бюджетов + всех дочерних",
+      "example": "parent.aggregatedBudgets = aggregateBudgets([...parent.budgets, ...children.flatMap(c => c.aggregatedBudgets)])"
+    },
+    {
+      "name": "Inline Edit Pattern",
+      "description": "Все редактирования происходят инлайн без открытия модалок для быстрого workflow",
+      "example": "<ItemHoursEdit itemId={item.id} plannedHours={item.plannedHours} onUpdate={handleUpdate} />"
+    },
+    {
+      "name": "Optimistic Update Pattern",
+      "description": "При мутациях сначала обновляется UI, затем отправляется запрос. При ошибке — rollback",
+      "example": "saveOptimisticSnapshot() → mutate() → onError: rollbackOptimisticUpdate()"
+    },
+    {
+      "name": "Operation Guard Pattern",
+      "description": "Защита от повторных кликов во время выполнения операции",
+      "example": "const { withGuard } = useOperationGuard(); withGuard(async () => await createItem(data))"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Direct Cache Mutation",
+      "description": "НЕ мутируй кэш напрямую без optimistic update helpers",
+      "instead": "Используй saveOptimisticSnapshot/rollbackOptimisticUpdate"
+    },
+    {
+      "name": "Modal for Simple Edits",
+      "description": "НЕ открывай модалки для простых изменений (часы, категория, сложность)",
+      "instead": "Используй inline-редактирование для быстрого workflow"
+    },
+    {
+      "name": "Separate Budget Queries",
+      "description": "НЕ делай отдельные запросы для бюджетов каждого узла",
+      "instead": "Используй useBudgetsHierarchy который загружает все данные одним запросом"
+    },
+    {
+      "name": "Cross-Module Internal Imports",
+      "description": "НЕ импортируй типы напрямую из internal paths других модулей (@/modules/X/types)",
+      "instead": "Используй только публичное API модуля через index.ts или создай собственные типы",
+      "status": "CURRENT_DEBT",
+      "note": "use-budgets-hierarchy.ts импортирует типы из resource-graph/types — требует рефакторинга"
+    }
+  ],
+
+  "technologies": [
+    "@tanstack/react-query",
+    "@supabase/supabase-js",
+    "tailwindcss",
+    "lucide-react",
+    "radix-ui"
+  ],
+
+  "dependencies": {
+    "modules": [
+      "cache",
+      "budgets",
+      "resource-graph",
+      "inline-filter",
+      "modals"
+    ],
+    "database": {
+      "tables": [
+        "projects",
+        "objects",
+        "sections",
+        "decomposition_stages",
+        "decomposition_items",
+        "budgets",
+        "budget_parts",
+        "work_categories",
+        "difficulty_levels"
+      ],
+      "views": [
+        "v_resource_graph",
+        "v_cache_budgets"
+      ],
+      "enums": [
+        "budget_entity_type_enum",
+        "budget_part_type_enum"
+      ],
+      "functions": []
+    }
+  },
+
+  "dependents": [
+    "tasks"
+  ],
+
+  "cache": {
+    "queryKeys": [
+      "budgetsHierarchy.list",
+      "difficultyLevels.list",
+      "workCategories.list"
+    ],
+    "realtimeChannels": [
+      "budgets",
+      "budget_parts",
+      "decomposition_stages",
+      "decomposition_items"
+    ],
+    "invalidationRules": [
+      {
+        "trigger": "budgets INSERT/UPDATE/DELETE",
+        "invalidates": ["budgetsHierarchy.list"]
+      },
+      {
+        "trigger": "budget_parts UPDATE",
+        "invalidates": ["budgetsHierarchy.list"]
+      },
+      {
+        "trigger": "decomposition_stages INSERT/DELETE",
+        "invalidates": ["budgetsHierarchy.list", "resourceGraph.all"]
+      },
+      {
+        "trigger": "decomposition_items INSERT/UPDATE/DELETE",
+        "invalidates": ["budgetsHierarchy.list", "resourceGraph.all"]
+      }
+    ]
+  },
+
+  "permissions": [
+    "budgets.view",
+    "budgets.create",
+    "budgets.edit",
+    "budgets.delete",
+    "decomposition.create_stage",
+    "decomposition.delete_stage",
+    "decomposition.create_item",
+    "decomposition.edit_item",
+    "decomposition.delete_item"
+  ],
+
+  "tasks": [
+    {
+      "id": "BP-003",
+      "title": "Ставка для расчёта бюджета раздела",
+      "description": "Добавить возможность вписать ставку (rate) по которой будет рассчитываться расчётный бюджет раздела. UI для ввода ставки + пересчёт бюджета",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "relatedFiles": [
+        "components/SectionRateEdit.tsx",
+        "components/BudgetRow.tsx",
+        "actions/decomposition.ts",
+        "supabase/migrations/20260105_add_section_hourly_rate.sql"
+      ]
+    },
+    {
+      "id": "BP-004",
+      "title": "Индикатор процента распределения бюджета",
+      "description": "Добавить кружок (ProgressCircle) около цифры распределённого бюджета, который показывает сколько процентов от общего бюджета распределено",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "relatedFiles": [
+        "components/BudgetRow.tsx"
+      ]
+    },
+    {
+      "id": "BP-005",
+      "title": "[Security] Server Actions для декомпозиции",
+      "description": "CRITICAL: Создать Server Actions для CRUD операций декомпозиции (stages/items) с проверкой аутентификации. Заменить прямые Supabase вызовы в StageInlineCreate, StageInlineDelete, ItemInlineCreate, ItemInlineDelete, ItemHoursEdit, ItemCategorySelect, ItemDifficultySelect",
+      "category": "security",
+      "priority": "critical",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": ["BP-006"],
+      "auditSource": "BP-002 Security Guardian",
+      "relatedFiles": [
+        "actions/decomposition.ts",
+        "actions/reference-data.ts",
+        "components/StageInlineCreate.tsx",
+        "components/StageInlineDelete.tsx",
+        "components/ItemInlineCreate.tsx",
+        "components/ItemInlineDelete.tsx",
+        "components/ItemHoursEdit.tsx",
+        "components/ItemCategorySelect.tsx",
+        "components/ItemDifficultySelect.tsx"
+      ]
+    },
+    {
+      "id": "BP-006",
+      "title": "[Security] Zod валидация для Server Actions",
+      "description": "Добавить Zod схемы для валидации входных данных во всех Server Actions",
+      "category": "security",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": ["BP-005"],
+      "blocks": [],
+      "auditSource": "BP-002 Security Guardian",
+      "note": "RLS policies не затронуты по запросу"
+    },
+    {
+      "id": "BP-007",
+      "title": "[Cache] Централизованные query keys",
+      "description": "Перенести локальные query keys из use-reference-data.ts в @/modules/cache/keys/query-keys.ts. Использовать createCacheQuery для useDifficultyLevels и useWorkCategories",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "auditSource": "BP-002 Cache Guardian",
+      "relatedFiles": [
+        "hooks/use-reference-data.ts",
+        "actions/reference-data.ts"
+      ]
+    },
+    {
+      "id": "BP-008",
+      "title": "[TypeScript] Исправить cross-module импорты",
+      "description": "Убрать прямые импорты из @/modules/resource-graph/types и @/modules/budgets/types. Экспортировать нужные типы через public API модулей (index.ts) или создать собственные типы",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "auditSource": "BP-002 TypeScript Guardian",
+      "relatedFiles": [
+        "hooks/use-budgets-hierarchy.ts",
+        "types/index.ts",
+        "components/BudgetPartsEditor.tsx"
+      ]
+    },
+    {
+      "id": "BP-009",
+      "title": "[DRY] Извлечь общие utility функции",
+      "description": "Извлечь дублирующиеся функции в utils/index.ts: parseAmount, formatNumber, calculatePercentage. Используются в BudgetInlineEdit, BudgetAmountEdit и других компонентах",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "auditSource": "BP-002 Clean Code Guardian",
+      "relatedFiles": [
+        "components/BudgetInlineEdit.tsx",
+        "components/BudgetAmountEdit.tsx",
+        "components/BudgetRow.tsx",
+        "components/BudgetCreatePopover.tsx",
+        "utils/index.ts"
+      ]
+    },
+    {
+      "id": "BP-010",
+      "title": "[Clean Code] Разбить BudgetRow на компоненты",
+      "description": "BudgetRow.tsx (659 строк) слишком большой. Извлечь: BudgetRowActions, BudgetRowBadges, BudgetRowExpander, BudgetRowHours в отдельные компоненты",
+      "category": "refactor",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "auditSource": "BP-002 Clean Code Guardian",
+      "relatedFiles": [
+        "components/BudgetRow.tsx",
+        "components/BudgetRowExpander.tsx",
+        "components/BudgetRowBadges.tsx",
+        "components/BudgetRowHours.tsx",
+        "components/BudgetRowActions.tsx"
+      ]
+    },
+    {
+      "id": "BP-011",
+      "title": "[Clean Code] Убрать hardcoded значения",
+      "description": "Вынести MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR, DEFAULT_WORK_CATEGORY_ID в конфигурацию или получать из БД. Добавить TODO комментарии для будущей настройки",
+      "category": "refactor",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "auditSource": "BP-002 Clean Code/Security Guardian",
+      "relatedFiles": [
+        "components/BudgetRow.tsx",
+        "actions/decomposition.ts",
+        "config/constants.ts"
+      ]
+    },
+    {
+      "id": "BP-012",
+      "title": "[Bug] Модалка редактирования проекта не работает",
+      "description": "Модалка ProjectQuickEditModal на странице бюджетов не работает — ничего не сохраняется, возможно dropdowns не реагируют.\n\n## Текущее поведение\n- Модалка открывается при клике на редактирование проекта\n- Dropdowns статуса/стадии/тегов могут не открываться или не сохранять\n- Кнопка 'Сохранить' disabled или не реагирует\n- Изменения не применяются к проекту\n\n## Потенциальные причины\n\n### 1. Несоответствие схемы данных\n- Модалка использует `stage_type` (string), но в БД может быть `stage_id` (FK на stages)\n- Проверить: `projects.stage_type` vs `projects.stage_id`\n- STAGE_TYPES захардкожены, а в БД могут быть другие значения\n\n### 2. Прямые Supabase вызовы (без auth check)\n- `updateProject.mutationFn` использует `createClient()` напрямую\n- Возможно RLS блокирует операцию без правильного auth\n- Нужно: Server Action с `createClient()` на сервере\n\n### 3. Проблема с z-index dropdowns\n- Dropdowns могут быть под overlay модалки\n- z-20 может быть недостаточно\n\n### 4. hasChanges не детектит изменения\n- currentStatus/currentStageType могут приходить в другом формате\n- Сравнение может давать false positive\n\n## План исправления\n\n### Шаг 1: Диагностика\n```typescript\n// Добавить console.log для отладки\nconsole.log('currentStatus:', currentStatus, 'status:', status)\nconsole.log('hasChanges:', hasChanges)\nconsole.log('updateProject.isPending:', updateProject.isPending)\n```\n\n### Шаг 2: Проверить схему БД\n```sql\nSELECT column_name, data_type \nFROM information_schema.columns \nWHERE table_name = 'projects' \nAND column_name IN ('project_status', 'stage_type', 'stage_id');\n```\n\n### Шаг 3: Миграция на Server Actions\n```typescript\n// modules/modals/actions/project.ts\nexport async function updateProject(input: UpdateProjectInput) {\n  const supabase = await createClient()\n  // ... auth check, validation, update\n}\n```\n\n### Шаг 4: Исправить z-index dropdowns\n```typescript\n// Увеличить z-index dropdown меню\nclassName=\"absolute ... z-50\" // было z-20\n```",
+      "category": "bug",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/modals/components/project/ProjectQuickEditModal.tsx",
+        "modules/modals/actions/project.ts",
+        "modules/budgets-page/components/BudgetRowActions.tsx"
+      ],
+      "estimatedHours": 3,
+      "acceptanceCriteria": [
+        "Dropdown статуса открывается и выбор сохраняется",
+        "Dropdown стадии открывается и выбор сохраняется",
+        "Теги можно добавлять/удалять",
+        "Название проекта можно редактировать",
+        "Кнопка 'Сохранить' активна при наличии изменений",
+        "Изменения применяются к проекту в БД",
+        "Cache invalidation работает (данные обновляются в UI)"
+      ],
+      "technicalNotes": {
+        "currentImplementation": "Прямые Supabase вызовы через createClient() в mutation",
+        "targetImplementation": "Server Action с auth check + Zod validation",
+        "relatedIssues": [
+          "z-index dropdowns может конфликтовать с modal overlay",
+          "stage_type vs stage_id — проверить схему",
+          "PROJECT_STATUSES захардкожены — нужно грузить из БД или enum"
+        ]
+      }
+    },
+    {
+      "id": "BP-013",
+      "title": "[Bug] Пропал выделенный бюджет проекта",
+      "description": "Бюджет проекта (allocated/выделенный) не отображается, хотя раньше был и данные есть в БД.\n\n## Текущее поведение\n- В строке проекта бюджет показывается как 0 или пустой\n- Хотя в таблице budgets есть запись с entity_type='project'\n- Агрегация дочерних бюджетов работает, но собственный бюджет проекта — нет\n\n## Потенциальные причины\n\n### 1. Изменения в v_resource_graph view\n- View мог быть изменён и не включает бюджеты проектов\n- Проверить: SELECT * FROM v_resource_graph WHERE project_id = 'xxx'\n\n### 2. Логика агрегации в use-budgets-hierarchy.ts\n- При построении иерархии бюджет проекта мог потеряться\n- Проверить: attachBudgetsToHierarchy() функцию\n\n### 3. entity_type filtering\n- Возможно фильтрация по entity_type неправильная\n- Бюджеты проекта имеют entity_type='project', но фильтр ищет что-то другое\n\n### 4. Миграция данных\n- После какой-то миграции связь budget.entity_id → project.project_id могла сломаться\n\n## План диагностики\n\n### Шаг 1: Проверить данные в БД\n```sql\n-- Есть ли бюджеты для проектов?\nSELECT * FROM budgets WHERE entity_type = 'project';\n\n-- Есть ли бюджеты для конкретного проекта?\nSELECT * FROM budgets WHERE entity_id = 'PROJECT_ID';\n\n-- Что возвращает view?\nSELECT project_id, project_budget_id, project_budget_amount \nFROM v_resource_graph \nWHERE project_id = 'PROJECT_ID' LIMIT 1;\n```\n\n### Шаг 2: Проверить логику хука\n```typescript\n// use-budgets-hierarchy.ts\nconsole.log('Raw budgets for projects:', \n  budgets.filter(b => b.entity_type === 'project'))\nconsole.log('Project node after attach:', projectNode)\n```\n\n### Шаг 3: Проверить v_cache_budgets\n```sql\nSELECT * FROM v_cache_budgets WHERE entity_type = 'project';\n```",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/hooks/use-budgets-hierarchy.ts",
+        "modules/cache/hooks/budgets.ts",
+        "supabase/migrations/*"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Бюджет проекта отображается в строке проекта",
+        "Сумма 'выделено' показывает budget_parts.amount для entity_type='project'",
+        "При клике на редактирование бюджета открывается BudgetPartsEditor",
+        "Изменения бюджета проекта сохраняются"
+      ],
+      "diagnosticQueries": [
+        "SELECT * FROM budgets WHERE entity_type = 'project'",
+        "SELECT * FROM budget_parts bp JOIN budgets b ON bp.budget_id = b.budget_id WHERE b.entity_type = 'project'",
+        "SELECT project_id, project_budget_id FROM v_resource_graph LIMIT 5"
+      ]
+    },
+    {
+      "id": "BP-014",
+      "title": "[Bug] Выбор сложности в строках задач не работает",
+      "description": "ItemDifficultySelect dropdown не работает — либо не открывается, либо выбор не сохраняется.\n\n## Текущее поведение\n- Клик по badge сложности не открывает dropdown\n- Или dropdown открывается, но выбор не сохраняется\n- Или после выбора показывается loading но ничего не меняется\n\n## Потенциальные причины\n\n### 1. Справочник difficulty_levels пустой\n- useDifficultyLevels() возвращает пустой массив\n- Проверить: есть ли данные в таблице difficulty_levels\n\n### 2. Server Action updateItemDifficulty падает\n- Auth check не проходит\n- Zod validation не проходит\n- RLS блокирует update\n\n### 3. Optimistic update с неправильным query key\n- queryKeys.resourceGraph.all может не совпадать с реальным ключом кэша\n- invalidateHierarchyCache может не инвалидировать нужный кэш\n\n### 4. CSS z-index проблема\n- Dropdown может быть скрыт под другими элементами\n- z-50 может быть недостаточно в контексте таблицы\n\n## План диагностики\n\n### Шаг 1: Проверить справочник\n```sql\nSELECT * FROM difficulty_levels ORDER BY sort_order;\n```\n\n### Шаг 2: Проверить console на ошибки\n```typescript\n// ItemDifficultySelect.tsx\nconsole.log('difficulties:', difficulties)\nconsole.log('isOpen:', isOpen)\nconsole.log('handleSelect called with:', newDifficultyId)\n```\n\n### Шаг 3: Проверить Server Action\n```typescript\n// actions/decomposition.ts updateItemDifficulty\nconsole.log('updateItemDifficulty input:', input)\nconsole.log('updateItemDifficulty result:', result)\n```\n\n### Шаг 4: Проверить RLS\n```sql\n-- Проверить что текущий пользователь может обновлять decomposition_items\nUPDATE decomposition_items SET difficulty_id = 'xxx' WHERE decomposition_item_id = 'yyy';\n```",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/ItemDifficultySelect.tsx",
+        "modules/budgets-page/actions/decomposition.ts",
+        "modules/budgets-page/hooks/use-reference-data.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Клик по badge сложности открывает dropdown",
+        "Dropdown показывает список сложностей из difficulty_levels",
+        "Выбор сложности сохраняется в БД",
+        "UI обновляется после выбора (optimistic + real)",
+        "При ошибке показывается rollback к предыдущему значению"
+      ],
+      "diagnosticSteps": [
+        "1. Проверить difficulty_levels в БД",
+        "2. Проверить console на ошибки при открытии dropdown",
+        "3. Проверить console на ошибки при выборе",
+        "4. Проверить Network tab на запросы к Supabase",
+        "5. Проверить RLS policies для decomposition_items"
+      ]
+    },
+    {
+      "id": "BP-AUDIT",
+      "title": "Full Module Audit: Budgets Page",
+      "description": "Полный аудит модуля budgets-page для подтверждения качества перед production.\n\nАудит включает проверку: базы данных, безопасности, бизнес-логики расчёта бюджетов, производительности и качества кода.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 6,
+      "checklist": {
+        "database": [
+          "[ ] Проверить v_resource_graph + v_cache_budgets на N+1 queries",
+          "[ ] Проверить индексы: budgets(entity_type, entity_id), budget_parts(budget_id)",
+          "[ ] EXPLAIN ANALYZE на useBudgetsHierarchy запросе",
+          "[ ] Проверить что JOIN budgets → budget_parts оптимален",
+          "[ ] Проверить время загрузки иерархии < 500ms для 100 разделов"
+        ],
+        "security": [
+          "[ ] Все Server Actions имеют auth check (decomposition.ts, reference-data.ts)",
+          "[ ] RLS policies покрывают: budgets, budget_parts, decomposition_*",
+          "[ ] Zod validation на createStage, deleteStage, createItem, deleteItem",
+          "[ ] Zod validation на updateItemHours, updateItemCategory, updateItemDifficulty",
+          "[ ] Permission checks: budgets.*, decomposition.*"
+        ],
+        "businessLogic": [
+          "[ ] Бюджет проекта = собственный + сумма дочерних (объекты → разделы)",
+          "[ ] Бюджет раздела = main + premium части",
+          "[ ] Часы плановые = сумма plannedHours задач",
+          "[ ] Часы приведённые = plannedHours × коэффициент сложности",
+          "[ ] Расчётный бюджет = приведённые часы × ставка",
+          "[ ] Процент распределения = distributed / allocated × 100",
+          "[ ] Проценты не могут быть > 100% (или warning если превышено)",
+          "[ ] Edge case: раздел без бюджета показывает 0 или placeholder",
+          "[ ] Edge case: этап без задач показывает 0 часов",
+          "[ ] Edge case: задача без сложности использует базовый коэффициент",
+          "[ ] Создание этапа добавляет его в иерархию сразу",
+          "[ ] Удаление этапа удаляет все его задачи (каскад)"
+        ],
+        "performance": [
+          "[ ] Загрузка страницы бюджетов < 1.5 сек",
+          "[ ] Раскрытие узла иерархии < 100ms (данные уже загружены)",
+          "[ ] Инлайн-редактирование отзывчивое (optimistic update)",
+          "[ ] Нет блокировки UI при сохранении",
+          "[ ] Expand all / Collapse all работает быстро"
+        ],
+        "codeQuality": [
+          "[ ] Нет `any` в TypeScript",
+          "[ ] BudgetRow.tsx < 500 строк после рефакторинга",
+          "[ ] Utility функции в utils/index.ts переиспользуются",
+          "[ ] Константы в config/constants.ts, не hardcoded",
+          "[ ] Нет дублирования между ItemHoursEdit, ItemCategorySelect, ItemDifficultySelect"
+        ],
+        "cache": [
+          "[ ] Query keys используют queryKeys.budgetsPage.* или queryKeys.resourceGraph.*",
+          "[ ] invalidateHierarchyCache вызывается после всех мутаций",
+          "[ ] Optimistic updates корректно откатываются при ошибке",
+          "[ ] Справочники (difficulties, categories) кешируются с большим staleTime"
+        ]
+      },
+      "auditProcedure": [
+        "1. npm run build — должен пройти без ошибок",
+        "2. Открыть /dashboard/tasks, вкладка 'Бюджеты'",
+        "3. Проверить загрузку данных в Network tab",
+        "4. Развернуть все узлы иерархии, проверить данные",
+        "5. Создать этап, задачу — проверить что появляются сразу",
+        "6. Изменить часы, категорию, сложность — проверить сохранение",
+        "7. Проверить расчёты бюджетов (калькулятор в руках)",
+        "8. Проверить работу фильтров"
+      ]
+    },
+    {
+      "id": "BP-015",
+      "title": "Спрашивать пользователя перед загрузкой данных",
+      "description": "Реализовать паттерн 'Ask Before Load' как в resource-graph: вместо автоматической загрузки всех данных, показывать кнопку 'Загрузить данные' и давать пользователю выбрать фильтры.\n\n## Текущее поведение\n- При открытии страницы бюджетов сразу загружаются ВСЕ данные\n- На больших проектах это может занять несколько секунд\n- Пользователь часто хочет только конкретный проект/раздел\n\n## Целевое поведение\n- При открытии показывается UI выбора фильтров\n- Пользователь выбирает проект/стадию/другие фильтры\n- Кнопка 'Загрузить' активирует загрузку данных\n- После первой загрузки данные обновляются автоматически\n\n## Референс\nСмотреть реализацию в resource-graph:\n- ResourceGraphWithFilter.tsx — компонент с кнопкой загрузки\n- useResourceGraphUIStore — флаг shouldLoadData\n\n## План реализации\n\n### 1. Добавить store состояние\n```typescript\n// stores/budgets-ui-store.ts\ninterface BudgetsUIState {\n  shouldLoadData: boolean\n  setShouldLoadData: (value: boolean) => void\n}\n```\n\n### 2. Модифицировать хук useBudgetsHierarchy\n```typescript\n// hooks/use-budgets-hierarchy.ts\nexport function useBudgetsHierarchy(params, options?: { enabled?: boolean }) {\n  // ...\n  const { data } = useQuery({\n    // ...\n    enabled: options?.enabled ?? true\n  })\n}\n```\n\n### 3. Обновить BudgetsViewInternal\n```typescript\n// Показывать кнопку 'Загрузить данные' если shouldLoadData === false\n// После клика setShouldLoadData(true)\n```",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 3,
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetsViewInternal.tsx",
+        "modules/budgets-page/hooks/use-budgets-hierarchy.ts",
+        "modules/budgets-page/stores/budgets-ui-store.ts"
+      ],
+      "acceptanceCriteria": [
+        "При открытии страницы данные НЕ загружаются автоматически",
+        "Показывается UI с фильтрами и кнопкой 'Загрузить'",
+        "После клика на 'Загрузить' данные загружаются",
+        "При изменении фильтров данные перезагружаются",
+        "Состояние shouldLoadData сохраняется в session (не localStorage)"
+      ],
+      "referenceImplementation": "modules/resource-graph/components/ResourceGraphWithFilter.tsx"
+    },
+    {
+      "id": "BP-017",
+      "title": "[Bug] Создание этапа декомпозиции падает с ошибкой Failed to fetch",
+      "description": "При создании нового этапа декомпозиции в разделе появляется ошибка 'Failed to fetch'. Сервер возвращает пустой ответ (net::ERR_EMPTY_RESPONSE).\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Выбрать проект (например 'Демопроект')\n3. Раскрыть объект → раскрыть раздел\n4. Нажать 'Добавить этап'\n5. Ввести название этапа (например 'Эскизный проект')\n6. Нажать Enter или кнопку 'Создать'\n\n## Ожидаемое поведение\nЭтап создаётся и появляется в иерархии\n\n## Фактическое поведение\n- Ошибка 'Failed to fetch' в UI\n- В консоли: net::ERR_EMPTY_RESPONSE\n- Этап не создаётся\n\n## Потенциальные причины\n\n### 1. Server Action падает до отправки ответа\n- createDecompositionStage может падать на auth check\n- Или на Supabase insert\n- Или на validation\n\n### 2. Edge case в action\n- sectionId может быть неправильного формата\n- Или section не существует\n\n### 3. RLS блокирует INSERT\n- Проверить policies для decomposition_stages\n\n## План диагностики\n\n### Шаг 1: Добавить логирование в Server Action\n```typescript\n// actions/decomposition.ts createDecompositionStage\nconsole.log('createDecompositionStage input:', input)\n// ... после каждого шага\nconsole.log('auth result:', user)\nconsole.log('insert result:', data, error)\n```\n\n### Шаг 2: Проверить RLS\n```sql\nSELECT * FROM pg_policies WHERE tablename = 'decomposition_stages';\n```\n\n### Шаг 3: Тест INSERT напрямую\n```sql\nINSERT INTO decomposition_stages (section_id, name) VALUES ('xxx', 'Test');\n```",
+      "category": "bug",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/actions/decomposition.ts",
+        "modules/budgets-page/components/StageInlineCreate.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Создание этапа работает без ошибок",
+        "Новый этап появляется в иерархии сразу после создания",
+        "Оптимистичный апдейт показывает этап до ответа сервера",
+        "При ошибке показывается понятное сообщение"
+      ],
+      "testEnvironment": {
+        "browser": "Chrome DevTools MCP",
+        "project": "Демопроект",
+        "section": "АР (Архитектура)",
+        "attemptedName": "Эскизный проект"
+      }
+    },
+    {
+      "id": "BP-018",
+      "title": "[Bug] Добавление части бюджета сбрасывает основной бюджет в 0",
+      "description": "При добавлении новой части бюджета (например 'Премиальный') через модалку 'Части бюджета', общий бюджет сущности сбрасывается в 0.\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Найти объект с установленным бюджетом (например 10,000 BYN)\n3. Нажать кнопку 'Части бюджета'\n4. Нажать 'Добавить часть'\n5. Выбрать 'Премиальный' и установить процент (например 20%)\n\n## Ожидаемое поведение\n- Часть 'Премиальный' добавляется с 20% от общего бюджета\n- Основной бюджет остаётся прежним или пересчитывается корректно\n- Общий бюджет остаётся 10,000 BYN\n\n## Фактическое поведение\n- Часть добавляется\n- Общий бюджет становится 0 BYN\n- В модалке отображается: Total: 0 BYN, Премиальный: 20% / 0 BYN\n\n## Потенциальные причины\n1. Server Action updateBudgetParts перезаписывает amount вместо добавления\n2. Логика расчёта части неправильно обнуляет родительский бюджет\n3. Optimistic update с неправильными данными\n\n## Тестовое окружение\n- Объект: 'Обхект' в проекте 'Демопроект'\n- Исходный бюджет: 10,000 BYN\n- Добавленная часть: Премиальный 20%",
+      "category": "bug",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetPartsEditor.tsx",
+        "modules/budgets/actions/index.ts",
+        "modules/budgets/hooks/use-budget-mutations.ts"
+      ],
+      "estimatedHours": 3,
+      "acceptanceCriteria": [
+        "Добавление части бюджета не сбрасывает общий бюджет",
+        "Премиальный процент корректно рассчитывается от общего бюджета",
+        "После добавления части UI показывает правильные значения",
+        "БД содержит корректные данные после операции"
+      ]
+    },
+    {
+      "id": "BP-019",
+      "title": "[Bug] Модалка 'Части бюджета' показывает Основной = 0 BYN",
+      "description": "В модалке 'Части бюджета' колонка 'Основной' всегда показывает 0 BYN, даже если у сущности есть выделенный бюджет.\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Найти раздел с установленным бюджетом (например АР с 1,800 BYN)\n3. Нажать кнопку 'Части бюджета'\n\n## Ожидаемое поведение\n- Модалка показывает: Total: 1,800 BYN\n- Основной: 1,800 BYN (или сумма распределённая на основную часть)\n- Распределено: корректный процент\n\n## Фактическое поведение\n- Модалка показывает: Total: 1,800 BYN (корректно)\n- Основной: — 0 BYN (НЕПРАВИЛЬНО)\n- Распределено: 0%\n\n## Затронутые уровни\n- Раздел (Section) - подтверждено\n- Этап (Stage) - подтверждено\n- Возможно все уровни с бюджетами\n\n## Потенциальные причины\n1. budget_parts не создаются автоматически при создании бюджета\n2. Запрос budget_parts не включает 'main' тип\n3. Логика отображения ищет 'Основной' по неправильному type\n\n## Диагностика\n```sql\n-- Проверить наличие частей бюджета\nSELECT bp.*, b.entity_type, b.entity_id \nFROM budget_parts bp \nJOIN budgets b ON bp.budget_id = b.budget_id \nWHERE b.entity_type IN ('section', 'decomposition_stage');\n```",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetPartsEditor.tsx",
+        "modules/budgets/hooks/use-budget-parts.ts",
+        "modules/cache/hooks/budgets.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Основной показывает корректную сумму из budget_parts type='main'",
+        "Если budget_parts пустой, Основной = Total (весь бюджет по умолчанию основной)",
+        "Распределено показывает корректный процент"
+      ]
+    },
+    {
+      "id": "BP-020",
+      "title": "[Bug] Бюджет задачи не сохраняется при inline-редактировании",
+      "description": "При изменении бюджета задачи через inline textbox, значение не сохраняется и откатывается к 0.\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Раскрыть иерархию до уровня задачи (например 'Работа 2')\n3. Кликнуть на textbox бюджета задачи (колонка 'Выделенный')\n4. Ввести значение (например 500)\n5. Нажать Tab или кликнуть вне поля\n\n## Ожидаемое поведение\n- Бюджет сохраняется как 500 BYN\n- Процент пересчитывается\n- UI обновляется\n\n## Фактическое поведение\n- При вводе значения процент пересчитывается мгновенно (39.7%)\n- После Tab/blur значение откатывается к 0\n- Textbox становится disabled\n- Данные не сохраняются в БД\n\n## Потенциальные причины\n1. Server Action для обновления бюджета задачи не существует или падает\n2. Optimistic update откатывается из-за ошибки\n3. Бюджет задачи может не иметь записи в таблице budgets\n4. RLS блокирует UPDATE для decomposition_items.budget\n\n## Консоль\nВозможно есть ошибка в console при сохранении (проверить)\n\n## Тестовое окружение\n- Задача: 'Работа 2' в этапе 'Подготовка ИД'\n- Введённое значение: 500 BYN\n- Результат: откат к 0 BYN",
+      "category": "bug",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetInlineEdit.tsx",
+        "modules/budgets-page/components/BudgetRow.tsx",
+        "modules/budgets/actions/index.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Inline редактирование бюджета задачи сохраняется в БД",
+        "UI показывает сохранённое значение после blur",
+        "Процент от родителя пересчитывается корректно",
+        "При ошибке показывается сообщение, а не silent rollback"
+      ]
+    },
+    {
+      "id": "BP-016",
+      "title": "[Security] Защита маршрута /tasks без аутентификации",
+      "description": "Маршрут /dashboard/tasks (и все вкладки: Бюджеты, Канбан, Отделы) должен требовать аутентификацию. Неавторизованные пользователи должны редиректиться на страницу логина.\n\n## Текущее поведение\n- Возможно страница доступна без логина (проверить)\n- Данные могут загружаться для неавторизованных пользователей\n- RLS защищает данные, но UI не защищён\n\n## Целевое поведение\n- Middleware проверяет наличие сессии\n- Без сессии → redirect на /auth/login\n- После логина → redirect обратно на /dashboard/tasks\n\n## План реализации\n\n### 1. Проверить middleware.ts\n```typescript\n// middleware.ts\nexport const config = {\n  matcher: ['/dashboard/:path*', ...]\n}\n\nexport async function middleware(request: NextRequest) {\n  const supabase = createMiddlewareClient({ request, response })\n  const { data: { session } } = await supabase.auth.getSession()\n  \n  if (!session && request.nextUrl.pathname.startsWith('/dashboard')) {\n    return NextResponse.redirect(new URL('/auth/login', request.url))\n  }\n}\n```\n\n### 2. Проверить защиту на уровне страницы\n```typescript\n// app/dashboard/tasks/page.tsx\nexport default async function TasksPage() {\n  const supabase = await createServerClient()\n  const { data: { user } } = await supabase.auth.getUser()\n  \n  if (!user) {\n    redirect('/auth/login')\n  }\n  \n  return <TasksContent />\n}\n```\n\n### 3. Проверить что Server Actions возвращают 401\n```typescript\n// Все Server Actions должны проверять auth\nconst { user } = await getAuthenticatedUser()\nif (!user) {\n  return { error: 'Unauthorized', status: 401 }\n}\n```",
+      "category": "security",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "affectedFiles": [
+        "middleware.ts",
+        "app/dashboard/tasks/page.tsx",
+        "modules/budgets-page/actions/decomposition.ts",
+        "modules/budgets-page/actions/reference-data.ts"
+      ],
+      "acceptanceCriteria": [
+        "Неавторизованный пользователь не может открыть /dashboard/tasks",
+        "Redirect на /auth/login с сохранением return URL",
+        "После логина пользователь возвращается на /dashboard/tasks",
+        "Server Actions возвращают 401 для неавторизованных запросов",
+        "UI показывает ошибку если сессия истекла во время работы"
+      ],
+      "diagnosticSteps": [
+        "1. Открыть /dashboard/tasks в incognito (без логина)",
+        "2. Проверить что происходит redirect",
+        "3. Проверить Network tab на запросы к API",
+        "4. Проверить console на ошибки авторизации"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.6",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-003: Добавлена редактируемая ставка (hourly rate) для разделов",
+        "Новая колонка section_hourly_rate в таблице sections",
+        "Новый компонент SectionRateEdit для inline-редактирования ставки",
+        "Server Action updateSectionHourlyRate с Zod валидацией",
+        "BP-004: Добавлен ProgressCircle индикатор процента распределения бюджета",
+        "Визуальный индикатор показывает % распределённого от выделенного бюджета"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-010: BudgetRow.tsx разбит на отдельные компоненты",
+        "Созданы компоненты: BudgetRowExpander, BudgetRowBadges, BudgetRowHours, BudgetRowActions",
+        "Размер файла уменьшен с 647 до 434 строк (33% reduction)",
+        "Улучшена читаемость и поддерживаемость кода"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-009: Извлечены дублирующиеся utility функции в utils/index.ts",
+        "Добавлены функции: parseAmount, formatNumber (с поддержкой decimals), calculatePercentage, calculateAmount",
+        "Удалены локальные дубликаты из BudgetInlineEdit, BudgetAmountEdit, BudgetRow, BudgetCreatePopover",
+        "Улучшена переиспользуемость кода и maintainability"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-011: Hardcoded константы вынесены в config/constants.ts",
+        "Создан централизованный файл конфигурации для MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR, DEFAULT_WORK_CATEGORY_ID",
+        "Добавлены TODO комментарии для будущей настройки из БД",
+        "Обновлены импорты в BudgetRow.tsx и actions/decomposition.ts"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-005: Созданы Server Actions для декомпозиции с auth checks",
+        "BP-006: Добавлена Zod валидация для всех Server Actions",
+        "BP-007: Миграция на централизованные query keys из cache модуля",
+        "BP-008: Исправлены cross-module импорты (используется public API модулей)",
+        "Все 7 компонентов инлайн-редактирования обновлены на Server Actions",
+        "Хуки useDifficultyLevels/useWorkCategories используют createSimpleCacheQuery"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-01-05",
+      "changes": [
+        "BP-002: Проведён полный аудит модуля агентами",
+        "Security Guardian: выявлено 10 issues (auth checks, RLS verification)",
+        "Cache Guardian: выявлено 5 issues (Server Actions, query keys)",
+        "TypeScript Guardian: выявлено 3 issues (module boundaries)",
+        "Clean Code Guardian: выявлено 6 issues (DRY, component size)"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": [
+        "Initial release",
+        "Иерархия проектов с бюджетами",
+        "Агрегация план/факт по типам",
+        "Инлайн-редактирование бюджетов",
+        "Создание/удаление этапов и задач"
+      ]
+    }
+  ]
+}

@@ -755,3 +755,9 @@ export type {
   UseTimelineResizeReturn,
   ResizeEdge,
 } from './useTimelineResize'
+
+// ============================================================================
+// Prefetch Hooks
+// ============================================================================
+
+export { usePrefetchSectionsBatch, usePrefetchObjectData } from './usePrefetchSectionsBatch'

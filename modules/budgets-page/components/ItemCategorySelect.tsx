@@ -1,26 +1,21 @@
 /**
  * Item Category Select Component
  *
- * Инлайн выбор категории работ задачи с optimistic updates.
+ * Инлайн выбор категории работ задачи.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
+ * BP-014: Исправлен - убран сломанный optimistic update, используется invalidation.
  */
 
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 import { ChevronDown } from 'lucide-react'
-import { queryKeys } from '@/modules/cache'
 import { useWorkCategories } from '../hooks/use-reference-data'
 import { useOperationGuard } from '../hooks/use-operation-guard'
-import {
-  saveOptimisticSnapshot,
-  rollbackOptimisticUpdate,
-  updateHierarchyNode,
-  invalidateHierarchyCache,
-} from '../utils'
-import type { HierarchyNode } from '../types'
+import { updateItemCategory } from '../actions/decomposition'
+import { invalidateHierarchyCache } from '../utils'
 
 // ============================================================================
 // Types
@@ -52,8 +47,7 @@ export function ItemCategorySelect({
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
-  const supabase = createClient()
-  const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
+  const { startOperation, isOperationStale } = useOperationGuard()
   const { data: categories = [] } = useWorkCategories()
 
   // Close dropdown on outside click
@@ -77,48 +71,35 @@ export function ItemCategorySelect({
     setIsOpen(false)
 
     const operationId = startOperation()
-    const snapshot = saveOptimisticSnapshot(queryClient)
 
-    // Find new category data
+    // Find new category data for logging
     const newCategory = categories.find((c) => c.id === newCategoryId)
+    console.log('[ItemCategorySelect] Updating to:', newCategory?.name)
 
-    // Optimistic update
-    queryClient.setQueriesData<HierarchyNode[]>(
-      { queryKey: queryKeys.resourceGraph.all },
-      (oldData) => {
-        if (!oldData) return oldData
-        return updateHierarchyNode(
-          oldData,
-          (node) => node.id === itemId,
-          (node) => ({
-            ...node,
-            workCategoryId: newCategoryId,
-            workCategoryName: newCategory?.name || null,
-          })
-        )
-      }
-    )
+    // NOTE: Skipping broken optimistic update - Project structure uses objects/sections/stages/items,
+    // not children property. Will rely on cache invalidation instead.
 
     try {
-      const { error } = await supabase
-        .from('decomposition_items')
-        .update({ decomposition_item_work_category_id: newCategoryId })
-        .eq('decomposition_item_id', itemId)
+      // Server Action с auth check (BP-005)
+      const result = await updateItemCategory({
+        itemId,
+        categoryId: newCategoryId,
+      })
 
-      if (error) throw new Error(error.message)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
       if (isOperationStale(operationId)) return
 
       await invalidateHierarchyCache(queryClient)
       onSuccess?.()
     } catch (err) {
-      if (isOperationCurrent(operationId)) {
-        rollbackOptimisticUpdate(queryClient, snapshot)
-      }
       console.error('[ItemCategorySelect] Error:', err)
     } finally {
       setIsUpdating(false)
     }
-  }, [itemId, categoryId, categories, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess])
+  }, [itemId, categoryId, categories, queryClient, startOperation, isOperationStale, onSuccess])
 
   // Сокращённое название категории для компактного отображения
   const shortName = categoryName

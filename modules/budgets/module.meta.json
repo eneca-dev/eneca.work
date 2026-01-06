@@ -1,0 +1,261 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "budgets",
+    "displayName": "Budgets Core",
+    "description": "Ядро системы бюджетов: типы, actions, hooks для работы с плановыми бюджетами",
+    "version": "2.0.0",
+    "status": "stable",
+    "route": null,
+    "tags": ["core", "data-layer"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для CRUD бюджетов",
+      "components/": "Базовые компоненты бюджетов",
+      "hooks/": "React Query хуки для бюджетов",
+      "migrations/": "SQL миграции схемы бюджетов",
+      "types.ts": "TypeScript типы бюджетов"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "useBudgetsByEntity",
+      "useCreateBudget",
+      "useUpdateBudget",
+      "useDeactivateBudget",
+      "createBudget",
+      "updateBudget",
+      "deactivateBudget",
+      "Budget",
+      "BudgetPart",
+      "BudgetEntityType"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useBudgetsByEntity",
+      "description": "Получение бюджетов для сущности (section, stage, item)",
+      "file": "hooks/index.ts",
+      "params": "entityType: BudgetEntityType, entityId: string",
+      "returns": "{ data: Budget[], isLoading }"
+    },
+    {
+      "name": "useCreateBudget",
+      "description": "Mutation для создания бюджета",
+      "file": "hooks/index.ts",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useUpdateBudget",
+      "description": "Mutation для обновления бюджета",
+      "file": "hooks/index.ts"
+    },
+    {
+      "name": "useDeactivateBudget",
+      "description": "Mutation для деактивации (soft delete) бюджета",
+      "file": "hooks/index.ts"
+    }
+  ],
+
+  "actions": [
+    {
+      "name": "createBudget",
+      "description": "Создать бюджет для сущности",
+      "file": "actions/budget-actions.ts",
+      "input": "CreateBudgetInput",
+      "output": "ActionResult<Budget>",
+      "mutates": true
+    },
+    {
+      "name": "updateBudget",
+      "description": "Обновить бюджет",
+      "file": "actions/budget-actions.ts",
+      "input": "UpdateBudgetInput",
+      "output": "ActionResult<Budget>",
+      "mutates": true
+    },
+    {
+      "name": "deactivateBudget",
+      "description": "Деактивировать бюджет (soft delete с сохранением истории)",
+      "file": "actions/budget-actions.ts",
+      "input": "budgetId: string",
+      "output": "ActionResult<void>",
+      "mutates": true
+    },
+    {
+      "name": "getBudgetsByEntity",
+      "description": "Получить бюджеты для сущности",
+      "file": "actions/budget-actions.ts",
+      "input": "entityType, entityId",
+      "output": "ActionResult<Budget[]>",
+      "mutates": false
+    }
+  ],
+
+  "stores": [],
+
+  "components": [],
+
+  "patterns": [
+    {
+      "name": "Budget Parts Pattern",
+      "description": "Бюджет состоит из частей (main, premium). Сумма частей = общий бюджет",
+      "example": "budget.parts.reduce((sum, p) => sum + p.amount, 0)"
+    },
+    {
+      "name": "Budget Versioning Pattern",
+      "description": "При изменении бюджета создаётся новая версия, старая деактивируется",
+      "example": "deactivateBudget(oldId) → createBudget(newData)"
+    },
+    {
+      "name": "Entity Hierarchy Pattern",
+      "description": "Бюджеты привязаны к section/stage/item. При отсутствии наследуются от родителя",
+      "example": "item.budget ?? stage.budget ?? section.budget"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Hard Delete Budget",
+      "description": "НЕ удаляй бюджеты физически из БД",
+      "instead": "Используй deactivateBudget для soft delete"
+    }
+  ],
+
+  "technologies": ["@tanstack/react-query", "@supabase/supabase-js"],
+
+  "dependencies": {
+    "modules": ["cache"],
+    "database": {
+      "tables": ["budgets", "budget_parts"],
+      "views": ["v_cache_budgets"],
+      "enums": ["budget_entity_type_enum", "budget_part_type_enum"],
+      "functions": []
+    }
+  },
+
+  "dependents": ["budgets-page", "resource-graph", "modals"],
+
+  "cache": {
+    "queryKeys": ["budgets.byEntity"],
+    "realtimeChannels": ["budgets", "budget_parts"],
+    "invalidationRules": [
+      {
+        "trigger": "budgets INSERT/UPDATE",
+        "invalidates": ["budgets.byEntity"]
+      },
+      {
+        "trigger": "budget_parts UPDATE",
+        "invalidates": ["budgets.byEntity"]
+      }
+    ]
+  },
+
+  "permissions": ["budgets.view", "budgets.create", "budgets.edit", "budgets.deactivate"],
+
+  "tasks": [
+    {
+      "id": "BU-001",
+      "title": "[System] Полный аудит и анализ системы бюджетов",
+      "description": "Комплексный аудит всей системы бюджетов: модули budgets (core) + budgets-page (UI).\n\n## Цели аудита\n1. **Понять текущую архитектуру** — как данные хранятся и связываются\n2. **Найти все баги** — систематизировать известные проблемы\n3. **Оценить качество кода** — соответствие паттернам проекта\n4. **Проверить безопасность** — auth, RLS, validation\n5. **Оценить производительность** — запросы, кэширование\n6. **Предложить улучшения** — roadmap развития системы\n\n## Scope аудита\n\n### 1. Архитектура данных (БД)\n- [ ] Схема таблиц: budgets, budget_parts\n- [ ] Views: v_cache_budgets, связь с v_resource_graph\n- [ ] Enums: budget_entity_type_enum, budget_part_type_enum\n- [ ] Индексы и производительность запросов\n- [ ] RLS policies\n- [ ] Связи с sections, decomposition_stages, decomposition_items\n\n### 2. Бизнес-логика\n- [ ] Иерархия бюджетов: project → object → section → stage → item\n- [ ] Агрегация снизу вверх (план/факт)\n- [ ] Расчёт часов: плановые → приведённые (с коэффициентами сложности)\n- [ ] Расчётный бюджет = часы × ставка\n- [ ] Части бюджета (main/premium) — как распределяются\n- [ ] Версионирование бюджетов (soft delete)\n- [ ] Наследование бюджетов от родителя\n\n### 3. Модуль budgets (core)\n- [ ] Server Actions: createBudget, updateBudget, deactivateBudget\n- [ ] Hooks: useBudgetsByEntity, mutations\n- [ ] Типы: Budget, BudgetPart, BudgetEntityType\n- [ ] Public API через index.ts\n\n### 4. Модуль budgets-page (UI)\n- [ ] Компоненты: BudgetRow, BudgetPartsEditor, BudgetInlineEdit\n- [ ] Иерархия: useBudgetsHierarchy\n- [ ] Инлайн редактирование\n- [ ] Создание/удаление этапов и задач\n- [ ] Актуальные баги (BP-012..BP-020)\n\n### 5. Интеграции\n- [ ] resource-graph: отображение бюджетов в timeline\n- [ ] modals: SectionModal, TaskSidebar с бюджетами\n- [ ] cache: query keys, invalidation rules\n- [ ] realtime: подписки на изменения\n\n## Известные проблемы (из budgets-page tasks)\n- BP-012: Модалка редактирования проекта не работает\n- BP-013: Пропал выделенный бюджет проекта\n- BP-014: Выбор сложности не работает\n- BP-017: Создание этапа падает с Failed to fetch\n- BP-018: Добавление части бюджета сбрасывает в 0\n- BP-019: Основной бюджет в модалке показывает 0\n- BP-020: Бюджет задачи не сохраняется\n\n## Deliverables\n1. **Документ архитектуры** — схема данных, диаграммы связей\n2. **Список багов** — приоритизированный backlog\n3. **Рекомендации** — что исправить, что рефакторить\n4. **Roadmap** — план развития системы бюджетов",
+      "category": "audit",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": ["BU-AUDIT", "BP-AUDIT"],
+      "estimatedHours": 12,
+      "affectedModules": ["budgets", "budgets-page", "resource-graph", "modals", "cache"],
+      "affectedTables": ["budgets", "budget_parts", "sections", "decomposition_stages", "decomposition_items"],
+      "acceptanceCriteria": [
+        "Создан документ с полной архитектурой системы бюджетов",
+        "Все известные баги систематизированы и приоритизированы",
+        "Проверены все Server Actions на auth/validation",
+        "Проверены RLS policies",
+        "Измерена производительность ключевых запросов",
+        "Составлен roadmap улучшений"
+      ]
+    },
+    {
+      "id": "BU-AUDIT",
+      "title": "Full Module Audit: Budgets Core",
+      "description": "Полный аудит ядра системы бюджетов для подтверждения качества.\n\nКак core модуль, требует особого внимания к архитектуре, типизации и безопасности.",
+      "category": "audit",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 4,
+      "checklist": {
+        "database": [
+          "[ ] v_cache_budgets возвращает все нужные поля без N+1",
+          "[ ] Индексы на budgets(entity_type, entity_id, is_active)",
+          "[ ] Индексы на budget_parts(budget_id)",
+          "[ ] Каскадное удаление budget_parts при deactivate бюджета",
+          "[ ] Enum types budget_entity_type_enum и budget_part_type_enum актуальны"
+        ],
+        "security": [
+          "[ ] createBudget имеет auth check",
+          "[ ] updateBudget имеет auth check",
+          "[ ] deactivateBudget имеет auth check",
+          "[ ] getBudgetsByEntity имеет auth check",
+          "[ ] RLS policies на budgets и budget_parts",
+          "[ ] Zod validation на всех inputs"
+        ],
+        "businessLogic": [
+          "[ ] Сумма budget_parts = общий бюджет",
+          "[ ] Деактивация не удаляет данные (soft delete)",
+          "[ ] Версионирование работает (старый деактивируется, новый создаётся)",
+          "[ ] entity_type соответствует реальной сущности",
+          "[ ] Нельзя создать два активных бюджета для одной сущности",
+          "[ ] Edge case: бюджет с нулевой суммой создаётся корректно",
+          "[ ] Edge case: budget_parts может быть пустым (бюджет без частей)"
+        ],
+        "codeQuality": [
+          "[ ] Типы Budget, BudgetPart экспортируются правильно",
+          "[ ] Нет `any` в types.ts",
+          "[ ] Public API в index.ts соответствует документации",
+          "[ ] ActionResult используется везде",
+          "[ ] Нет прямых Supabase вызовов в hooks (только через actions)"
+        ],
+        "cache": [
+          "[ ] queryKeys.budgets.byEntity используется консистентно",
+          "[ ] Invalidation после create/update/deactivate",
+          "[ ] Realtime подписки на budgets и budget_parts настроены"
+        ]
+      },
+      "auditProcedure": [
+        "1. Проверить types.ts на полноту типов",
+        "2. Проверить все Server Actions на auth checks",
+        "3. Протестировать CRUD через UI (BudgetPartsEditor)",
+        "4. Проверить что деактивация не ломает историю",
+        "5. Проверить RLS policies в Supabase Dashboard"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "2.0.0",
+      "date": "2025-01-01",
+      "changes": [
+        "Переход на Server Actions",
+        "Budget Parts система",
+        "Soft delete с версионированием"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2024-10-01",
+      "changes": ["Initial release"]
+    }
+  ]
+}

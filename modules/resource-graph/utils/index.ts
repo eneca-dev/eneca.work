@@ -20,6 +20,7 @@ import type {
   DayInfo,
   ReadinessCheckpoint,
   BudgetSpendingPoint,
+  ProgressHistoryEntry,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -266,6 +267,7 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         readinessCheckpoints,
         actualReadiness,
         budgetSpending,
+        hourlyRate: row.section_hourly_rate ? Number(row.section_hourly_rate) : null,
         decompositionStages: [],
       }
       object.sections.push(section)
@@ -304,12 +306,25 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
     if (existingItem) continue
 
     // Create decomposition item
+    // Cast row to access new budget and progress history fields from v_resource_graph
+    const rowAny = row as Record<string, unknown>
+
+    // Parse progress history JSONB array
+    const rawProgressHistory = rowAny.decomposition_item_progress_history
+    let progressHistory: ProgressHistoryEntry[] = []
+    if (rawProgressHistory && Array.isArray(rawProgressHistory)) {
+      progressHistory = rawProgressHistory as ProgressHistoryEntry[]
+    }
+
     const item: DecompositionItem = {
       id: row.decomposition_item_id,
+      stageId: row.decomposition_stage_id || null,
       description: row.decomposition_item_description || '',
       plannedHours: row.decomposition_item_planned_hours || 0,
       plannedDueDate: row.decomposition_item_planned_due_date || null,
       progress: row.decomposition_item_progress || null,
+      progressDelta: row.decomposition_item_progress_delta ?? null,
+      progressHistory,
       order: row.decomposition_item_order || 0,
       responsible: {
         id: row.item_responsible_id || null,
@@ -329,6 +344,13 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
       },
       workCategoryId: row.decomposition_item_work_category_id || null,
       workCategoryName: row.work_category_name || null,
+      budget: {
+        id: (rowAny.item_budget_id as string) || null,
+        total: Number(rowAny.item_budget_total) || 0,
+        spent: Number(rowAny.item_budget_spent) || 0,
+        remaining: Number(rowAny.item_budget_remaining) || 0,
+        percentage: Number(rowAny.item_budget_percentage) || 0,
+      },
     }
     decompStage.items.push(item)
   }

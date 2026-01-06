@@ -20,6 +20,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { BudgetPartsEditor } from './BudgetPartsEditor'
+import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
 
 // ============================================================================
 // Types
@@ -47,43 +48,6 @@ interface BudgetAmountEditProps {
 }
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Парсит введённую строку в число (поддержка пробелов, запятых)
- */
-function parseAmount(value: string): number {
-  const cleaned = value.replace(/\s/g, '').replace(',', '.')
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? 0 : num
-}
-
-/**
- * Форматирует число для display (с разделителями тысяч)
- */
-function formatDisplayAmount(amount: number): string {
-  if (amount === 0) return '0'
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount)
-}
-
-/**
- * Рассчитывает процент от родителя
- */
-function calculatePercentage(amount: number, parentAmount: number): number {
-  if (parentAmount <= 0) return 0
-  return Math.round((amount / parentAmount) * 100 * 10) / 10 // 1 знак после запятой
-}
-
-/**
- * Рассчитывает сумму от процента
- */
-function calculateAmount(percentage: number, parentAmount: number): number {
-  if (parentAmount <= 0) return 0
-  return Math.round((percentage / 100) * parentAmount)
-}
-
-// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -99,7 +63,7 @@ export function BudgetAmountEdit({
   hideColorDot = false,
 }: BudgetAmountEditProps) {
   // Локальные значения для редактирования
-  const [localAmount, setLocalAmount] = useState(formatDisplayAmount(currentAmount))
+  const [localAmount, setLocalAmount] = useState(formatNumber(currentAmount))
   const [localPercent, setLocalPercent] = useState(
     parentPlannedAmount > 0 ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
   )
@@ -115,7 +79,7 @@ export function BudgetAmountEdit({
   // Sync с внешними данными когда они меняются
   useEffect(() => {
     if (activeField === null) {
-      setLocalAmount(formatDisplayAmount(currentAmount))
+      setLocalAmount(formatNumber(currentAmount))
       setLocalPercent(
         hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
       )
@@ -146,7 +110,7 @@ export function BudgetAmountEdit({
     const newPercent = parseFloat(raw.replace(',', '.')) || 0
     if (hasParent && newPercent >= 0) {
       const newAmount = calculateAmount(newPercent, parentPlannedAmount)
-      setLocalAmount(formatDisplayAmount(newAmount))
+      setLocalAmount(formatNumber(newAmount))
     }
   }, [hasParent, parentPlannedAmount])
 
@@ -174,7 +138,7 @@ export function BudgetAmountEdit({
       } else if (e.key === 'Escape') {
         e.preventDefault()
         // Сброс к исходным значениям
-        setLocalAmount(formatDisplayAmount(currentAmount))
+        setLocalAmount(formatNumber(currentAmount))
         setLocalPercent(
           hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
         )
@@ -190,7 +154,7 @@ export function BudgetAmountEdit({
     <div className="text-[11px] space-y-0.5">
       <div className="font-medium">{label}</div>
       <div className="text-muted-foreground">
-        Освоено: {formatDisplayAmount(spentAmount)} / {formatDisplayAmount(currentAmount)} BYN
+        Освоено: {formatNumber(spentAmount)} / {formatNumber(currentAmount)} BYN
       </div>
       <div className={cn(
         'font-mono',

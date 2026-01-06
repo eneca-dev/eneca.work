@@ -112,7 +112,7 @@ export function BudgetsRow({
       >
         {/* Sidebar */}
         <div
-          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -201,7 +201,7 @@ export function BudgetsRow({
         </div>
 
         {/* Timeline - показываем период раздела (серый, как у развёрнутого раздела) */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
           <div className="absolute inset-0 opacity-30 saturate-50">
             <SectionPeriodFrame
@@ -300,7 +300,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
     >
       {/* Sidebar */}
       <div
-        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
         style={{
           width: SIDEBAR_WIDTH,
           paddingLeft: 8 + depth * 16,
@@ -399,7 +399,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
       </div>
 
       {/* Timeline - progress bar в пределах периода раздела */}
-      <div className="relative" style={{ width: timelineWidth }}>
+      <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
         <TimelineGrid dayCells={dayCells} />
 
         {/* Progress bar - позиционируется по датам раздела */}

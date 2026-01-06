@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
 import type { BudgetInfo, BudgetPageEntityType } from '../types'
 import { BudgetPartsEditor } from './BudgetPartsEditor'
+import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
 
 // ============================================================================
 // Types
@@ -31,31 +32,6 @@ interface BudgetInlineEditProps {
   isOverBudget?: boolean
   /** Компактный режим */
   compact?: boolean
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function parseAmount(value: string): number {
-  const cleaned = value.replace(/\s/g, '').replace(',', '.')
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? 0 : num
-}
-
-function formatNumber(value: number): string {
-  if (value === 0) return '0'
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)
-}
-
-function calculatePercentage(amount: number, parentAmount: number): number {
-  if (parentAmount <= 0) return 0
-  return Math.round((amount / parentAmount) * 100 * 10) / 10
-}
-
-function calculateAmount(percentage: number, parentAmount: number): number {
-  if (parentAmount <= 0) return 0
-  return Math.round((percentage / 100) * parentAmount)
 }
 
 // ============================================================================

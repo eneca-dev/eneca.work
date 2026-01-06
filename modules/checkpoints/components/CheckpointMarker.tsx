@@ -209,7 +209,7 @@ function CheckpointMarkerSvg({
   overlapIndex?: number
   baseY: number
 }) {
-  const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
+  const { registerCheckpoint, unregisterCheckpoint, layoutVersion } = useCheckpointLinks()
   const circleRef = useRef<SVGCircleElement>(null)
 
   // Базовая X позиция (центр дня)
@@ -228,6 +228,8 @@ function CheckpointMarkerSvg({
   const checkpointId = checkpoint.checkpoint_id
 
   // Вычисляем реальную позицию через DOM измерения
+  // FIX RG-001: Добавлен layoutVersion в зависимости - при expand/collapse других строк
+  // позиции пересчитываются через getBoundingClientRect()
   useLayoutEffect(() => {
     if (!hasLinkedSections || !circleRef.current) return
 
@@ -254,8 +256,8 @@ function CheckpointMarkerSvg({
     registerCheckpoint({ checkpoint, sectionId, x: absoluteX, y: absoluteY })
 
     return () => unregisterCheckpoint(checkpointId, sectionId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- используем checkpointId для стабильности
-  }, [checkpointId, sectionId, x, y, hasLinkedSections, registerCheckpoint, unregisterCheckpoint])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- используем checkpointId для стабильности, layoutVersion для пересчёта при expand/collapse
+  }, [checkpointId, sectionId, x, y, hasLinkedSections, layoutVersion, registerCheckpoint, unregisterCheckpoint])
 
   const IconComponent = useMemo(() => getIcon(checkpoint.icon), [checkpoint.icon])
 

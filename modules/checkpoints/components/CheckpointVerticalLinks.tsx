@@ -99,24 +99,6 @@ export function CheckpointVerticalLinks() {
         height: maxY + SVG_PADDING,
       }}
     >
-      {/* Определение маркера-стрелки */}
-      <defs>
-        <marker
-          id="checkpoint-link-arrow"
-          markerWidth="5"
-          markerHeight="5"
-          refX="5"
-          refY="2.5"
-          orient="auto"
-          markerUnits="userSpaceOnUse"
-        >
-          <path
-            d="M 0 0 L 5 2.5 L 0 5 z"
-            fill="hsl(var(--muted-foreground))"
-            opacity="0.5"
-          />
-        </marker>
-      </defs>
 
       {linkedGroups.map(group => {
         // X координата уже абсолютная (относительно контейнера)
@@ -148,7 +130,6 @@ export function CheckpointVerticalLinks() {
                   strokeWidth="1"
                   strokeDasharray="4,3"
                   opacity="0.4"
-                  markerEnd="url(#checkpoint-link-arrow)"
                   className="transition-all duration-300"
                 />
               )

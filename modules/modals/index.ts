@@ -182,5 +182,11 @@ export {
   type ObjectCreateModalProps,
 } from './components/object'
 
+// Project
+export {
+  ProjectQuickEditModal,
+  type ProjectQuickEditModalProps,
+} from './components/project'
+
 // Global
 // export { GlobalModals } from './components/GlobalModals'

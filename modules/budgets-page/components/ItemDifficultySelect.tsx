@@ -1,25 +1,20 @@
 /**
  * Item Difficulty Select Component
  *
- * Инлайн выбор сложности задачи с optimistic updates.
+ * Инлайн выбор сложности задачи.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
+ * BP-014: Исправлен - убран сломанный optimistic update, используется invalidation.
  */
 
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
-import { queryKeys } from '@/modules/cache'
 import { useDifficultyLevels } from '../hooks/use-reference-data'
 import { useOperationGuard } from '../hooks/use-operation-guard'
-import {
-  saveOptimisticSnapshot,
-  rollbackOptimisticUpdate,
-  updateHierarchyNode,
-  invalidateHierarchyCache,
-} from '../utils'
-import type { HierarchyNode } from '../types'
+import { updateItemDifficulty } from '../actions/decomposition'
+import { invalidateHierarchyCache } from '../utils'
 
 // ============================================================================
 // Types
@@ -52,9 +47,11 @@ export function ItemDifficultySelect({
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
-  const { data: difficulties = [] } = useDifficultyLevels()
+  const { data: difficulties = [], isLoading, error } = useDifficultyLevels()
+
+  // Debug: log difficulties loading state
+  console.log('[ItemDifficultySelect] difficulties:', difficulties.length, 'loading:', isLoading, 'error:', error)
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -68,7 +65,10 @@ export function ItemDifficultySelect({
   }, [])
 
   const handleSelect = useCallback(async (newDifficultyId: string | null) => {
+    console.log('[ItemDifficultySelect] handleSelect called with:', newDifficultyId, 'current:', difficulty?.id)
+
     if (newDifficultyId === difficulty?.id) {
+      console.log('[ItemDifficultySelect] Same value, skipping')
       setIsOpen(false)
       return
     }
@@ -77,51 +77,39 @@ export function ItemDifficultySelect({
     setIsOpen(false)
 
     const operationId = startOperation()
-    const snapshot = saveOptimisticSnapshot(queryClient)
 
-    // Find new difficulty data
+    // Find new difficulty data for optimistic UI feedback
     const newDifficulty = newDifficultyId
       ? difficulties.find((d) => d.id === newDifficultyId)
       : null
 
-    // Optimistic update
-    queryClient.setQueriesData<HierarchyNode[]>(
-      { queryKey: queryKeys.resourceGraph.all },
-      (oldData) => {
-        if (!oldData) return oldData
-        return updateHierarchyNode(
-          oldData,
-          (node) => node.id === itemId,
-          (node) => ({
-            ...node,
-            difficulty: newDifficulty
-              ? { id: newDifficulty.id, abbr: newDifficulty.abbr, name: newDifficulty.name }
-              : null,
-          })
-        )
-      }
-    )
+    // NOTE: Skipping broken optimistic update - Project structure uses objects/sections/stages/items,
+    // not children property. Will rely on cache invalidation instead.
+    console.log('[ItemDifficultySelect] New difficulty:', newDifficulty)
 
     try {
-      const { error } = await supabase
-        .from('decomposition_items')
-        .update({ decomposition_item_difficulty_id: newDifficultyId })
-        .eq('decomposition_item_id', itemId)
+      // Server Action с auth check (BP-005)
+      console.log('[ItemDifficultySelect] Calling updateItemDifficulty:', { itemId, difficultyId: newDifficultyId })
+      const result = await updateItemDifficulty({
+        itemId,
+        difficultyId: newDifficultyId,
+      })
+      console.log('[ItemDifficultySelect] Server action result:', result)
 
-      if (error) throw new Error(error.message)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
       if (isOperationStale(operationId)) return
 
       await invalidateHierarchyCache(queryClient)
       onSuccess?.()
     } catch (err) {
-      if (isOperationCurrent(operationId)) {
-        rollbackOptimisticUpdate(queryClient, snapshot)
-      }
       console.error('[ItemDifficultySelect] Error:', err)
     } finally {
       setIsUpdating(false)
     }
-  }, [itemId, difficulty?.id, difficulties, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess])
+  }, [itemId, difficulty?.id, difficulties, queryClient, startOperation, isOperationStale, onSuccess])
 
   return (
     <div ref={dropdownRef} className="relative">

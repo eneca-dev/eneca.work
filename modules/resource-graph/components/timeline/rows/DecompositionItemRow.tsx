@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -14,10 +14,11 @@ import type { DecompositionItem, TimelineRange, WorkLog } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid, ProgressCircle } from '../shared'
 import { WorkLogMarkers } from '../WorkLogMarkers'
+import { ProgressHistoryMarkers } from '../ProgressHistoryMarkers'
 import { SectionPeriodFrame } from '../SectionPeriodFrame'
 import { WorkLogCreateModal, ProgressUpdateDialog } from '@/modules/modals'
-import { formatHoursCompact } from '../../../utils'
-import { ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
+import { formatHoursCompact, formatBudgetAmount } from '../../../utils'
+import { ROW_HEIGHT, ITEM_ROW_HEIGHT_WITH_HISTORY, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 import { useDeleteDecompositionItem } from '../../../hooks'
 
 // Dynamic import для TaskSidebar
@@ -104,17 +105,21 @@ export function DecompositionItemRow({
   // Прогресс (0-100)
   const progress = item.progress ?? 0
 
+  // Используем расширенную высоту если есть история прогресса
+  const hasProgressHistory = item.progressHistory && item.progressHistory.length > 0
+  const rowHeight = hasProgressHistory ? ITEM_ROW_HEIGHT_WITH_HISTORY : ROW_HEIGHT
+
   return (
     <>
       <div
         className={cn(
           'flex border-b border-border/50 group/item'
         )}
-        style={{ height: ROW_HEIGHT, minWidth: totalWidth }}
+        style={{ height: rowHeight, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
         <div
-          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -144,7 +149,11 @@ export function DecompositionItemRow({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
-                Готовность: {progress}% — нажмите для изменения
+                Готовность: {progress}%
+                {item.progressDelta !== null && item.progressDelta !== 0 && (
+                  <> ({item.progressDelta > 0 ? '+' : ''}{item.progressDelta}%)</>
+                )}
+                {' — нажмите для изменения'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -180,6 +189,36 @@ export function DecompositionItemRow({
               </span>
             )}
           </div>
+
+          {/* Budget indicator - compact */}
+          {item.budget && item.budget.total > 0 && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      'flex items-center gap-0.5 shrink-0 text-[9px] tabular-nums px-1 py-0.5 rounded',
+                      item.budget.percentage >= 100
+                        ? 'text-red-500 bg-red-500/10'
+                        : item.budget.percentage >= 80
+                          ? 'text-amber-500 bg-amber-500/10'
+                          : 'text-muted-foreground bg-muted/30'
+                    )}
+                  >
+                    <Wallet className="w-2.5 h-2.5" />
+                    <span className="font-medium">{Math.round(item.budget.percentage)}%</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <div className="space-y-0.5">
+                    <div>Бюджет: {formatBudgetAmount(item.budget.total)}</div>
+                    <div>Израсходовано: {formatBudgetAmount(item.budget.spent)} ({Math.round(item.budget.percentage)}%)</div>
+                    <div>Остаток: {formatBudgetAmount(item.budget.remaining)}</div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {/* Кнопка добавления отчёта */}
           <TooltipProvider delayDuration={300}>
@@ -226,8 +265,8 @@ export function DecompositionItemRow({
           </TooltipProvider>
         </div>
 
-        {/* Timeline area */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        {/* Timeline area - isolate + overflow-hidden to contain elements */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
           {/* Stage period frame (semi-transparent) */}
           <div className="absolute inset-0 opacity-30 saturate-50">
@@ -241,6 +280,15 @@ export function DecompositionItemRow({
           {itemWorkLogs.length > 0 && (
             <WorkLogMarkers
               workLogs={itemWorkLogs}
+              range={range}
+              timelineWidth={timelineWidth}
+            />
+          )}
+
+          {/* Progress History Markers - показываем изменения прогресса по дням */}
+          {item.progressHistory && item.progressHistory.length > 0 && (
+            <ProgressHistoryMarkers
+              progressHistory={item.progressHistory}
               range={range}
               timelineWidth={timelineWidth}
             />

@@ -2,16 +2,17 @@
  * Item Hours Edit Component
  *
  * Инлайн редактирование плановых часов задачи с optimistic updates.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
  */
 
 'use client'
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { queryKeys } from '@/modules/cache'
 import { HoursInput } from './HoursInput'
 import { useOperationGuard } from '../hooks/use-operation-guard'
+import { updateItemPlannedHours } from '../actions/decomposition'
 import {
   saveOptimisticSnapshot,
   rollbackOptimisticUpdate,
@@ -43,7 +44,6 @@ export function ItemHoursEdit({
   onSuccess,
 }: ItemHoursEditProps) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
 
   const handleChange = useCallback(async (newValue: number) => {
@@ -66,12 +66,16 @@ export function ItemHoursEdit({
     )
 
     try {
-      const { error } = await supabase
-        .from('decomposition_items')
-        .update({ decomposition_item_planned_hours: newValue })
-        .eq('decomposition_item_id', itemId)
+      // Server Action с auth check (BP-005)
+      const result = await updateItemPlannedHours({
+        itemId,
+        plannedHours: newValue,
+      })
 
-      if (error) throw new Error(error.message)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
       if (isOperationStale(operationId)) return
 
       await invalidateHierarchyCache(queryClient)
@@ -82,7 +86,7 @@ export function ItemHoursEdit({
       }
       console.error('[ItemHoursEdit] Error:', err)
     }
-  }, [itemId, value, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess])
+  }, [itemId, value, queryClient, startOperation, isOperationStale, isOperationCurrent, onSuccess])
 
   return (
     <HoursInput

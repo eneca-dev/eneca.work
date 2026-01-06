@@ -2,16 +2,17 @@
  * Item Inline Create Component
  *
  * Инлайн создание задачи (decomposition_item) с optimistic updates.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
  */
 
 'use client'
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { queryKeys } from '@/modules/cache'
 import { InlineCreateForm } from './InlineCreateForm'
 import { useOperationGuard } from '../hooks/use-operation-guard'
+import { createDecompositionItem } from '../actions/decomposition'
 import {
   saveOptimisticSnapshot,
   rollbackOptimisticUpdate,
@@ -38,13 +39,6 @@ interface ItemInlineCreateProps {
 }
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-/** Default work category ID (Проектирование) */
-const DEFAULT_WORK_CATEGORY_ID = '89a560a5-e740-4cec-b2df-e4edd49f95b2'
-
-// ============================================================================
 // Component
 // ============================================================================
 
@@ -55,7 +49,6 @@ export function ItemInlineCreate({
   onSuccess,
 }: ItemInlineCreateProps) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
 
   const handleSubmit = useCallback(
@@ -79,42 +72,28 @@ export function ItemInlineCreate({
       )
 
       try {
-        // Получаем максимальный order
-        const { data: maxOrderData } = await supabase
-          .from('decomposition_items')
-          .select('decomposition_item_order')
-          .eq('decomposition_item_stage_id', stageId)
-          .order('decomposition_item_order', { ascending: false })
-          .limit(1)
+        // Server Action с auth check (BP-005)
+        const result = await createDecompositionItem({
+          stageId,
+          sectionId,
+          description: value,
+        })
 
-        const nextOrder = (maxOrderData?.[0]?.decomposition_item_order ?? -1) + 1
+        if (!result.success) {
+          throw new Error(result.error)
+        }
 
-        // Создаём в БД
-        const { data, error } = await supabase
-          .from('decomposition_items')
-          .insert({
-            decomposition_item_description: value,
-            decomposition_item_section_id: sectionId,
-            decomposition_item_stage_id: stageId,
-            decomposition_item_work_category_id: DEFAULT_WORK_CATEGORY_ID,
-            decomposition_item_planned_hours: 0,
-            decomposition_item_order: nextOrder,
-          })
-          .select('decomposition_item_id')
-          .single()
-
-        if (error) throw new Error(error.message)
         if (isOperationStale(operationId)) return
 
         // Заменяем temp ID на реальный
         queryClient.setQueriesData<HierarchyNode[]>(
           { queryKey: queryKeys.resourceGraph.all },
           (oldData) => {
-            if (!oldData || !data) return oldData
+            if (!oldData || !result.data) return oldData
             return updateHierarchyNode(
               oldData,
               (node) => node.id === tempId,
-              (node) => ({ ...node, id: data.decomposition_item_id })
+              (node) => ({ ...node, id: result.data.decomposition_item_id })
             )
           }
         )
@@ -128,7 +107,7 @@ export function ItemInlineCreate({
         throw err
       }
     },
-    [stageId, sectionId, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess]
+    [stageId, sectionId, queryClient, startOperation, isOperationStale, isOperationCurrent, onSuccess]
   )
 
   return (

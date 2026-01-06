@@ -2,16 +2,17 @@
  * Item Inline Delete Component
  *
  * Инлайн удаление задачи (decomposition_item) с optimistic updates.
+ * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
  */
 
 'use client'
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { queryKeys } from '@/modules/cache'
 import { InlineDeleteButton } from './InlineDeleteButton'
 import { useOperationGuard } from '../hooks/use-operation-guard'
+import { deleteDecompositionItem } from '../actions/decomposition'
 import {
   saveOptimisticSnapshot,
   rollbackOptimisticUpdate,
@@ -43,7 +44,6 @@ export function ItemInlineDelete({
   onSuccess,
 }: ItemInlineDeleteProps) {
   const queryClient = useQueryClient()
-  const supabase = createClient()
   const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
 
   const handleDelete = useCallback(async () => {
@@ -60,12 +60,13 @@ export function ItemInlineDelete({
     )
 
     try {
-      const { error } = await supabase
-        .from('decomposition_items')
-        .delete()
-        .eq('decomposition_item_id', itemId)
+      // Server Action с auth check (BP-005)
+      const result = await deleteDecompositionItem({ itemId })
 
-      if (error) throw new Error(error.message)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
       if (isOperationStale(operationId)) return
 
       await invalidateHierarchyCache(queryClient)
@@ -76,7 +77,7 @@ export function ItemInlineDelete({
       }
       throw err
     }
-  }, [itemId, queryClient, supabase, startOperation, isOperationStale, isOperationCurrent, onSuccess])
+  }, [itemId, queryClient, startOperation, isOperationStale, isOperationCurrent, onSuccess])
 
   return (
     <InlineDeleteButton

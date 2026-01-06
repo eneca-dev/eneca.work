@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/popover'
 import { useCreateBudget } from '@/modules/budgets'
 import type { BudgetInfo, BudgetPageEntityType } from '../types'
+import { parseAmount, formatNumber } from '../utils'
 
 interface BudgetCreatePopoverProps {
   /** Тип сущности */
@@ -41,23 +42,6 @@ const ENTITY_TYPE_LABELS: Record<BudgetPageEntityType, string> = {
   section: 'Раздел',
   object: 'Объект',
   project: 'Проект',
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function parseAmount(value: string): number {
-  const cleaned = value.replace(/\s/g, '').replace(',', '.')
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? 0 : num
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 // ============================================================================
@@ -107,7 +91,7 @@ export function BudgetCreatePopover({
 
   const handleAmountBlur = useCallback(() => {
     if (amount > 0) {
-      setAmountString(formatCurrency(amount))
+      setAmountString(formatNumber(amount, 2))
     }
   }, [amount])
 

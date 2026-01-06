@@ -73,7 +73,7 @@ export function BaseRow({
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20',
+            'sticky left-0 z-40',
             depth === 0 ? 'bg-card' : 'bg-background'
           )}
           style={{

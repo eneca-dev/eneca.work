@@ -70,28 +70,29 @@ export function CheckpointCreateModal({
   }, [checkpointTypes])
 
   // Обработка структуры проекта для получения разделов
+  // Иерархия: Project → Object → Section (stages убраны из иерархии)
   const { projectSections, projectId } = useMemo(() => {
     if (!projectStructureResult || !sectionId || !isOpen) {
       return { projectSections: [], projectId: initialProjectId || null }
     }
 
-    const { sections, objects, stages } = projectStructureResult
+    const { sections, objects } = projectStructureResult
 
+    // Находим текущую секцию
     const currentSection = sections.find((s) => s.id === sectionId)
     if (!currentSection?.objectId) return { projectSections: [], projectId: initialProjectId || null }
 
+    // Находим объект секции
     const currentObject = objects.find((o) => o.id === currentSection.objectId)
-    if (!currentObject?.stageId) return { projectSections: [], projectId: initialProjectId || null }
+    // stageId теперь содержит projectId (объекты связаны напрямую с проектами)
+    const currentProjectId = currentObject?.stageId
+    if (!currentProjectId) return { projectSections: [], projectId: initialProjectId || null }
 
-    const currentStage = stages.find((s) => s.id === currentObject.stageId)
-    if (!currentStage?.projectId) return { projectSections: [], projectId: initialProjectId || null }
-
-    const projectStages = stages.filter((s) => s.projectId === currentStage.projectId)
-    const stageIds = new Set(projectStages.map((s) => s.id))
-
-    const projectObjects = objects.filter((o) => o.stageId && stageIds.has(o.stageId))
+    // Находим все объекты этого проекта
+    const projectObjects = objects.filter((o) => o.stageId === currentProjectId)
     const objectIds = new Set(projectObjects.map((o) => o.id))
 
+    // Находим все секции этих объектов
     const filteredSections: SectionOption[] = sections
       .filter((s) => s.objectId && objectIds.has(s.objectId))
       .map((s) => ({
@@ -102,7 +103,7 @@ export function CheckpointCreateModal({
 
     return {
       projectSections: filteredSections,
-      projectId: currentStage.projectId,
+      projectId: currentProjectId,
     }
   }, [projectStructureResult, sectionId, isOpen, initialProjectId])
 
