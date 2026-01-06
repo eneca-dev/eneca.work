@@ -1147,33 +1147,6 @@ export type Database = {
           },
         ]
       }
-      budget_types: {
-        Row: {
-          color: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          type_id: string
-        }
-        Insert: {
-          color?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          type_id?: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          type_id?: string
-        }
-        Relationships: []
-      }
       budgets: {
         Row: {
           budget_id: string
@@ -11250,21 +11223,6 @@ export type Database = {
           },
         ]
       }
-      v_budget_hierarchy: {
-        Row: {
-          budget_id: string | null
-          distributed_amount: number | null
-          entity_id: string | null
-          entity_type: Database["public"]["Enums"]["budget_entity_type"] | null
-          is_over_distributed: boolean | null
-          level: number | null
-          name: string | null
-          parent_budget_id: string | null
-          path: string[] | null
-          total_amount: number | null
-        }
-        Relationships: []
-      }
       v_budgets_full: {
         Row: {
           budget_id: string | null
@@ -11426,18 +11384,6 @@ export type Database = {
             referencedColumns: ["item_budget_id"]
           },
         ]
-      }
-      v_cache_budget_types: {
-        Row: {
-          color: string | null
-          created_at: string | null
-          description: string | null
-          is_active: boolean | null
-          name: string | null
-          type_id: string | null
-          usage_count: number | null
-        }
-        Relationships: []
       }
       v_cache_budgets: {
         Row: {
@@ -12520,198 +12466,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_stage_employee_loadings"
             referencedColumns: ["responsible_department_id"]
-          },
-        ]
-      }
-      v_pending_budget_approvals: {
-        Row: {
-          amount: number | null
-          approval_threshold: number | null
-          budget_id: string | null
-          budget_name: string | null
-          created_at: string | null
-          created_by: string | null
-          creator_first_name: string | null
-          creator_last_name: string | null
-          description: string | null
-          entity_id: string | null
-          entity_type: Database["public"]["Enums"]["budget_entity_type"] | null
-          expense_date: string | null
-          expense_id: string | null
-          part_amount: number | null
-          part_id: string | null
-          part_name: string | null
-          part_type: Database["public"]["Enums"]["budget_part_type"] | null
-          work_log_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "budget_expenses_budget_id_fkey"
-            columns: ["budget_id"]
-            isOneToOne: false
-            referencedRelation: "budgets"
-            referencedColumns: ["budget_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_budget_id_fkey"
-            columns: ["budget_id"]
-            isOneToOne: false
-            referencedRelation: "v_budgets_full"
-            referencedColumns: ["budget_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_budget_id_fkey"
-            columns: ["budget_id"]
-            isOneToOne: false
-            referencedRelation: "v_cache_budgets"
-            referencedColumns: ["budget_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_budget_id_fkey"
-            columns: ["budget_id"]
-            isOneToOne: false
-            referencedRelation: "v_resource_graph"
-            referencedColumns: ["item_budget_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "v_org_structure"
-            referencedColumns: ["employee_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "v_project_structure"
-            referencedColumns: ["manager_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_employee_workloads"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_my_work_analytics"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_organizational_structure"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_organizational_structure_ui"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["section_responsible_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_section_hierarchy"
-            referencedColumns: ["project_lead_engineer_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_section_hierarchy"
-            referencedColumns: ["project_manager_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_section_hierarchy"
-            referencedColumns: ["section_responsible_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_sections_with_loadings"
-            referencedColumns: ["section_responsible_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_stage_employee_loadings"
-            referencedColumns: ["section_responsible_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_users"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "view_users_with_details"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_part_id_fkey"
-            columns: ["part_id"]
-            isOneToOne: false
-            referencedRelation: "budget_parts"
-            referencedColumns: ["part_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_part_id_fkey"
-            columns: ["part_id"]
-            isOneToOne: false
-            referencedRelation: "v_cache_budgets"
-            referencedColumns: ["main_part_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_part_id_fkey"
-            columns: ["part_id"]
-            isOneToOne: false
-            referencedRelation: "v_cache_budgets"
-            referencedColumns: ["premium_part_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_work_log_id_fkey"
-            columns: ["work_log_id"]
-            isOneToOne: false
-            referencedRelation: "view_work_logs_enriched"
-            referencedColumns: ["work_log_id"]
-          },
-          {
-            foreignKeyName: "budget_expenses_work_log_id_fkey"
-            columns: ["work_log_id"]
-            isOneToOne: false
-            referencedRelation: "work_logs"
-            referencedColumns: ["work_log_id"]
           },
         ]
       }

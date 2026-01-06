@@ -12,7 +12,7 @@ import type { DayCell } from '../types'
 // Re-export date utils from resource-graph
 export { buildCalendarMap, getDayInfo } from '@/modules/resource-graph/utils'
 
-// Re-export loading bars utils from planning
+// Re-export loading bars utils from shared components
 export {
   loadingsToPeriods,
   calculateBarRenders,
@@ -29,7 +29,7 @@ export {
   type BarPeriod,
   type BarRender,
   type BarLabelParts,
-} from '@/modules/planning/components/timeline/loading-bars-utils'
+} from '@/components/shared/timeline/loading-bars-utils'
 
 // ============================================================================
 // Cell Helpers - DRY utilities for timeline cells

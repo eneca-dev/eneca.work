@@ -6,7 +6,7 @@ export default async function FeedbackAnalyticsRoute() {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect("/dashboard")
+    redirect("/")
   }
 
   // Проверяем доступ к аналитике на сервере
@@ -17,7 +17,7 @@ export default async function FeedbackAnalyticsRoute() {
     .maybeSingle()
 
   if (!accessRecord) {
-    redirect("/dashboard")
+    redirect("/")
   }
   const { FeedbackAnalyticsPage } = await import("@/modules/feedback-analytics")
   return <FeedbackAnalyticsPage />

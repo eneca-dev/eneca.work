@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, BarChart, Users, MessageSquare, FolderOpen, CalendarDays, List, FileText, LineChart, Columns3 } from "lucide-react"
+import { LogOut, Home, ChevronLeft, BarChart, Users, MessageSquare, FolderOpen, List, FileText, LineChart } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
@@ -106,21 +106,19 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   }
 
   const menuItems = [
-    { title: "Главная", href: "/dashboard", icon: Home },
-    { title: "Проекты", href: "/dashboard/projects", icon: FolderOpen },
-    { title: "Планирование", href: "/dashboard/planning", icon: CalendarDays },
-    { title: "Канбан", href: "/dashboard/kanban", icon: Columns3 },
-    { title: "Заметки", href: "/dashboard/notions", icon: List },
-    { title: "Отчёты", href: "/dashboard/reports", icon: BarChart },
+    { title: "Главная", href: "/", icon: Home },
+    { title: "Задачи", href: "/tasks", icon: List },
+    { title: "Заметки", href: "/notions", icon: FolderOpen },
+    { title: "Отчёты", href: "/reports", icon: BarChart },
   ]
 
-  const isUsersActiveInternal = isUsersActive ?? pathname === "/dashboard/users"
+  const isUsersActiveInternal = isUsersActive ?? pathname === "/users"
 
   return (
     <div
       data-sidebar
       className={cn(
-        "h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300",
+        "h-screen bg-[#0a0e13] border-r border-slate-700/50 transition-all duration-300",
         collapsed ? "w-20" : "w-64",
       )}
     >
@@ -138,7 +136,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             {!collapsed && (
               <h1 className="text-xl font-mono ml-3">
                 <span className="text-primary">eneca</span>
-                <span className="dark:text-gray-200">.work</span>
+                <span className="text-slate-400">.work</span>
               </h1>
             )}
             {!collapsed && (
@@ -149,7 +147,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", collapsed ? "ml-2" : "", collapsed && "rotate-180")}
+              className={cn("h-8 w-8 text-slate-400 hover:text-slate-200 hover:bg-white/5", collapsed ? "ml-2" : "", collapsed && "rotate-180")}
               onClick={onToggle}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -173,7 +171,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
                     "flex items-center rounded-md px-3 py-2 nav-item transition-colors",
                     pathname === item.href
                       ? "bg-primary/10 text-primary"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+                      : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
                     collapsed && "justify-center px-0",
                   )}
                 >
@@ -189,12 +187,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         {hasAnalyticsAccess && (
           <div className="px-2 mt-2">
             <Link
-              href="/dashboard/feedback-analytics"
+              href="/analytics"
               className={cn(
                 "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
-                pathname === "/dashboard/feedback-analytics"
+                pathname === "/analytics"
                   ? "bg-primary/10 text-primary"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
                 collapsed && "justify-center px-0"
               )}
             >
@@ -207,12 +205,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         {/* Документация */}
         <div className="px-2 mt-2">
           <Link
-            href="/dashboard/user-docs"
+            href="/docs"
             className={cn(
               "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
-              pathname === "/dashboard/user-docs"
+              pathname === "/docs"
                 ? "bg-primary/10 text-primary"
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+                : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
               collapsed && "justify-center px-0"
             )}
           >
@@ -224,12 +222,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         {/* Сообщить о проблеме */}
         <div className="px-2 mt-2">
           <Link
-            href="/dashboard/report"
+            href="/feedback"
             className={cn(
               "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
-              pathname === "/dashboard/report"
+              pathname === "/feedback"
                 ? "bg-primary/10 text-primary"
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+                : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
               collapsed && "justify-center px-0"
             )}
           >
@@ -242,7 +240,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         <WeeklyCalendar collapsed={collapsed} />
 
         {/* User and Theme */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+        <div className="border-t border-slate-700/50 p-4">
           <div className={cn("flex items-center", collapsed ? "flex-col space-y-2" : "space-x-3")}>
             <UserAvatar
               avatarUrl={avatarUrl}
@@ -253,46 +251,46 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             />
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="list-item-title truncate dark:text-gray-200">{displayName}</p>
-                <p className="metadata truncate">{displayEmail}</p>
+                <p className="list-item-title truncate text-slate-200">{displayName}</p>
+                <p className="metadata truncate text-slate-500">{displayEmail}</p>
               </div>
             )}
           </div>
 
           {collapsed ? (
             <div className="mt-4 flex flex-col items-center space-y-2">
-              <ThemeToggle />
+              {/* <ThemeToggle /> */}
 
-              <Link href="/dashboard/users">
+              <Link href="/users">
                 <Button
                   variant={isUsersActiveInternal ? "secondary" : "ghost"}
                   size="icon"
-                  className={`h-9 w-9 ${isUsersActiveInternal ? "bg-primary/10 text-primary" : ""}`}
+                  className={`h-9 w-9 ${isUsersActiveInternal ? "bg-primary/10 text-primary" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
                 >
-                  <Users className={`h-4 w-4 ${isUsersActiveInternal ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                  <Users className={`h-4 w-4 ${isUsersActiveInternal ? "text-primary" : ""}`} />
                 </Button>
               </Link>
 
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogoutInternal}>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-200 hover:bg-white/5" onClick={handleLogoutInternal}>
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
           ) : (
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
-                <ThemeToggle />
+                {/* <ThemeToggle /> */}
 
-                <Link href="/dashboard/users">
+                <Link href="/users">
                   <Button
                     variant={isUsersActiveInternal ? "secondary" : "ghost"}
                     size="icon"
-                    className={`h-9 w-9 ${isUsersActiveInternal ? "bg-primary/10 text-primary" : ""}`}
+                    className={`h-9 w-9 ${isUsersActiveInternal ? "bg-primary/10 text-primary" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
                   >
-                    <Users className={`h-4 w-4 ${isUsersActiveInternal ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                    <Users className={`h-4 w-4 ${isUsersActiveInternal ? "text-primary" : ""}`} />
                   </Button>
                 </Link>
 
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogoutInternal}>
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-200 hover:bg-white/5" onClick={handleLogoutInternal}>
                   <LogOut className="h-4 w-4" />
                 </Button>
               </div>

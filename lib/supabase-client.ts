@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
-import type { Section, Loading, PlannedLoading, DecompositionStage } from "@/modules/planning/types"
+import type { Section, Loading, PlannedLoading, DecompositionStage } from "@/types/planning"
 import { parseMinskDate } from '@/lib/timezone-utils'
 
 // Используем единый клиент Supabase вместо создания нового

@@ -31,7 +31,7 @@ import {
 } from '../../utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
 import type { Employee, DayCell, Loading } from '../../types'
-import type { TimelineUnit } from '@/modules/planning/types'
+import type { TimelineUnit } from '@/types/planning'
 
 interface EmployeeRowProps {
   employee: Employee

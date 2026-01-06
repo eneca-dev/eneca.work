@@ -5,10 +5,88 @@
     "name": "budgets-page",
     "displayName": "Budgets Page",
     "description": "Отображение иерархии проектов с бюджетами, инлайн-редактирование, агрегация план/факт",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "status": "stable",
     "route": "/dashboard/tasks (вкладка Бюджеты)",
     "tags": ["feature", "ui", "data-layer"]
+  },
+
+  "documentation": {
+    "overview": "UI модуль для отображения иерархии проектов с бюджетами. Таблица с expand/collapse, inline-редактирование часов/категорий/сложности, агрегация бюджетов снизу вверх. Интегрирован в /dashboard/tasks как вкладка 'Бюджеты'.",
+
+    "dataFlow": {
+      "loading": "useBudgetsHierarchy загружает useResourceGraphData (иерархия) + useBudgets (бюджеты) → объединяет в HierarchyNode[]",
+      "budgetAttachment": "Бюджеты привязываются к узлам через entity_type:entity_id (например 'section:uuid')",
+      "aggregation": "aggregateBudgetsUpward() — каждый узел показывает сумму своих бюджетов + всех потомков",
+      "inlineEdit": "Изменения → Server Action → optimistic update → refetch иерархии"
+    },
+
+    "hierarchy": {
+      "structure": "Project → Object → Section → DecompositionStage → DecompositionItem",
+      "note": "Stage (стадия) — это параметр проекта (project.stage_id), НЕ уровень иерархии",
+      "nodeTypes": {
+        "project": "Корневой узел, показывает stageName, projectStatus, projectTags",
+        "object": "Объект проекта",
+        "section": "Раздел с hourlyRate для расчёта бюджета",
+        "decomposition_stage": "Этап декомпозиции, содержит items",
+        "decomposition_item": "Задача с plannedHours, workCategory, difficulty"
+      }
+    },
+
+    "calculations": {
+      "plannedHours": "Сумма plannedHours всех задач в этапе/разделе",
+      "adjustedHours": "plannedHours × коэффициент сложности (difficulty.weight)",
+      "calculatedBudget": "adjustedHours × section.hourlyRate",
+      "spentPercentage": "total_spent / total_amount × 100",
+      "distributedPercentage": "Сумма дочерних бюджетов / бюджет родителя × 100"
+    },
+
+    "inlineEditing": {
+      "hours": "ItemHoursEdit → updateItemPlannedHours action",
+      "category": "ItemCategorySelect → updateItemCategory action",
+      "difficulty": "ItemDifficultySelect → updateItemDifficulty action",
+      "sectionRate": "SectionRateEdit → updateSectionHourlyRate action",
+      "budgetAmount": "BudgetInlineEdit → updateBudgetAmount action (из модуля budgets)",
+      "pattern": "Все используют optimistic updates с rollback при ошибке"
+    },
+
+    "createDelete": {
+      "stage": "StageInlineCreate/Delete → createDecompositionStage/deleteDecompositionStage actions",
+      "item": "ItemInlineCreate/Delete → createDecompositionItem/deleteDecompositionItem actions",
+      "cascade": "Удаление stage удаляет все его items (каскад в БД)"
+    },
+
+    "referenceData": {
+      "difficultyLevels": "useDifficultyLevels → getDifficultyLevels action → decomposition_difficulty_levels table",
+      "workCategories": "useWorkCategories → getWorkCategoriesForBudgets action → work_categories table",
+      "caching": "Справочники кешируются с большим staleTime (редко меняются)"
+    },
+
+    "keyComponents": {
+      "BudgetsViewInternal": "Главный компонент, принимает filterString и queryParams",
+      "BudgetsHierarchy": "Таблица с колонками: название, часы, бюджет, прогресс-бары",
+      "BudgetRow": "Строка узла, рендерит разный UI в зависимости от nodeType",
+      "BudgetRowActions": "Кнопки действий: создание/удаление stage/item, редактирование проекта",
+      "BudgetRowHours": "Отображение часов: плановые → приведённые → % от родителя"
+    },
+
+    "keyRules": [
+      "Все мутации через Server Actions с auth check и Zod validation",
+      "Optimistic updates для мгновенного UI отклика",
+      "invalidateHierarchyCache после любой мутации",
+      "Справочники (difficulties, categories) загружаются один раз и кешируются",
+      "PostgreSQL numeric конвертируется в number через toNumber() helper"
+    ],
+
+    "knownIssues": [
+      "BP-012: ProjectQuickEditModal не сохраняет изменения",
+      "BP-013: Бюджет проекта не отображается",
+      "BP-014: Выбор сложности не работает",
+      "BP-017: Создание этапа падает с Failed to fetch",
+      "BP-018: Добавление части бюджета сбрасывает в 0",
+      "BP-019: Модалка частей показывает Основной = 0",
+      "BP-020: Бюджет задачи не сохраняется"
+    ]
   },
 
   "architecture": {
@@ -975,6 +1053,15 @@
   ],
 
   "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-01-06",
+      "changes": [
+        "Синхронизация с очисткой БД модуля budgets",
+        "Удалены неиспользуемые views из зависимостей: v_cache_budget_types, v_budget_hierarchy, v_pending_budget_approvals",
+        "Создана документация системы бюджетов: docs/budgets-system-research.md"
+      ]
+    },
     {
       "version": "1.0.6",
       "date": "2026-01-05",

@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [redirectUrl, setRedirectUrl] = useState('/dashboard')
+  const [redirectUrl, setRedirectUrl] = useState('/')
   const router = useRouter()
   const supabase = createClient()
 

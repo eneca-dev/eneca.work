@@ -24,7 +24,7 @@ import { AuthProvider } from "@/modules/auth";
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
         <NoSSR>
           {/* AuthProvider ПЕРВЫЙ — слушает auth события и синхронизирует store */}
           <AuthProvider>
