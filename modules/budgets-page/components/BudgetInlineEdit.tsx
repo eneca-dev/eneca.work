@@ -3,17 +3,28 @@
  *
  * Компактный inline редактор суммы бюджета и % от родителя.
  * Используется в колонке "Выделенный" таблицы бюджетов.
+ *
+ * Сохранение: по Enter или при потере фокуса (blur).
+ * Отмена: по Escape.
  */
 
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Loader2, Plus, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
 import type { BudgetInfo, BudgetPageEntityType } from '../types'
 import { BudgetPartsEditor } from './BudgetPartsEditor'
 import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
+
+// Debug logging (отключить в production)
+const DEBUG = false
+const log = (action: string, data?: Record<string, unknown>) => {
+  if (DEBUG) {
+    console.log(`[InlineEdit] ${action}`, data ?? '')
+  }
+}
 
 // ============================================================================
 // Types
@@ -54,7 +65,7 @@ export function BudgetInlineEdit({
   const parentAmount = budget?.parent_planned_amount || 0
   const hasParent = parentAmount > 0
 
-  // Локальные значения
+  // Локальные значения для редактирования
   const [localAmount, setLocalAmount] = useState('')
   const [localPercent, setLocalPercent] = useState('')
   const [isEditing, setIsEditing] = useState(false)
@@ -63,15 +74,49 @@ export function BudgetInlineEdit({
   const { mutate: updateAmount, isPending: isUpdating } = useUpdateBudgetAmount()
   const { mutate: createBudget, isPending: isCreating } = useCreateBudget()
 
-  // Синхронизация с внешними данными
+  // Синхронизация с серверными данными (когда не редактируем и нет pending запроса)
+  // isPending = true означает оптимистичный рендер — показываем локальное значение
   useEffect(() => {
-    if (!isEditing && budget) {
+    if (!isEditing && !isUpdating && budget) {
+      log('SYNC from server', { budgetId: budget.budget_id, amount: budget.planned_amount })
       setLocalAmount(formatNumber(budget.planned_amount))
       if (hasParent) {
         setLocalPercent(calculatePercentage(budget.planned_amount, parentAmount).toString())
       }
     }
-  }, [budget, isEditing, hasParent, parentAmount])
+  }, [budget, isEditing, isUpdating, hasParent, parentAmount])
+
+  // Сохранение на сервер
+  const saveToServer = useCallback(() => {
+    if (!budget) return
+
+    const newAmount = parseAmount(localAmount)
+
+    // Сохраняем только если значение изменилось
+    if (newAmount >= 0 && newAmount !== budget.planned_amount) {
+      log('SAVE to server', { budgetId: budget.budget_id, amount: newAmount })
+      updateAmount({
+        budget_id: budget.budget_id,
+        total_amount: newAmount,
+      })
+    } else {
+      log('SKIP save (no change)', { newAmount, serverAmount: budget.planned_amount })
+    }
+  }, [budget, localAmount, updateAmount])
+
+  // Фокус на поле суммы
+  const handleAmountFocus = useCallback(() => {
+    log('FOCUS amount')
+    setIsEditing(true)
+  }, [])
+
+  // MouseUp на поле суммы - select all
+  const handleAmountMouseUp = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.target as HTMLInputElement
+    if (input.selectionStart === input.selectionEnd) {
+      input.select()
+    }
+  }, [])
 
   // Изменение суммы
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,6 +129,19 @@ export function BudgetInlineEdit({
     }
   }, [hasParent, parentAmount])
 
+  // Фокус на поле процента
+  const handlePercentFocus = useCallback(() => {
+    setIsEditing(true)
+  }, [])
+
+  // MouseUp на поле процента - select all
+  const handlePercentMouseUp = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.target as HTMLInputElement
+    if (input.selectionStart === input.selectionEnd) {
+      input.select()
+    }
+  }, [])
+
   // Изменение процента
   const handlePercentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^\d,\.]/g, '')
@@ -95,19 +153,12 @@ export function BudgetInlineEdit({
     }
   }, [hasParent, parentAmount])
 
-  // Сохранение
-  const handleSave = useCallback(() => {
-    const newAmount = parseAmount(localAmount)
-
-    if (budget && newAmount >= 0 && newAmount !== budget.planned_amount) {
-      updateAmount({
-        budget_id: budget.budget_id,
-        total_amount: newAmount,
-      })
-    }
-
+  // Потеря фокуса → сохранение
+  const handleBlur = useCallback(() => {
+    log('BLUR → save')
+    saveToServer()
     setIsEditing(false)
-  }, [localAmount, budget, updateAmount])
+  }, [saveToServer])
 
   // Создание бюджета
   const handleCreate = useCallback(() => {
@@ -123,10 +174,12 @@ export function BudgetInlineEdit({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      handleSave()
-      ;(e.target as HTMLInputElement).blur()
+      log('ENTER → save & blur')
+      ;(e.target as HTMLInputElement).blur() // blur вызовет handleBlur → saveToServer
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      log('ESCAPE → revert')
+      // Отмена: возвращаем серверное значение без сохранения
       if (budget) {
         setLocalAmount(formatNumber(budget.planned_amount))
         if (hasParent) {
@@ -136,7 +189,7 @@ export function BudgetInlineEdit({
       setIsEditing(false)
       ;(e.target as HTMLInputElement).blur()
     }
-  }, [handleSave, budget, hasParent, parentAmount])
+  }, [budget, hasParent, parentAmount])
 
   // Если нет бюджета - показываем кнопку создания
   if (!hasBudget) {
@@ -175,8 +228,9 @@ export function BudgetInlineEdit({
           inputMode="numeric"
           value={localAmount}
           onChange={handleAmountChange}
-          onFocus={() => setIsEditing(true)}
-          onBlur={handleSave}
+          onFocus={handleAmountFocus}
+          onMouseUp={handleAmountMouseUp}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onClick={(e) => e.stopPropagation()}
           disabled={isPending}
@@ -203,8 +257,9 @@ export function BudgetInlineEdit({
             inputMode="decimal"
             value={localPercent}
             onChange={handlePercentChange}
-            onFocus={() => setIsEditing(true)}
-            onBlur={handleSave}
+            onFocus={handlePercentFocus}
+            onMouseUp={handlePercentMouseUp}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onClick={(e) => e.stopPropagation()}
             disabled={isPending}

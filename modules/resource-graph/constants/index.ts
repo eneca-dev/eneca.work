@@ -28,7 +28,7 @@ export const RATE_COLORS = {
 
 /** Цвета для статусов загрузки */
 export const LOADING_STATUS_COLORS = {
-  planned: 'bg-gray-300 dark:bg-gray-600',
+  planned: 'bg-muted-foreground/30 dark:bg-muted-foreground/40',
   approved: 'bg-green-500 dark:bg-green-600',
   rejected: 'bg-red-500 dark:bg-red-600',
 } as const

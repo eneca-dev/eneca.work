@@ -103,6 +103,36 @@
 
   "tasks": [
     {
+      "id": "IF-002",
+      "title": "Добавить фильтр \"статус проекта\"",
+      "description": "Добавить новый ключ фильтра 'статус' для фильтрации проектов по статусу (active, draft, potential project и др.)\n\nТребуется:\n1. Добавить ключ в RESOURCE_GRAPH_FILTER_CONFIG\n2. Загружать статусы из project_status_enum\n3. Добавить обработку фильтра в getResourceGraphData\n4. Обновить useFilterOptions для статусов",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-08",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedModules": ["resource-graph", "kanban", "budgets-page"],
+      "checklist": {
+        "implementation": [
+          "[ ] Добавить ключ 'статус' в RESOURCE_GRAPH_FILTER_CONFIG",
+          "[ ] Создать action getProjectStatuses для загрузки статусов из enum",
+          "[ ] Добавить статусы в useFilterOptions",
+          "[ ] Обработать project_status в getResourceGraphData",
+          "[ ] Обновить v_resource_graph если нужно (колонка project_status)"
+        ],
+        "testing": [
+          "[ ] Фильтр статус:\"active\" работает",
+          "[ ] Автокомплит показывает все статусы",
+          "[ ] Множественный фильтр статус + проект работает"
+        ]
+      }
+    },
+    {
       "id": "IF-AUDIT",
       "title": "Full Module Audit: Inline Filter",
       "description": "Полный аудит модуля инлайн-фильтров для подтверждения качества.\n\nКак utility модуль без БД, фокус на корректности парсинга и UX.",

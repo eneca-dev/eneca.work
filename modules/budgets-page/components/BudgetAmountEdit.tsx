@@ -5,6 +5,9 @@
  * Поля всегда видимы и редактируемы. При вводе в одно — автоматически рассчитывается другое.
  * Процент рассчитывается от parent_planned_amount.
  *
+ * Сохранение: по Enter или при потере фокуса (blur).
+ * Отмена: по Escape.
+ *
  * Включает кнопку для открытия BudgetPartsEditor (управление частями бюджета).
  */
 
@@ -21,6 +24,14 @@ import {
 } from '@/components/ui/tooltip'
 import { BudgetPartsEditor } from './BudgetPartsEditor'
 import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
+
+// Debug logging (отключить в production)
+const DEBUG = false
+const log = (action: string, data?: Record<string, unknown>) => {
+  if (DEBUG) {
+    console.log(`[AmountEdit] ${action}`, data ?? '')
+  }
+}
 
 // ============================================================================
 // Types
@@ -63,11 +74,9 @@ export function BudgetAmountEdit({
   hideColorDot = false,
 }: BudgetAmountEditProps) {
   // Локальные значения для редактирования
-  const [localAmount, setLocalAmount] = useState(formatNumber(currentAmount))
-  const [localPercent, setLocalPercent] = useState(
-    parentPlannedAmount > 0 ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
-  )
-  const [activeField, setActiveField] = useState<'amount' | 'percent' | null>(null)
+  const [localAmount, setLocalAmount] = useState('')
+  const [localPercent, setLocalPercent] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
 
   const amountRef = useRef<HTMLInputElement>(null)
   const percentRef = useRef<HTMLInputElement>(null)
@@ -76,19 +85,51 @@ export function BudgetAmountEdit({
 
   const hasParent = parentPlannedAmount > 0
 
-  // Sync с внешними данными когда они меняются
+  // Sync с серверными данными (когда не редактируем и нет pending запроса)
+  // isPending = true означает оптимистичный рендер — показываем локальное значение
   useEffect(() => {
-    if (activeField === null) {
+    if (!isEditing && !isPending) {
+      log('SYNC from server', { budgetId, amount: currentAmount })
       setLocalAmount(formatNumber(currentAmount))
       setLocalPercent(
         hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
       )
     }
-  }, [currentAmount, parentPlannedAmount, hasParent, activeField])
+  }, [currentAmount, parentPlannedAmount, hasParent, isEditing, isPending, budgetId])
+
+  // Сохранение на сервер
+  const saveToServer = useCallback(() => {
+    const newAmount = parseAmount(localAmount)
+
+    // Сохраняем только если значение изменилось
+    if (newAmount >= 0 && newAmount !== currentAmount) {
+      log('SAVE to server', { budgetId, amount: newAmount })
+      updateAmount({
+        budget_id: budgetId,
+        total_amount: newAmount,
+      })
+    } else {
+      log('SKIP save (no change)', { newAmount, serverAmount: currentAmount })
+    }
+  }, [budgetId, localAmount, currentAmount, updateAmount])
 
   // Ограничиваем процент освоения для визуализации
   const visualPercentage = Math.min(spentPercentage, 100)
   const isOverBudget = spentPercentage > 100
+
+  // Фокус на поле суммы
+  const handleAmountFocus = useCallback(() => {
+    log('FOCUS amount')
+    setIsEditing(true)
+  }, [])
+
+  // MouseUp на поле суммы - select all
+  const handleAmountMouseUp = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.target as HTMLInputElement
+    if (input.selectionStart === input.selectionEnd) {
+      input.select()
+    }
+  }, [])
 
   // Изменение суммы → пересчёт процента
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,6 +143,19 @@ export function BudgetAmountEdit({
     }
   }, [hasParent, parentPlannedAmount])
 
+  // Фокус на поле процента
+  const handlePercentFocus = useCallback(() => {
+    setIsEditing(true)
+  }, [])
+
+  // MouseUp на поле процента - select all
+  const handlePercentMouseUp = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.target as HTMLInputElement
+    if (input.selectionStart === input.selectionEnd) {
+      input.select()
+    }
+  }, [])
+
   // Изменение процента → пересчёт суммы
   const handlePercentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^\d,\.]/g, '')
@@ -114,39 +168,33 @@ export function BudgetAmountEdit({
     }
   }, [hasParent, parentPlannedAmount])
 
-  // Сохранение при blur
-  const handleSave = useCallback(() => {
-    const newAmount = parseAmount(localAmount)
-
-    if (newAmount >= 0 && newAmount !== currentAmount) {
-      updateAmount({
-        budget_id: budgetId,
-        total_amount: newAmount,
-      })
-    }
-
-    setActiveField(null)
-  }, [localAmount, currentAmount, budgetId, updateAmount])
+  // Потеря фокуса → сохранение
+  const handleBlur = useCallback(() => {
+    log('BLUR → save')
+    saveToServer()
+    setIsEditing(false)
+  }, [saveToServer])
 
   // Обработка клавиш
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        handleSave()
-        ;(e.target as HTMLInputElement).blur()
+        log('ENTER → save & blur')
+        ;(e.target as HTMLInputElement).blur() // blur вызовет handleBlur → saveToServer
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        // Сброс к исходным значениям
+        log('ESCAPE → revert')
+        // Отмена: возвращаем серверное значение без сохранения
         setLocalAmount(formatNumber(currentAmount))
         setLocalPercent(
           hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
         )
-        setActiveField(null)
+        setIsEditing(false)
         ;(e.target as HTMLInputElement).blur()
       }
     },
-    [handleSave, currentAmount, hasParent, parentPlannedAmount]
+    [currentAmount, hasParent, parentPlannedAmount]
   )
 
   // Tooltip content
@@ -193,8 +241,9 @@ export function BudgetAmountEdit({
           inputMode="numeric"
           value={localAmount}
           onChange={handleAmountChange}
-          onFocus={() => setActiveField('amount')}
-          onBlur={handleSave}
+          onFocus={handleAmountFocus}
+          onMouseUp={handleAmountMouseUp}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onClick={(e) => e.stopPropagation()}
           disabled={isPending}
@@ -226,8 +275,9 @@ export function BudgetAmountEdit({
             inputMode="decimal"
             value={localPercent}
             onChange={handlePercentChange}
-            onFocus={() => setActiveField('percent')}
-            onBlur={handleSave}
+            onFocus={handlePercentFocus}
+            onMouseUp={handlePercentMouseUp}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onClick={(e) => e.stopPropagation()}
             disabled={isPending}

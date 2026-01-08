@@ -206,13 +206,13 @@ export async function getKanbanSections(
       }
     }
 
-    // Order for consistent hierarchy
+    // Order for consistent hierarchy (Project → Object → Section → DecompositionStage → Item)
+    // Note: stage_name removed - stage is now a project attribute, not a hierarchy level
     query = query
       .order('project_name')
-      .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query
@@ -424,13 +424,13 @@ export async function getKanbanSectionsPaginated(
       }
     }
 
-    // Order for consistent hierarchy
+    // Order for consistent hierarchy (Project → Object → Section → DecompositionStage → Item)
+    // Note: stage_name removed - stage is now a project attribute, not a hierarchy level
     query = query
       .order('project_name')
-      .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query
@@ -485,7 +485,7 @@ export async function getKanbanSectionById(
       .from('v_resource_graph')
       .select('*')
       .eq('section_id', sectionId)
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     if (error) {

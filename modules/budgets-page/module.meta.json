@@ -85,7 +85,7 @@
       "BP-017: Создание этапа падает с Failed to fetch",
       "BP-018: Добавление части бюджета сбрасывает в 0",
       "BP-019: Модалка частей показывает Основной = 0",
-      "BP-020: Бюджет задачи не сохраняется"
+      "BP-021: Конкатенация значений при редактировании бюджета этапа (CRITICAL)"
     ]
   },
 
@@ -998,10 +998,11 @@
       "description": "При изменении бюджета задачи через inline textbox, значение не сохраняется и откатывается к 0.\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Раскрыть иерархию до уровня задачи (например 'Работа 2')\n3. Кликнуть на textbox бюджета задачи (колонка 'Выделенный')\n4. Ввести значение (например 500)\n5. Нажать Tab или кликнуть вне поля\n\n## Ожидаемое поведение\n- Бюджет сохраняется как 500 BYN\n- Процент пересчитывается\n- UI обновляется\n\n## Фактическое поведение\n- При вводе значения процент пересчитывается мгновенно (39.7%)\n- После Tab/blur значение откатывается к 0\n- Textbox становится disabled\n- Данные не сохраняются в БД\n\n## Потенциальные причины\n1. Server Action для обновления бюджета задачи не существует или падает\n2. Optimistic update откатывается из-за ошибки\n3. Бюджет задачи может не иметь записи в таблице budgets\n4. RLS блокирует UPDATE для decomposition_items.budget\n\n## Консоль\nВозможно есть ошибка в console при сохранении (проверить)\n\n## Тестовое окружение\n- Задача: 'Работа 2' в этапе 'Подготовка ИД'\n- Введённое значение: 500 BYN\n- Результат: откат к 0 BYN",
       "category": "bug",
       "priority": "critical",
-      "status": "todo",
+      "status": "done",
       "assignee": null,
       "createdAt": "2026-01-05",
-      "updatedAt": "2026-01-05",
+      "updatedAt": "2026-01-06",
+      "completedAt": "2026-01-06",
       "blockedBy": [],
       "blocks": [],
       "affectedFiles": [
@@ -1015,7 +1016,70 @@
         "UI показывает сохранённое значение после blur",
         "Процент от родителя пересчитывается корректно",
         "При ошибке показывается сообщение, а не silent rollback"
-      ]
+      ],
+      "testResult": {
+        "date": "2026-01-06",
+        "status": "passed",
+        "notes": "TC-023 прошёл успешно. Значение 500 BYN сохранилось в БД и отображается после refresh страницы."
+      }
+    },
+    {
+      "id": "BP-021",
+      "title": "[Bug] Конкатенация значений при редактировании бюджета этапа",
+      "description": "При вводе числа в поле бюджета этапа (Выделенный), значение конкатенируется с существующим вместо замены. Результат: 0 + 5000 → 550,000,000 BYN.\n\n## Шаги воспроизведения\n1. Открыть /tasks → вкладка 'Бюджеты'\n2. Раскрыть иерархию до уровня этапа\n3. Кликнуть на textbox бюджета этапа (колонка 'Выделенный', значение 0)\n4. Ввести 5000\n5. Нажать Tab\n\n## Ожидаемое поведение\n- Значение заменяется на 5000 BYN\n- Процент пересчитывается корректно\n\n## Фактическое поведение\n- Значение становится 550,000,000 BYN (550M)\n- Процент показывает 5500%\n- Plan в header: 550M BYN\n- Данные сохраняются в БД с некорректным значением\n\n## Анализ\nПохоже что input не очищается перед вводом — символы добавляются к существующему '0', создавая огромные числа. Возможно проблема в:\n1. Отсутствии select-all при focus на input\n2. Неправильной обработке onChange\n3. Конкатенации строк вместо замены числа\n\n## Тестовое окружение\n- Проект: 'Демонстрация передачи заданий'\n- Этап: 'тестовый' в разделе 'Тестовый'\n- Ввод: 5000\n- Результат: 550,000,000 BYN",
+      "category": "bug",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetInlineEdit.tsx",
+        "modules/budgets-page/components/BudgetAmountEdit.tsx",
+        "modules/budgets/components/BudgetAmountInput.tsx"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "При клике на поле бюджета, существующее значение выделяется (select all)",
+        "Ввод нового значения полностью заменяет старое",
+        "Нет конкатенации строк при вводе",
+        "Корректные значения сохраняются в БД"
+      ],
+      "suggestedFix": "Добавить onFocus handler с event.target.select() для выделения всего текста при фокусе"
+    },
+    {
+      "id": "BP-022",
+      "title": "[Performance] Debounce + Optimistic Updates для inline-редактирования бюджетов",
+      "description": "При быстром вводе значений в колонку 'Выделенный бюджет' происходит много отдельных запросов к серверу. Каждый blur триггерит Server Action с 5-6 запросами к БД + инвалидацию всего кэша. Решение: debounce (500ms) + optimistic updates для мгновенного отклика UI.\n\n## Проблема\n1. Сохранение на каждый onBlur без debounce\n2. updateBudgetAmount делает 5-6 запросов: auth, getBudgetById, update, history, getBudgetById\n3. Инвалидируются ВСЕ списки бюджетов после каждого обновления\n4. При быстром переключении между 5 полями: 25-30 запросов к БД\n\n## Решение\n1. Debounced save — собирать изменения и отправлять через 500ms после последнего ввода\n2. Optimistic update — UI обновляется мгновенно, запрос отправляется в фоне\n3. Rollback при ошибке — возврат к предыдущему значению если сервер вернул ошибку\n\n## План реализации\n\n### Этап 1: Хук useDebouncedBudgetUpdate\nСоздать хук который объединяет debounce + optimistic update:\n- Принимает budgetId, currentAmount\n- Возвращает { localValue, setLocalValue, isPending, error }\n- Использует lodash.debounce для отложенного сохранения\n- Оптимистично обновляет локальное состояние сразу\n\n### Этап 2: Обновить BudgetInlineEdit\n- Использовать useDebouncedBudgetUpdate вместо прямого useUpdateBudgetAmount\n- Убрать handleSave из onBlur — сохранение происходит автоматически по debounce\n- Добавить визуальный индикатор pending состояния\n\n### Этап 3: Обновить BudgetAmountEdit\n- Аналогичные изменения для компонента BudgetAmountEdit\n- Синхронизировать логику между двумя компонентами\n\n### Этап 4: Тестирование\n- Проверить быстрый ввод в несколько полей подряд\n- Проверить что данные сохраняются корректно\n- Проверить rollback при ошибке сервера",
+      "category": "performance",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "completedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/budgets-page/components/BudgetInlineEdit.tsx",
+        "modules/budgets-page/components/BudgetAmountEdit.tsx",
+        "modules/budgets-page/hooks/use-debounced-budget-update.ts"
+      ],
+      "estimatedHours": 3,
+      "acceptanceCriteria": [
+        "При быстром вводе в 5 полей подряд — только 5 запросов к серверу (не 25-30)",
+        "UI обновляется мгновенно при вводе (optimistic)",
+        "Запрос отправляется через 500ms после последнего изменения",
+        "При ошибке сервера значение откатывается к предыдущему",
+        "Spinner показывается во время сохранения"
+      ],
+      "technicalNotes": {
+        "currentBehavior": "onBlur → updateAmount → 5-6 DB queries → invalidate all caches",
+        "targetBehavior": "onChange → optimistic UI → debounce 500ms → single mutation → selective invalidation",
+        "dependencies": ["lodash.debounce (уже в проекте)", "usehooks-ts (useDebounceValue)"]
+      }
     },
     {
       "id": "BP-016",
@@ -1053,6 +1117,16 @@
   ],
 
   "changelog": [
+    {
+      "version": "1.2.0",
+      "date": "2026-01-08",
+      "changes": [
+        "BP-022: Добавлен debounce (300ms) для inline-редактирования бюджетов",
+        "Оптимизация: запросы к серверу отправляются после паузы в вводе, а не на каждый blur",
+        "UI остаётся отзывчивым благодаря optimistic updates через local state",
+        "Escape отменяет изменения и блокирует pending debounce"
+      ]
+    },
     {
       "version": "1.1.0",
       "date": "2026-01-06",

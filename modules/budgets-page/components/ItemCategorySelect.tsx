@@ -1,9 +1,8 @@
 /**
  * Item Category Select Component
  *
- * Инлайн выбор категории работ задачи.
+ * Инлайн выбор категории работ задачи с optimistic updates.
  * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
- * BP-014: Исправлен - убран сломанный optimistic update, используется invalidation.
  */
 
 'use client'
@@ -20,6 +19,11 @@ import { invalidateHierarchyCache } from '../utils'
 // ============================================================================
 // Types
 // ============================================================================
+
+interface CategoryData {
+  id: string | null
+  name: string | null
+}
 
 interface ItemCategorySelectProps {
   /** ID задачи */
@@ -44,11 +48,21 @@ export function ItemCategorySelect({
 }: ItemCategorySelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [optimisticValue, setOptimisticValue] = useState<CategoryData | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
   const { startOperation, isOperationStale } = useOperationGuard()
   const { data: categories = [] } = useWorkCategories()
+
+  // Отображаемые значения: оптимистичные (если есть) или серверные
+  const displayId = isUpdating && optimisticValue !== null ? optimisticValue.id : categoryId
+  const displayName = isUpdating && optimisticValue !== null ? optimisticValue.name : categoryName
+
+  // Сокращённое название категории для компактного отображения
+  const shortName = displayName
+    ? displayName.length > 12 ? displayName.slice(0, 10) + '...' : displayName
+    : '—'
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -67,20 +81,27 @@ export function ItemCategorySelect({
       return
     }
 
+    // Find new category data for optimistic display
+    // Handle both mapped format (id/name) and raw DB format
+    const newCategoryData = categories.find((c: any) =>
+      (c.id || c.work_category_id) === newCategoryId
+    )
+
+    const optimistic: CategoryData = newCategoryData
+      ? {
+          id: (newCategoryData as any).id || (newCategoryData as any).work_category_id,
+          name: (newCategoryData as any).name || (newCategoryData as any).work_category_name,
+        }
+      : { id: newCategoryId, name: null }
+
+    // Optimistic update - показываем сразу
+    setOptimisticValue(optimistic)
     setIsUpdating(true)
     setIsOpen(false)
 
     const operationId = startOperation()
 
-    // Find new category data for logging
-    const newCategory = categories.find((c) => c.id === newCategoryId)
-    console.log('[ItemCategorySelect] Updating to:', newCategory?.name)
-
-    // NOTE: Skipping broken optimistic update - Project structure uses objects/sections/stages/items,
-    // not children property. Will rely on cache invalidation instead.
-
     try {
-      // Server Action с auth check (BP-005)
       const result = await updateItemCategory({
         itemId,
         categoryId: newCategoryId,
@@ -96,15 +117,13 @@ export function ItemCategorySelect({
       onSuccess?.()
     } catch (err) {
       console.error('[ItemCategorySelect] Error:', err)
+      // Revert optimistic - очищаем, вернётся к серверному значению
+      setOptimisticValue(null)
     } finally {
       setIsUpdating(false)
+      setOptimisticValue(null)
     }
   }, [itemId, categoryId, categories, queryClient, startOperation, isOperationStale, onSuccess])
-
-  // Сокращённое название категории для компактного отображения
-  const shortName = categoryName
-    ? categoryName.length > 12 ? categoryName.slice(0, 10) + '...' : categoryName
-    : '—'
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -115,10 +134,10 @@ export function ItemCategorySelect({
         className={cn(
           'flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-all cursor-pointer',
           'hover:bg-slate-700/50',
-          categoryName ? 'text-slate-400' : 'text-slate-600',
+          displayName ? 'text-slate-400' : 'text-slate-600',
           isUpdating && 'opacity-50 cursor-wait'
         )}
-        title={categoryName || 'Выбрать категорию'}
+        title={displayName || 'Выбрать категорию'}
       >
         <span className="truncate max-w-[80px]">{shortName}</span>
         <ChevronDown className="h-3 w-3 text-slate-600 shrink-0" />
@@ -127,18 +146,23 @@ export function ItemCategorySelect({
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 top-full left-0 mt-1 min-w-[160px] max-h-[240px] overflow-y-auto bg-slate-800 border border-slate-700 rounded-md shadow-lg py-1">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => handleSelect(c.id)}
-              className={cn(
-                'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors',
-                categoryId === c.id && 'text-cyan-400 bg-slate-700/30'
-              )}
-            >
-              {c.name}
-            </button>
-          ))}
+          {categories.map((c: any, index) => {
+            // Handle both mapped format (id/name) and raw DB format
+            const optionId = c.id || c.work_category_id
+            const optionName = c.name || c.work_category_name
+            return (
+              <button
+                key={optionId || `cat-${index}`}
+                onClick={() => handleSelect(optionId)}
+                className={cn(
+                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors',
+                  displayId === optionId && 'text-cyan-400 bg-slate-700/30'
+                )}
+              >
+                {optionName}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

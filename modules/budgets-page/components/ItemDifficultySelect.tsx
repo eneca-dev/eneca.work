@@ -1,9 +1,8 @@
 /**
  * Item Difficulty Select Component
  *
- * Инлайн выбор сложности задачи.
+ * Инлайн выбор сложности задачи с optimistic updates.
  * BP-005: Использует Server Actions с auth check вместо прямых Supabase вызовов.
- * BP-014: Исправлен - убран сломанный optimistic update, используется invalidation.
  */
 
 'use client'
@@ -20,15 +19,17 @@ import { invalidateHierarchyCache } from '../utils'
 // Types
 // ============================================================================
 
+interface DifficultyData {
+  id: string | null
+  abbr: string | null
+  name: string | null
+}
+
 interface ItemDifficultySelectProps {
   /** ID задачи */
   itemId: string
   /** Текущая сложность */
-  difficulty: {
-    id: string | null
-    abbr: string | null
-    name: string | null
-  } | null
+  difficulty: DifficultyData | null
   /** Callback при успехе */
   onSuccess?: () => void
 }
@@ -44,14 +45,15 @@ export function ItemDifficultySelect({
 }: ItemDifficultySelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [optimisticValue, setOptimisticValue] = useState<DifficultyData | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
-  const { startOperation, isOperationStale, isOperationCurrent } = useOperationGuard()
-  const { data: difficulties = [], isLoading, error } = useDifficultyLevels()
+  const { startOperation, isOperationStale } = useOperationGuard()
+  const { data: difficulties = [] } = useDifficultyLevels()
 
-  // Debug: log difficulties loading state
-  console.log('[ItemDifficultySelect] difficulties:', difficulties.length, 'loading:', isLoading, 'error:', error)
+  // Отображаемое значение: оптимистичное (если есть) или серверное
+  const displayValue = isUpdating && optimisticValue !== null ? optimisticValue : difficulty
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -65,36 +67,37 @@ export function ItemDifficultySelect({
   }, [])
 
   const handleSelect = useCallback(async (newDifficultyId: string | null) => {
-    console.log('[ItemDifficultySelect] handleSelect called with:', newDifficultyId, 'current:', difficulty?.id)
-
     if (newDifficultyId === difficulty?.id) {
-      console.log('[ItemDifficultySelect] Same value, skipping')
       setIsOpen(false)
       return
     }
 
+    // Find new difficulty data for optimistic display
+    // Handle both mapped format (id/abbr/name) and raw DB format
+    const newDifficultyData = newDifficultyId
+      ? difficulties.find((d: any) => (d.id || d.difficulty_id) === newDifficultyId)
+      : null
+
+    const optimistic: DifficultyData = newDifficultyData
+      ? {
+          id: (newDifficultyData as any).id || (newDifficultyData as any).difficulty_id,
+          abbr: (newDifficultyData as any).abbr || (newDifficultyData as any).difficulty_abbr,
+          name: (newDifficultyData as any).name || (newDifficultyData as any).difficulty_definition,
+        }
+      : { id: null, abbr: null, name: null }
+
+    // Optimistic update - показываем сразу
+    setOptimisticValue(optimistic)
     setIsUpdating(true)
     setIsOpen(false)
 
     const operationId = startOperation()
 
-    // Find new difficulty data for optimistic UI feedback
-    const newDifficulty = newDifficultyId
-      ? difficulties.find((d) => d.id === newDifficultyId)
-      : null
-
-    // NOTE: Skipping broken optimistic update - Project structure uses objects/sections/stages/items,
-    // not children property. Will rely on cache invalidation instead.
-    console.log('[ItemDifficultySelect] New difficulty:', newDifficulty)
-
     try {
-      // Server Action с auth check (BP-005)
-      console.log('[ItemDifficultySelect] Calling updateItemDifficulty:', { itemId, difficultyId: newDifficultyId })
       const result = await updateItemDifficulty({
         itemId,
         difficultyId: newDifficultyId,
       })
-      console.log('[ItemDifficultySelect] Server action result:', result)
 
       if (!result.success) {
         throw new Error(result.error)
@@ -106,8 +109,11 @@ export function ItemDifficultySelect({
       onSuccess?.()
     } catch (err) {
       console.error('[ItemDifficultySelect] Error:', err)
+      // Revert optimistic - очищаем, вернётся к серверному значению
+      setOptimisticValue(null)
     } finally {
       setIsUpdating(false)
+      setOptimisticValue(null)
     }
   }, [itemId, difficulty?.id, difficulties, queryClient, startOperation, isOperationStale, onSuccess])
 
@@ -120,14 +126,14 @@ export function ItemDifficultySelect({
         className={cn(
           'px-1.5 py-0.5 rounded text-[9px] font-medium transition-all cursor-pointer',
           'hover:ring-1 hover:ring-offset-1 hover:ring-offset-slate-900',
-          difficulty?.abbr
+          displayValue?.abbr
             ? 'bg-orange-500/20 text-orange-400 hover:ring-orange-500/50'
             : 'bg-slate-700/50 text-slate-500 hover:ring-slate-500/50',
           isUpdating && 'opacity-50 cursor-wait'
         )}
-        title={difficulty?.name || 'Выбрать сложность'}
+        title={displayValue?.name || 'Выбрать сложность'}
       >
-        {difficulty?.abbr || '—'}
+        {displayValue?.abbr || '—'}
       </button>
 
       {/* Dropdown */}
@@ -138,25 +144,31 @@ export function ItemDifficultySelect({
             onClick={() => handleSelect(null)}
             className={cn(
               'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors',
-              !difficulty?.id && 'text-cyan-400'
+              !displayValue?.id && 'text-cyan-400'
             )}
           >
             — Не указано
           </button>
           {/* Difficulty options */}
-          {difficulties.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => handleSelect(d.id)}
-              className={cn(
-                'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors flex items-center gap-2',
-                difficulty?.id === d.id && 'text-cyan-400'
-              )}
-            >
-              <span className="w-6 text-center font-medium text-orange-400">{d.abbr}</span>
-              <span className="text-slate-300">{d.name}</span>
-            </button>
-          ))}
+          {difficulties.map((d: any, index) => {
+            // Handle both mapped format (id/abbr/name) and raw DB format
+            const optionId = d.id || d.difficulty_id
+            const optionAbbr = d.abbr || d.difficulty_abbr
+            const optionName = d.name || d.difficulty_definition
+            return (
+              <button
+                key={optionId || `diff-${index}`}
+                onClick={() => handleSelect(optionId)}
+                className={cn(
+                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors flex items-center gap-2',
+                  displayValue?.id === optionId && 'text-cyan-400'
+                )}
+              >
+                <span className="w-6 text-center font-medium text-orange-400">{optionAbbr}</span>
+                <span className="text-slate-300">{optionName}</span>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

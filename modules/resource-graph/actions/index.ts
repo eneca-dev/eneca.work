@@ -142,6 +142,11 @@ export async function getResourceGraphData(
       }
     }
 
+    // Apply project status filter (точное совпадение с enum значением)
+    if (secureFilters?.project_status && typeof secureFilters.project_status === 'string') {
+      query = query.eq('project_status', secureFilters.project_status)
+    }
+
     // Apply team filter (requires subquery to get team members)
     const teamId = secureFilters?.team_id
     if (teamId && typeof teamId === 'string') {

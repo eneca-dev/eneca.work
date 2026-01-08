@@ -6,7 +6,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { Building2, Users, FolderKanban, Tag } from 'lucide-react'
+import { Building2, Users, FolderKanban, Tag, CircleDot } from 'lucide-react'
 import type { TimelineScale, DisplaySettings, TreeNodeType } from '../types'
 import { DEFAULT_DISPLAY_SETTINGS } from '../constants'
 import type { FilterConfig, FilterQueryParams } from '@/modules/inline-filter'
@@ -43,8 +43,14 @@ export const RESOURCE_GRAPH_FILTER_CONFIG: FilterConfig = {
       icon: Tag,
       color: 'emerald',
     },
+    'статус проекта': {
+      field: 'project_status',
+      label: 'Статус проекта',
+      icon: CircleDot,
+      color: 'cyan',
+    },
   },
-  placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название"',
+  placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название" статус проекта:"active"',
 }
 
 // ============================================================================

@@ -1,7 +1,7 @@
 /**
  * Hours Input Component
  *
- * Inline редактор плановых часов для задач.
+ * Inline редактор плановых часов для задач с optimistic updates.
  */
 
 'use client'
@@ -37,14 +37,20 @@ export function HoursInput({
 }: HoursInputProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [localValue, setLocalValue] = useState(value.toString())
+  const [optimisticValue, setOptimisticValue] = useState<number | null>(null)
+  const [isPending, setIsPending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync с внешним значением
+  // Отображаемое значение: оптимистичное → редактируемое → серверное
+  const displayValue = optimisticValue !== null ? optimisticValue : value
+
+  // Sync с внешним значением (когда не редактируем и нет pending)
   useEffect(() => {
-    if (!isEditing) {
+    if (!isEditing && !isPending) {
       setLocalValue(value.toString())
+      setOptimisticValue(null)
     }
-  }, [value, isEditing])
+  }, [value, isEditing, isPending])
 
   // Focus при входе в режим редактирования
   useEffect(() => {
@@ -65,12 +71,22 @@ export function HoursInput({
     setLocalValue(raw)
   }, [])
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const newValue = parseInt(localValue, 10) || 0
-    if (newValue !== value && onChange) {
-      onChange(newValue)
-    }
     setIsEditing(false)
+
+    if (newValue !== value && onChange) {
+      // Optimistic update - показываем сразу
+      setOptimisticValue(newValue)
+      setIsPending(true)
+
+      try {
+        await onChange(newValue)
+      } finally {
+        setIsPending(false)
+        // optimisticValue сбросится при следующем sync с сервером
+      }
+    }
   }, [localValue, value, onChange])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -82,8 +98,8 @@ export function HoursInput({
     }
   }, [handleSave, value])
 
-  const displayValue = new Intl.NumberFormat('ru-RU').format(value)
-  const isZero = value === 0
+  const formattedValue = new Intl.NumberFormat('ru-RU').format(displayValue)
+  const isZero = displayValue === 0
 
   if (isEditing) {
     return (
@@ -115,10 +131,11 @@ export function HoursInput({
         !isZero && highlighted && 'text-slate-100',
         bold && !isZero && 'font-medium text-slate-200',
         !readOnly && onChange && 'cursor-pointer hover:text-cyan-400',
+        isPending && 'opacity-50',
         className
       )}
     >
-      {displayValue}
+      {formattedValue}
     </span>
   )
 }

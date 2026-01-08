@@ -519,8 +519,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
           </div>
         </div>
 
-        {/* Timeline area - isolate creates stacking context, overflow-hidden clips bleeding elements */}
-        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth, height: rowHeight }}>
+        {/* Timeline area - isolate creates stacking context, overflow-x-hidden clips horizontal bleeding */}
+        <div className="relative isolate overflow-x-hidden overflow-y-visible" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
 
           {/* Рамка периода раздела - на всю высоту строки (оптимистичный рендер) */}

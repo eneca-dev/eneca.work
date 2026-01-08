@@ -124,6 +124,28 @@ export function DeleteObjectModal({
         decompositionItemsCount = itemsResult.count || 0
         budgetsCount += sectionBudgetsResult.count || 0
 
+        // Считаем бюджеты этапов декомпозиции
+        if (stagesResult.data && stagesResult.data.length > 0) {
+          const stageIds = stagesResult.data.map(s => s.decomposition_stage_id)
+          const { count: stageBudgetsCount } = await supabase
+            .from('budgets')
+            .select('budget_id', { count: 'exact' })
+            .eq('entity_type', 'decomposition_stage')
+            .in('entity_id', stageIds)
+          budgetsCount += stageBudgetsCount || 0
+        }
+
+        // Считаем бюджеты задач декомпозиции
+        if (itemsResult.data && itemsResult.data.length > 0) {
+          const itemIds = itemsResult.data.map(i => i.decomposition_item_id)
+          const { count: itemBudgetsCount } = await supabase
+            .from('budgets')
+            .select('budget_id', { count: 'exact' })
+            .eq('entity_type', 'decomposition_item')
+            .in('entity_id', itemIds)
+          budgetsCount += itemBudgetsCount || 0
+        }
+
         // Получаем work_logs через decomposition_items
         if (itemsResult.data && itemsResult.data.length > 0) {
           const itemIds = itemsResult.data.map(i => i.decomposition_item_id)
@@ -231,6 +253,23 @@ export function DeleteObjectModal({
         // Удаляем work_logs для decomposition_items
         if (itemIds.length > 0) {
           await supabase.from('work_logs').delete().in('decomposition_item_id', itemIds)
+
+          // Получаем бюджеты задач декомпозиции для удаления budget_parts
+          const { data: itemBudgets } = await supabase
+            .from('budgets')
+            .select('budget_id')
+            .eq('entity_type', 'decomposition_item')
+            .in('entity_id', itemIds)
+
+          const itemBudgetIds = itemBudgets?.map(b => b.budget_id) || []
+
+          // Удаляем budget_parts для бюджетов задач
+          if (itemBudgetIds.length > 0) {
+            await supabase.from('budget_parts').delete().in('budget_id', itemBudgetIds)
+          }
+
+          // Удаляем бюджеты задач декомпозиции
+          await supabase.from('budgets').delete().eq('entity_type', 'decomposition_item').in('entity_id', itemIds)
         }
 
         // Получаем бюджеты разделов для удаления budget_parts
@@ -252,6 +291,33 @@ export function DeleteObjectModal({
 
         // Удаляем decomposition_items
         await supabase.from('decomposition_items').delete().in('decomposition_item_section_id', sectionIds)
+
+        // Получаем decomposition_stages для удаления их бюджетов
+        const { data: stages } = await supabase
+          .from('decomposition_stages')
+          .select('decomposition_stage_id')
+          .in('decomposition_stage_section_id', sectionIds)
+
+        if (stages && stages.length > 0) {
+          const stageIds = stages.map(s => s.decomposition_stage_id)
+
+          // Получаем бюджеты этапов для удаления budget_parts
+          const { data: stageBudgets } = await supabase
+            .from('budgets')
+            .select('budget_id')
+            .eq('entity_type', 'decomposition_stage')
+            .in('entity_id', stageIds)
+
+          const stageBudgetIds = stageBudgets?.map(b => b.budget_id) || []
+
+          // Удаляем budget_parts для бюджетов этапов
+          if (stageBudgetIds.length > 0) {
+            await supabase.from('budget_parts').delete().in('budget_id', stageBudgetIds)
+          }
+
+          // Удаляем бюджеты этапов
+          await supabase.from('budgets').delete().eq('entity_type', 'decomposition_stage').in('entity_id', stageIds)
+        }
 
         // Удаляем decomposition_stages
         await supabase.from('decomposition_stages').delete().in('decomposition_stage_section_id', sectionIds)

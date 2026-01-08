@@ -90,7 +90,7 @@ export function PlannedReadinessArea({
           className="absolute flex flex-col items-center pointer-events-none"
           style={{
             left: p.x,
-            top: p.y - 12,
+            top: Math.max(0, p.y - 12), // Не выходим за верхнюю границу контейнера
             transform: 'translateX(-50%)',
           }}
         >

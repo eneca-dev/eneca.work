@@ -94,8 +94,10 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
             className={cn(
               'absolute top-0 bottom-0',
               cell.isToday && 'bg-primary/20',
-              !cell.isToday && isSpecialDayOff && 'bg-amber-50/50 dark:bg-amber-950/20',
-              !cell.isToday && isRegularWeekend && 'bg-gray-100/50 dark:bg-gray-800/30'
+              // Праздники - сохраняем amber акцент
+              !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/5',
+              // Обычные выходные - нейтральный серый
+              !cell.isToday && isRegularWeekend && 'bg-muted/30 dark:bg-muted/15'
             )}
             style={{
               left: i * DAY_CELL_WIDTH,

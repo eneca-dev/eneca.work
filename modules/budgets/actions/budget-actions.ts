@@ -87,35 +87,54 @@ const ApproveExpenseSchema = z.object({
 
 /**
  * Получить список бюджетов с фильтрами (из v_cache_budgets)
+ *
+ * ВАЖНО: PostgREST имеет серверный лимит ~3000 записей.
+ * Используем pagination для загрузки всех данных.
  */
 export async function getBudgets(
   filters?: BudgetFilters
 ): Promise<ActionResult<BudgetCurrent[]>> {
   try {
     const supabase = await createClient()
+    const PAGE_SIZE = 1000
+    let allData: BudgetCurrent[] = []
+    let page = 0
+    let hasMore = true
 
-    let query = supabase.from('v_cache_budgets').select('*')
+    while (hasMore) {
+      let query = supabase.from('v_cache_budgets').select('*')
 
-    if (filters?.entity_type) {
-      query = query.eq('entity_type', filters.entity_type)
+      if (filters?.entity_type) {
+        query = query.eq('entity_type', filters.entity_type)
+      }
+
+      if (filters?.entity_id) {
+        query = query.eq('entity_id', filters.entity_id)
+      }
+
+      if (filters?.is_active !== undefined) {
+        query = query.eq('is_active', filters.is_active)
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+      if (error) {
+        console.error('[getBudgets] Supabase error:', error)
+        return { success: false, error: error.message }
+      }
+
+      if (data && data.length > 0) {
+        allData = allData.concat(data as BudgetCurrent[])
+        page++
+        hasMore = data.length === PAGE_SIZE
+      } else {
+        hasMore = false
+      }
     }
 
-    if (filters?.entity_id) {
-      query = query.eq('entity_id', filters.entity_id)
-    }
-
-    if (filters?.is_active !== undefined) {
-      query = query.eq('is_active', filters.is_active)
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('[getBudgets] Supabase error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as BudgetCurrent[] }
+    return { success: true, data: allData }
   } catch (error) {
     console.error('[getBudgets] Error:', error)
     return {

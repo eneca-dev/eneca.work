@@ -15,7 +15,7 @@ import {
 } from '@/modules/cache'
 import { getOrgStructure, getProjectStructure, getProjectTags } from '../actions'
 import type { FilterOption } from '@/modules/inline-filter'
-import type { OrgStructure, ProjectStructure, ProjectTag } from '../types'
+import type { OrgStructure, ProjectStructure, ProjectTag, ProjectStatusType } from '../types'
 
 // ============================================================================
 // Base Structure Hooks (используют cache module фабрики)
@@ -56,6 +56,27 @@ export const useProjectTags = createSimpleCacheQuery<ProjectTag[]>({
   queryFn: getProjectTags,
   staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
 })
+
+// ============================================================================
+// Static Options (статичные данные из enum, не требуют запроса к БД)
+// ============================================================================
+
+/**
+ * Статусы проектов с русскими названиями
+ * Значения соответствуют project_status_enum в БД
+ * Используется `satisfies` для compile-time валидации enum значений
+ */
+const PROJECT_STATUS_OPTIONS: FilterOption[] = [
+  { id: 'active' satisfies ProjectStatusType, name: 'В работе', key: 'статус проекта' },
+  { id: 'draft' satisfies ProjectStatusType, name: 'Черновик', key: 'статус проекта' },
+  { id: 'potential project' satisfies ProjectStatusType, name: 'Потенциальный проект', key: 'статус проекта' },
+  { id: 'completed' satisfies ProjectStatusType, name: 'Завершён', key: 'статус проекта' },
+  { id: 'paused' satisfies ProjectStatusType, name: 'Приостановлен', key: 'статус проекта' },
+  { id: 'waiting for input data' satisfies ProjectStatusType, name: 'Ожидание исходных данных', key: 'статус проекта' },
+  { id: 'author supervision' satisfies ProjectStatusType, name: 'Авторский надзор', key: 'статус проекта' },
+  { id: 'actual calculation' satisfies ProjectStatusType, name: 'Актуализация расчёта', key: 'статус проекта' },
+  { id: 'customer approval' satisfies ProjectStatusType, name: 'Согласование с заказчиком', key: 'статус проекта' },
+]
 
 // ============================================================================
 // Combined Filter Options Hook (для InlineFilter)
@@ -104,6 +125,9 @@ export function useFilterOptions() {
         result.push({ id: tag.id, name: tag.name, key: 'метка' })
       }
     }
+
+    // Статусы проектов (статичные, из enum)
+    result.push(...PROJECT_STATUS_OPTIONS)
 
     return result
   }, [orgStructure, projectStructure, tags])
