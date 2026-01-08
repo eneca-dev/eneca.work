@@ -1083,6 +1083,143 @@
       ]
     },
     {
+      "id": "RG-026",
+      "title": "[Bug] Аватар пользователя отображает 'UNDEFINED' вместо инициалов",
+      "description": "На вкладке 'Отделы' внутри команды ГР-2 на аватарке пользователя vladimir.nesterovich@enecagroup.com отображается текст 'UNDEFINED' вместо аватара или инициалов имени.\n\n## Проблема\n- В компоненте Avatar fallback показывает строку 'UNDEFINED'\n- Ожидается: либо аватар пользователя (если есть), либо первые буквы имени (например 'ВН' для Владимира Нестеровича)\n\n## Воспроизведение\n1. Открыть страницу /dashboard/tasks\n2. Перейти на вкладку 'Отделы'\n3. Открыть команду ГР-2\n4. Найти пользователя vladimir.nesterovich@enecagroup.com\n5. Наблюдать: на аватарке отображается 'UNDEFINED'\n\n## Возможные причины\n1. Поле `name` или `display_name` у пользователя не заполнено в БД\n2. Компонент AvatarFallback получает `undefined` вместо строки инициалов\n3. Функция генерации инициалов возвращает undefined при пустом имени\n4. Отсутствует fallback на email при пустом имени\n\n## Решение\n1. Проверить данные пользователя в таблице profiles (полнота полей name, display_name, email)\n2. Добавить fallback в компонент Avatar: если имя пустое, использовать email для генерации инициалов\n3. Добавить защиту в функцию генерации инициалов: возвращать первые 2 буквы email если имя отсутствует\n4. Пример: 'vladimir.nesterovich@enecagroup.com' → 'VN'",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/components/timeline/LoadingBadges.tsx",
+        "modules/resource-graph/components/timeline/LoadingBars.tsx",
+        "shared/components/Avatar.tsx",
+        "shared/utils/getInitials.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Аватар НЕ показывает 'UNDEFINED' ни при каких обстоятельствах",
+        "Если имя пользователя пустое, используются инициалы из email",
+        "Для vladimir.nesterovich@enecagroup.com отображается корректный fallback (инициалы или аватар)",
+        "Все аватары в модуле resource-graph корректно отображают инициалы"
+      ]
+    },
+    {
+      "id": "RG-027",
+      "title": "[Bug] При hover на строку сотрудника пропадает отображение выходных и сегодняшнего дня",
+      "description": "При наведении курсора на строку сотрудника (DecompositionStageRow с загрузками) пропадает цветовое выделение выходных дней и сегодняшнего дня на timeline.\n\n## Проблема\n- TimelineGrid отображает фоны для выходных (серый/amber) и сегодняшнего дня (primary)\n- При hover на строку DecompositionStageRow эти фоны пропадают\n- Пользователь теряет визуальную ориентацию по датам во время наведения\n\n## Ожидаемое поведение\n- При hover на строку команды или отдела фоны выходных и сегодняшнего дня сохраняются\n- Hover эффект должен быть виден, но НЕ должен перекрывать фоновые индикаторы дат\n- Аналогично поведению в ProjectRow, ObjectRow, SectionRow\n\n## Возможные причины\n1. Строка DecompositionStageRow имеет класс 'group' но не имеет явного hover:bg-* стиля\n2. Возможно применяется глобальный CSS для .group:hover который перекрывает TimelineGrid\n3. z-index TimelineGrid ниже чем hover overlay\n4. Hover эффект использует непрозрачный фон вместо полупрозрачного\n\n## Решение\n1. Проверить есть ли hover:bg-* на строке DecompositionStageRow\n2. Если есть hover эффект, убедиться что он использует полупрозрачный фон (bg-muted/10 вместо bg-muted)\n3. Или применить hover эффект только к sidebar части, не затрагивая timeline область\n4. Проверить z-index: TimelineGrid должен быть выше hover overlay\n5. Альтернативно: применить pointer-events-none к TimelineGrid и mix-blend-mode для корректного наложения",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/components/timeline/shared/TimelineGrid.tsx",
+        "modules/resource-graph/components/timeline/rows/BaseRow.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "При hover на строку сотрудника фоны выходных дней остаются видимыми",
+        "При hover на строку сотрудника фон сегодняшнего дня остаётся видимым",
+        "Hover эффект на строку всё ещё виден (например, на sidebar части)",
+        "Поведение консистентно со всеми другими типами строк (ProjectRow, ObjectRow, SectionRow)",
+        "UX: пользователь не теряет визуальную ориентацию по датам при наведении"
+      ]
+    },
+    {
+      "id": "RG-028",
+      "title": "[Bug] Модалка актуализации данных не соответствует теме пользователя",
+      "description": "При нажатии на точку актуальности (FreshnessIndicator) для актуализации данных модальное окно отображается в светлой теме, хотя пользователь работает в тёмной теме.\n\n## Проблема\n- Пользователь работает в тёмной теме\n- При клике на точку актуальности открывается модалка 'Актуализировать данные?'\n- Модалка отображается в светлой теме (белый фон, тёмный текст)\n- Это создаёт визуальный диссонанс и плохой UX\n\n## Ожидаемое поведение\n- Модалка должна соответствовать текущей теме пользователя\n- Если пользователь в тёмной теме → модалка тёмная\n- Если пользователь в светлой теме → модалка светлая\n\n## Причина\n- В TeamRow.tsx на строке 102: `theme=\"light\"` - хардкод светлой темы\n- В DepartmentRow.tsx аналогичная проблема\n- Нужно передавать актуальную тему пользователя из useTheme() или аналога\n\n## Решение\n1. Импортировать useTheme() hook в TeamRow.tsx и DepartmentRow.tsx\n2. Получить текущую тему: `const { theme } = useTheme()`\n3. Передать динамическую тему в FreshnessIndicator:\n   ```typescript\n   <FreshnessIndicator\n     theme={theme === 'dark' ? 'dark' : 'light'}\n     // ... other props\n   />\n   ```\n4. Убедиться что все места использования FreshnessIndicator обновлены",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/departments-timeline/components/timeline/TeamRow.tsx",
+        "modules/departments-timeline/components/timeline/DepartmentRow.tsx"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "Модалка актуализации отображается в тёмной теме когда пользователь в тёмной теме",
+        "Модалка актуализации отображается в светлой теме когда пользователь в светлой теме",
+        "Тема модалки переключается автоматически при смене темы пользователем",
+        "Все использования FreshnessIndicator используют динамическую тему"
+      ]
+    },
+    {
+      "id": "RG-029",
+      "title": "[Bug] Точка актуальности не обновляется после подтверждения актуализации",
+      "description": "После подтверждения актуализации данных в модалке точка актуальности (FreshnessIndicator) не меняет свой цвет до перезагрузки страницы.\n\n## Проблема\n- Точка актуальности жёлтая/красная (данные устарели на 3+ дней)\n- Пользователь нажимает на точку → открывается модалка 'Актуализировать данные?'\n- Пользователь нажимает 'Подтвердить'\n- Модалка закрывается, но точка остаётся жёлтой/красной\n- Только после полной перезагрузки страницы (F5) точка становится зелёной\n\n## Ожидаемое поведение\n- После нажатия 'Подтвердить' точка должна мгновенно стать зелёной\n- daysSinceUpdate должен обновиться до 0\n- lastUpdate должен обновиться до текущей даты/времени\n- Не должна требоваться перезагрузка страницы\n\n## Причина\n- В FreshnessIndicator.tsx после успешного подтверждения (строка 198) просто закрывается модалка\n- Нет optimistic update локального состояния компонента\n- Нет invalidation кэша React Query для обновления данных из БД\n- Компонент продолжает рендерить старые props `daysSinceUpdate` до следующего refetch\n\n## Решение\n\n### Вариант 1: Invalidation кэша (рекомендуется)\n1. После успешного onConfirm вызвать invalidation:\n   ```typescript\n   if (result.success) {\n     await queryClient.invalidateQueries({ \n       queryKey: ['departmentsTimeline'] \n     })\n     onClose()\n   }\n   ```\n2. React Query автоматически перезапросит данные\n3. Компонент получит новые props с обновлённым daysSinceUpdate\n\n### Вариант 2: Optimistic update\n1. Добавить локальное состояние в FreshnessIndicator:\n   ```typescript\n   const [optimisticUpdate, setOptimisticUpdate] = useState<Date | null>(null)\n   const effectiveDaysSinceUpdate = optimisticUpdate ? 0 : daysSinceUpdate\n   ```\n2. После подтверждения установить optimisticUpdate:\n   ```typescript\n   if (result.success) {\n     setOptimisticUpdate(new Date())\n     onClose()\n   }\n   ```\n\n### Вариант 3: Callback с новыми данными\n1. onConfirm возвращает новые данные:\n   ```typescript\n   onConfirm: (teamId) => Promise<{ \n     success: boolean\n     data?: { daysSinceUpdate: number, lastUpdate: Date }\n   }>\n   ```\n2. Родительский компонент обновляет state",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "components/shared/timeline/FreshnessIndicator.tsx",
+        "modules/departments-timeline/hooks/index.ts",
+        "modules/departments-timeline/components/timeline/TeamRow.tsx",
+        "modules/departments-timeline/components/timeline/DepartmentRow.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "После нажатия 'Подтвердить' точка актуальности мгновенно становится зелёной",
+        "Не требуется перезагрузка страницы для обновления цвета точки",
+        "daysSinceUpdate обновляется до 0 сразу после подтверждения",
+        "lastUpdate обновляется до текущей даты/времени сразу после подтверждения",
+        "Tooltip точки показывает 'Обновлено сегодня' сразу после подтверждения",
+        "Если актуализация не удалась (ошибка сервера), точка остаётся в прежнем состоянии"
+      ]
+    },
+    {
+      "id": "RG-030",
+      "title": "[Bug] Фильтры по проекту, ответственному и метке не работают на вкладке Отделы",
+      "description": "На вкладке 'Отделы' фильтры по проекту, ответственному и метке не применяются — отображаются все отделы и команды, хотя ожидается фильтрация только задействованных отделов/команд/сотрудников.\n\n## Проблема 1: Фильтр по проекту\n- Пользователь выбирает проект в InlineFilter на вкладке 'Отделы'\n- Timeline отображает все отделы, команды и сотрудников\n- Ожидается: должны отображаться только те отделы/команды/сотрудники, у которых есть загрузки (loadings) в выбранном проекте\n\n## Проблема 2: Фильтр по ответственному (responsible_id)\n- Пользователь выбирает конкретного сотрудника в фильтре\n- Timeline отображает все отделы и команды\n- Ожидается: должны отображаться только отдел и команда, в которых работает этот сотрудник\n- ПРИМЕЧАНИЕ: Сам сотрудник фильтруется корректно (строка 181-187), НО его отдел и команда всё равно показывают всех остальных сотрудников\n\n## Проблема 3: Фильтр по метке (tag_id)\n- Пользователь выбирает метку проекта в фильтре\n- Timeline отображает все отделы и команды\n- Ожидается: должны отображаться только отделы/команды/сотрудники, работающие над проектами с этой меткой\n- ПРИМЕЧАНИЕ: Фильтр по метке вообще не реализован в getDepartmentsData\n\n## Воспроизведение\n\n### Для фильтра по проекту:\n1. Открыть страницу /dashboard/tasks\n2. Перейти на вкладку 'Отделы'\n3. В InlineFilter выбрать конкретный проект (например, 'Проект А')\n4. Наблюдать: отображаются все отделы, а не только те, что работают над 'Проект А'\n\n### Для фильтра по ответственному:\n1. В InlineFilter выбрать конкретного сотрудника (например, 'Иванов Иван')\n2. Наблюдать: отображаются все отделы и все сотрудники в командах, хотя должна быть видна только команда Иванова\n\n### Для фильтра по метке:\n1. В InlineFilter выбрать метку проекта (например, 'Срочно')\n2. Наблюдать: отображаются все отделы, фильтр не применяется\n\n## Причина\nВ getDepartmentsData (modules/departments-timeline/actions/index.ts) отсутствует корректная обработка фильтров:\n\n### Для проекта:\n- Строки 94-148: есть фильтры по subdivision_id, department_id, team_id, но НЕТ project_id\n- Строки 161-188: employeeQuery фильтруется по department/team/responsible, но НЕ по project_id\n- Загрузки (loadings) в view_employee_workloads содержат project_id, но фильтр не применяется\n\n### Для ответственного:\n- Строка 181-187: фильтр по responsible_id ЕСТЬ и работает для employeeQuery\n- НО orgQuery (строка 92-150) НЕ фильтруется по ответственному\n- Результат: возвращаются все команды и отделы, даже если в них нет отфильтрованных сотрудников\n\n### Для метки:\n- Фильтр по tag_id вообще не реализован\n- Нужно джойнить project_tag_links для получения проектов с меткой\n- Затем фильтровать loadings по этим проектам\n\n## Решение\n\n### Для проекта (project_id):\n```typescript\n// После строки 165 в employeeQuery\nif (secureFilters?.project_id) {\n  if (isUuid(secureFilters.project_id)) {\n    employeeQuery = employeeQuery.eq('project_id', secureFilters.project_id)\n  } else {\n    employeeQuery = employeeQuery.ilike('project_name', `%${secureFilters.project_id}%`)\n  }\n}\n```\n\n### Для метки (tag_id):\n```typescript\n// После фильтра по project_id\nif (secureFilters?.tag_id) {\n  // Получаем проекты с этой меткой\n  const { data: taggedProjects } = await supabase\n    .from('project_tag_links')\n    .select('project_id')\n    .eq('tag_id', secureFilters.tag_id)\n  \n  const projectIds = taggedProjects?.map(p => p.project_id) || []\n  if (projectIds.length > 0) {\n    employeeQuery = employeeQuery.in('project_id', projectIds)\n  } else {\n    return { success: true, data: [] }\n  }\n}\n```\n\n### Для всех фильтров: Очистка пустых элементов\nПосле сборки иерархии (после строки 332) удалить пустые команды и отделы:\n```typescript\n// Удаляем команды без сотрудников\ndepartments.forEach((dept) => {\n  dept.teams = dept.teams.filter(team => team.employees.length > 0)\n})\n\n// Удаляем отделы без команд\nconst filteredDepartments = departments.filter(dept => dept.teams.length > 0)\n\nreturn { success: true, data: filteredDepartments }\n```\n\nЭто решит проблему с ответственным: если у команды не осталось сотрудников после фильтрации, команда не отобразится.\n\n## Дополнительные проверки\n- Убедиться что view_employee_workloads содержит корректный project_id для всех загрузок\n- Протестировать фильтрацию по UUID проекта и по названию проекта\n- Протестировать фильтр по ответственному: должна отображаться только его команда\n- Протестировать фильтр по метке: должны отображаться только проекты с этой меткой\n- Проверить что при сбросе фильтра отображаются все отделы обратно\n- Протестировать комбинацию фильтров (проект + ответственный)",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/departments-timeline/actions/index.ts"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "ПРОЕКТ: При выборе проекта отображаются только отделы/команды с загрузками в этом проекте",
+        "ПРОЕКТ: Фильтрация работает как по UUID проекта, так и по названию проекта",
+        "ПРОЕКТ: dailyWorkloads корректно вычисляются только для загрузок выбранного проекта",
+        "ОТВЕТСТВЕННЫЙ: При выборе сотрудника отображается только его отдел и команда",
+        "ОТВЕТСТВЕННЫЙ: В команде отображается только выбранный сотрудник, остальные скрыты",
+        "ОТВЕТСТВЕННЫЙ: Фильтрация работает как по UUID сотрудника, так и по имени",
+        "МЕТКА: При выборе метки отображаются только отделы/команды, работающие над проектами с этой меткой",
+        "МЕТКА: Фильтр корректно работает с project_tag_links",
+        "ОБЩЕЕ: Пустые отделы/команды не отображаются при активных фильтрах",
+        "ОБЩЕЕ: При сбросе фильтров отображаются все отделы обратно",
+        "ОБЩЕЕ: Комбинация фильтров работает корректно (например, проект + ответственный)",
+        "ОБЩЕЕ: dailyWorkloads корректно агрегируются только для отфильтрованных данных"
+      ]
+    },
+    {
       "id": "RG-AUDIT",
       "title": "Full Module Audit: Resource Graph",
       "description": "Полный аудит модуля resource-graph для подтверждения качества перед production.\n\nАудит включает проверку: базы данных, безопасности, бизнес-логики, производительности, качества кода и кэширования.",
