@@ -18,6 +18,8 @@ import {
   Ban,
   XCircle,
   AlertTriangle,
+  Search,
+  ClipboardCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AggregatedTask, TaskCategory, TaskStatus, TaskPriority } from '../types'
@@ -35,6 +37,8 @@ const categoryConfig: Record<
   docs: { icon: FileText, label: 'Документация', color: 'text-slate-500' },
   'tech-debt': { icon: Wrench, label: 'Тех. долг', color: 'text-orange-500' },
   migration: { icon: ArrowRightLeft, label: 'Миграция', color: 'text-cyan-500' },
+  audit: { icon: ClipboardCheck, label: 'Аудит', color: 'text-indigo-500' },
+  research: { icon: Search, label: 'Исследование', color: 'text-pink-500' },
 }
 
 // Status icons and colors
@@ -100,9 +104,9 @@ interface TaskCardProps {
 }
 
 export const TaskCard = memo(function TaskCard({ task, showModule = true }: TaskCardProps) {
-  const category = categoryConfig[task.category]
-  const status = statusConfig[task.status]
-  const priority = priorityConfig[task.priority]
+  const category = categoryConfig[task.category] || categoryConfig.feature
+  const status = statusConfig[task.status] || statusConfig.backlog
+  const priority = priorityConfig[task.priority] || priorityConfig.medium
   const CategoryIcon = category.icon
   const StatusIcon = status.icon
 

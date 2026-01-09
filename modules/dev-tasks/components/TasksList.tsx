@@ -26,6 +26,8 @@ const categoryLabels: Record<TaskCategory, string> = {
   docs: 'Документация',
   'tech-debt': 'Тех. долг',
   migration: 'Миграции',
+  audit: 'Аудит',
+  research: 'Исследование',
 }
 
 const priorityLabels: Record<TaskPriority, string> = {
@@ -57,11 +59,14 @@ const categoryOrder: TaskCategory[] = [
   'tech-debt',
   'docs',
   'migration',
+  'audit',
+  'research',
 ]
 
 interface TasksListProps {
   tasks: AggregatedTask[]
   groupBy: GroupBy
+  enableGrouping?: boolean
 }
 
 interface TaskGroup {
@@ -70,9 +75,14 @@ interface TaskGroup {
   tasks: AggregatedTask[]
 }
 
-export const TasksList = memo(function TasksList({ tasks, groupBy }: TasksListProps) {
+export const TasksList = memo(function TasksList({ tasks, groupBy, enableGrouping = true }: TasksListProps) {
   // Group tasks
   const groups = useMemo((): TaskGroup[] => {
+    // If grouping is disabled, return all tasks in a single group
+    if (!enableGrouping) {
+      return [{ key: 'all', label: 'Все задачи', tasks }]
+    }
+
     const grouped = new Map<string, AggregatedTask[]>()
 
     for (const task of tasks) {
@@ -133,7 +143,7 @@ export const TasksList = memo(function TasksList({ tasks, groupBy }: TasksListPr
     }
 
     return result
-  }, [tasks, groupBy])
+  }, [tasks, groupBy, enableGrouping])
 
   if (tasks.length === 0) {
     return (

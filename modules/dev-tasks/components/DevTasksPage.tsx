@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Code2, RefreshCcw, List, LayoutGrid } from 'lucide-react'
+import { Code2, RefreshCcw, List, LayoutGrid, SortAsc, SortDesc, Calendar, Type, Layers } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { TasksStats } from './TasksStats'
 import { TasksFilters } from './TasksFilters'
 import { TasksList } from './TasksList'
@@ -22,6 +24,8 @@ const defaultFilters: TaskFilters = {
 }
 
 type ViewMode = 'compact' | 'cards'
+type SortBy = 'none' | 'createdAt' | 'title'
+type SortOrder = 'asc' | 'desc'
 
 export function DevTasksPage() {
   const [tasks, setTasks] = useState<AggregatedTask[]>([])
@@ -33,6 +37,9 @@ export function DevTasksPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>('module')
   const [viewMode, setViewMode] = useState<ViewMode>('compact')
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
+  const [enableGrouping, setEnableGrouping] = useState(true)
+  const [sortBy, setSortBy] = useState<SortBy>('none')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
 
   // Load tasks
   const loadTasks = useCallback(async () => {
@@ -61,9 +68,9 @@ export function DevTasksPage() {
     return Array.from(set).sort()
   }, [tasks])
 
-  // Apply filters
+  // Apply filters and sorting
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    let result = tasks.filter((task) => {
       if (filters.modules.length > 0 && !filters.modules.includes(task.moduleName)) {
         return false
       }
@@ -87,7 +94,22 @@ export function DevTasksPage() {
       }
       return true
     })
-  }, [tasks, filters])
+
+    // Apply sorting
+    if (sortBy === 'createdAt') {
+      result = [...result].sort((a, b) => {
+        const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        return sortOrder === 'desc' ? diff : -diff
+      })
+    } else if (sortBy === 'title') {
+      result = [...result].sort((a, b) => {
+        const diff = a.id.localeCompare(b.id)
+        return sortOrder === 'asc' ? diff : -diff
+      })
+    }
+
+    return result
+  }, [tasks, filters, sortBy, sortOrder])
 
   // Loading state
   if (isLoading) {
@@ -199,6 +221,81 @@ export function DevTasksPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr,400px]">
         {/* Tasks list */}
         <div className="space-y-4">
+          {/* View options */}
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center gap-6">
+              {/* Grouping toggle */}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="enable-grouping"
+                  checked={enableGrouping}
+                  onCheckedChange={(checked) => setEnableGrouping(!!checked)}
+                />
+                <Label htmlFor="enable-grouping" className="flex items-center gap-2 cursor-pointer">
+                  <Layers className="h-4 w-4" />
+                  Группировка
+                </Label>
+              </div>
+
+              {/* Sort options */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Сортировка:</span>
+                <div className="flex rounded-lg border bg-muted/50 p-1">
+                  <button
+                    onClick={() => setSortBy('none')}
+                    className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                      sortBy === 'none'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Нет
+                  </button>
+                  <button
+                    onClick={() => setSortBy('createdAt')}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                      sortBy === 'createdAt'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Дата
+                  </button>
+                  <button
+                    onClick={() => setSortBy('title')}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                      sortBy === 'title'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Type className="h-4 w-4" />
+                    ID
+                  </button>
+                </div>
+              </div>
+
+              {/* Sort order toggle - only show when sorting is enabled */}
+              {sortBy !== 'none' && (
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted"
+                  title={sortOrder === 'asc' ? 'По возрастанию' : 'По убыванию'}
+                >
+                  {sortOrder === 'asc' ? (
+                    <SortAsc className="h-4 w-4" />
+                  ) : (
+                    <SortDesc className="h-4 w-4" />
+                  )}
+                  <span className="text-muted-foreground">
+                    {sortOrder === 'asc' ? 'По возрастанию' : 'По убыванию'}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Filters - only in cards mode */}
           {viewMode === 'cards' && (
             <TasksFilters
@@ -226,9 +323,10 @@ export function DevTasksPage() {
               tasks={filteredTasks}
               selectedTasks={selectedTasks}
               onSelectionChange={setSelectedTasks}
+              enableGrouping={enableGrouping}
             />
           ) : (
-            <TasksList tasks={filteredTasks} groupBy={groupBy} />
+            <TasksList tasks={filteredTasks} groupBy={groupBy} enableGrouping={enableGrouping} />
           )}
         </div>
 
