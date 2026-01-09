@@ -31,3 +31,11 @@ export {
   type DifficultyLevel,
   type WorkCategory,
 } from './reference-data'
+
+// Sync Actions (Work → Worksection)
+export {
+  syncProjectToWorksection,
+  type SyncProjectInput,
+  type SyncResult,
+  type SyncEntityStats,
+} from './sync-actions'

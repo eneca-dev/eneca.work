@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BudgetRow } from './BudgetRow'
 import { useExpandedState } from '../hooks/use-expanded-state'
+import { useWorkToWsSync } from '../hooks/use-work-to-ws-sync'
 import type { HierarchyNode } from '../types'
 
 // ============================================================================
@@ -46,6 +47,9 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
     expandAll,
     collapseAll,
   } = useExpandedState({ nodes })
+
+  // Хук синхронизации с Worksection
+  const { sync, status: syncStatus, syncingProjectId } = useWorkToWsSync()
 
   // Callback для автоматического раскрытия узла при создании дочернего элемента
   const handleAutoExpandNode = useCallback((nodeId: string) => {
@@ -203,6 +207,9 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
                 onExpandAll={handleExpandAll}
                 onRefresh={onRefresh}
                 onAutoExpand={handleAutoExpandNode}
+                onProjectSync={sync}
+                syncStatus={syncStatus}
+                syncingProjectId={syncingProjectId}
               />
             ))}
           </div>
