@@ -422,6 +422,22 @@ export function LoadingModal({
     )
   }, [setNotification, clearNotification, viewMode, userDepartmentId, employee, section])
 
+  // Helper: Get user-friendly message for missing entity
+  const getMissingEntityMessage = useCallback((missingEntity: 'stages' | 'objects' | 'sections' | 'decomposition_stages' | undefined): string => {
+    switch (missingEntity) {
+      case 'stages':
+        return 'не содержит стадий'
+      case 'objects':
+        return 'не содержит объектов'
+      case 'sections':
+        return 'не содержит разделов'
+      case 'decomposition_stages':
+        return 'не содержит этапов декомпозиции'
+      default:
+        return 'не содержит структуры данных'
+    }
+  }, [])
+
   // Helper: Build stage nodes from view data
   const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
     const stageMap = new Map<string, FileTreeNode>()
@@ -513,13 +529,13 @@ export function LoadingModal({
 
 
   // Load children for a specific node using optimized view
-  // Returns: true if children were loaded successfully, false if no children after filtering
-  const loadNodeChildren = useCallback(async (node: FileTreeNode, forceRefresh = false): Promise<boolean> => {
+  // Returns: object with hasChildren flag and missing entity type
+  const loadNodeChildren = useCallback(async (node: FileTreeNode, forceRefresh = false): Promise<{ hasChildren: boolean; missingEntity?: 'stages' | 'objects' | 'sections' | 'decomposition_stages' }> => {
     console.log(`🔵 loadNodeChildren ВЫЗВАН: node.id="${node.id}", node.name="${node.name}", projectId="${node.projectId}", forceRefresh=${forceRefresh}`)
 
     if (!node.projectId || loadingNodes.has(node.id)) {
       console.log(`🔴 loadNodeChildren РАННИЙ ВЫХОД: projectId=${!!node.projectId}, isLoading=${loadingNodes.has(node.id)}`)
-      return false
+      return { hasChildren: false }
     }
 
     setLoadingNodes((prev) => new Set(prev).add(node.id))
@@ -692,6 +708,8 @@ export function LoadingModal({
         const updateNode = (nodes: FileTreeNode[]): FileTreeNode[] => {
           return nodes.map((n) => {
             if (n.id === node.id) {
+              // Устанавливаем children как пустой массив даже если нет детей
+              // Это важно для отличия "не загружено" (undefined) от "загружено но пусто" ([])
               return { ...n, children: stageNodes }
             }
             if (n.children) {
@@ -705,8 +723,45 @@ export function LoadingModal({
 
       // Return true if we have children, false otherwise
       const hasChildren = stageNodes.length > 0
+
+      if (!hasChildren) {
+        // Определяем, что именно отсутствует
+        let missingEntity: 'stages' | 'objects' | 'sections' | 'decomposition_stages' | undefined
+
+        if (projectData.length === 0) {
+          // Нет данных из view вообще - значит нет разделов (так как view строится от sections)
+          missingEntity = 'sections'
+        } else {
+          // Данные есть, но stageNodes пустой - проверяем что есть в данных
+          const hasStages = projectData.some(row => row.stage_id !== null)
+          const hasObjects = projectData.some(row => row.object_id !== null)
+          const hasSections = projectData.some(row => row.section_id !== null)
+
+          if (!hasStages) {
+            missingEntity = 'stages'
+          } else if (!hasObjects) {
+            missingEntity = 'objects'
+          } else if (!hasSections) {
+            missingEntity = 'sections'
+          } else {
+            // Стадии, объекты, разделы есть, но нет этапов декомпозиции
+            missingEntity = 'decomposition_stages'
+          }
+        }
+
+        console.log('┌─────────────────────────────────────────────────────────────')
+        console.log('│ ⚠️  loadNodeChildren - ПРОЕКТ БЕЗ СТРУКТУРЫ')
+        console.log('├─────────────────────────────────────────────────────────────')
+        console.log(`│ Проект: ${node.name} (${node.projectId})`)
+        console.log(`│ Отсутствует: ${missingEntity}`)
+        console.log(`│ ViewMode: ${viewMode}`)
+        console.log('└─────────────────────────────────────────────────────────────')
+
+        return { hasChildren: false, missingEntity }
+      }
+
       console.log(`📊 loadNodeChildren ВОЗВРАЩАЕТ hasChildren: ${hasChildren} (stageNodes.length = ${stageNodes.length})`)
-      return hasChildren
+      return { hasChildren: true }
     } catch (error) {
       console.error("[LoadingModal] Ошибка при загрузке данных проекта:", error)
       console.log(`🔴 loadNodeChildren ВОЗВРАЩАЕТ false из-за ОШИБКИ`)
@@ -721,7 +776,7 @@ export function LoadingModal({
           project_id: node.projectId,
         },
       })
-      return false
+      return { hasChildren: false }
     } finally {
       setLoadingNodes((prev) => {
         const next = new Set(prev)
@@ -1159,16 +1214,26 @@ export function LoadingModal({
 
         // Загружаем иерархию перед поиском
         ;(async () => {
-          const hasChildren = await loadNodeChildren(projectNode)
+          const result = await loadNodeChildren(projectNode)
 
-          if (hasChildren) {
+          if (result.hasChildren) {
             setPendingStageSelection({
               stageId: targetStageId!,
               projectId: targetProjectId!
             })
           } else {
+            // Нет детей у проекта
             if (viewMode === "my") {
+              // В режиме "Мои проекты" - переключаемся на "Все проекты"
               switchToAllProjects(targetStageId!, targetProjectId!)
+            } else {
+              // В режиме "Все проекты" и детей нет - значит у проекта нет структуры
+              const message = getMissingEntityMessage(result.missingEntity)
+              console.log(`❌ Проект "${projectNode.name}" ${message}`)
+              setNotification(`Проект "${projectNode.name}" ${message}`)
+              setTimeout(() => clearNotification(), 5000)
+              // Сбрасываем pendingStageSelection чтобы остановить цикл
+              setPendingStageSelection(null)
             }
           }
         })()
@@ -1179,7 +1244,7 @@ export function LoadingModal({
         }
       }
     }
-  }, [treeData, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode])
+  }, [treeData, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode, setNotification, clearNotification, getMissingEntityMessage])
 
   // Handle pending stage selection after viewMode switch
   useEffect(() => {
@@ -1221,27 +1286,51 @@ export function LoadingModal({
 
       if (foundNode) {
         // Узел найден - выбираем его и сбрасываем pending
-        console.log("Узел найден, выбираем...")
+        console.log("✅ Узел найден, выбираем...")
         findAndSelectNode(pendingStageId, pendingProjectId)
         setPendingStageSelection(null)
       } else {
-        // Узел не найден - вероятно, нужно загрузить вложенные уровни
-        // НЕ сбрасываем pendingStageSelection, ждём обновления treeData
-        console.log("Узел не найден в загруженных детях, ожидаем...")
+        // Узел не найден даже после загрузки детей
+        console.log("❌ Узел не найден в загруженных детях проекта")
+        console.log(`   Проект: ${projectNode.name}`)
+        console.log(`   Искомый stageId: ${pendingStageId}`)
 
-        // Принудительная перезагрузка данных проекта
-        if (!loadingNodes.has(projectNode.id)) {
-          loadNodeChildren(projectNode, true)
-        }
+        // Дети загружены, но узел не найден - значит его нет в этом проекте
+        setNotification(`Этап не найден в проекте "${projectNode.name}". Возможно, данные были удалены.`)
+        setTimeout(() => clearNotification(), 5000)
+
+        // Сбрасываем pendingStageSelection чтобы остановить цикл
+        setPendingStageSelection(null)
       }
+    } else if (projectNode.children && projectNode.children.length === 0) {
+      // Дети загружены, но массив пустой - проект без структуры
+      console.log("❌ Проект не содержит структуры данных (children = [])")
+      // Загружаем снова, чтобы получить missingEntity
+      loadNodeChildren(projectNode, true).then((result) => {
+        const message = getMissingEntityMessage(result.missingEntity)
+        setNotification(`Проект "${projectNode.name}" ${message}`)
+        setTimeout(() => clearNotification(), 5000)
+        setPendingStageSelection(null)
+      })
     } else if (!loadingNodes.has(projectNode.id)) {
-      // Дети не загружены - загружаем
-      console.log("Загружаем дети проекта для pending selection...")
-      loadNodeChildren(projectNode, true)
-      // НЕ сбрасываем pendingStageSelection - ждём обновления treeData
+      // Дети не загружены (children === undefined) - загружаем
+      console.log("⏳ Загружаем дети проекта для pending selection...")
+
+      // Используем промис для отслеживания результата загрузки
+      loadNodeChildren(projectNode, true).then((result) => {
+        if (!result.hasChildren) {
+          // Загрузка завершена, но детей нет
+          console.log("❌ Загрузка завершена: детей нет")
+          const message = getMissingEntityMessage(result.missingEntity)
+          setNotification(`Проект "${projectNode.name}" ${message}`)
+          setTimeout(() => clearNotification(), 5000)
+          setPendingStageSelection(null)
+        }
+        // Если hasChildren === true, следующий рендер обработает поиск узла
+      })
     }
     // Если узел загружается (loadingNodes.has), просто ждём следующего рендера
-  }, [pendingStageSelection, treeData, viewMode, loadNodeChildren, findAndSelectNode, setProjectSearchTerm, loadingNodes])
+  }, [pendingStageSelection, treeData, viewMode, loadNodeChildren, findAndSelectNode, setProjectSearchTerm, loadingNodes, setNotification, clearNotification, getMissingEntityMessage])
 
   // Reset modal state when reopening
   useEffect(() => {
