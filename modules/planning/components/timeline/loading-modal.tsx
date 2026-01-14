@@ -1121,6 +1121,15 @@ export function LoadingModal({
       setExpandedFolders(new Set())
       // Rebuild project list
       await buildFileTree()
+
+      // В режиме редактирования восстанавливаем развернутое состояние проекта
+      if (isEditMode && loading?.stageId && loading?.projectId) {
+        setPendingStageSelection({
+          stageId: loading.stageId,
+          projectId: loading.projectId,
+        })
+      }
+
       setNotification("Список проектов обновлён")
       successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
     } catch (error) {
@@ -1137,7 +1146,7 @@ export function LoadingModal({
     } finally {
       setIsRefreshingAll(false)
     }
-  }, [isRefreshingAll, buildFileTree, setNotification, clearNotification])
+  }, [isRefreshingAll, buildFileTree, setNotification, clearNotification, isEditMode, loading])
 
   // Load tree and employees on mount
   useEffect(() => {
