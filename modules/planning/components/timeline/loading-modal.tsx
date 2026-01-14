@@ -362,7 +362,7 @@ export function LoadingModal({
             id: `project-${project.project_id}`,
             name: project.project_name,
             type: "folder" as const,
-            children: [], // Empty initially, will be loaded on expand
+            children: undefined, // undefined = not loaded yet, [] = loaded but empty
             projectId: project.project_id,
           }))
 
@@ -1279,41 +1279,15 @@ export function LoadingModal({
       return null
     }
 
-    // Проверяем, загружены ли уже дети этого проекта
-    if (projectNode.children && projectNode.children.length > 0) {
-      // Дети уже загружены, проверяем наличие узла
-      const foundNode = findNodeInTreeLocal(treeData, pendingStageId)
+    // Проверяем состояние загрузки детей проекта
+    if (loadingNodes.has(projectNode.id)) {
+      // Дети загружаются прямо сейчас - ждём следующего рендера
+      console.log("⏳ Проект загружается, ждём...")
+      return
+    }
 
-      if (foundNode) {
-        // Узел найден - выбираем его и сбрасываем pending
-        console.log("✅ Узел найден, выбираем...")
-        findAndSelectNode(pendingStageId, pendingProjectId)
-        setPendingStageSelection(null)
-      } else {
-        // Узел не найден даже после загрузки детей
-        console.log("❌ Узел не найден в загруженных детях проекта")
-        console.log(`   Проект: ${projectNode.name}`)
-        console.log(`   Искомый stageId: ${pendingStageId}`)
-
-        // Дети загружены, но узел не найден - значит его нет в этом проекте
-        setNotification(`Этап не найден в проекте "${projectNode.name}". Возможно, данные были удалены.`)
-        setTimeout(() => clearNotification(), 5000)
-
-        // Сбрасываем pendingStageSelection чтобы остановить цикл
-        setPendingStageSelection(null)
-      }
-    } else if (projectNode.children && projectNode.children.length === 0) {
-      // Дети загружены, но массив пустой - проект без структуры
-      console.log("❌ Проект не содержит структуры данных (children = [])")
-      // Загружаем снова, чтобы получить missingEntity
-      loadNodeChildren(projectNode, true).then((result) => {
-        const message = getMissingEntityMessage(result.missingEntity)
-        setNotification(`Проект "${projectNode.name}" ${message}`)
-        setTimeout(() => clearNotification(), 5000)
-        setPendingStageSelection(null)
-      })
-    } else if (!loadingNodes.has(projectNode.id)) {
-      // Дети не загружены (children === undefined) - загружаем
+    if (projectNode.children === undefined) {
+      // Дети не загружены (undefined) - запускаем загрузку
       console.log("⏳ Загружаем дети проекта для pending selection...")
 
       // Используем промис для отслеживания результата загрузки
@@ -1328,8 +1302,44 @@ export function LoadingModal({
         }
         // Если hasChildren === true, следующий рендер обработает поиск узла
       })
+      return
     }
-    // Если узел загружается (loadingNodes.has), просто ждём следующего рендера
+
+    // Дети загружены (children !== undefined)
+    if (projectNode.children.length === 0) {
+      // Массив пустой - проект без структуры
+      console.log("❌ Проект не содержит структуры данных (children = [])")
+      // Загружаем снова, чтобы получить missingEntity
+      loadNodeChildren(projectNode, true).then((result) => {
+        const message = getMissingEntityMessage(result.missingEntity)
+        setNotification(`Проект "${projectNode.name}" ${message}`)
+        setTimeout(() => clearNotification(), 5000)
+        setPendingStageSelection(null)
+      })
+      return
+    }
+
+    // Дети есть - проверяем наличие искомого узла
+    const foundNode = findNodeInTreeLocal(treeData, pendingStageId)
+
+    if (foundNode) {
+      // Узел найден - выбираем его и сбрасываем pending
+      console.log("✅ Узел найден, выбираем...")
+      findAndSelectNode(pendingStageId, pendingProjectId)
+      setPendingStageSelection(null)
+    } else {
+      // Узел не найден даже после загрузки детей
+      console.log("❌ Узел не найден в загруженных детях проекта")
+      console.log(`   Проект: ${projectNode.name}`)
+      console.log(`   Искомый stageId: ${pendingStageId}`)
+
+      // Дети загружены, но узел не найден - значит его нет в этом проекте
+      setNotification(`Этап не найден в проекте "${projectNode.name}". Возможно, данные были удалены.`)
+      setTimeout(() => clearNotification(), 5000)
+
+      // Сбрасываем pendingStageSelection чтобы остановить цикл
+      setPendingStageSelection(null)
+    }
   }, [pendingStageSelection, treeData, viewMode, loadNodeChildren, findAndSelectNode, setProjectSearchTerm, loadingNodes, setNotification, clearNotification, getMissingEntityMessage])
 
   // Reset modal state when reopening
