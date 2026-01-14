@@ -2367,6 +2367,7 @@ export function LoadingModal({
                   )}>
                     <button
                       onClick={() => setViewMode("my")}
+                      disabled={isEditMode}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
@@ -2375,13 +2376,15 @@ export function LoadingModal({
                             : "bg-background shadow-sm"
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
-                          : "hover:bg-background/50"
+                          : "hover:bg-background/50",
+                        isEditMode && "cursor-not-allowed opacity-50"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
+                      disabled={isEditMode}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
@@ -2390,7 +2393,8 @@ export function LoadingModal({
                             : "bg-background shadow-sm"
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
-                          : "hover:bg-background/50"
+                          : "hover:bg-background/50",
+                        isEditMode && "cursor-not-allowed opacity-50"
                       )}
                     >
                       Все проекты
@@ -2404,6 +2408,7 @@ export function LoadingModal({
                       placeholder="Поиск проектов..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      disabled={isEditMode}
                       className="h-8 pl-8 pr-8 text-sm"
                     />
                     {projectSearchTerm && (
