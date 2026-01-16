@@ -4,6 +4,7 @@ import React, { useMemo } from 'react'
 import { Calendar, Clock, AlertTriangle } from 'lucide-react'
 import type { UserLoading, DeadlinesBlockProps } from '../types'
 import { ScrollableContainer } from './ScrollableContainer'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 
 interface LocalDeadlineItem {
   id: string
@@ -14,15 +15,13 @@ interface LocalDeadlineItem {
 }
 
 export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isCompact = false, hideHeader = false }) => {
-  // Функция для расчета количества дней до дедлайна
+  // Функция для расчета количества дней до дедлайна (в часовом поясе Минска)
   const calculateDaysLeft = (date: Date): number => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const targetDate = new Date(date)
-    targetDate.setHours(0, 0, 0, 0)
-    
-    const diffTime = targetDate.getTime() - today.getTime()
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    // ✅ Используем сегодняшнюю дату в часовом поясе Минска
+    const today = getTodayMinsk()
+    // Оба Date объекта уже представляют полночь UTC, можно сравнивать напрямую
+    const diffTime = date.getTime() - today.getTime()
+    return Math.round(diffTime / (1000 * 60 * 60 * 24))
   }
 
   // Функция для форматирования дней до дедлайна
@@ -62,7 +61,8 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
     // Добавляем дедлайны загрузок
     loadings.forEach(loading => {
       if (loading.loading_finish) {
-        const finishDate = new Date(loading.loading_finish)
+        // ✅ Парсим дату в часовом поясе Минска
+        const finishDate = parseMinskDate(loading.loading_finish)
         const daysLeft = calculateDaysLeft(finishDate)
         
         items.push({

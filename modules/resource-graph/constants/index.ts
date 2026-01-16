@@ -28,7 +28,7 @@ export const RATE_COLORS = {
 
 /** Цвета для статусов загрузки */
 export const LOADING_STATUS_COLORS = {
-  planned: 'bg-gray-300 dark:bg-gray-600',
+  planned: 'bg-muted-foreground/30 dark:bg-muted-foreground/40',
   approved: 'bg-green-500 dark:bg-green-600',
   rejected: 'bg-red-500 dark:bg-red-600',
 } as const
@@ -40,8 +40,17 @@ export const LOADING_STATUS_COLORS = {
 /** Высота строки в пикселях */
 export const ROW_HEIGHT = 40
 
+/** Высота строки задачи с историей прогресса (расширенная) */
+export const ITEM_ROW_HEIGHT_WITH_HISTORY = 56
+
+/** Высота строки объекта (с графиками агрегации) */
+export const OBJECT_ROW_HEIGHT = 56
+
 /** Высота строки раздела (двухстрочная) */
 export const SECTION_ROW_HEIGHT = 56
+
+/** Высота строки раздела с чекпоинтами (56 график + 54 чекпоинты) */
+export const SECTION_ROW_HEIGHT_WITH_CHECKPOINTS = 110
 
 /** Высота строки этапа декомпозиции (двухстрочная + место для загрузок и готовности) */
 export const STAGE_ROW_HEIGHT = 64
@@ -50,7 +59,7 @@ export const STAGE_ROW_HEIGHT = 64
 export const DAY_CELL_WIDTH = 36
 
 /** Ширина боковой панели */
-export const SIDEBAR_WIDTH = 320
+export const SIDEBAR_WIDTH = 380
 
 // ============================================================================
 // Work Log Display Constants

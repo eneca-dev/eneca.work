@@ -96,6 +96,7 @@ export function RealtimeSync() {
     let reconnectAttempts = 0
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY_MS = 3000
+    let isAuthChecked = false
 
     /**
      * Создаёт и настраивает канал с подписками
@@ -127,7 +128,20 @@ export function RealtimeSync() {
     /**
      * Подписывается на канал с обработкой переподключения
      */
-    const subscribeWithReconnect = () => {
+    const subscribeWithReconnect = async () => {
+      // Проверяем авторизацию перед подключением
+      if (!isAuthChecked) {
+        const { data: { session } } = await supabase.auth.getSession()
+        isAuthChecked = true
+
+        if (!session) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[RealtimeSync] No session, skipping Realtime connection')
+          }
+          return
+        }
+      }
+
       const channel = createChannel()
       channelRef.current = channel
 

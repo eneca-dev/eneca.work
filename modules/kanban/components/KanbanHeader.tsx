@@ -1,45 +1,63 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { KANBAN_COLUMNS } from '../constants'
+import type { StageStatus } from '../hooks/useStageStatuses'
+import { KANBAN_COLUMNS, COLUMN_MIN_WIDTH } from '../constants'
 
-export function KanbanHeader() {
+interface KanbanHeaderProps {
+  statuses: StageStatus[]
+}
+
+// Цвета индикаторов (точек) для каждого статуса
+const STATUS_INDICATOR_COLORS: Record<string, string> = {
+  backlog: 'bg-slate-500',
+  planned: 'bg-violet-500',
+  in_progress: 'bg-blue-500',
+  paused: 'bg-amber-500',
+  review: 'bg-pink-500',
+  done: 'bg-emerald-500',
+}
+
+export function KanbanHeader({ statuses }: KanbanHeaderProps) {
   return (
     <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b">
-      <div className="flex h-full">
-        {/* Spacer for swimlane header area */}
-        <div className="w-0 flex-shrink-0" />
+      {/* Column Headers */}
+      <div className="flex px-1.5 py-2.5">
+        {statuses.map((status) => {
+          // Находим соответствующую колонку из констант по порядку
+          const column = KANBAN_COLUMNS[status.kanban_order]
+          const indicatorColor = STATUS_INDICATOR_COLORS[column?.id || ''] || 'bg-slate-400'
 
-        {/* Column Headers */}
-        <div className="flex flex-1 gap-0">
-          {KANBAN_COLUMNS.map((column) => (
+          return (
             <div
-              key={column.id}
-              className={cn(
-                'flex-1',
-                'px-3 py-3',
-                column.bgColor
-              )}
+              key={status.id}
+              className="flex-shrink-0 px-1.5"
+              style={{ width: COLUMN_MIN_WIDTH }}
             >
-              <div className="flex items-center gap-2">
+              {/* Badge-style header */}
+              <div
+                className={cn(
+                  'flex items-center justify-center gap-2',
+                  'px-4 py-2 rounded-lg',
+                  'border transition-colors',
+                  column?.bgColor,
+                  column?.borderColor
+                )}
+              >
                 <div
                   className={cn(
                     'w-2 h-2 rounded-full',
-                    column.id === 'backlog' && 'bg-slate-400',
-                    column.id === 'planned' && 'bg-teal-500',
-                    column.id === 'in_progress' && 'bg-orange-500',
-                    column.id === 'paused' && 'bg-stone-500',
-                    column.id === 'review' && 'bg-indigo-500',
-                    column.id === 'done' && 'bg-emerald-500'
+                    'ring-2 ring-white/50 dark:ring-black/20',
+                    indicatorColor
                   )}
                 />
-                <span className={cn('text-sm font-medium', column.color)}>
-                  {column.title}
+                <span className={cn('text-sm font-medium', column?.color)}>
+                  {status.name}
                 </span>
               </div>
             </div>
-          ))}
-        </div>
+          )
+        })}
       </div>
     </div>
   )

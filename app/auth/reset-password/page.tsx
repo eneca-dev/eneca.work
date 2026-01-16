@@ -97,36 +97,31 @@ function ResetPasswordForm() {
   // Функция для получения понятного сообщения об ошибке
   const getErrorMessage = (error: any): string => {
     if (!error?.message) return "Произошла неизвестная ошибка"
-    
+
     const message = error.message.toLowerCase()
-    
-    // Проверка различных типов ошибок
-    if (message.includes('weak password')) {
-      return "Пароль слишком простой. Убедитесь, что он содержит минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
-    }
-    
-    if (message.includes('password should be at least')) {
+
+    // Ошибки пароля
+    if (message.includes('weak password') || message.includes('password should be at least')) {
       return "Пароль должен содержать минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
     }
-    
+
     if (message.includes('same password')) {
       return "Новый пароль должен отличаться от текущего."
     }
-    
-    if (message.includes('session not found') || message.includes('invalid session')) {
-      return "Сессия истекла. Запросите новую ссылку для сброса пароля."
-    }
-    
-    if (message.includes('user not found')) {
-      return "Пользователь не найден. Запросите новую ссылку для сброса пароля."
-    }
-    
-    if (message.includes('token expired') || message.includes('invalid token')) {
+
+    // Ошибки сессии/токена — общее сообщение
+    if (
+      message.includes('session not found') ||
+      message.includes('invalid session') ||
+      message.includes('user not found') ||
+      message.includes('token expired') ||
+      message.includes('invalid token')
+    ) {
       return "Ссылка истекла или недействительна. Запросите новую ссылку для сброса пароля."
     }
-    
-    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
-    return error.message
+
+    // Общее сообщение для остальных ошибок
+    return "Не удалось сбросить пароль. Попробуйте запросить новую ссылку."
   }
 
   const validatePassword = (password: string): string[] => {

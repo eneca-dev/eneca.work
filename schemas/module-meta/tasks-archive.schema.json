@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eneca.work/schemas/module-meta/tasks-archive.schema.json",
+  "title": "Tasks Archive Schema",
+  "description": "Schema for tasks.archive.json files - completed tasks storage",
+  "type": "object",
+  "required": ["moduleName", "archivedTasks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to JSON Schema"
+    },
+    "moduleName": {
+      "type": "string",
+      "description": "Module name this archive belongs to"
+    },
+    "archivedTasks": {
+      "type": "array",
+      "description": "Completed tasks moved from module.meta.json",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "priority", "status", "completedAt", "changelogEntry"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Task ID (MODULE-NNN format)",
+            "pattern": "^[A-Z]+-\\d{3}$"
+          },
+          "title": {
+            "type": "string",
+            "description": "Task title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Task description"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["feature", "bug", "refactor", "performance", "security", "docs", "tech-debt", "migration"]
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["done", "cancelled"],
+            "description": "Final status (only done or cancelled)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date",
+            "description": "Date when task was completed"
+          },
+          "changelogEntry": {
+            "type": "string",
+            "description": "Brief changelog entry describing what was done"
+          },
+          "relatedFiles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files that were modified"
+          }
+        }
+      }
+    }
+  }
+}

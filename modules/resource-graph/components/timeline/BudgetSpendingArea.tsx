@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
-import { differenceInDays, parseISO, format, addDays } from 'date-fns'
+import { useMemo, useId } from 'react'
+import { format, addDays } from 'date-fns'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import type { BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -12,6 +13,8 @@ interface BudgetSpendingAreaProps {
   range: TimelineRange
   /** Общая ширина timeline в пикселях */
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 interface PointData {
@@ -57,8 +60,9 @@ export function BudgetSpendingArea({
   spending,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: BudgetSpendingAreaProps) {
-  // Вычисляем точки с интерполяцией
+  // Вычисляем точки БЕЗ интерполяции (ступеньки) — как у ActualReadinessArea
   const points = useMemo(() => {
     if (!spending || spending.length === 0) return []
 
@@ -73,24 +77,32 @@ export function BudgetSpendingArea({
       spendingMap.set(point.date, point)
     }
 
-    // Границы данных
-    const firstDataDate = parseISO(sortedSpending[0].date)
-    const lastDataDate = parseISO(sortedSpending[sortedSpending.length - 1].date)
+    // Границы данных (используем parseMinskDate для консистентности с range.start)
+    const firstDataDate = parseMinskDate(sortedSpending[0].date)
+    const lastDataDate = parseMinskDate(sortedSpending[sortedSpending.length - 1].date)
+
+    // График идёт до сегодняшнего дня (или до последней даты данных, если она позже)
+    const today = getTodayMinsk()
+    const endDate = lastDataDate > today ? lastDataDate : today
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
-    const graphHeight = SECTION_ROW_HEIGHT * 0.75
-    const topPadding = SECTION_ROW_HEIGHT * 0.1
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
 
     // Максимальный процент для масштабирования (если есть перерасход)
     const maxPercentage = Math.max(100, ...sortedSpending.map(s => s.percentage))
+
+    // Начальные значения для ступенчатой интерполяции
+    let lastKnownPercentage = sortedSpending[0].percentage
+    let lastKnownSpent = sortedSpending[0].spent
 
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
       const dateKey = format(dayDate, 'yyyy-MM-dd')
 
-      // Пропускаем дни до/после данных
-      if (dayDate < firstDataDate || dayDate > lastDataDate) continue
+      // Пропускаем дни до первых данных или после сегодня
+      if (dayDate < firstDataDate || dayDate > endDate) continue
 
       let percentage: number
       let spent: number
@@ -100,10 +112,12 @@ export function BudgetSpendingArea({
       if (exactPoint) {
         percentage = exactPoint.percentage
         spent = exactPoint.spent
+        lastKnownPercentage = percentage
+        lastKnownSpent = spent
       } else {
-        const interpolated = interpolateSpending(dayDate, sortedSpending)
-        percentage = interpolated.percentage
-        spent = interpolated.spent
+        // Ступенька: используем последнее известное значение
+        percentage = lastKnownPercentage
+        spent = lastKnownSpent
         isInterpolated = true
       }
 
@@ -117,12 +131,10 @@ export function BudgetSpendingArea({
     }
 
     return result
-  }, [spending, range.start, timelineWidth])
-
-  if (points.length === 0) return null
+  }, [spending, range.start, timelineWidth, rowHeight])
 
   // Создаём SVG paths
-  const baseY = SECTION_ROW_HEIGHT * 0.85
+  const baseY = rowHeight * 0.85
   const { areaPath, linePath, isOverspend } = useMemo(() => {
     if (points.length < 1) return { areaPath: '', linePath: '', isOverspend: false }
 
@@ -141,27 +153,31 @@ export function BudgetSpendingArea({
       linePath += ` L ${points[i].x} ${points[i].y}`
     }
 
-    const isOverspend = points[points.length - 1].percentage > 100
+    const isOverspend = points.length > 0 && points[points.length - 1].percentage > 100
 
     return { areaPath, linePath, isOverspend }
   }, [points, baseY])
 
   // Находим последнюю точку для отображения текущего значения
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
   const mainColor = isOverspend ? OVERSPEND_COLOR : BUDGET_COLOR
 
-  // Уникальный ID для паттерна (чтобы не конфликтовать между компонентами)
-  const patternId = `budgetStripes-${Math.random().toString(36).slice(2, 9)}`
-  const gradientId = `budgetGradient-${Math.random().toString(36).slice(2, 9)}`
+  // Уникальный ID для паттерна (React useId для стабильности)
+  const uniqueId = useId()
+  const patternId = `budgetStripes-${uniqueId}`
+  const gradientId = `budgetGradient-${uniqueId}`
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         <defs>
           {/* Диагональный паттерн полосок */}
@@ -262,38 +278,3 @@ export function BudgetSpendingArea({
   )
 }
 
-/**
- * Интерполирует значение расхода бюджета между точками
- */
-function interpolateSpending(date: Date, spending: BudgetSpendingPoint[]): { percentage: number; spent: number } {
-  let leftPoint: BudgetSpendingPoint | null = null
-  let rightPoint: BudgetSpendingPoint | null = null
-
-  for (const point of spending) {
-    const pointDate = parseISO(point.date)
-    if (pointDate <= date) {
-      leftPoint = point
-    }
-    if (pointDate >= date && !rightPoint) {
-      rightPoint = point
-      break
-    }
-  }
-
-  if (!leftPoint && rightPoint) return { percentage: rightPoint.percentage, spent: rightPoint.spent }
-  if (leftPoint && !rightPoint) return { percentage: leftPoint.percentage, spent: leftPoint.spent }
-  if (!leftPoint || !rightPoint) return { percentage: 0, spent: 0 }
-
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) return { percentage: leftPoint.percentage, spent: leftPoint.spent }
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return {
-    percentage: leftPoint.percentage + (rightPoint.percentage - leftPoint.percentage) * ratio,
-    spent: leftPoint.spent + (rightPoint.spent - leftPoint.spent) * ratio,
-  }
-}

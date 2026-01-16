@@ -6,7 +6,6 @@ export async function updateSession(request: NextRequest) {
 
   // Публичные роуты, которые не требуют авторизации
   const publicRoutes = [
-    '/',
     '/auth/login',
     '/auth/register',
     '/auth/forgot-password',

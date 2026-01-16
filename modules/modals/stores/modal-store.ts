@@ -143,3 +143,15 @@ export const openEmployeeView = (employeeId: string) =>
  * Закрыть любую открытую модалку
  */
 export const closeModal = () => useModalStore.getState().closeModal()
+
+/**
+ * Открыть модалку создания чекпоинта
+ */
+export const openCheckpointCreate = (sectionId: string, sectionName: string) =>
+  useModalStore.getState().openModal('checkpoint-create', { sectionId, sectionName })
+
+/**
+ * Открыть модалку редактирования чекпоинта
+ */
+export const openCheckpointEdit = (checkpointId: string) =>
+  useModalStore.getState().openModal('checkpoint-edit', { checkpointId })

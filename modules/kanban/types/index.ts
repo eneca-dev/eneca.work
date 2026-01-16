@@ -29,6 +29,7 @@ export interface KanbanTask {
   plannedHours: number
   actualHours: number
   progress: number // 0-100
+  cpi: number | null // Cost Performance Index (EV / Actual)
   dueDate?: string | null
   order: number
   workCategory?: string | null
@@ -49,6 +50,7 @@ export interface KanbanStage {
   plannedHours: number
   actualHours: number
   progress: number
+  cpi: number | null // Aggregated CPI for stage
 }
 
 // Раздел (Section / Swimlane) - горизонтальная дорожка
@@ -62,11 +64,9 @@ export interface KanbanSection {
     firstName: string
     lastName: string
   } | null
-  // Контекст
+  // Контекст (иерархия: Project → Object → Section)
   projectId: string
   projectName: string
-  stageId: string
-  stageName: string
   objectId: string
   objectName: string
   // Этапы в этом разделе

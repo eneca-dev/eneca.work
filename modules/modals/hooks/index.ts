@@ -3,6 +3,75 @@
  */
 
 export { useModal } from './useModal'
+export { useUpdateSection } from './useUpdateSection'
+
+// ============================================================================
+// Reference Data Hooks
+// ============================================================================
+
+export { useWorkCategories } from './useWorkCategories'
+export { useDifficultyLevels } from './useDifficultyLevels'
+export { useStageStatuses } from './useStageStatuses'
+
+// ============================================================================
+// Decomposition Query Hooks
+// ============================================================================
+
+export {
+  useDecompositionBootstrap,
+  useEmployees,
+  useWorkLogsAggregate,
+} from './useDecompositionStage'
+
+// Unified hook с кешированием из resourceGraph
+export { useDecompositionData } from './useDecompositionData'
+export type { DecompositionDataResult } from './useDecompositionData'
+
+// ============================================================================
+// Decomposition Stage Mutation Hooks
+// ============================================================================
+
+export {
+  useCreateDecompositionStage,
+  useUpdateDecompositionStage,
+  useDeleteDecompositionStage,
+  useReorderDecompositionStages,
+} from './useUpdateDecompositionStage'
+
+// ============================================================================
+// Decomposition Item Mutation Hooks
+// ============================================================================
+
+export {
+  useCreateDecompositionItem,
+  useUpdateDecompositionItem,
+  useDeleteDecompositionItem,
+  useMoveDecompositionItems,
+  useReorderDecompositionItems,
+  useBulkCreateDecompositionItems,
+  useBulkDeleteDecompositionItems,
+} from './useUpdateDecompositionItem'
+
+// ============================================================================
+// Readiness Checkpoints Hooks
+// ============================================================================
+
+export {
+  useReadinessCheckpoints,
+  useCreateReadinessCheckpoint,
+  useUpdateReadinessCheckpoint,
+  useDeleteReadinessCheckpoint,
+} from './useReadinessCheckpoints'
+
+// ============================================================================
+// Work Logs Hooks
+// ============================================================================
+
+export {
+  useDecompositionItemsForWorkLog,
+  useUserHourlyRate,
+  useCreateWorkLog,
+} from './useWorkLogs'
 
 // ============================================================================
 // Типизированные хуки для конкретных модалок
@@ -24,6 +93,8 @@ import type {
   LoadingEditData,
   EmployeeViewData,
   ProgressUpdateData,
+  CheckpointCreateData,
+  CheckpointEditData,
 } from '../types'
 
 /**
@@ -122,4 +193,18 @@ export function useEmployeeViewModal() {
  */
 export function useProgressUpdateModal() {
   return useModal<ProgressUpdateData>()
+}
+
+/**
+ * Хук для модалки создания чекпоинта
+ */
+export function useCheckpointCreateModal() {
+  return useModal<CheckpointCreateData>()
+}
+
+/**
+ * Хук для модалки редактирования чекпоинта
+ */
+export function useCheckpointEditModal() {
+  return useModal<CheckpointEditData>()
 }

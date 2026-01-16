@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { differenceInDays, parseISO, addDays, format, subDays } from 'date-fns'
+import { useMemo, useState, useId } from 'react'
+import { addDays, format, subDays } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH } from '../../constants'
@@ -23,6 +24,10 @@ interface StageReadinessAreaProps {
   rowHeight: number
   /** Цвет линии и заливки (по умолчанию синий) */
   color?: string
+  /** Дата начала этапа (для плановой линии) */
+  stageStartDate?: string | null
+  /** Дата окончания этапа (для плановой линии) */
+  stageEndDate?: string | null
 }
 
 interface PointData {
@@ -45,10 +50,12 @@ export function StageReadinessArea({
   timelineWidth,
   rowHeight,
   color = '#3b82f6',
+  stageStartDate,
+  stageEndDate,
 }: StageReadinessAreaProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
-  // Вычисляем точки с интерполяцией и дельтой
+  // Вычисляем точки БЕЗ интерполяции (ступеньки)
   const points = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return []
 
@@ -63,9 +70,9 @@ export function StageReadinessArea({
       snapshotMap.set(snap.date, snap.value)
     }
 
-    // Границы данных
-    const firstDataDate = parseISO(sortedSnapshots[0].date)
-    const lastDataDate = parseISO(sortedSnapshots[sortedSnapshots.length - 1].date)
+    // Границы данных (используем parseMinskDate для консистентности с range.start)
+    const firstDataDate = parseMinskDate(sortedSnapshots[0].date)
+    const lastDataDate = parseMinskDate(sortedSnapshots[sortedSnapshots.length - 1].date)
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
@@ -73,6 +80,7 @@ export function StageReadinessArea({
     const topPadding = rowHeight * 0.1
 
     let prevValue: number | null = null
+    let lastKnownValue = sortedSnapshots[0].value
 
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
@@ -87,8 +95,10 @@ export function StageReadinessArea({
       const exactValue = snapshotMap.get(dateKey)
       if (exactValue !== undefined) {
         value = exactValue
+        lastKnownValue = exactValue
       } else {
-        value = interpolateValue(dayDate, sortedSnapshots)
+        // Ступенька: используем последнее известное значение
+        value = lastKnownValue
         isInterpolated = true
       }
 
@@ -98,8 +108,8 @@ export function StageReadinessArea({
       // Y координата
       const y = topPadding + graphHeight * (1 - value / 100)
 
-      // Дельта относительно предыдущего дня
-      const delta = prevValue !== null ? value - prevValue : null
+      // Дельта относительно предыдущего дня (только для реальных точек)
+      const delta = prevValue !== null && !isInterpolated ? value - prevValue : null
 
       result.push({ x, y, value, date: dateKey, isInterpolated, delta })
       prevValue = value
@@ -108,7 +118,48 @@ export function StageReadinessArea({
     return result
   }, [snapshots, range.start, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
+  // Вычисляем плановую линию (0% в начале этапа → 100% в конце)
+  const plannedLine = useMemo(() => {
+    if (!stageStartDate || !stageEndDate) return null
+
+    const stageStart = parseMinskDate(stageStartDate)
+    const stageEnd = parseMinskDate(stageEndDate)
+    const stageDuration = Math.max(1, Math.ceil((stageEnd.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)))
+
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
+    const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
+
+    // Находим X координаты для начала и конца этапа
+    const startDayIndex = Math.ceil((stageStart.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24))
+    const endDayIndex = Math.ceil((stageEnd.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24))
+
+    // Проверяем что этап попадает в видимую область
+    if (endDayIndex < 0 || startDayIndex >= totalDays) return null
+
+    // Координаты точек
+    const startX = Math.max(0, startDayIndex * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2)
+    const endX = Math.min(timelineWidth, endDayIndex * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2)
+
+    // Y: 0% внизу (topPadding + graphHeight), 100% вверху (topPadding)
+    const startY = topPadding + graphHeight // 0%
+    const endY = topPadding // 100%
+
+    return {
+      path: `M ${startX} ${startY} L ${endX} ${endY}`,
+      startX,
+      endX,
+      stageDuration,
+      // Функция для расчёта планового значения на конкретную дату
+      getPlannedValue: (dateStr: string): number | null => {
+        const date = parseMinskDate(dateStr)
+        if (date < stageStart) return 0
+        if (date > stageEnd) return 100
+        const daysPassed = (date.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)
+        return Math.round((daysPassed / stageDuration) * 100)
+      }
+    }
+  }, [stageStartDate, stageEndDate, range.start, timelineWidth, rowHeight])
 
   // Создаём SVG paths для заливки и линии
   const baseY = rowHeight * 0.85
@@ -134,12 +185,12 @@ export function StageReadinessArea({
   }, [points, baseY])
 
   // Последняя точка для отображения текущего значения и прироста
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
 
   // Вычисляем прирост за сегодня (относительно вчера)
   const todayDelta = useMemo(() => {
     if (points.length < 2) return null
-    const today = format(new Date(), 'yyyy-MM-dd')
+    const today = formatMinskDate(getTodayMinsk())
     const todayPoint = points.find(p => p.date === today)
     if (todayPoint?.delta !== null && todayPoint?.delta !== undefined) {
       return todayPoint.delta
@@ -148,8 +199,15 @@ export function StageReadinessArea({
     return lastPoint?.delta ?? null
   }, [points, lastPoint])
 
-  // Уникальный ID для градиента
-  const gradientId = `stageReadinessGradient-${Math.random().toString(36).substr(2, 9)}`
+  // Уникальный ID для градиента (React useId для стабильности)
+  const uniqueId = useId()
+  const gradientId = `stageReadiness-${uniqueId}`
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
+
+  // Ранний выход ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -177,7 +235,19 @@ export function StageReadinessArea({
             />
           )}
 
-          {/* Верхняя граница — сплошная линия */}
+          {/* Плановая линия — пунктирная */}
+          {plannedLine && (
+            <path
+              d={plannedLine.path}
+              fill="none"
+              stroke={color}
+              strokeWidth="1"
+              strokeDasharray="4 3"
+              strokeOpacity="0.5"
+            />
+          )}
+
+          {/* Верхняя граница — сплошная линия (факт) */}
           {linePath && (
             <path
               d={linePath}
@@ -222,7 +292,7 @@ export function StageReadinessArea({
             <TooltipContent side="top" className="text-xs">
               <div className="space-y-1">
                 <div className="text-muted-foreground text-[10px]">
-                  {format(parseISO(point.date), 'd MMMM', { locale: ru })}
+                  {format(parseMinskDate(point.date), 'd MMMM', { locale: ru })}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium" style={{ color }}>
@@ -244,6 +314,24 @@ export function StageReadinessArea({
                     </span>
                   )}
                 </div>
+                {/* План vs Факт */}
+                {plannedLine && (() => {
+                  const plannedValue = plannedLine.getPlannedValue(point.date)
+                  if (plannedValue === null) return null
+                  const diff = Math.round(point.value) - plannedValue
+                  return (
+                    <div className="flex items-center gap-2 pt-0.5 border-t border-border/50">
+                      <span className="text-muted-foreground">
+                        План: {plannedValue}%
+                      </span>
+                      {diff !== 0 && (
+                        <span className={diff > 0 ? 'text-emerald-500' : 'text-red-400'}>
+                          {diff > 0 ? '+' : ''}{diff}%
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </TooltipContent>
           </Tooltip>
@@ -285,54 +373,24 @@ export function StageReadinessArea({
 }
 
 /**
- * Интерполирует значение между ближайшими точками
- */
-function interpolateValue(date: Date, snapshots: ReadinessPoint[]): number {
-  let leftPoint: ReadinessPoint | null = null
-  let rightPoint: ReadinessPoint | null = null
-
-  for (const snap of snapshots) {
-    const snapDate = parseISO(snap.date)
-    if (snapDate <= date) {
-      leftPoint = snap
-    }
-    if (snapDate >= date && !rightPoint) {
-      rightPoint = snap
-      break
-    }
-  }
-
-  if (!leftPoint && rightPoint) return rightPoint.value
-  if (leftPoint && !rightPoint) return leftPoint.value
-  if (!leftPoint || !rightPoint) return 0
-
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) return leftPoint.value
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return leftPoint.value + (rightPoint.value - leftPoint.value) * ratio
-}
-
-/**
  * Хелпер для вычисления прироста за сегодня
  * Используется в sidebar этапа
+ *
+ * Без интерполяции: сравнивает только реальные снэпшоты
  */
 export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null {
   if (!snapshots || snapshots.length === 0) return null
 
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+  const todayDate = getTodayMinsk()
+  const today = formatMinskDate(todayDate)
+  const yesterday = formatMinskDate(subDays(todayDate, 1))
 
   // Сортируем
   const sorted = [...snapshots].sort((a, b) =>
     new Date(a.date).getTime() - new Date(b.date).getTime()
   )
 
-  // Ищем значения за сегодня и вчера
+  // Ищем точные значения за сегодня и вчера
   let todayValue: number | null = null
   let yesterdayValue: number | null = null
 
@@ -341,15 +399,24 @@ export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null 
     if (snap.date === yesterday) yesterdayValue = snap.value
   }
 
-  // Если нет точного значения за сегодня, берём последнее
+  // Если нет точного значения за сегодня, берём последнее известное
   if (todayValue === null && sorted.length > 0) {
     todayValue = sorted[sorted.length - 1].value
   }
 
-  // Если нет точного значения за вчера, интерполируем
+  // Если нет точного значения за вчера, ищем последнее известное до вчера
   if (yesterdayValue === null && sorted.length > 0) {
-    const yesterdayDate = subDays(new Date(), 1)
-    yesterdayValue = interpolateValue(yesterdayDate, sorted)
+    const yesterdayDate = new Date(yesterday)
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (new Date(sorted[i].date) < yesterdayDate) {
+        yesterdayValue = sorted[i].value
+        break
+      }
+    }
+    // Если не нашли ничего до вчера, берём первое значение
+    if (yesterdayValue === null) {
+      yesterdayValue = sorted[0].value
+    }
   }
 
   if (todayValue !== null && yesterdayValue !== null) {

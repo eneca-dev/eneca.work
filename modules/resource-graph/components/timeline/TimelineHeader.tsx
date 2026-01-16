@@ -1,12 +1,13 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, getDay, getWeek, addDays, differenceInDays, startOfDay } from 'date-fns'
+import { format, getDay, getWeek, addDays } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 
 export interface DayCell {
   date: Date
@@ -35,26 +36,32 @@ export function generateDayCells(
   calendarEvents: CompanyCalendarEvent[] = []
 ): DayCell[] {
   const cells: DayCell[] = []
-  const today = startOfDay(new Date())
+  // Используем сегодняшнюю дату в часовом поясе Минска
+  const todayKey = formatMinskDate(getTodayMinsk())
 
   // Build calendar map for fast lookup
   const calendarMap = buildCalendarMap(calendarEvents)
 
   for (let i = 0; i < range.totalDays; i++) {
     const date = addDays(range.start, i)
-    const dayOfWeek = getDay(date)
+    // Используем день недели в часовом поясе Минска
+    const dayOfWeek = getMinskDayOfWeek(date)
     const isDefaultWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
     // Get calendar info for this day
     const dayInfo = getDayInfo(date, calendarMap)
 
+    // Используем день месяца в часовом поясе Минска
+    const dayOfMonth = getMinskDate(date)
+    const dateKey = formatMinskDate(date)
+
     cells.push({
       date,
-      dayOfMonth: date.getDate(),
+      dayOfMonth,
       dayOfWeek: format(date, 'EEEEEE', { locale: ru }),
       isWeekend: isDefaultWeekend,
-      isToday: differenceInDays(date, today) === 0,
-      isMonthStart: date.getDate() === 1,
+      isToday: dateKey === todayKey,
+      isMonthStart: dayOfMonth === 1,
       monthName: format(date, 'LLLL yyyy', { locale: ru }),
       // Calendar info
       isHoliday: dayInfo.isHoliday,
@@ -191,10 +198,10 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 'flex flex-col items-center justify-center text-[10px]',
                 // Сегодня - высший приоритет
                 cell.isToday && 'bg-primary/10',
-                // Праздники и дополнительные выходные - желтоватый фон
-                !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
-                // Стандартные выходные (Сб/Вс) - серый фон
-                !cell.isToday && isRegularWeekend && 'bg-gray-100 dark:bg-gray-800/50',
+                // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
+                !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/10',
+                // Стандартные выходные (Сб/Вс) - нейтральный серый фон
+                !cell.isToday && isRegularWeekend && 'bg-muted/50 dark:bg-muted/30',
                 i < dayCells.length - 1 && 'border-r border-border/20'
               )}
               style={{ width: DAY_CELL_WIDTH }}
@@ -204,8 +211,8 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 className={cn(
                   'font-medium',
                   cell.isToday && 'text-primary',
-                  !cell.isToday && isSpecialDayOff && 'text-amber-600 dark:text-amber-400',
-                  !cell.isToday && isRegularWeekend && 'text-gray-500 dark:text-gray-400'
+                  !cell.isToday && isSpecialDayOff && 'text-amber-500 dark:text-amber-400',
+                  !cell.isToday && isRegularWeekend && 'text-muted-foreground/70'
                 )}
               >
                 {cell.dayOfMonth}
@@ -213,8 +220,8 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               <span
                 className={cn(
                   'uppercase',
-                  isSpecialDayOff ? 'text-amber-500 dark:text-amber-500' :
-                  isRegularWeekend ? 'text-gray-400 dark:text-gray-500' :
+                  isSpecialDayOff ? 'text-amber-500 dark:text-amber-400' :
+                  isRegularWeekend ? 'text-muted-foreground/50' :
                   'text-muted-foreground'
                 )}
               >

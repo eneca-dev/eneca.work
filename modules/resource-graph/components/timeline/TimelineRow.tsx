@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { parseMinskDate, formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import {
   ChevronRight,
   FolderKanban,
-  Layers,
   Box,
   ListTodo,
   Calendar,
@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/tooltip'
 import type {
   Project,
-  Stage,
   ProjectObject,
   Section,
   DecompositionStage,
@@ -44,6 +43,7 @@ import { ActualReadinessArea } from './ActualReadinessArea'
 import { BudgetSpendingArea } from './BudgetSpendingArea'
 import { BudgetsRow } from './BudgetsRow'
 import { SectionTooltipOverlay } from './SectionTooltipOverlay'
+import { ProjectReportsRow } from '@/modules/project-reports'
 import {
   useWorkLogs,
   useLoadings,
@@ -55,7 +55,8 @@ import {
   useTimelineResize,
 } from '../../hooks'
 import dynamic from 'next/dynamic'
-import { WorkLogCreateModal, ProgressUpdateDialog } from '@/modules/modals'
+import { WorkLogCreateModal, ProgressUpdateDialog, CheckpointCreateModal } from '@/modules/modals'
+import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
 
 // Dynamic import to avoid circular dependency during build
 const SectionModal = dynamic(
@@ -93,8 +94,10 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
             className={cn(
               'absolute top-0 bottom-0',
               cell.isToday && 'bg-primary/20',
-              !cell.isToday && isSpecialDayOff && 'bg-amber-50/50 dark:bg-amber-950/20',
-              !cell.isToday && isRegularWeekend && 'bg-gray-100/50 dark:bg-gray-800/30'
+              // Праздники - сохраняем amber акцент
+              !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/5',
+              // Обычные выходные - нейтральный серый
+              !cell.isToday && isRegularWeekend && 'bg-muted/30 dark:bg-muted/15'
             )}
             style={{
               left: i * DAY_CELL_WIDTH,
@@ -167,7 +170,7 @@ function BaseRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           depth === 0 && 'bg-muted/20'
         )}
         style={{ height, minWidth: totalWidth }}
@@ -176,7 +179,7 @@ function BaseRow({
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20',
+            'sticky left-0 z-40',
             depth === 0 ? 'bg-card' : 'bg-background'
           )}
           style={{
@@ -396,12 +399,12 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        className="flex border-b border-border/50 group"
         style={{ height: ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
         <div
-          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -411,7 +414,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
           <div className="w-5 shrink-0" />
 
           {/* Progress Circle - кликабельный для редактирования */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -465,7 +468,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
           </div>
 
           {/* Кнопка добавления отчёта */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -538,12 +541,12 @@ function formatHoursCompact(hours: number): string {
  */
 function formatBudgetAmount(amount: number): string {
   if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}M ₽`
+    return `${(amount / 1_000_000).toFixed(1)}M BYN`
   }
   if (amount >= 1_000) {
-    return `${Math.round(amount / 1_000)}K ₽`
+    return `${Math.round(amount / 1_000)}K BYN`
   }
-  return `${Math.round(amount)} ₽`
+  return `${Math.round(amount)} BYN`
 }
 
 // ============================================================================
@@ -681,7 +684,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   // Объединяем исторические снэпшоты с сегодняшним рассчитанным значением
   // Это позволяет графику обновляться при изменении прогресса задач
   const mergedStageReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     // Если нет данных для расчёта — возвращаем исторические как есть
     if (!stageStats.hasData) {
@@ -712,7 +715,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   const formatStageDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     try {
-      return format(parseISO(dateStr), 'dd.MM')
+      return format(parseMinskDate(dateStr), 'dd.MM')
     } catch {
       return '—'
     }
@@ -730,7 +733,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           // Завершённые этапы — полупрозрачные и серые
           isCompleted && 'opacity-50 grayscale-[30%]'
         )}
@@ -740,7 +743,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -788,7 +791,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
                 />
                 {/* Прирост за сегодня */}
                 {todayDelta !== null && todayDelta !== 0 && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
@@ -1076,12 +1079,18 @@ interface SectionRowProps {
 function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
+  const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
 
   // Lazy load work logs при развороте объекта (не раздела!)
   const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
     enabled: isObjectExpanded, // Загружаем когда объект развёрнут
   })
+
+  // Lazy load checkpoints при развороте объекта
+  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints(
+    isObjectExpanded ? { sectionId: section.id } : undefined
+  )
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
@@ -1133,7 +1142,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 
   // Объединяем исторические снэпшоты секции с сегодняшним расчётом
   const mergedSectionReadiness = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = formatMinskDate(getTodayMinsk())
 
     // Если нет данных для расчёта — возвращаем исторические как есть
     if (sectionTodayReadiness === null) {
@@ -1165,7 +1174,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
     try {
-      return format(parseISO(dateStr), 'dd.MM')
+      return format(parseMinskDate(dateStr), 'dd.MM')
     } catch {
       return '—'
     }
@@ -1173,15 +1182,15 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 
   // Сегодняшние показатели для sidebar
   const todayIndicators = useMemo(() => {
-    const today = new Date()
-    const todayStr = format(today, 'yyyy-MM-dd')
+    const today = getTodayMinsk()
+    const todayStr = formatMinskDate(today)
 
     // Проверяем, находится ли сегодня в периоде раздела
     let isTodayInSection = false
     if (section.startDate && section.endDate) {
       try {
-        const start = parseISO(section.startDate)
-        const end = parseISO(section.endDate)
+        const start = parseMinskDate(section.startDate)
+        const end = parseMinskDate(section.endDate)
         isTodayInSection = today >= start && today <= end
       } catch {
         isTodayInSection = false
@@ -1196,16 +1205,16 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
       const sorted = [...section.readinessCheckpoints].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       )
-      const firstDate = parseISO(sorted[0].date)
-      const lastDate = parseISO(sorted[sorted.length - 1].date)
+      const firstDate = parseMinskDate(sorted[0].date)
+      const lastDate = parseMinskDate(sorted[sorted.length - 1].date)
 
       if (today >= firstDate && today <= lastDate) {
         // Ищем интервал для интерполяции
         for (let i = 0; i < sorted.length - 1; i++) {
           const left = sorted[i]
           const right = sorted[i + 1]
-          const leftDate = parseISO(left.date)
-          const rightDate = parseISO(right.date)
+          const leftDate = parseMinskDate(left.date)
+          const rightDate = parseMinskDate(right.date)
 
           if (today >= leftDate && today <= rightDate) {
             const totalDays = Math.max(1, (rightDate.getTime() - leftDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -1237,21 +1246,21 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50 group"
         style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* Первая строка: Expand + Avatar + Name */}
+          {/* Первая строка: Expand + Checkpoint Button + Avatar + Name */}
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Expand/Collapse */}
             {hasChildren ? (
@@ -1270,8 +1279,32 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
               <div className="w-5 shrink-0" />
             )}
 
+            {/* Кнопка добавления чекпоинта (появляется при hover) */}
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsCheckpointModalOpen(true)
+                    }}
+                    className={cn(
+                      'p-0.5 rounded transition-all shrink-0',
+                      'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
+                      'opacity-0 group-hover:opacity-100'
+                    )}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Добавить чекпоинт
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             {/* Avatar вместо иконки */}
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar className="w-5 h-5 shrink-0">
@@ -1325,7 +1358,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
               <div className="flex items-center gap-1.5 ml-auto">
                 {/* План (зелёный) */}
                 {todayIndicators.planned !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-emerald-500">
@@ -1340,7 +1373,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
                 )}
                 {/* Факт (синий) */}
                 {todayIndicators.actual !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-blue-500">
@@ -1365,7 +1398,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
                 )}
                 {/* Бюджет (оранжевый/красный) */}
                 {todayIndicators.budget !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
@@ -1439,6 +1472,14 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
           />
+          {/* Маркеры чекпоинтов */}
+          {checkpoints.length > 0 && (
+            <CheckpointMarkers
+              checkpoints={checkpoints}
+              range={range}
+              timelineWidth={timelineWidth}
+            />
+          )}
         </div>
       </div>
 
@@ -1496,6 +1537,17 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
           refetchWorkLogs()
         }}
       />
+
+      {/* Checkpoint Create Modal */}
+      <CheckpointCreateModal
+        isOpen={isCheckpointModalOpen}
+        onClose={() => setIsCheckpointModalOpen(false)}
+        sectionId={section.id}
+        sectionName={section.name}
+        onSuccess={() => {
+          refetchCheckpoints()
+        }}
+      />
     </>
   )
 }
@@ -1539,44 +1591,7 @@ function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
 }
 
 // ============================================================================
-// Stage Row
-// ============================================================================
-
-interface StageRowProps {
-  stage: Stage
-  dayCells: DayCell[]
-  range: TimelineRange
-}
-
-function StageRow({ stage, dayCells, range }: StageRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const hasChildren = stage.objects.length > 0
-
-  return (
-    <BaseRow
-      depth={1}
-      isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
-      hasChildren={hasChildren}
-      icon={<Layers className="w-4 h-4" />}
-      label={stage.name}
-      dayCells={dayCells}
-      range={range}
-    >
-      {stage.objects.map((obj) => (
-        <ObjectRow
-          key={obj.id}
-          object={obj}
-          dayCells={dayCells}
-          range={range}
-        />
-      ))}
-    </BaseRow>
-  )
-}
-
-// ============================================================================
-// Project Row (Top Level)
+// Project Row (Top Level) - Legacy, use rows/ProjectRow.tsx instead
 // ============================================================================
 
 interface ProjectRowProps {
@@ -1587,7 +1602,7 @@ interface ProjectRowProps {
 
 export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const hasChildren = project.stages.length > 0
+  const hasChildren = project.objects.length > 0
 
   return (
     <BaseRow
@@ -1600,10 +1615,10 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
       dayCells={dayCells}
       range={range}
     >
-      {project.stages.map((stage) => (
-        <StageRow
-          key={stage.id}
-          stage={stage}
+      {project.objects.map((obj) => (
+        <ObjectRow
+          key={obj.id}
+          object={obj}
           dayCells={dayCells}
           range={range}
         />

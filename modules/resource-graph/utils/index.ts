@@ -6,12 +6,12 @@
 
 import { addDays, differenceInDays, startOfWeek, endOfWeek, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk } from '@/lib/timezone-utils'
 import type {
   TimelineRange,
   TimelineScale,
   ResourceGraphRow,
   Project,
-  Stage,
   ProjectObject,
   Section,
   DecompositionStage,
@@ -20,6 +20,7 @@ import type {
   DayInfo,
   ReadinessCheckpoint,
   BudgetSpendingPoint,
+  ProgressHistoryEntry,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -35,7 +36,7 @@ import { DEFAULT_MONTHS_RANGE } from '../constants'
  * @returns Диапазон временной шкалы
  */
 export function createTimelineRange(
-  start: Date = new Date(),
+  start: Date = getTodayMinsk(),
   months: number = DEFAULT_MONTHS_RANGE
 ): TimelineRange {
   const end = addDays(start, months * 30)
@@ -173,7 +174,7 @@ export function getWeekBounds(date: Date): { start: Date; end: Date } {
 /**
  * Трансформирует плоские строки из v_resource_graph в иерархическую структуру
  *
- * Иерархия: Project → Stage → Object → Section → DecompositionStage → DecompositionItem
+ * Иерархия: Project → Object → Section → DecompositionStage → DecompositionItem
  *
  * @param rows - Строки из view v_resource_graph
  * @returns Массив проектов с вложенной иерархией
@@ -192,43 +193,30 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         id: row.project_id,
         name: row.project_name || '',
         status: row.project_status || null,
+        stageType: row.stage_type || null,
         manager: {
           id: row.manager_id || null,
           firstName: row.manager_first_name || null,
           lastName: row.manager_last_name || null,
           name: row.manager_name || null,
         },
-        stages: [],
-      }
-      projectsMap.set(row.project_id, project)
-    }
-
-    // Skip if no stage
-    if (!row.stage_id) continue
-
-    // Get or create stage
-    let stage = project.stages.find(s => s.id === row.stage_id)
-    if (!stage) {
-      stage = {
-        id: row.stage_id,
-        name: row.stage_name || '',
         objects: [],
       }
-      project.stages.push(stage)
+      projectsMap.set(row.project_id, project)
     }
 
     // Skip if no object
     if (!row.object_id) continue
 
     // Get or create object
-    let object = stage.objects.find(o => o.id === row.object_id)
+    let object = project.objects.find(o => o.id === row.object_id)
     if (!object) {
       object = {
         id: row.object_id,
         name: row.object_name || '',
         sections: [],
       }
-      stage.objects.push(object)
+      project.objects.push(object)
     }
 
     // Skip if no section
@@ -279,6 +267,7 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         readinessCheckpoints,
         actualReadiness,
         budgetSpending,
+        hourlyRate: row.section_hourly_rate ? Number(row.section_hourly_rate) : null,
         decompositionStages: [],
       }
       object.sections.push(section)
@@ -317,12 +306,25 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
     if (existingItem) continue
 
     // Create decomposition item
+    // Cast row to access new budget and progress history fields from v_resource_graph
+    const rowAny = row as Record<string, unknown>
+
+    // Parse progress history JSONB array
+    const rawProgressHistory = rowAny.decomposition_item_progress_history
+    let progressHistory: ProgressHistoryEntry[] = []
+    if (rawProgressHistory && Array.isArray(rawProgressHistory)) {
+      progressHistory = rawProgressHistory as ProgressHistoryEntry[]
+    }
+
     const item: DecompositionItem = {
       id: row.decomposition_item_id,
+      stageId: row.decomposition_stage_id || null,
       description: row.decomposition_item_description || '',
       plannedHours: row.decomposition_item_planned_hours || 0,
       plannedDueDate: row.decomposition_item_planned_due_date || null,
       progress: row.decomposition_item_progress || null,
+      progressDelta: row.decomposition_item_progress_delta ?? null,
+      progressHistory,
       order: row.decomposition_item_order || 0,
       responsible: {
         id: row.item_responsible_id || null,
@@ -342,18 +344,23 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
       },
       workCategoryId: row.decomposition_item_work_category_id || null,
       workCategoryName: row.work_category_name || null,
+      budget: {
+        id: (rowAny.item_budget_id as string) || null,
+        total: Number(rowAny.item_budget_total) || 0,
+        spent: Number(rowAny.item_budget_spent) || 0,
+        remaining: Number(rowAny.item_budget_remaining) || 0,
+        percentage: Number(rowAny.item_budget_percentage) || 0,
+      },
     }
     decompStage.items.push(item)
   }
 
   // Sort items by order
   for (const project of projectsMap.values()) {
-    for (const stage of project.stages) {
-      for (const object of stage.objects) {
-        for (const section of object.sections) {
-          for (const decompStage of section.decompositionStages) {
-            decompStage.items.sort((a, b) => a.order - b.order)
-          }
+    for (const object of project.objects) {
+      for (const section of object.sections) {
+        for (const decompStage of section.decompositionStages) {
+          decompStage.items.sort((a, b) => a.order - b.order)
         }
       }
     }
@@ -368,12 +375,13 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
 
 /**
  * Форматирует дату в строку для использования в качестве ключа
+ * Использует часовой пояс Минска для консистентности
  *
  * @param date - Дата
- * @returns Строка в формате 'YYYY-MM-DD'
+ * @returns Строка в формате 'YYYY-MM-DD' в часовом поясе Минска
  */
 export function formatDateKey(date: Date): string {
-  return format(date, 'yyyy-MM-dd')
+  return formatMinskDate(date)
 }
 
 /**
@@ -444,7 +452,8 @@ export function buildCalendarMap(events: CompanyCalendarEvent[]): Map<string, Pa
 export function getDayInfo(date: Date, calendarMap: Map<string, Partial<DayInfo>>): DayInfo {
   const key = formatDateKey(date)
   const calendarInfo = calendarMap.get(key)
-  const dayOfWeek = date.getDay()
+  // Используем день недели в часовом поясе Минска
+  const dayOfWeek = getMinskDayOfWeek(date)
   const isDefaultWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
   // Базовые значения
@@ -516,15 +525,76 @@ export function getEmployeeColor(employeeId: string | null): string {
   return EMPLOYEE_COLORS[index]
 }
 
+// ============================================================================
+// Checkpoint Mapping
+// ============================================================================
+
+import type { BatchCheckpoint } from '../types'
+import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
+
 /**
- * Получить инициалы из имени и фамилии
+ * Преобразует BatchCheckpoint (из batch загрузки) в Checkpoint (для CheckpointMarkers)
  *
- * @param firstName - Имя
- * @param lastName - Фамилия
- * @returns Инициалы (1-2 буквы)
+ * Batch-тип использует camelCase и содержит только поля, нужные для отображения.
+ * Checkpoint использует snake_case и включает дополнительные поля для модалок.
+ *
+ * @param batch - Чекпоинт из batch данных
+ * @returns Чекпоинт в формате для CheckpointMarkers
  */
-export function getInitials(firstName: string | null, lastName: string | null): string {
-  const first = firstName?.charAt(0)?.toUpperCase() || ''
-  const last = lastName?.charAt(0)?.toUpperCase() || ''
-  return first + last || '?'
+export function mapBatchCheckpointToCheckpoint(batch: BatchCheckpoint): Checkpoint {
+  return {
+    checkpoint_id: batch.id,
+    section_id: batch.sectionId,
+    type_id: batch.typeId,
+    type_code: batch.typeCode,
+    type_name: batch.typeName,
+    is_custom: batch.isCustom,
+    title: batch.title ?? '',
+    description: batch.description,
+    checkpoint_date: batch.checkpointDate,
+    icon: batch.icon,
+    color: batch.color,
+    completed_at: batch.completedAt,
+    completed_by: null, // Не используется в CheckpointMarkers
+    status: batch.status,
+    status_label: batch.statusLabel,
+    created_by: null, // Не используется в CheckpointMarkers
+    created_at: '', // Не используется в CheckpointMarkers
+    updated_at: '', // Не используется в CheckpointMarkers
+    section_responsible: null, // Не используется в CheckpointMarkers
+    project_manager: null, // Не используется в CheckpointMarkers
+    linked_sections: batch.linkedSections.map(ls => ({
+      section_id: ls.section_id,
+      section_name: ls.section_name,
+      object_id: ls.object_id,
+    })),
+    linked_sections_count: batch.linkedSectionsCount,
+  }
 }
+
+// ============================================================================
+// Re-exports from format.ts
+// ============================================================================
+
+export {
+  formatHoursCompact,
+  formatBudgetAmount,
+  formatDateShort,
+  formatDateFull,
+  formatRate,
+  getInitials,
+  getProgressColor,
+} from './format'
+
+// ============================================================================
+// Re-exports from hierarchy.ts
+// ============================================================================
+
+export {
+  updateInHierarchy,
+  updateByIdInHierarchy,
+  updateItemProgress as updateItemProgressInHierarchy,
+  updateDecompositionStageDates,
+  updateSectionDates as updateSectionDatesInHierarchy,
+  type HierarchyLevel,
+} from './hierarchy'

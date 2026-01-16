@@ -14,7 +14,7 @@ export interface TableSubscription {
   /** События для подписки (по умолчанию все) */
   events?: RealtimeEvent[]
   /** Query keys для инвалидации при изменении */
-  invalidateKeys: readonly unknown[][]
+  invalidateKeys: readonly (readonly unknown[])[]
   /** Дополнительный фильтр (например, filter: 'user_id=eq.123') */
   filter?: string
 }
@@ -72,7 +72,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'loadings',
     invalidateKeys: [
       queryKeys.loadings.all,
-      queryKeys.sections.all, // Подсчёты в секциях
+      // НЕ инвалидируем sections.all - слишком агрессивно, вызывает лаги
+      // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
       [...queryKeys.resourceGraph.all, 'loadings'],
     ],
@@ -80,15 +81,21 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'decomposition_stages',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Этапы декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска
+      // Ответственные за этапы (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageResponsibles'],
     ],
   },
   {
     table: 'decomposition_items',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Задачи декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска (задачи)
     ],
   },
 
@@ -107,6 +114,13 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.resourceGraph.all, // Фактическая готовность
     ],
   },
+  {
+    table: 'stage_readiness_snapshots',
+    invalidateKeys: [
+      // Инвалидируем stageReadiness кеши (lazy-loaded данные по этапам)
+      [...queryKeys.resourceGraph.all, 'stageReadiness'],
+    ],
+  },
 
   // ============================================================================
   // Отчёты о работе (work_logs)
@@ -122,6 +136,19 @@ export const realtimeSubscriptions: TableSubscription[] = [
   },
 
   // ============================================================================
+  // Отчёты к стадиям (project_reports)
+  // ============================================================================
+  {
+    table: 'project_reports',
+    invalidateKeys: [
+      // Инвалидируем все stageReports кеши (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageReports'],
+      // Инвалидируем resourceGraph.all для обновления timeline
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
   // Бюджеты
   // ============================================================================
   {
@@ -129,19 +156,29 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       // При изменении бюджета обновляем данные графика ресурсов
       queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
     ],
   },
   {
-    table: 'budget_versions',
+    table: 'budget_parts',
     invalidateKeys: [
-      // При изменении версии бюджета (суммы) обновляем данные графика ресурсов
+      // При изменении частей бюджета (сумм) обновляем данные
       queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
     ],
   },
 
   // ============================================================================
   // Справочники
   // ============================================================================
+  {
+    table: 'section_statuses',
+    invalidateKeys: [
+      queryKeys.sectionStatuses.all,
+      queryKeys.sections.all, // секции показывают статусы
+      queryKeys.resourceGraph.all, // resource graph показывает статусы
+    ],
+  },
   {
     table: 'departments',
     invalidateKeys: [queryKeys.departments.all],
@@ -165,6 +202,38 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'user_notifications',
     invalidateKeys: [queryKeys.notifications.all],
+  },
+
+  // ============================================================================
+  // Checkpoints (чекпоинты/дедлайны разделов)
+  // ============================================================================
+  {
+    table: 'section_checkpoints',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+      queryKeys.sections.all,
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'checkpoint_section_links',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_audit',
+    events: ['INSERT'],
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_types',
+    invalidateKeys: [
+      queryKeys.checkpointTypes.all,
+      queryKeys.checkpoints.all,
+    ],
   },
 ]
 

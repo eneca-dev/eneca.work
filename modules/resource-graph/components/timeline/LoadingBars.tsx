@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -8,11 +8,14 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { format, parseISO } from 'date-fns'
+import { MessageSquare } from 'lucide-react'
+import { format } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type { Loading, TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { getEmployeeColor, getInitials } from '../../utils'
 import { useTimelineResize } from '../../hooks'
+import { LoadingModal } from '@/modules/modals'
 
 // Константы для расчёта высоты
 const CHIP_HEIGHT = 18
@@ -84,6 +87,7 @@ export function LoadingBars({
             range={range}
             chipHeight={CHIP_HEIGHT}
             verticalPosition={index * (CHIP_HEIGHT + CHIP_GAP)}
+            sectionId={sectionId}
             onResize={onLoadingResize}
           />
         ))}
@@ -92,24 +96,72 @@ export function LoadingBars({
   )
 }
 
+/** Данные для drag & drop загрузки между этапами */
+export interface LoadingDragData {
+  loadingId: string
+  sectionId: string
+  currentStageId: string
+  employeeName: string
+}
+
+/** MIME тип для drag & drop загрузок */
+export const LOADING_DRAG_TYPE = 'application/x-loading-drag'
+
 interface LoadingChipProps {
   loading: Loading
   range: TimelineRange
   chipHeight: number
   verticalPosition: number
+  sectionId?: string
   onResize?: (loadingId: string, startDate: string, finishDate: string) => void
 }
 
 /**
  * Отдельный чип загрузки - минималистичный стиль с поддержкой resize
+ * Клик открывает модалку для редактирования (L2, L3, L4, L6)
  */
 function LoadingChip({
   loading,
   range,
   chipHeight,
   verticalPosition,
+  sectionId,
   onResize,
 }: LoadingChipProps) {
+  // State for modal
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  // State for dragging
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Drag handlers for moving between stages
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    if (!sectionId) {
+      e.preventDefault()
+      return
+    }
+
+    const dragData: LoadingDragData = {
+      loadingId: loading.id,
+      sectionId,
+      currentStageId: loading.stageId,
+      employeeName: loading.employee.name || `${loading.employee.firstName} ${loading.employee.lastName}`,
+    }
+
+    e.dataTransfer.setData(LOADING_DRAG_TYPE, JSON.stringify(dragData))
+    e.dataTransfer.effectAllowed = 'move'
+    setIsDragging(true)
+
+    // Hide tooltip during drag
+    const tooltip = document.querySelector('[data-radix-popper-content-wrapper]')
+    if (tooltip) {
+      ;(tooltip as HTMLElement).style.display = 'none'
+    }
+  }, [loading, sectionId])
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
   // Resize hook
   const {
     leftHandleProps,
@@ -117,6 +169,7 @@ function LoadingChip({
     isResizing,
     previewPosition,
     previewDates,
+    wasRecentlyDragging,
   } = useTimelineResize({
     startDate: loading.startDate,
     endDate: loading.finishDate,
@@ -127,6 +180,20 @@ function LoadingChip({
     minDays: 1,
     disabled: !onResize,
   })
+
+  // Handle click - open modal only if not recently dragging
+  const handleChipClick = useCallback((e: React.MouseEvent) => {
+    // Prevent if not editable
+    if (!sectionId) return
+
+    // Check if this was a drag operation
+    if (wasRecentlyDragging()) {
+      e.stopPropagation()
+      return
+    }
+
+    setIsModalOpen(true)
+  }, [sectionId, wasRecentlyDragging])
 
   const position = calculateBarPosition(loading.startDate, loading.finishDate, range)
 
@@ -151,172 +218,213 @@ function LoadingChip({
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : loading.startDate
   const displayFinishDate = isResizing && previewDates ? previewDates.endDate : loading.finishDate
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
+  // Контент чипа для отображения
+  const chipElement = (
+    <div
+      onClick={handleChipClick}
+      draggable={!!sectionId && !isResizing}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className={`
+        absolute
+        flex items-center gap-1 px-1
+        rounded
+        transition-colors duration-150
+        ${isResizing ? 'ring-2 ring-white/30 z-50' : 'hover:brightness-110'}
+        ${isDragging ? 'opacity-50 z-50' : ''}
+        ${sectionId ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+      `}
+      style={{
+        left: paddedLeft,
+        width: paddedWidth,
+        top: verticalPosition,
+        height: chipHeight,
+        backgroundColor: `${chipColor}1A`, // 10% opacity
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: isResizing || isDragging ? chipColor : `${chipColor}40`, // 25% opacity or full during drag/resize
+      }}
+    >
+      {/* Left resize handle */}
+      {onResize && (
         <div
-          className={`
-            absolute
-            flex items-center gap-1 px-1
-            rounded
-            transition-colors duration-150
-            ${isResizing ? 'ring-2 ring-white/30 z-50' : 'hover:brightness-110'}
-            ${onResize ? 'cursor-default' : 'cursor-default pointer-events-auto'}
-          `}
+          {...leftHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
           style={{
-            left: paddedLeft,
-            width: paddedWidth,
-            top: verticalPosition,
-            height: chipHeight,
-            backgroundColor: `${chipColor}1A`, // 10% opacity
-            borderWidth: 1,
-            borderStyle: 'solid',
-            borderColor: isResizing ? chipColor : `${chipColor}40`, // 25% opacity or full during resize
+            ...leftHandleProps.style,
+            left: -RESIZE_HANDLE_WIDTH / 2,
+            width: RESIZE_HANDLE_WIDTH,
           }}
         >
-          {/* Left resize handle */}
-          {onResize && (
-            <div
-              {...leftHandleProps}
-              className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
-              style={{
-                ...leftHandleProps.style,
-                left: -RESIZE_HANDLE_WIDTH / 2,
-                width: RESIZE_HANDLE_WIDTH,
-              }}
-            >
-              <div
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
-              />
-            </div>
-          )}
-
-          {/* Avatar */}
           <div
-            className="shrink-0 rounded overflow-hidden"
-            style={{
-              width: chipHeight - 6,
-              height: chipHeight - 6,
-              backgroundColor: `${chipColor}30`,
-            }}
-          >
-            {hasAvatar ? (
-              <img
-                src={loading.employee.avatarUrl!}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div
-                className="w-full h-full flex items-center justify-center text-[7px] font-medium"
-                style={{ color: chipColor }}
-              >
-                {initials}
-              </div>
-            )}
-          </div>
-
-          {/* Name (only if wide enough) */}
-          {isWide && (
-            <span
-              className="text-[10px] truncate min-w-0 flex-1 font-medium"
-              style={{ color: chipColor }}
-            >
-              {loading.employee.lastName || loading.employee.firstName || '—'}
-            </span>
-          )}
-
-          {/* Rate as number */}
-          {isMedium && (
-            <span
-              className="shrink-0 text-[9px] font-medium tabular-nums opacity-70"
-              style={{ color: chipColor }}
-            >
-              {loading.rate}
-            </span>
-          )}
-
-          {/* Right resize handle */}
-          {onResize && (
-            <div
-              {...rightHandleProps}
-              className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
-              style={{
-                ...rightHandleProps.style,
-                right: -RESIZE_HANDLE_WIDTH / 2,
-                width: RESIZE_HANDLE_WIDTH,
-              }}
-            >
-              <div
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
-              />
-            </div>
-          )}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
+          />
         </div>
-      </TooltipTrigger>
+      )}
 
-      <TooltipContent
-        side="top"
-        align="center"
-        sideOffset={8}
-        className="
-          bg-zinc-900/95 backdrop-blur-xl
-          border border-white/10
-          shadow-xl shadow-black/40
-          rounded-lg px-3 py-2.5
-          max-w-[220px]
-        "
+      {/* Avatar */}
+      <div
+        className="shrink-0 rounded overflow-hidden"
+        style={{
+          width: chipHeight - 6,
+          height: chipHeight - 6,
+          backgroundColor: `${chipColor}30`,
+        }}
       >
-        <div className="space-y-2">
-          {/* Employee info */}
-          <div className="flex items-center gap-2">
-            <Avatar className="w-6 h-6">
-              {hasAvatar && (
-                <AvatarImage
-                  src={loading.employee.avatarUrl!}
-                  alt={loading.employee.name || ''}
-                />
-              )}
-              <AvatarFallback className="text-[9px] bg-zinc-700 text-white/80">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="text-sm font-medium text-white">
-                {loading.employee.name || 'Не назначен'}
-              </div>
-              <div className="text-[10px] text-white/50">
-                Ставка: {formatRate(loading.rate)}
-              </div>
-            </div>
+        {hasAvatar ? (
+          <img
+            src={loading.employee.avatarUrl!}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center text-[7px] font-medium"
+            style={{ color: chipColor }}
+          >
+            {initials}
           </div>
+        )}
+      </div>
 
-          {/* Period - показываем preview даты во время resize */}
-          <div className="flex items-center gap-2 text-[11px] text-white/60">
-            <span className="text-white/40">Период:</span>
-            <span className={`tabular-nums ${isResizing ? 'text-white font-medium' : ''}`}>
-              {formatDate(displayStartDate)} — {formatDate(displayFinishDate)}
-            </span>
-          </div>
+      {/* Name (only if wide enough) */}
+      {isWide && (
+        <span
+          className="text-[10px] truncate min-w-0 flex-1 font-medium"
+          style={{ color: chipColor }}
+        >
+          {loading.employee.lastName || loading.employee.firstName || '—'}
+        </span>
+      )}
 
-          {/* Resize hint */}
-          {isResizing && (
-            <div className="pt-1 border-t border-white/10 text-[10px] text-white/40">
-              Отпустите для сохранения
-            </div>
-          )}
+      {/* Rate as number */}
+      {isMedium && (
+        <span
+          className="shrink-0 text-[9px] font-medium tabular-nums opacity-70"
+          style={{ color: chipColor }}
+        >
+          {loading.rate}
+        </span>
+      )}
 
-          {/* Comment */}
-          {loading.comment && !isResizing && (
-            <div className="pt-1 border-t border-white/10">
-              <p className="text-[11px] text-white/60 leading-relaxed">
-                {loading.comment}
-              </p>
-            </div>
-          )}
+      {/* Comment indicator */}
+      {loading.comment && (
+        <MessageSquare
+          className="shrink-0 w-2.5 h-2.5 opacity-60"
+          style={{ color: chipColor }}
+        />
+      )}
+
+      {/* Right resize handle */}
+      {onResize && (
+        <div
+          {...rightHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
+          style={{
+            ...rightHandleProps.style,
+            right: -RESIZE_HANDLE_WIDTH / 2,
+            width: RESIZE_HANDLE_WIDTH,
+          }}
+        >
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
+          />
         </div>
-      </TooltipContent>
-    </Tooltip>
+      )}
+    </div>
+  )
+
+  // Tooltip с информацией о загрузке
+  const tooltipContent = (
+    <TooltipContent
+      side="top"
+      align="center"
+      sideOffset={8}
+      className="
+        bg-popover backdrop-blur-xl
+        border border-border
+        shadow-xl
+        rounded-lg px-3 py-2.5
+        max-w-[220px]
+      "
+    >
+      <div className="space-y-2">
+        {/* Employee info */}
+        <div className="flex items-center gap-2">
+          <Avatar className="w-6 h-6">
+            {hasAvatar && (
+              <AvatarImage
+                src={loading.employee.avatarUrl!}
+                alt={loading.employee.name || ''}
+              />
+            )}
+            <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="text-sm font-medium text-popover-foreground">
+              {loading.employee.name || 'Не назначен'}
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              Ставка: {formatRate(loading.rate)}
+            </div>
+          </div>
+        </div>
+
+        {/* Period - показываем preview даты во время resize */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="text-muted-foreground/70">Период:</span>
+          <span className={`tabular-nums ${isResizing ? 'text-popover-foreground font-medium' : ''}`}>
+            {formatDate(displayStartDate)} — {formatDate(displayFinishDate)}
+          </span>
+        </div>
+
+        {/* Resize hint */}
+        {isResizing && (
+          <div className="pt-1 border-t border-border text-[10px] text-muted-foreground/70">
+            Отпустите для сохранения
+          </div>
+        )}
+
+        {/* Comment */}
+        {loading.comment && !isResizing && (
+          <div className="pt-1 border-t border-border">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {loading.comment}
+            </p>
+          </div>
+        )}
+
+        {/* Edit hint */}
+        {sectionId && !isResizing && (
+          <div className="pt-1 border-t border-border text-[10px] text-muted-foreground/70">
+            Нажмите для редактирования
+          </div>
+        )}
+      </div>
+    </TooltipContent>
+  )
+
+  // Рендерим tooltip с чипом + модалку отдельно
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>{chipElement}</TooltipTrigger>
+        {tooltipContent}
+      </Tooltip>
+
+      {/* Модалка редактирования (только если sectionId) */}
+      {sectionId && (
+        <LoadingModal
+          mode="edit"
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          loading={loading}
+          sectionId={sectionId}
+        />
+      )}
+    </>
   )
 }
 
@@ -338,7 +446,7 @@ function formatRate(rate: number): string {
  */
 function formatDate(dateStr: string): string {
   try {
-    return format(parseISO(dateStr), 'dd.MM')
+    return format(parseMinskDate(dateStr), 'dd.MM')
   } catch {
     return '—'
   }

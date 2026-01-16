@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO, format, addDays, isWithinInterval } from 'date-fns'
+import { differenceInDays, format, addDays, isWithinInterval } from 'date-fns'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { ru } from 'date-fns/locale'
 import type { ReadinessCheckpoint, ReadinessPoint, BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
@@ -54,8 +55,8 @@ export function SectionTooltipOverlay({
   const dayMetrics = useMemo(() => {
     if (!sectionStartDate || !sectionEndDate) return []
 
-    const sectionStart = parseISO(sectionStartDate)
-    const sectionEnd = parseISO(sectionEndDate)
+    const sectionStart = parseMinskDate(sectionStartDate)
+    const sectionEnd = parseMinskDate(sectionEndDate)
 
     // Создаём Maps для быстрого поиска
     const plannedMap = new Map<string, number>()
@@ -107,14 +108,14 @@ export function SectionTooltipOverlay({
         actualReadiness = exactActual
       } else if (sortedActual.length > 0) {
         // Интерполируем только если дата в пределах данных
-        const firstActual = parseISO(sortedActual[0].date)
-        const lastActual = parseISO(sortedActual[sortedActual.length - 1].date)
+        const firstActual = parseMinskDate(sortedActual[0].date)
+        const lastActual = parseMinskDate(sortedActual[sortedActual.length - 1].date)
         if (dayDate >= firstActual && dayDate <= lastActual) {
           actualReadiness = interpolateValue(dayDate, sortedActual)
         }
       }
 
-      // Бюджет
+      // Бюджет — ступенчатая интерполяция до сегодня (как график)
       let budgetPercent: number | null = null
       let budgetSpent: number | null = null
       const exactBudget = budgetMap.get(dateKey)
@@ -122,13 +123,14 @@ export function SectionTooltipOverlay({
         budgetPercent = exactBudget.percent
         budgetSpent = exactBudget.spent
       } else if (sortedBudget.length > 0) {
-        // Интерполируем только если дата в пределах данных
-        const firstBudget = parseISO(sortedBudget[0].date)
-        const lastBudget = parseISO(sortedBudget[sortedBudget.length - 1].date)
-        if (dayDate >= firstBudget && dayDate <= lastBudget) {
-          const interpolated = interpolateBudget(dayDate, sortedBudget)
-          budgetPercent = interpolated.percent
-          budgetSpent = interpolated.spent
+        const firstBudget = parseMinskDate(sortedBudget[0].date)
+        const today = getTodayMinsk()
+        // Показываем значение от первой даты данных до сегодня
+        if (dayDate >= firstBudget && dayDate <= today) {
+          // Ступенчатая интерполяция — последнее известное значение
+          const lastKnown = getLastKnownBudget(dayDate, sortedBudget)
+          budgetPercent = lastKnown.percent
+          budgetSpent = lastKnown.spent
         }
       }
 
@@ -161,7 +163,7 @@ export function SectionTooltipOverlay({
   return (
     <TooltipProvider delayDuration={100}>
       <div
-        className="absolute inset-0 z-10 pointer-events-none"
+        className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
         style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
       >
         {dayMetrics.map((day) => (
@@ -181,7 +183,7 @@ interface DayTooltipProps {
 
 function DayTooltip({ day }: DayTooltipProps) {
   const left = day.dayIndex * DAY_CELL_WIDTH
-  const formattedDate = format(parseISO(day.date), 'd MMMM', { locale: ru })
+  const formattedDate = format(parseMinskDate(day.date), 'd MMMM', { locale: ru })
 
   return (
     <Tooltip>
@@ -284,7 +286,7 @@ function interpolateValue(
   let rightPoint: { date: string; value: number } | null = null
 
   for (const point of points) {
-    const pointDate = parseISO(point.date)
+    const pointDate = parseMinskDate(point.date)
     if (pointDate <= date) {
       leftPoint = point
     }
@@ -298,8 +300,8 @@ function interpolateValue(
   if (leftPoint && !rightPoint) return leftPoint.value
   if (!leftPoint || !rightPoint) return null
 
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
+  const leftDate = parseMinskDate(leftPoint.date)
+  const rightDate = parseMinskDate(rightPoint.date)
   const totalDays = differenceInDays(rightDate, leftDate)
   if (totalDays === 0) return leftPoint.value
 
@@ -310,50 +312,29 @@ function interpolateValue(
 }
 
 /**
- * Интерполирует значение бюджета между точками
+ * Возвращает последнее известное значение бюджета до указанной даты (ступенчатая интерполяция)
  */
-function interpolateBudget(
+function getLastKnownBudget(
   date: Date,
   points: BudgetSpendingPoint[]
 ): { percent: number; spent: number } {
-  let leftPoint: BudgetSpendingPoint | null = null
-  let rightPoint: BudgetSpendingPoint | null = null
+  let lastKnown: BudgetSpendingPoint | null = null
 
   for (const point of points) {
-    const pointDate = parseISO(point.date)
+    const pointDate = parseMinskDate(point.date)
     if (pointDate <= date) {
-      leftPoint = point
-    }
-    if (pointDate >= date && !rightPoint) {
-      rightPoint = point
+      lastKnown = point
+    } else {
       break
     }
   }
 
-  if (!leftPoint && rightPoint) {
-    return { percent: rightPoint.percentage, spent: rightPoint.spent }
-  }
-  if (leftPoint && !rightPoint) {
-    return { percent: leftPoint.percentage, spent: leftPoint.spent }
-  }
-  if (!leftPoint || !rightPoint) {
-    return { percent: 0, spent: 0 }
+  if (lastKnown) {
+    return { percent: lastKnown.percentage, spent: lastKnown.spent }
   }
 
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) {
-    return { percent: leftPoint.percentage, spent: leftPoint.spent }
-  }
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return {
-    percent: leftPoint.percentage + (rightPoint.percentage - leftPoint.percentage) * ratio,
-    spent: leftPoint.spent + (rightPoint.spent - leftPoint.spent) * ratio,
-  }
+  // Если дата раньше первой точки, берём первую
+  return { percent: points[0].percentage, spent: points[0].spent }
 }
 
 /**
@@ -361,10 +342,10 @@ function interpolateBudget(
  */
 function formatMoney(value: number): string {
   if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M ₽`
+    return `${(value / 1_000_000).toFixed(1)}M BYN`
   }
   if (value >= 1_000) {
-    return `${Math.round(value / 1_000)}K ₽`
+    return `${Math.round(value / 1_000)}K BYN`
   }
-  return `${Math.round(value)} ₽`
+  return `${Math.round(value)} BYN`
 }

@@ -8,6 +8,7 @@
 - **Бюджет** — можно создать в планировании, канбане, модалке раздела
 - **Отчёт о работе** — из графика ресурсов, планирования, дашборда
 - **Загрузка сотрудника** — из планирования, канбана, профиля сотрудника
+- **Декомпозиция** — этапы и задачи раздела с drag-and-drop
 
 Чтобы не дублировать код, все бизнес-модалки живут здесь.
 
@@ -15,31 +16,189 @@
 
 ```
 modules/modals/
+├── actions/
+│   ├── index.ts                      # Public API actions
+│   ├── updateSection.ts              # Server Action для обновления раздела
+│   ├── getDecompositionStage.ts      # Bootstrap данных декомпозиции (RPC)
+│   ├── updateDecompositionStage.ts   # CRUD для этапов декомпозиции
+│   ├── updateDecompositionItem.ts    # CRUD для задач декомпозиции
+│   ├── readinessCheckpoints.ts       # CRUD для контрольных точек готовности
+│   ├── getWorkCategories.ts          # Справочник: категории работ
+│   ├── getDifficultyLevels.ts        # Справочник: уровни сложности
+│   └── getStageStatuses.ts           # Справочник: статусы этапов
 ├── components/
-│   ├── budget/              # Модалки бюджетов
-│   │   ├── BudgetCreateModal.tsx
-│   │   ├── BudgetEditModal.tsx
-│   │   └── BudgetViewModal.tsx
-│   ├── worklog/             # Модалки отчётов о работе
-│   │   ├── WorkLogCreateModal.tsx
-│   │   ├── WorkLogEditModal.tsx
-│   │   └── WorkLogViewModal.tsx
-│   ├── section/             # Модалки разделов
-│   │   ├── SectionViewModal.tsx
-│   │   └── SectionEditModal.tsx
-│   ├── stage/               # Модалки этапов декомпозиции
-│   ├── item/                # Модалки задач
-│   ├── loading/             # Модалки загрузок сотрудников
-│   └── employee/            # Модалки сотрудников
+│   ├── budget/
+│   │   ├── BudgetCreateModal.tsx     # Создание бюджета
+│   │   └── index.ts
+│   ├── checkpoint/
+│   │   ├── CheckpointCreateModal.tsx # Создание контрольной точки
+│   │   └── index.ts
+│   ├── loading/
+│   │   ├── LoadingModal.tsx          # Модалка загрузки сотрудника
+│   │   └── index.ts
+│   ├── progress/
+│   │   ├── ProgressUpdateDialog.tsx  # Диалог обновления прогресса
+│   │   └── index.ts
+│   ├── section/
+│   │   ├── SectionModal.tsx          # Главная модалка раздела (slide-in panel)
+│   │   ├── SectionMetrics.tsx        # Компонент метрик План/Факт/Бюджет
+│   │   ├── StatusDropdown.tsx        # Выпадающий список статусов
+│   │   ├── ResponsibleDropdown.tsx   # Выбор ответственного с поиском
+│   │   ├── DateRangeInput.tsx        # Ввод диапазона дат
+│   │   ├── tabs/
+│   │   │   ├── OverviewTab.tsx       # Вкладка "Обзор"
+│   │   │   ├── TasksTab.tsx          # Вкладка "Задачи" (декомпозиция)
+│   │   │   ├── ReadinessTab.tsx      # Вкладка "Готовность"
+│   │   │   └── index.ts
+│   │   ├── decomposition/
+│   │   │   ├── StagesManager.tsx     # Управление этапами и задачами
+│   │   │   ├── StageCard.tsx         # Карточка этапа (collapsible)
+│   │   │   ├── StageHeader.tsx       # Заголовок этапа с actions
+│   │   │   ├── StageResponsibles.tsx # Аватары ответственных
+│   │   │   ├── DecompositionTable.tsx # Таблица задач
+│   │   │   ├── DecompositionRow.tsx  # Строка задачи (editable)
+│   │   │   ├── dialogs/
+│   │   │   │   ├── AssignResponsiblesDialog.tsx
+│   │   │   │   ├── DeleteConfirmDialog.tsx
+│   │   │   │   ├── MoveItemsDialog.tsx
+│   │   │   │   ├── PasteDialog.tsx   # Вставка из Excel
+│   │   │   │   └── index.ts
+│   │   │   ├── constants.ts          # Константы (ширина колонок и т.д.)
+│   │   │   ├── types.ts              # Типы декомпозиции
+│   │   │   ├── utils.ts              # Хелперы
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   ├── stage/
+│   │   ├── StageModal.tsx            # Модалка стадии проекта
+│   │   ├── ResponsiblesDropdown.tsx  # Выбор ответственных (multi)
+│   │   └── index.ts
+│   ├── task/
+│   │   ├── TaskCreateModal.tsx       # Создание задачи декомпозиции
+│   │   ├── TaskSidebar.tsx           # Боковая панель задачи
+│   │   └── index.ts
+│   └── worklog/
+│       ├── WorkLogCreateModal.tsx    # Создание отчёта о работе
+│       └── index.ts
 ├── hooks/
-│   ├── useBudgetModal.ts    # Хук для управления модалкой бюджета
-│   ├── useWorkLogModal.ts
-│   └── index.ts
+│   ├── index.ts                      # Public API hooks
+│   ├── useModal.ts                   # Базовый хук управления модалками
+│   ├── useUpdateSection.ts           # Mutation: обновление раздела
+│   ├── useDecompositionStage.ts      # Query: bootstrap данных декомпозиции
+│   ├── useUpdateDecompositionStage.ts # Mutations: CRUD этапов
+│   ├── useUpdateDecompositionItem.ts # Mutations: CRUD задач
+│   ├── useReadinessCheckpoints.ts    # Query + Mutations: контрольные точки
+│   ├── useWorkCategories.ts          # Query: категории работ
+│   ├── useDifficultyLevels.ts        # Query: уровни сложности
+│   └── useStageStatuses.ts           # Query: статусы этапов
 ├── types/
-│   └── index.ts             # Типы для модалок
+│   └── index.ts                      # BaseModalProps и другие типы
 ├── stores/
-│   └── modal-store.ts       # Zustand store для глобального управления
-└── index.ts                 # Public API
+│   └── modal-store.ts                # Zustand store для глобального управления
+├── DESIGN_GUIDE.md                   # Дизайн-гайд (цвета, типографика)
+└── index.ts                          # Public API
+```
+
+## Архитектура загрузки данных
+
+### Bootstrap Pattern (оптимизация)
+
+Для модалки раздела используется паттерн bootstrap — загрузка всех данных одним RPC-запросом:
+
+```typescript
+// actions/getDecompositionStage.ts
+export async function getDecompositionBootstrap(sectionId: string) {
+  // Один запрос возвращает:
+  // - stages: этапы декомпозиции
+  // - items: задачи декомпозиции
+  // - categories: справочник категорий работ
+  // - difficulties: справочник уровней сложности
+  // - statuses: справочник статусов этапов
+  // - profiles: профили для ответственных
+}
+
+// hooks/useDecompositionStage.ts
+export const useDecompositionBootstrap = createDetailCacheQuery({
+  queryKey: (sectionId) => queryKeys.decomposition.bootstrap(sectionId),
+  queryFn: getDecompositionBootstrap,
+  staleTime: staleTimePresets.fast,
+})
+```
+
+**Преимущества:**
+- 1 HTTP запрос вместо 6
+- Консистентные данные
+- Быстрый Time-to-Interactive
+
+### Employees (отдельный запрос)
+
+Сотрудники загружаются отдельно, так как нужны дополнительные данные (аватары, должности):
+
+```typescript
+export const useEmployees = createCacheQuery<Employee[], void>({
+  queryKey: () => queryKeys.employees.list(),
+  queryFn: getEmployees,
+  staleTime: staleTimePresets.medium,
+})
+```
+
+## Cache Module Integration
+
+Все hooks используют фабрики из cache module:
+
+```typescript
+// Query хуки
+import { createDetailCacheQuery, createCacheQuery, queryKeys } from '@/modules/cache'
+
+// Mutation хуки
+import { createCacheMutation, createSimpleMutation, queryKeys } from '@/modules/cache'
+```
+
+### Пример mutation с optimistic update
+
+```typescript
+// hooks/useUpdateDecompositionItem.ts
+export const useUpdateDecompositionItem = createCacheMutation<UpdateItemInput, ItemResult>({
+  mutationFn: updateDecompositionItem,
+  invalidateKeys: () => [
+    queryKeys.decomposition.all,
+    queryKeys.sections.all,
+  ],
+})
+```
+
+## Realtime синхронизация
+
+Таблицы декомпозиции подписаны на realtime обновления:
+
+| Таблица | Инвалидируемые ключи |
+|---------|---------------------|
+| `decomposition_stages` | `decomposition.all`, `sections.all`, `resourceGraph.all`, `kanban.all` |
+| `decomposition_items` | `decomposition.all`, `sections.all`, `resourceGraph.all`, `kanban.all` |
+| `section_readiness_checkpoints` | `resourceGraph.all` |
+| `section_readiness_snapshots` | `resourceGraph.all` |
+
+## Server Actions
+
+Все Server Actions:
+- Возвращают `ActionResult<T>`
+- Содержат auth checks
+- Типизированы строго (без `any`)
+
+```typescript
+// Пример структуры
+export async function updateDecompositionStage(
+  input: UpdateStageInput
+): Promise<ActionResult<StageResult>> {
+  const supabase = await createClient()
+
+  // Auth check
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return { success: false, error: 'Не авторизован' }
+  }
+
+  // ... логика
+}
 ```
 
 ## Паттерны использования
@@ -47,25 +206,24 @@ modules/modals/
 ### 1. Локальное использование (в компоненте)
 
 ```tsx
-import { BudgetCreateModal, useBudgetModal } from '@/modules/modals'
+import { BudgetCreateModal } from '@/modules/modals'
 
 function SectionCard({ sectionId }) {
-  const { isOpen, open, close, data } = useBudgetModal()
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
-      <Button onClick={() => open({ sectionId })}>
+      <Button onClick={() => setIsOpen(true)}>
         Добавить бюджет
       </Button>
 
       <BudgetCreateModal
         isOpen={isOpen}
-        onClose={close}
-        sectionId={data?.sectionId}
-        onSuccess={() => {
-          close()
-          toast.success('Бюджет создан')
-        }}
+        onClose={() => setIsOpen(false)}
+        entityType="section"
+        entityId={sectionId}
+        entityName="Раздел АР"
+        onSuccess={() => toast.success('Бюджет создан')}
       />
     </>
   )
@@ -75,7 +233,6 @@ function SectionCard({ sectionId }) {
 ### 2. Глобальное использование (через store)
 
 ```tsx
-// Из любого места в приложении
 import { useModalStore } from '@/modules/modals'
 
 function AnyComponent() {
@@ -87,18 +244,6 @@ function AnyComponent() {
     </Button>
   )
 }
-
-// В layout/providers — глобальный рендер модалок
-import { GlobalModals } from '@/modules/modals'
-
-function Layout({ children }) {
-  return (
-    <>
-      {children}
-      <GlobalModals />
-    </>
-  )
-}
 ```
 
 ## Конвенции
@@ -108,176 +253,88 @@ function Layout({ children }) {
 - `*CreateModal` — создание сущности
 - `*EditModal` — редактирование существующей
 - `*ViewModal` — просмотр (read-only)
+- `*Modal` — универсальная модалка (view + edit)
+- `*Sidebar` — боковая панель
+- `*Dialog` — небольшой диалог
 - `*DeleteConfirm` — подтверждение удаления
 
 ### Props модалок
-
-Каждая модалка принимает стандартный набор props:
 
 ```tsx
 interface BaseModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess?: () => void  // Callback после успешного действия
-}
-
-// Для Create модалок
-interface CreateModalProps extends BaseModalProps {
-  // Контекст создания (к чему привязываем)
-  sectionId?: string
-  stageId?: string
-  // ...
-}
-
-// Для Edit/View модалок
-interface EditModalProps extends BaseModalProps {
-  // ID сущности для загрузки
-  id: string
+  onSuccess?: () => void
 }
 ```
 
-### Состояния формы
+### Валюта
 
-Все модалки с формами должны:
-- Показывать loading при отправке
-- Показывать ошибки валидации
-- Блокировать повторную отправку
-- Очищать форму при закрытии
-
-### Мутации
-
-Модалки используют мутации из соответствующих модулей:
-
-```tsx
-// BudgetCreateModal.tsx
-import { useCreateBudget } from '@/modules/budgets'
-
-function BudgetCreateModal({ onSuccess, ...props }) {
-  const { mutate, isPending } = useCreateBudget()
-
-  const onSubmit = (data) => {
-    mutate(data, {
-      onSuccess: () => {
-        onSuccess?.()
-      }
-    })
-  }
-  // ...
-}
-```
+- Единственная валюта: **BYN** (белорусский рубль)
+- Формат: `1.2M BYN`, `123K BYN`, `999 BYN`
+- Никогда не использовать ₽ или другие символы
 
 ## Зависимости
 
-Модуль использует:
-- `@/components/modals` — базовые компоненты (Modal, ModalHeader, etc.)
-- `@/modules/cache` — для мутаций и данных
-- `react-hook-form` + `zod` — для форм
-- `zustand` — для глобального store (опционально)
+- `@/modules/cache` — query/mutation hooks, realtime
+- `@radix-ui/react-focus-scope` — focus trap
+- `react-hook-form` + `zod` — формы
+- `zustand` — глобальный store (опционально)
+- `@dnd-kit` — drag-and-drop в декомпозиции
+
+## Accessibility Checklist
+
+- [x] `role="dialog"` и `aria-modal="true"`
+- [x] `aria-labelledby` связан с заголовком
+- [x] Focus trap (FocusScope.Root)
+- [x] Escape закрывает модалку
+- [x] `aria-label` на кнопке закрытия
+- [x] Labels связаны с inputs через `htmlFor/id`
+- [x] `role="listbox"` и `aria-selected` в dropdowns
+- [x] Loading states с aria-label
 
 ## Roadmap
 
-### Фаза 1: Основные модалки
-- [ ] BudgetCreateModal
-- [ ] BudgetEditModal
-- [ ] WorkLogCreateModal
-- [ ] WorkLogEditModal
+### Завершено
+- [x] SectionModal (slide-in panel с табами)
+- [x] SectionMetrics (План/Факт/Бюджет)
+- [x] StatusDropdown, ResponsibleDropdown, DateRangeInput
+- [x] useUpdateSection hook
+- [x] BudgetCreateModal
+- [x] ProgressUpdateDialog
+- [x] CheckpointCreateModal
+- [x] LoadingModal
+- [x] StageModal
+- [x] TaskCreateModal, TaskSidebar
+- [x] WorkLogCreateModal
+- [x] **Декомпозиция раздела:**
+  - [x] StagesManager — управление этапами
+  - [x] DecompositionTable — таблица задач
+  - [x] Drag-and-drop (items + stages)
+  - [x] Inline editing
+  - [x] Bulk actions (перемещение, удаление)
+  - [x] Вставка из Excel (PasteDialog)
+  - [x] Назначение ответственных
+- [x] Bootstrap data loading (оптимизация)
+- [x] Auth checks во всех Server Actions
+- [x] Типизация RPC ответов (без `any`)
 
-### Фаза 2: Модалки сущностей
-- [ ] SectionViewModal
-- [ ] SectionEditModal
-- [ ] StageViewModal
-- [ ] ItemEditModal
-- [ ] LoadingCreateModal
-
-### Фаза 3: Улучшения
+### Планируется
 - [ ] GlobalModals компонент
 - [ ] useModalStore для глобального управления
 - [ ] Keyboard shortcuts (Cmd+B для бюджета и т.д.)
-- [ ] Prefetch данных при hover
+- [ ] Undo/Redo для декомпозиции
 
-## Пример полной модалки
+## Дизайн-гайд
 
-```tsx
-'use client'
+Подробные правила оформления модалок см. в [DESIGN_GUIDE.md](./DESIGN_GUIDE.md).
 
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Modal, ModalButton } from '@/components/modals'
-import { useCreateBudget } from '@/modules/budgets'
+### Быстрая справка
 
-const schema = z.object({
-  name: z.string().min(1, 'Название обязательно'),
-  amount: z.number().min(0, 'Сумма должна быть положительной'),
-  typeId: z.string().uuid('Выберите тип бюджета'),
-})
-
-type FormData = z.infer<typeof schema>
-
-interface BudgetCreateModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess?: () => void
-  sectionId: string
-}
-
-export function BudgetCreateModal({
-  isOpen,
-  onClose,
-  onSuccess,
-  sectionId,
-}: BudgetCreateModalProps) {
-  const { mutate, isPending } = useCreateBudget()
-
-  const form = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: '',
-      amount: 0,
-      typeId: '',
-    },
-  })
-
-  const handleSubmit = form.handleSubmit((data) => {
-    mutate(
-      { ...data, sectionId },
-      {
-        onSuccess: () => {
-          form.reset()
-          onSuccess?.()
-        },
-      }
-    )
-  })
-
-  const handleClose = () => {
-    form.reset()
-    onClose()
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="md">
-      <Modal.Header title="Новый бюджет" onClose={handleClose} />
-
-      <form onSubmit={handleSubmit}>
-        <Modal.Body>
-          {/* Form fields */}
-        </Modal.Body>
-
-        <Modal.Footer>
-          <ModalButton variant="cancel" onClick={handleClose}>
-            Отмена
-          </ModalButton>
-          <ModalButton
-            variant="success"
-            type="submit"
-            loading={isPending}
-          >
-            Создать
-          </ModalButton>
-        </Modal.Footer>
-      </form>
-    </Modal>
-  )
-}
+```
+Overlay:        bg-black/35 backdrop-blur-[2px]
+Panel:          bg-gradient-to-b from-slate-900 to-slate-950
+Labels:         text-[10px] font-medium text-slate-400 uppercase tracking-wider
+Focus:          border-amber-500/50 ring-2 ring-amber-500/15
+Primary action: text-amber-400 hover:bg-amber-500/10
 ```

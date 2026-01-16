@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { addDays, format, parseISO, differenceInDays } from 'date-fns'
+import { addDays, format, differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import { DAY_CELL_WIDTH } from '../constants'
 import type { TimelineRange } from '../types'
 
@@ -41,6 +42,8 @@ export interface UseTimelineResizeReturn {
   previewPosition: { left: number; width: number } | null
   /** Preview даты во время resize */
   previewDates: { startDate: string; endDate: string } | null
+  /** Проверить, был ли недавно завершён drag (для блокировки click) */
+  wasRecentlyDragging: () => boolean
 }
 
 /**
@@ -86,6 +89,8 @@ export function useTimelineResize({
   const initialMouseXRef = useRef(0)
   const initialStartDateRef = useRef<Date | null>(null)
   const initialEndDateRef = useRef<Date | null>(null)
+  // Время последнего завершения drag (для блокировки click)
+  const lastDragEndRef = useRef(0)
 
   // Очищаем preview когда props обновились до ожидаемых значений
   useEffect(() => {
@@ -143,8 +148,8 @@ export function useTimelineResize({
       setIsResizing(true)
       setResizingEdge(edge)
       initialMouseXRef.current = e.clientX
-      initialStartDateRef.current = parseISO(startDate)
-      initialEndDateRef.current = parseISO(endDate)
+      initialStartDateRef.current = parseMinskDate(startDate)
+      initialEndDateRef.current = parseMinskDate(endDate)
       setPreviewDates({ startDate, endDate })
     },
     [disabled, startDate, endDate]
@@ -208,6 +213,9 @@ export function useTimelineResize({
   const handleMouseUp = useCallback(() => {
     if (!isResizing || !previewDates) return
 
+    // Записываем время завершения drag для блокировки click
+    lastDragEndRef.current = Date.now()
+
     const datesChanged = previewDates.startDate !== startDate || previewDates.endDate !== endDate
 
     // Вызываем callback только если даты изменились
@@ -253,8 +261,8 @@ export function useTimelineResize({
    */
   const previewPosition = previewDates
     ? (() => {
-        const start = parseISO(previewDates.startDate)
-        const end = parseISO(previewDates.endDate)
+        const start = parseMinskDate(previewDates.startDate)
+        const end = parseMinskDate(previewDates.endDate)
 
         const dayFromStart = differenceInDays(start, range.start)
         const duration = differenceInDays(end, start) + 1
@@ -276,6 +284,14 @@ export function useTimelineResize({
     zIndex: 10,
   }
 
+  /**
+   * Проверяет, был ли недавно завершён drag (в пределах 200мс)
+   * Используется для блокировки click после drag
+   */
+  const wasRecentlyDragging = useCallback(() => {
+    return Date.now() - lastDragEndRef.current < 200
+  }, [])
+
   return {
     leftHandleProps: {
       onMouseDown: handleMouseDown('left'),
@@ -295,5 +311,6 @@ export function useTimelineResize({
     resizingEdge,
     previewPosition,
     previewDates,
+    wasRecentlyDragging,
   }
 }

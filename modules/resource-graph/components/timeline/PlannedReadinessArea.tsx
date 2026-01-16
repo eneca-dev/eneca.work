@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO } from 'date-fns'
+import { differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type { ReadinessCheckpoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -9,6 +10,8 @@ interface PlannedReadinessAreaProps {
   checkpoints: ReadinessCheckpoint[]
   range: TimelineRange
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 /**
@@ -18,6 +21,7 @@ export function PlannedReadinessArea({
   checkpoints,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: PlannedReadinessAreaProps) {
   // Вычисляем точки для SVG path
   const points = useMemo(() => {
@@ -25,23 +29,21 @@ export function PlannedReadinessArea({
 
     return checkpoints
       .map((cp) => {
-        const cpDate = parseISO(cp.date)
+        const cpDate = parseMinskDate(cp.date)
         const dayOffset = differenceInDays(cpDate, range.start)
 
         // X координата: центр ячейки дня
         const x = dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
 
         // Y координата: инвертируем (0% внизу, 100% вверху)
-        const graphHeight = SECTION_ROW_HEIGHT * 0.75
-        const topPadding = SECTION_ROW_HEIGHT * 0.1
+        const graphHeight = rowHeight * 0.75
+        const topPadding = rowHeight * 0.1
         const y = topPadding + graphHeight * (1 - cp.value / 100)
 
         return { x, y, value: cp.value, date: cp.date }
       })
       .filter((p) => p.x >= 0 && p.x <= timelineWidth)
-  }, [checkpoints, range, timelineWidth])
-
-  if (points.length === 0) return null
+  }, [checkpoints, range, timelineWidth, rowHeight])
 
   // Создаём SVG path для пунктирной линии
   const linePath = useMemo(() => {
@@ -56,14 +58,17 @@ export function PlannedReadinessArea({
     return path
   }, [points])
 
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
+
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {/* Пунктирная линия */}
         {linePath && (
@@ -85,7 +90,7 @@ export function PlannedReadinessArea({
           className="absolute flex flex-col items-center pointer-events-none"
           style={{
             left: p.x,
-            top: p.y - 12,
+            top: Math.max(0, p.y - 12), // Не выходим за верхнюю границу контейнера
             transform: 'translateX(-50%)',
           }}
         >

@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
-import { differenceInDays, parseISO, addDays, format } from 'date-fns'
+import { useMemo, useId } from 'react'
+import { addDays, format } from 'date-fns'
+import { parseMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -12,6 +13,8 @@ interface ActualReadinessAreaProps {
   range: TimelineRange
   /** Общая ширина timeline в пикселях */
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 interface PointData {
@@ -30,8 +33,9 @@ export function ActualReadinessArea({
   snapshots,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: ActualReadinessAreaProps) {
-  // Вычисляем точки с интерполяцией
+  // Вычисляем точки БЕЗ интерполяции (ступеньки)
   const points = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return []
 
@@ -47,20 +51,27 @@ export function ActualReadinessArea({
     }
 
     // Границы данных
-    const firstDataDate = parseISO(sortedSnapshots[0].date)
-    const lastDataDate = parseISO(sortedSnapshots[sortedSnapshots.length - 1].date)
+    // Используем parseMinskDate для консистентности с range.start
+    const firstDataDate = parseMinskDate(sortedSnapshots[0].date)
+    const lastDataDate = parseMinskDate(sortedSnapshots[sortedSnapshots.length - 1].date)
+
+    // График идёт до сегодняшнего дня (или до последней даты данных, если она позже)
+    const today = getTodayMinsk()
+    const endDate = lastDataDate > today ? lastDataDate : today
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
-    const graphHeight = SECTION_ROW_HEIGHT * 0.75
-    const topPadding = SECTION_ROW_HEIGHT * 0.1
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
+
+    let lastKnownValue = sortedSnapshots[0].value
 
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
       const dateKey = format(dayDate, 'yyyy-MM-dd')
 
-      // Пропускаем дни до/после данных
-      if (dayDate < firstDataDate || dayDate > lastDataDate) continue
+      // Пропускаем дни до первых данных или после сегодня
+      if (dayDate < firstDataDate || dayDate > endDate) continue
 
       let value: number
       let isInterpolated = false
@@ -68,8 +79,10 @@ export function ActualReadinessArea({
       const exactValue = snapshotMap.get(dateKey)
       if (exactValue !== undefined) {
         value = exactValue
+        lastKnownValue = exactValue
       } else {
-        value = interpolateValue(dayDate, sortedSnapshots)
+        // Ступенька: используем последнее известное значение
+        value = lastKnownValue
         isInterpolated = true
       }
 
@@ -83,12 +96,10 @@ export function ActualReadinessArea({
     }
 
     return result
-  }, [snapshots, range.start, timelineWidth])
-
-  if (points.length === 0) return null
+  }, [snapshots, range.start, timelineWidth, rowHeight])
 
   // Создаём SVG paths для заливки и линии
-  const baseY = SECTION_ROW_HEIGHT * 0.85
+  const baseY = rowHeight * 0.85
   const { areaPath, linePath } = useMemo(() => {
     if (points.length < 1) return { areaPath: '', linePath: '' }
 
@@ -111,20 +122,26 @@ export function ActualReadinessArea({
   }, [points, baseY])
 
   // Находим последнюю точку для отображения текущего значения
-  const lastPoint = points[points.length - 1]
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null
+
+  // Уникальный ID для градиента (React 18+ useId для SSR-safe уникальности)
+  const gradientId = useId()
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {/* Градиентная заливка синим */}
         <defs>
-          <linearGradient id="actualReadinessGradient" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`actualReadiness-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
             <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.08} />
           </linearGradient>
@@ -134,7 +151,7 @@ export function ActualReadinessArea({
         {areaPath && (
           <path
             d={areaPath}
-            fill="url(#actualReadinessGradient)"
+            fill={`url(#actualReadiness-${gradientId})`}
           />
         )}
 
@@ -186,35 +203,3 @@ export function ActualReadinessArea({
   )
 }
 
-/**
- * Интерполирует фактическое значение
- */
-function interpolateValue(date: Date, snapshots: ReadinessPoint[]): number {
-  let leftPoint: ReadinessPoint | null = null
-  let rightPoint: ReadinessPoint | null = null
-
-  for (const snap of snapshots) {
-    const snapDate = parseISO(snap.date)
-    if (snapDate <= date) {
-      leftPoint = snap
-    }
-    if (snapDate >= date && !rightPoint) {
-      rightPoint = snap
-      break
-    }
-  }
-
-  if (!leftPoint && rightPoint) return rightPoint.value
-  if (leftPoint && !rightPoint) return leftPoint.value
-  if (!leftPoint || !rightPoint) return 0
-
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) return leftPoint.value
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return leftPoint.value + (rightPoint.value - leftPoint.value) * ratio
-}

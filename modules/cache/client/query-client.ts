@@ -4,6 +4,9 @@ import { QueryClient, isServer } from '@tanstack/react-query'
  * Конфигурация staleTime для разных типов данных
  */
 export const staleTimePresets = {
+  /** Справочники которые НИКОГДА не меняются в рамках сессии (статусы, отделы, категории) */
+  infinity: Infinity,
+
   /** Праздники, годовые справочники - практически не меняются */
   eternal: 24 * 60 * 60 * 1000, // 24 часа
 
@@ -90,11 +93,30 @@ export function getQueryClient(): QueryClient {
 }
 
 /**
- * Сбросить QueryClient (для тестов или logout)
+ * Полная очистка QueryClient (вызывается при logout)
+ * - Отменяет все активные запросы
+ * - Очищает весь кэш
+ * - Пересоздаёт клиент при следующем getQueryClient()
  */
 export function resetQueryClient(): void {
   if (browserQueryClient) {
+    // Отменяем все активные запросы
+    browserQueryClient.cancelQueries()
+    // Очищаем весь кэш
     browserQueryClient.clear()
+    // Сбрасываем singleton для пересоздания
     browserQueryClient = undefined
+    console.log("🗑️ QueryClient сброшен")
+  }
+}
+
+/**
+ * Инвалидация всех запросов (soft reset)
+ * Используется при обновлении данных пользователя без полного сброса
+ */
+export function invalidateAllQueries(): void {
+  if (browserQueryClient) {
+    browserQueryClient.invalidateQueries()
+    console.log("🔄 Все запросы инвалидированы")
   }
 }

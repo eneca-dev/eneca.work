@@ -168,6 +168,53 @@ export interface ProgressUpdateData {
 }
 
 // ============================================================================
+// Checkpoint Modal Types
+// ============================================================================
+
+export interface CheckpointCreateData {
+  /** ID раздела */
+  sectionId: string
+  /** Название раздела */
+  sectionName: string
+}
+
+export interface CheckpointEditData {
+  /** ID чекпоинта */
+  checkpointId: string
+}
+
+// ============================================================================
+// Template Modal Types
+// ============================================================================
+
+export interface TemplateSelectData {
+  /** ID раздела для применения шаблона */
+  sectionId: string
+  /** Есть ли права на управление шаблонами */
+  hasManagePermission?: boolean
+  /** ID отдела пользователя для предвыбора фильтра */
+  defaultDepartmentId?: string
+}
+
+export interface TemplateSaveData {
+  /** Этапы для сохранения (в формате TemplateStage[]) */
+  stages: Array<{
+    name: string
+    order: number
+    items: Array<{
+      description: string
+      workCategoryId: string
+      workCategoryName: string
+      difficultyId: string | null
+      difficultyName: string | null
+      plannedHours: number
+    }>
+  }>
+  /** ID отдела пользователя для предвыбора */
+  defaultDepartmentId?: string
+}
+
+// ============================================================================
 // Global Modal Store Types
 // ============================================================================
 
@@ -186,6 +233,10 @@ export type ModalType =
   | 'loading-edit'
   | 'employee-view'
   | 'progress-update'
+  | 'checkpoint-create'
+  | 'checkpoint-edit'
+  | 'template-select'
+  | 'template-save'
 
 export interface GlobalModalState {
   /** Текущая открытая модалка */

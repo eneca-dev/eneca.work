@@ -2,77 +2,81 @@
  * Resource Graph Filters - Filter Options Hooks
  *
  * Хуки для загрузки данных структур (для автокомплита InlineFilter)
+ * Используют фабрики из cache module
  */
 
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import {
+  createSimpleCacheQuery,
+  queryKeys,
+  staleTimePresets,
+} from '@/modules/cache'
 import { getOrgStructure, getProjectStructure, getProjectTags } from '../actions'
 import type { FilterOption } from '@/modules/inline-filter'
+import type { OrgStructure, ProjectStructure, ProjectTag, ProjectStatusType } from '../types'
 
 // ============================================================================
-// Query Keys
-// ============================================================================
-
-const filterStructureKeys = {
-  all: ['filter-structure'] as const,
-  org: () => [...filterStructureKeys.all, 'org'] as const,
-  project: () => [...filterStructureKeys.all, 'project'] as const,
-  tags: () => [...filterStructureKeys.all, 'tags'] as const,
-}
-
-// ============================================================================
-// Base Structure Hooks
+// Base Structure Hooks (используют cache module фабрики)
 // ============================================================================
 
 /**
  * Загрузить организационную структуру
+ *
+ * @example
+ * const { data: orgStructure, isLoading } = useOrgStructure()
  */
-export function useOrgStructure() {
-  return useQuery({
-    queryKey: filterStructureKeys.org(),
-    queryFn: async () => {
-      const result = await getOrgStructure()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  })
-}
+export const useOrgStructure = createSimpleCacheQuery<OrgStructure>({
+  queryKey: queryKeys.filterStructure.org(),
+  queryFn: getOrgStructure,
+  staleTime: staleTimePresets.static, // 10 минут - структура редко меняется
+})
 
 /**
  * Загрузить проектную структуру
+ *
+ * @example
+ * const { data: projectStructure, isLoading } = useProjectStructure()
  */
-export function useProjectStructure() {
-  return useQuery({
-    queryKey: filterStructureKeys.project(),
-    queryFn: async () => {
-      const result = await getProjectStructure()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
-  })
-}
+export const useProjectStructure = createSimpleCacheQuery<ProjectStructure>({
+  queryKey: queryKeys.filterStructure.project(),
+  queryFn: getProjectStructure,
+  staleTime: staleTimePresets.medium, // 5 минут - проекты меняются чаще
+})
 
 /**
  * Загрузить теги проектов
+ *
+ * @example
+ * const { data: tags, isLoading } = useProjectTags()
  */
-export function useProjectTags() {
-  return useQuery({
-    queryKey: filterStructureKeys.tags(),
-    queryFn: async () => {
-      const result = await getProjectTags()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  })
-}
+export const useProjectTags = createSimpleCacheQuery<ProjectTag[]>({
+  queryKey: queryKeys.filterStructure.tags(),
+  queryFn: getProjectTags,
+  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+})
+
+// ============================================================================
+// Static Options (статичные данные из enum, не требуют запроса к БД)
+// ============================================================================
+
+/**
+ * Статусы проектов с русскими названиями
+ * Значения соответствуют project_status_enum в БД
+ * Используется `satisfies` для compile-time валидации enum значений
+ */
+const PROJECT_STATUS_OPTIONS: FilterOption[] = [
+  { id: 'active' satisfies ProjectStatusType, name: 'В работе', key: 'статус проекта' },
+  { id: 'draft' satisfies ProjectStatusType, name: 'Черновик', key: 'статус проекта' },
+  { id: 'potential project' satisfies ProjectStatusType, name: 'Потенциальный проект', key: 'статус проекта' },
+  { id: 'completed' satisfies ProjectStatusType, name: 'Завершён', key: 'статус проекта' },
+  { id: 'paused' satisfies ProjectStatusType, name: 'Приостановлен', key: 'статус проекта' },
+  { id: 'waiting for input data' satisfies ProjectStatusType, name: 'Ожидание исходных данных', key: 'статус проекта' },
+  { id: 'author supervision' satisfies ProjectStatusType, name: 'Авторский надзор', key: 'статус проекта' },
+  { id: 'actual calculation' satisfies ProjectStatusType, name: 'Актуализация расчёта', key: 'статус проекта' },
+  { id: 'customer approval' satisfies ProjectStatusType, name: 'Согласование с заказчиком', key: 'статус проекта' },
+]
 
 // ============================================================================
 // Combined Filter Options Hook (для InlineFilter)
@@ -82,6 +86,9 @@ export function useProjectTags() {
  * Хук для получения всех опций фильтров в формате InlineFilter
  *
  * Возвращает массив FilterOption[] для автокомплита
+ *
+ * @example
+ * const { options, isLoading } = useFilterOptions()
  */
 export function useFilterOptions() {
   const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()
@@ -118,6 +125,9 @@ export function useFilterOptions() {
         result.push({ id: tag.id, name: tag.name, key: 'метка' })
       }
     }
+
+    // Статусы проектов (статичные, из enum)
+    result.push(...PROJECT_STATUS_OPTIONS)
 
     return result
   }, [orgStructure, projectStructure, tags])
