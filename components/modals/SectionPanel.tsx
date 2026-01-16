@@ -10,10 +10,11 @@ import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 // TEMPORARILY HIDDEN: Reports tab
 // import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
-import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
-import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
+// TEMPORARILY HIDDEN: Loadings and Tasks tabs (components deleted)
+// import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
+// import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
-import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
+import { DeleteSectionModal } from '@/modules/modals'
 import SectionDecomposition2Tab from '@/modules/decomposition2/components/SectionDecomposition2Tab'
 
 interface SectionPanelProps {
@@ -807,6 +808,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             >
               Отчёты
             </button> */}
+            {/* TEMPORARILY HIDDEN: Loadings tab button (component deleted)
             <button
               onClick={() => setActiveTab('loadings')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
@@ -816,7 +818,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               }`}
             >
               Загрузки
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -1224,18 +1226,20 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             <SectionDecomposition2Tab sectionId={sectionId} compact />
           )}
               
+              {/* TEMPORARILY HIDDEN: Tasks tab content (component deleted)
               {activeTab === 'tasks' && (
                 <div>
                   <SectionTasksPreview sectionId={sectionId} />
                 </div>
-              )}
+              )} */}
               {/* TEMPORARILY HIDDEN: Reports tab content */}
               {/* {activeTab === 'reports' && (
                 <SectionReportsTab sectionId={sectionId} />
               )} */}
+              {/* TEMPORARILY HIDDEN: Loadings tab content (component deleted)
               {activeTab === 'loadings' && (
                 <SectionLoadingsTab sectionId={sectionId} />
-              )}
+              )} */}
             </div>
           ) : (
             <div className="text-center text-slate-500 dark:text-slate-400 py-8">
