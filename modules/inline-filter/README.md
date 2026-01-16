@@ -75,7 +75,6 @@ key:"value with \"quotes\""  # Escaped quotes in value
 
 | Export | Description |
 |--------|-------------|
-| `useInlineFilter` | State management hook with parsing utilities |
 | `useFilterContext` | Low-level hook for detecting input context (key/value) |
 
 ### Parser Utilities
@@ -101,8 +100,6 @@ key:"value with \"quotes\""  # Escaped quotes in value
 | `ParsedFilter` | Result of parsing filter string |
 | `FilterQueryParams` | Query parameters for database |
 | `FilterKeyColor` | Available color names |
-| `FilterValueType` | Value types: string, date, number, boolean, select |
-| `FilterOperator` | Comparison operators for future use |
 | `FilterInputContext` | Input context type (empty, key, or value) |
 | `UseFilterContextOptions` | Options for useFilterContext hook |
 
@@ -137,15 +134,6 @@ interface FilterKeyConfig {
 
   /** Color: 'violet' | 'blue' | 'amber' | 'emerald' | 'rose' | 'cyan' | 'gray' */
   color?: FilterKeyColor
-
-  /** Value type (for future validation) */
-  valueType?: 'string' | 'date' | 'number' | 'boolean' | 'select'
-
-  /** Operators for date/number (for future use) */
-  operators?: FilterOperator[]
-
-  /** Enum values for select/boolean types */
-  enumValues?: FilterEnumValue[]
 }
 ```
 
@@ -205,40 +193,7 @@ function MyComponent() {
 }
 ```
 
-### Pattern 2: Using the Hook
-
-```typescript
-import { useInlineFilter } from '@/modules/inline-filter'
-
-function MyComponent() {
-  const {
-    value,           // Current filter string
-    setValue,        // Set filter string
-    parsedTokens,    // Parsed tokens array
-    queryParams,     // Ready-to-use query params
-    hasFilters,      // Boolean: any filters active?
-    clear,           // Clear all filters
-    addToken,        // Add a filter programmatically
-    removeToken,     // Remove a filter programmatically
-  } = useInlineFilter({ config })
-
-  // Add filter programmatically
-  const handleAddProjectFilter = (projectName: string) => {
-    addToken('проект', projectName)
-  }
-
-  return (
-    <InlineFilter
-      config={config}
-      value={value}
-      onChange={setValue}
-      options={options}
-    />
-  )
-}
-```
-
-### Pattern 3: Zustand Store Integration
+### Pattern 2: Zustand Store Integration
 
 ```typescript
 // stores/filters.ts
@@ -271,7 +226,7 @@ export const useFiltersStore = create(
 )
 ```
 
-### Pattern 4: Loading Options from Database
+### Pattern 3: Loading Options from Database
 
 ```typescript
 import { useQuery } from '@tanstack/react-query'
@@ -338,70 +293,6 @@ function useFilterOptions() {
 
 ---
 
-## Future Extensions
-
-The module is prepared for these future features:
-
-### Date/Number Filters with Operators
-
-```typescript
-// Future syntax support
-'дата:>2024-01-01'           // After date
-'загрузка:<100'              // Less than number
-'приоритет:>=5'              // Greater or equal
-```
-
-Configuration ready:
-```typescript
-{
-  'дата': {
-    field: 'created_at',
-    valueType: 'date',
-    operators: ['gt', 'lt', 'gte', 'lte', 'eq'],
-  },
-}
-```
-
-### Boolean Filters
-
-```typescript
-// Future syntax support
-'архив:да'
-'активный:нет'
-```
-
-Configuration ready:
-```typescript
-{
-  'архив': {
-    field: 'is_archived',
-    valueType: 'boolean',
-    enumValues: [
-      { value: 'да', label: 'Да' },
-      { value: 'нет', label: 'Нет' },
-    ],
-  },
-}
-```
-
-### Select Filters
-
-```typescript
-{
-  'статус': {
-    field: 'status',
-    valueType: 'select',
-    enumValues: [
-      { value: 'active', label: 'Активный' },
-      { value: 'paused', label: 'Приостановлен' },
-      { value: 'completed', label: 'Завершён' },
-    ],
-  },
-}
-```
-
----
-
 ## Accessibility (A11y)
 
 The component includes full ARIA support:
@@ -432,7 +323,6 @@ modules/inline-filter/
 │   └── FilterSuggestions.tsx   # Dropdown suggestions component
 └── hooks/
     ├── index.ts
-    ├── useInlineFilter.ts      # State management hook
     └── useFilterContext.ts     # Input context detection hook
 ```
 

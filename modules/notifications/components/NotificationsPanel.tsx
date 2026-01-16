@@ -472,19 +472,19 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       ref={panelRef}
       className={cn(
         // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
-        "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-50",
+        "fixed inset-y-0 border-r border-slate-700/50 shadow-2xl z-[9999]",
       )}
       // Панель без дебаг-колонки
-      style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
+      style={{ width: panelWidthPx, left: collapsed ? 80 : 256, backgroundColor: '#0a0e13' }}
       onMouseMove={(e) => throttledSetPointerPosition({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => clearPointerPosition()}
     >
       {/* Контент панели: header + scrollable list, full height */}
       <div className="flex h-full flex-col">
         {/* Заголовок + компактные фильтры */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-b border-slate-700/50">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-lg font-semibold text-slate-100">
               {(isRefreshingOnOpen || isManualRefreshing) ? "Обновление уведомлений..." : "Уведомления"}
             </h3>
             <div className="flex items-center gap-2">

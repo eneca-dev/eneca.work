@@ -31,15 +31,16 @@ const nextConfig = {
   },
   experimental: {
     webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
+    // Отключаем параллельную компиляцию - частая причина "call" ошибок
+    parallelServerBuildTraces: false,
+    parallelServerCompiles: false,
   },
   webpack: (config, { dev, isServer }) => {
-    // Отключаем проблемное кэширование в dev режиме или по переменной окружения
-    if (dev || process.env.NEXT_WEBPACK_CACHE === 'false') {
+    // Отключаем кэширование только по явной переменной окружения
+    if (process.env.NEXT_WEBPACK_CACHE === 'false') {
       config.cache = false;
     }
-    
+
     // Настройки для решения проблем с PackFileCacheStrategy
     if (config.cache && typeof config.cache === 'object') {
       config.cache.type = 'filesystem';
@@ -51,7 +52,7 @@ const nextConfig = {
       config.cache.compression = 'gzip';
       config.cache.hashAlgorithm = 'md4';
     }
-    
+
     // Дополнительные оптимизации для dev режима
     if (dev) {
       config.optimization = {
@@ -60,8 +61,21 @@ const nextConfig = {
         removeEmptyChunks: false,
         splitChunks: false,
       };
+
+      // Задержка HMR для стабильности
+      config.watchOptions = {
+        aggregateTimeout: 500,  // Ждёт 500мс после изменения
+        // НЕ используем polling - fs events более эффективны на macOS
+        ignored: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/.next/**',
+          '**/out/**',
+          '**/*.log',
+        ],
+      };
     }
-    
+
     return config;
   },
 }
@@ -106,13 +120,15 @@ widenClientFileUpload: true,
 // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
 // side errors will fail.
  tunnelRoute: "/_relay",
-// Automatically tree-shake Sentry logger statements to reduce bundle size
-disableLogger: true,
 
-// Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
-// See the following for more information:
-// https://docs.sentry.io/product/crons/
-// https://vercel.com/docs/cron-jobs
-automaticVercelMonitors: true,
+// Webpack-specific options
+webpack: {
+  // Automatically tree-shake Sentry logger statements to reduce bundle size
+  treeshake: {
+    removeDebugLogging: true,
+  },
+  // Enables automatic instrumentation of Vercel Cron Monitors
+  automaticVercelMonitors: true,
+},
 },
 );

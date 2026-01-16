@@ -22,17 +22,30 @@ export interface CreateCheckpointInput {
   customIcon?: string | null
   customColor?: string | null
   linkedSectionIds?: string[] // Дополнительные связанные разделы
+  // Только для optimistic update (не отправляются на сервер)
+  _optimisticTypeName?: string
+  _optimisticTypeCode?: string
+  _optimisticIsCustom?: boolean
+  _optimisticLinkedSections?: Array<{ section_id: string; section_name: string; object_id: string | null }>
 }
 
 /** Input для обновления чекпоинта */
 export interface UpdateCheckpointInput {
   checkpointId: string
+  typeId?: string // Изменение типа чекпоинта
   title?: string
   description?: string | null
   checkpointDate?: string
   customIcon?: string | null
   customColor?: string | null
   linkedSectionIds?: string[] // Полный список связанных разделов
+  // Только для optimistic update (не отправляются на сервер)
+  _optimisticIcon?: string
+  _optimisticColor?: string
+  _optimisticTypeName?: string
+  _optimisticTypeCode?: string
+  _optimisticIsCustom?: boolean
+  _optimisticLinkedSections?: Array<{ section_id: string; section_name: string; object_id: string | null }>
 }
 
 /** Input для отметки выполнения */
@@ -63,7 +76,7 @@ export interface Checkpoint {
   updated_at: string
   section_responsible: string | null
   project_manager: string | null
-  linked_sections: Array<{ section_id: string; section_name: string }>
+  linked_sections: Array<{ section_id: string; section_name: string; object_id: string | null }>
   linked_sections_count: number
 }
 
@@ -81,6 +94,13 @@ export interface AuditEntry {
   user_firstname?: string | null
   user_lastname?: string | null
   user_avatar_url?: string | null
+}
+
+/** Упрощенная информация о разделе для списков */
+export interface SectionOption {
+  id: string
+  name: string
+  objectId: string | null
 }
 
 // ============================================================================
@@ -725,11 +745,15 @@ export async function updateCheckpoint(
 
         // 3. Подготовить данные для обновления
         const updates: Record<string, unknown> = {}
+        if (input.typeId !== undefined) updates.type_id = input.typeId
         if (input.title !== undefined) updates.title = input.title
         if (input.description !== undefined) updates.description = input.description
         if (input.checkpointDate !== undefined) updates.checkpoint_date = input.checkpointDate
         if (input.customIcon !== undefined) updates.custom_icon = input.customIcon
         if (input.customColor !== undefined) updates.custom_color = input.customColor
+
+        console.log('[updateCheckpoint] Input:', input)
+        console.log('[updateCheckpoint] Updates to apply:', updates)
 
         if (Object.keys(updates).length === 0 && !input.linkedSectionIds) {
           return { success: false, error: 'Нет данных для обновления' }
@@ -754,6 +778,7 @@ export async function updateCheckpoint(
           // 5. Audit trail для каждого измененного поля
           // Маппинг полей из updates в поля Checkpoint
           const fieldMapping: Record<string, keyof Checkpoint> = {
+            'type_id': 'type_id',
             'title': 'title',
             'description': 'description',
             'checkpoint_date': 'checkpoint_date',
@@ -994,6 +1019,89 @@ export async function deleteCheckpoint(
           extra: { checkpointId },
         })
         console.error('[deleteCheckpoint] Error:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        }
+      }
+    }
+  )
+}
+
+// ============================================================================
+// Helper Actions
+// ============================================================================
+
+/**
+ * Получить список разделов проекта для выбора в UI
+ *
+ * Используется в CheckpointEditModal для выбора связанных разделов.
+ * Возвращает только разделы того же проекта, что и указанный раздел.
+ *
+ * ОПТИМИЗИРОВАНО: Использует VIEW v_project_sections вместо 4 последовательных запросов.
+ * Теперь выполняется всего 2 запроса: 1) получить project_id, 2) получить все разделы проекта.
+ *
+ * @param sectionId - ID раздела, для которого нужно получить список разделов проекта
+ * @returns Список разделов проекта (исключая сам sectionId)
+ */
+export async function getProjectSections(
+  sectionId: string
+): Promise<ActionResult<SectionOption[]>> {
+  return await Sentry.startSpan(
+    {
+      name: 'getProjectSections',
+      op: 'db.query',
+      attributes: {
+        'section.id': sectionId,
+      },
+    },
+    async () => {
+      try {
+        const supabase = await createClient()
+
+        // 1. Получить project_id через VIEW (1 запрос вместо 3)
+        const { data: currentSection, error: sectionError } = await supabase
+          .from('v_project_sections')
+          .select('project_id')
+          .eq('section_id', sectionId)
+          .single()
+
+        if (sectionError || !currentSection?.project_id) {
+          console.error('[getProjectSections] Section error:', sectionError)
+          return { success: false, error: 'Раздел не найден' }
+        }
+
+        const projectId = currentSection.project_id
+
+        // 2. Получить все разделы проекта через VIEW (1 запрос вместо 4)
+        const { data: projectSections, error: sectionsError } = await supabase
+          .from('v_project_sections')
+          .select('section_id, section_name, object_id')
+          .eq('project_id', projectId)
+          .order('section_name', { ascending: true })
+
+        if (sectionsError) {
+          Sentry.captureException(sectionsError, {
+            tags: { module: 'checkpoints' },
+            extra: { sectionId, projectId },
+          })
+          console.error('[getProjectSections] Sections error:', sectionsError)
+          return { success: false, error: sectionsError.message }
+        }
+
+        const sections: SectionOption[] = (projectSections || []).map(s => ({
+          id: s.section_id,
+          name: s.section_name,
+          objectId: s.object_id,
+        }))
+
+        return { success: true, data: sections }
+      } catch (error) {
+        Sentry.captureException(error, {
+          tags: { module: 'checkpoints', action: 'getProjectSections' },
+          extra: { sectionId },
+        })
+        console.error('[getProjectSections] Error:', error)
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Неизвестная ошибка',

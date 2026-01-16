@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/tooltip'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { MessageSquare } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type { Loading, TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { getEmployeeColor, getInitials } from '../../utils'
@@ -340,9 +341,9 @@ function LoadingChip({
       align="center"
       sideOffset={8}
       className="
-        bg-zinc-900/95 backdrop-blur-xl
-        border border-white/10
-        shadow-xl shadow-black/40
+        bg-popover backdrop-blur-xl
+        border border-border
+        shadow-xl
         rounded-lg px-3 py-2.5
         max-w-[220px]
       "
@@ -357,39 +358,39 @@ function LoadingChip({
                 alt={loading.employee.name || ''}
               />
             )}
-            <AvatarFallback className="text-[9px] bg-zinc-700 text-white/80">
+            <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
               {initials}
             </AvatarFallback>
           </Avatar>
           <div>
-            <div className="text-sm font-medium text-white">
+            <div className="text-sm font-medium text-popover-foreground">
               {loading.employee.name || 'Не назначен'}
             </div>
-            <div className="text-[10px] text-white/50">
+            <div className="text-[10px] text-muted-foreground">
               Ставка: {formatRate(loading.rate)}
             </div>
           </div>
         </div>
 
         {/* Period - показываем preview даты во время resize */}
-        <div className="flex items-center gap-2 text-[11px] text-white/60">
-          <span className="text-white/40">Период:</span>
-          <span className={`tabular-nums ${isResizing ? 'text-white font-medium' : ''}`}>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="text-muted-foreground/70">Период:</span>
+          <span className={`tabular-nums ${isResizing ? 'text-popover-foreground font-medium' : ''}`}>
             {formatDate(displayStartDate)} — {formatDate(displayFinishDate)}
           </span>
         </div>
 
         {/* Resize hint */}
         {isResizing && (
-          <div className="pt-1 border-t border-white/10 text-[10px] text-white/40">
+          <div className="pt-1 border-t border-border text-[10px] text-muted-foreground/70">
             Отпустите для сохранения
           </div>
         )}
 
         {/* Comment */}
         {loading.comment && !isResizing && (
-          <div className="pt-1 border-t border-white/10">
-            <p className="text-[11px] text-white/60 leading-relaxed">
+          <div className="pt-1 border-t border-border">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
               {loading.comment}
             </p>
           </div>
@@ -397,7 +398,7 @@ function LoadingChip({
 
         {/* Edit hint */}
         {sectionId && !isResizing && (
-          <div className="pt-1 border-t border-white/10 text-[10px] text-white/40">
+          <div className="pt-1 border-t border-border text-[10px] text-muted-foreground/70">
             Нажмите для редактирования
           </div>
         )}
@@ -445,7 +446,7 @@ function formatRate(rate: number): string {
  */
 function formatDate(dateStr: string): string {
   try {
-    return format(parseISO(dateStr), 'dd.MM')
+    return format(parseMinskDate(dateStr), 'dd.MM')
   } catch {
     return '—'
   }

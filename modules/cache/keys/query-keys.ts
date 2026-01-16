@@ -81,6 +81,15 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Employees (расширенные данные сотрудников для назначения ответственных)
+  // -------------------------------------------------------------------------
+  employees: {
+    all: ['employees'] as const,
+    list: () => [...queryKeys.employees.all, 'list'] as const,
+    detail: (id: string) => [...queryKeys.employees.all, 'detail', id] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Projects
   // -------------------------------------------------------------------------
   projects: {
@@ -92,6 +101,7 @@ export const queryKeys = {
     statistics: (id: string) => [...queryKeys.projects.detail(id), 'statistics'] as const,
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
+    // structure moved to filterStructure.project() for unified caching
   },
 
   // -------------------------------------------------------------------------
@@ -231,6 +241,10 @@ export const queryKeys = {
     lists: () => [...queryKeys.resourceGraph.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.resourceGraph.lists(), filters] as const,
     user: (userId: string) => [...queryKeys.resourceGraph.all, 'user', userId] as const,
+    /** Инвалидирует ВСЕ sectionsBatch запросы (для чекпоинтов и других cross-object изменений) */
+    allSectionsBatch: () => [...queryKeys.resourceGraph.all, 'sectionsBatch'] as const,
+    /** Batch данные для всех секций объекта (загрузка при развороте объекта) */
+    sectionsBatch: (objectId: string) => [...queryKeys.resourceGraph.all, 'sectionsBatch', objectId] as const,
     /** Work logs для раздела (lazy load при развороте) */
     workLogs: (sectionId: string) => [...queryKeys.resourceGraph.all, 'workLogs', sectionId] as const,
     /** Loadings для раздела (lazy load при развороте) */
@@ -252,11 +266,18 @@ export const queryKeys = {
     list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
     details: () => [...queryKeys.budgets.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
+    /** Полная информация о бюджете с частями (v_budgets_full) */
+    full: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'full'] as const,
+    /** История изменений бюджета */
+    history: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'history'] as const,
+    /** @deprecated Use history instead */
     versions: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'versions'] as const,
     byEntity: (entityType: string, entityId: string) =>
       [...queryKeys.budgets.all, 'entity', entityType, entityId] as const,
     sectionSummary: (projectId?: string) =>
       [...queryKeys.budgets.all, 'section-summary', projectId] as const,
+    parentCandidates: (entityType: string, entityId: string, budgetTypeId: string) =>
+      [...queryKeys.budgets.all, 'parent-candidates', entityType, entityId, budgetTypeId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -266,6 +287,18 @@ export const queryKeys = {
     all: ['budget-tags'] as const,
     list: () => [...queryKeys.budgetTags.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.budgetTags.all, 'detail', id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Project Reports (отчеты руководителей проектов)
+  // -------------------------------------------------------------------------
+  projectReports: {
+    all: ['project-reports'] as const,
+    lists: () => [...queryKeys.projectReports.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.projectReports.lists(), filters] as const,
+    details: () => [...queryKeys.projectReports.all, 'detail'] as const,
+    /** Reports для конкретного проекта */
+    detail: (projectId: string) => [...queryKeys.projectReports.details(), projectId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -280,6 +313,7 @@ export const queryKeys = {
     audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
     bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
     byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+    projectSections: (sectionId: string) => [...queryKeys.checkpoints.all, 'projectSections', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -324,6 +358,60 @@ export const queryKeys = {
     project: () => [...queryKeys.filterStructure.all, 'project'] as const,
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Filter Permissions (контекст разрешений фильтров)
+  // -------------------------------------------------------------------------
+  filterPermissions: {
+    all: ['filter-permissions'] as const,
+    /** Контекст текущего пользователя (роли, scope, org structure) */
+    context: () => [...queryKeys.filterPermissions.all, 'context'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Project Tags (теги проектов)
+  // -------------------------------------------------------------------------
+  projectTags: {
+    all: ['project-tags'] as const,
+    /** Список всех тегов (справочник) */
+    list: () => [...queryKeys.projectTags.all, 'list'] as const,
+    /** Map тегов по проектам (Record<projectId, tags[]>) */
+    map: () => [...queryKeys.projectTags.all, 'map'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Company Calendar (праздники и переносы)
+  // -------------------------------------------------------------------------
+  companyCalendar: {
+    all: ['company-calendar'] as const,
+    /** События календаря (праздники и переносы) */
+    events: () => [...queryKeys.companyCalendar.all, 'events'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Decomposition Templates (шаблоны декомпозиции)
+  // -------------------------------------------------------------------------
+  decTemplates: {
+    all: ['dec-templates'] as const,
+    lists: () => [...queryKeys.decTemplates.all, 'list'] as const,
+    /** Список шаблонов (опционально с фильтром по отделу) */
+    list: (departmentId?: string) => [...queryKeys.decTemplates.lists(), departmentId] as const,
+    details: () => [...queryKeys.decTemplates.all, 'detail'] as const,
+    /** Детали шаблона по ID */
+    detail: (id: string) => [...queryKeys.decTemplates.details(), id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Departments Timeline (таймлайн отделов)
+  // -------------------------------------------------------------------------
+  departmentsTimeline: {
+    all: ['departments-timeline'] as const,
+    lists: () => [...queryKeys.departmentsTimeline.all, 'list'] as const,
+    /** Список отделов с фильтрами */
+    list: (filters?: Record<string, unknown>) => [...queryKeys.departmentsTimeline.lists(), filters] as const,
+    /** Данные актуальности команд */
+    freshness: () => [...queryKeys.departmentsTimeline.all, 'freshness'] as const,
   },
 } as const
 

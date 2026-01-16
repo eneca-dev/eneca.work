@@ -5,7 +5,7 @@
  * Синтаксис: ключ:"значение" или ключ:значение
  *
  * @example
- * import { InlineFilter, useInlineFilter, parseFilterString } from '@/modules/inline-filter'
+ * import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
  *
  * const config = {
  *   keys: {
@@ -23,8 +23,9 @@
  *   options={filterOptions}
  * />
  *
- * // Хук для управления состоянием
- * const { value, parsedTokens, queryParams, addToken, removeToken } = useInlineFilter({ config })
+ * // Парсинг строки фильтров
+ * const parsed = parseFilterString(filterString, config)
+ * const queryParams = tokensToQueryParams(parsed.tokens, config)
  */
 
 // Types
@@ -35,9 +36,6 @@ export type {
   ParsedFilter,
   FilterOption,
   FilterQueryParams,
-  FilterValueType,
-  FilterOperator,
-  FilterEnumValue,
   FilterKeyColor,
 } from './types'
 
@@ -61,5 +59,5 @@ export { FilterSuggestions, COLOR_MAP, DEFAULT_COLOR } from './components'
 export type { FilterSuggestion, FilterSuggestionsProps } from './components'
 
 // Hooks
-export { useInlineFilter, useFilterContext } from './hooks'
-export type { UseInlineFilterOptions, UseInlineFilterReturn, FilterInputContext, UseFilterContextOptions } from './hooks'
+export { useFilterContext } from './hooks'
+export type { FilterInputContext, UseFilterContextOptions } from './hooks'

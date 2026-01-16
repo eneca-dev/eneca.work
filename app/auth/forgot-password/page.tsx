@@ -18,38 +18,28 @@ export default function ForgotPasswordPage() {
   const supabase = createClient()
 
   // Функция для получения понятного сообщения об ошибке
+  // ВАЖНО: Не раскрываем информацию о существовании пользователя
   const getErrorMessage = (error: any): string => {
     if (!error?.message) return "Произошла неизвестная ошибка"
-    
+
     const message = error.message.toLowerCase()
-    
-    // Проверка различных типов ошибок
-    if (message.includes('user not found')) {
-      return "Пользователь с таким email не найден. Проверьте правильность email адреса или зарегистрируйтесь."
-    }
-    
-    if (message.includes('invalid email')) {
-      return "Указан некорректный email адрес. Проверьте правильность ввода."
-    }
-    
+
+    // Rate limit
     if (message.includes('email rate limit') || message.includes('too many requests')) {
       return "Превышен лимит отправки писем. Подождите несколько минут и попробуйте снова."
     }
-    
+
+    // Ошибки отправки
     if (message.includes('smtp') || (message.includes('email') && message.includes('send'))) {
-      return "Ошибка отправки письма. Проверьте правильность email адреса и попробуйте позже."
+      return "Ошибка отправки письма. Попробуйте позже."
     }
-    
+
     if (message.includes('password reset is disabled')) {
       return "Восстановление пароля временно отключено. Обратитесь к администратору."
     }
-    
-    if (message.includes('signup is disabled')) {
-      return "Система временно недоступна. Попробуйте позже или обратитесь к администратору."
-    }
-    
-    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
-    return error.message
+
+    // Все остальные ошибки — общее сообщение (не раскрываем детали)
+    return "Не удалось отправить письмо. Попробуйте позже."
   }
 
   const validateForm = (): string | null => {

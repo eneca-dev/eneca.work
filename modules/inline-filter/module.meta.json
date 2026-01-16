@@ -1,0 +1,198 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "inline-filter",
+    "displayName": "Inline Filter",
+    "description": "Инлайн-фильтры в стиле GitHub Projects с синтаксисом ключ:\"значение\"",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": null,
+    "tags": ["core", "ui", "utility"]
+  },
+
+  "architecture": {
+    "structure": {
+      "components/": "React компоненты (InlineFilter, FilterSuggestions)",
+      "hooks/": "Хуки для контекста фильтра",
+      "parser.ts": "Парсер строки фильтров",
+      "types.ts": "TypeScript типы"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "InlineFilter",
+      "parseFilterString",
+      "serializeFilter",
+      "tokensToQueryParams",
+      "hasActiveFilters",
+      "useFilterContext"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useFilterContext",
+      "description": "Хук для получения контекста ввода фильтра (курсор, текущий токен)",
+      "file": "hooks/index.ts",
+      "returns": "FilterInputContext"
+    }
+  ],
+
+  "actions": [],
+
+  "stores": [],
+
+  "components": [
+    {
+      "name": "InlineFilter",
+      "description": "Компонент инлайн-фильтра с автокомплитом",
+      "file": "components/InlineFilter.tsx",
+      "props": ["config", "value", "onChange", "options", "placeholder?"],
+      "example": "<InlineFilter config={config} value={filter} onChange={setFilter} options={options} />"
+    },
+    {
+      "name": "FilterSuggestions",
+      "description": "Выпадающий список подсказок для фильтра",
+      "file": "components/FilterSuggestions.tsx",
+      "props": ["suggestions", "onSelect", "selectedIndex"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Filter Config Pattern",
+      "description": "Определяй конфигурацию фильтра с маппингом ключей на поля БД",
+      "example": "{ keys: { 'проект': { field: 'project_id', label: 'Проект' } } }"
+    },
+    {
+      "name": "Parse and Query Pattern",
+      "description": "Парси строку фильтра и преобразуй в query params",
+      "example": "const params = tokensToQueryParams(parseFilterString(str, config).tokens, config)"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Direct String Parsing",
+      "description": "НЕ парси строку фильтра вручную регулярками",
+      "instead": "Используй parseFilterString из модуля"
+    }
+  ],
+
+  "technologies": ["react", "tailwindcss"],
+
+  "dependencies": {
+    "modules": [],
+    "database": {
+      "tables": [],
+      "views": [],
+      "enums": [],
+      "functions": []
+    }
+  },
+
+  "dependents": ["resource-graph", "budgets-page", "kanban", "departments-timeline"],
+
+  "cache": {
+    "queryKeys": [],
+    "realtimeChannels": [],
+    "invalidationRules": []
+  },
+
+  "permissions": [],
+
+  "tasks": [
+    {
+      "id": "IF-002",
+      "title": "Добавить фильтр \"статус проекта\"",
+      "description": "Добавить новый ключ фильтра 'статус' для фильтрации проектов по статусу (active, draft, potential project и др.)\n\nТребуется:\n1. Добавить ключ в RESOURCE_GRAPH_FILTER_CONFIG\n2. Загружать статусы из project_status_enum\n3. Добавить обработку фильтра в getResourceGraphData\n4. Обновить useFilterOptions для статусов",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-08",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedModules": ["resource-graph", "kanban", "budgets-page"],
+      "checklist": {
+        "implementation": [
+          "[ ] Добавить ключ 'статус' в RESOURCE_GRAPH_FILTER_CONFIG",
+          "[ ] Создать action getProjectStatuses для загрузки статусов из enum",
+          "[ ] Добавить статусы в useFilterOptions",
+          "[ ] Обработать project_status в getResourceGraphData",
+          "[ ] Обновить v_resource_graph если нужно (колонка project_status)"
+        ],
+        "testing": [
+          "[ ] Фильтр статус:\"active\" работает",
+          "[ ] Автокомплит показывает все статусы",
+          "[ ] Множественный фильтр статус + проект работает"
+        ]
+      }
+    },
+    {
+      "id": "IF-AUDIT",
+      "title": "Full Module Audit: Inline Filter",
+      "description": "Полный аудит модуля инлайн-фильтров для подтверждения качества.\n\nКак utility модуль без БД, фокус на корректности парсинга и UX.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "checklist": {
+        "businessLogic": [
+          "[ ] Парсинг ключ:\"значение\" работает корректно",
+          "[ ] Парсинг ключ:значение (без кавычек) работает",
+          "[ ] Множественные фильтры разделяются правильно",
+          "[ ] Пробелы в значениях обрабатываются (нужны кавычки)",
+          "[ ] Русские символы в ключах и значениях работают",
+          "[ ] tokensToQueryParams генерирует правильные параметры",
+          "[ ] hasActiveFilters определяет наличие фильтров корректно",
+          "[ ] Edge case: пустая строка → нет фильтров",
+          "[ ] Edge case: только пробелы → нет фильтров",
+          "[ ] Edge case: незакрытая кавычка → обрабатывается без краша"
+        ],
+        "performance": [
+          "[ ] Автокомплит появляется < 50ms после ввода",
+          "[ ] Рендеринг подсказок не тормозит при 100+ опциях",
+          "[ ] Парсинг длинной строки (1000 символов) < 10ms"
+        ],
+        "codeQuality": [
+          "[ ] Типы FilterConfig, FilterToken экспортируются",
+          "[ ] parser.ts покрыт edge cases",
+          "[ ] Нет `any` в типах",
+          "[ ] InlineFilter < 300 строк"
+        ],
+        "ux": [
+          "[ ] Клавиша Tab выбирает подсказку",
+          "[ ] Enter выбирает подсказку",
+          "[ ] Escape закрывает подсказки",
+          "[ ] Стрелки вверх/вниз навигируют по подсказкам",
+          "[ ] Подсветка текущего токена в input",
+          "[ ] Клик по подсказке вставляет значение"
+        ]
+      },
+      "auditProcedure": [
+        "1. Открыть страницу с фильтром (График/Бюджеты)",
+        "2. Ввести различные фильтры, проверить парсинг",
+        "3. Проверить автокомплит (скорость, корректность)",
+        "4. Проверить keyboard navigation",
+        "5. Проверить edge cases (спецсимволы, кавычки)"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": ["Initial release", "GitHub Projects стиль", "Автокомплит с подсветкой"]
+    }
+  ]
+}

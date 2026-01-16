@@ -2,7 +2,7 @@
  * Resource Graph Module - Component Exports
  */
 
-export { ResourceGraph } from './ResourceGraph'
+export { ResourceGraph, ResourceGraphInternal } from './ResourceGraph'
 
 // Timeline components
 export {
@@ -15,6 +15,3 @@ export {
   calculateBarPosition,
   type DayCell,
 } from './timeline'
-
-// Reports components
-export { StageReportMarkers } from './reports/StageReportMarkers'

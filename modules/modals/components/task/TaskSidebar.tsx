@@ -10,16 +10,16 @@ import {
   X,
   Edit3,
   Loader2,
-  Check,
   Clock,
   Target,
   User,
   Tag,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { DecompositionItem } from '@/modules/resource-graph/types'
-import { getInitials } from '@/modules/resource-graph/utils'
+import { getInitials, formatBudgetAmount } from '@/modules/resource-graph/utils'
 import type { BaseModalProps } from '../../types'
 import { useUpdateDecompositionItem } from '../../hooks'
 
@@ -27,8 +27,8 @@ import { useUpdateDecompositionItem } from '../../hooks'
 // Constants
 // ============================================================================
 
-const ANIMATION_DURATION = 300
-const PANEL_WIDTH = 380
+const ANIMATION_DURATION = 200
+const PANEL_WIDTH = 420
 
 // ============================================================================
 // Schema
@@ -226,10 +226,12 @@ export function TaskSidebar({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (editingDescription || editingHours) {
+        if (editingDescription) {
           setEditingDescription(false)
+          setValue('description', task.description)
+        } else if (editingHours) {
           setEditingHours(false)
-          reset()
+          setValue('plannedHours', task.plannedHours)
         } else {
           onClose()
         }
@@ -238,7 +240,7 @@ export function TaskSidebar({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, editingDescription, editingHours, onClose, reset])
+  }, [isOpen, editingDescription, editingHours, onClose, setValue, task.description, task.plannedHours])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -253,11 +255,12 @@ export function TaskSidebar({
       {/* Overlay */}
       <div
         className={cn(
-          'fixed inset-0 z-50 transition-all duration-300',
+          'fixed inset-0 z-50 transition-all',
           isAnimating
-            ? 'bg-black/35 backdrop-blur-[2px]'
+            ? 'bg-black/50 backdrop-blur-sm'
             : 'bg-transparent backdrop-blur-0'
         )}
+        style={{ transitionDuration: `${ANIMATION_DURATION}ms` }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -270,304 +273,311 @@ export function TaskSidebar({
           aria-labelledby="task-sidebar-title"
           className={cn(
             'fixed inset-y-0 right-0 z-50',
-            'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950',
-            'border-l border-slate-800/80',
-            'shadow-[-8px_0_40px_-15px_rgba(0,0,0,0.6)]',
+            'bg-slate-900/95 backdrop-blur-md',
+            'border-l border-slate-700/50',
+            'shadow-2xl shadow-black/50',
             'flex flex-col',
-            'transition-all duration-300 ease-out',
-            isAnimating
-              ? 'translate-x-0 opacity-100'
-              : 'translate-x-full opacity-95'
+            'transition-transform',
+            isAnimating ? 'translate-x-0' : 'translate-x-full'
           )}
-          style={{ width: PANEL_WIDTH }}
+          style={{ width: PANEL_WIDTH, transitionDuration: `${ANIMATION_DURATION}ms` }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <header className="relative px-5 pt-5 pb-4 border-b border-slate-800/60">
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              aria-label="Закрыть"
-              className={cn(
-                'absolute top-4 right-4',
-                'p-2 rounded-lg',
-                'text-slate-500 hover:text-slate-300',
-                'hover:bg-slate-800/50',
-                'transition-all duration-200'
-              )}
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Task label */}
-            <div className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5" />
-              Задача
-            </div>
-
-            {/* Editable description */}
-            <div className="pr-10">
+          <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+            <div className="flex items-center gap-2 min-w-0">
+              <Target className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-xs font-medium text-slate-300">Задача</span>
+              <span className="text-[10px] text-slate-500">·</span>
               {editingDescription ? (
-                <div className="flex items-center gap-2">
-                  <label htmlFor="task-description" className="sr-only">
-                    Описание задачи
-                  </label>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <input
-                    id="task-description"
-                    {...(() => {
-                      const { ref, ...rest } = form.register('description')
-                      return {
-                        ...rest,
-                        ref: (e: HTMLInputElement | null) => {
-                          ref(e)
-                          descriptionInputRef.current = e
-                        },
-                      }
-                    })()}
+                    ref={descriptionInputRef}
+                    {...form.register('description')}
                     className={cn(
-                      'flex-1 px-3 py-1.5 text-base font-medium',
-                      'bg-slate-800/80 border border-slate-600',
-                      'rounded-lg text-slate-100',
-                      'focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20'
+                      'flex-1 min-w-0 px-2 py-1 text-xs font-medium',
+                      'bg-slate-800 border border-slate-600 rounded',
+                      'text-slate-100',
+                      'focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
                     )}
                     disabled={savingField === 'description'}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleDescriptionSave()
                       if (e.key === 'Escape') {
                         setEditingDescription(false)
-                        reset()
+                        setValue('description', task.description)
                       }
                     }}
+                    onBlur={handleDescriptionSave}
                   />
-                  <button
-                    onClick={handleDescriptionSave}
-                    disabled={savingField === 'description'}
-                    aria-label="Сохранить описание"
-                    className="p-2 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
-                  >
-                    {savingField === 'description' ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                  </button>
+                  {savingField === 'description' && (
+                    <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                  )}
                 </div>
               ) : (
                 <button
-                  className="group flex items-start gap-2 text-left max-w-full"
+                  className="group flex items-center gap-1.5 min-w-0"
                   onClick={() => setEditingDescription(true)}
-                  aria-label="Редактировать описание"
                 >
-                  <h2
+                  <span
                     id="task-sidebar-title"
-                    className="text-base font-medium text-slate-100 line-clamp-2"
+                    className="text-xs text-slate-200 truncate max-w-[200px]"
+                    title={task.description}
                   >
                     {form.watch('description') || task.description || 'Без описания'}
-                  </h2>
-                  <Edit3 className="w-3.5 h-3.5 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+                  </span>
+                  <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               )}
             </div>
-
-            {/* Status indicator */}
-            <div className="mt-3 flex items-center gap-2">
-              <div
-                className={cn(
-                  'px-2.5 py-1 rounded-full text-xs font-medium',
-                  isCompleted
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-amber-500/20 text-amber-400'
-                )}
-              >
-                {isCompleted ? 'Завершено' : 'В работе'}
-              </div>
-
-              {task.status.name && (
-                <div
-                  className="px-2.5 py-1 rounded-full text-xs font-medium border"
-                  style={{
-                    backgroundColor: `${task.status.color || '#6b7280'}20`,
-                    borderColor: `${task.status.color || '#6b7280'}40`,
-                    color: task.status.color || '#6b7280',
-                  }}
-                >
-                  {task.status.name}
-                </div>
-              )}
-            </div>
+            <button
+              onClick={onClose}
+              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </header>
 
-          {/* Error message */}
+          {/* Error */}
           {saveError && (
-            <div
-              role="alert"
-              className="mx-5 mt-4 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400"
-            >
+            <div className="mx-4 mt-3 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-[11px] text-red-400">
               {saveError}
             </div>
           )}
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {/* Progress Slider */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-400">Готовность</span>
-                <span
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-4">
+              {/* Status badges */}
+              <div className="flex items-center gap-2">
+                <div
                   className={cn(
-                    'text-sm font-medium',
-                    isCompleted ? 'text-emerald-400' : 'text-slate-200'
+                    'px-2 py-1 rounded text-[10px] font-medium',
+                    isCompleted
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-amber-500/20 text-amber-400'
                   )}
                 >
-                  {watchedProgress}%
-                </span>
-              </div>
-              <Slider.Root
-                value={[watchedProgress]}
-                onValueCommit={handleProgressChange}
-                max={100}
-                step={5}
-                disabled={savingField === 'progress'}
-                className="relative flex items-center select-none touch-none w-full h-5"
-                aria-label="Готовность задачи"
-              >
-                <Slider.Track className="bg-slate-700 relative grow rounded-full h-2">
-                  <Slider.Range
-                    className={cn(
-                      'absolute rounded-full h-full transition-colors',
-                      isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
-                    )}
-                  />
-                </Slider.Track>
-                <Slider.Thumb
-                  className={cn(
-                    'block w-5 h-5 rounded-full shadow-lg transition-colors',
-                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900',
-                    isCompleted
-                      ? 'bg-emerald-500 focus:ring-emerald-500'
-                      : 'bg-amber-500 focus:ring-amber-500',
-                    savingField === 'progress' && 'opacity-50'
-                  )}
-                />
-              </Slider.Root>
-            </div>
-
-            {/* Planned Hours */}
-            <div className="bg-slate-800/40 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm">Плановые часы</span>
+                  {isCompleted ? 'Завершено' : 'В работе'}
                 </div>
 
-                {editingHours ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="task-hours"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      {...(() => {
-                        const { ref, ...rest } = form.register('plannedHours', {
-                          valueAsNumber: true,
-                        })
-                        return {
-                          ...rest,
-                          ref: (e: HTMLInputElement | null) => {
-                            ref(e)
-                            hoursInputRef.current = e
-                          },
-                        }
-                      })()}
-                      className={cn(
-                        'w-20 px-2 py-1 text-sm text-right',
-                        'bg-slate-800/80 border border-slate-600',
-                        'rounded text-slate-100',
-                        'focus:outline-none focus:border-amber-500/60'
-                      )}
-                      disabled={savingField === 'plannedHours'}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleHoursSave()
-                        if (e.key === 'Escape') {
-                          setEditingHours(false)
-                          reset()
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleHoursSave}
-                      disabled={savingField === 'plannedHours'}
-                      aria-label="Сохранить часы"
-                      className="p-1.5 text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
-                    >
-                      {savingField === 'plannedHours' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="group flex items-center gap-1.5 text-slate-200 hover:text-white transition-colors"
-                    onClick={() => setEditingHours(true)}
-                    aria-label="Редактировать плановые часы"
+                {task.status.name && (
+                  <div
+                    className="px-2 py-1 rounded text-[10px] font-medium border"
+                    style={{
+                      backgroundColor: `${task.status.color || '#6b7280'}20`,
+                      borderColor: `${task.status.color || '#6b7280'}40`,
+                      color: task.status.color || '#6b7280',
+                    }}
                   >
-                    <span className="font-medium">
-                      {form.watch('plannedHours')}ч
-                    </span>
-                    <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
+                    {task.status.name}
+                  </div>
                 )}
               </div>
-            </div>
 
-            {/* Responsible */}
-            {task.responsible.id && (
-              <div className="bg-slate-800/40 rounded-lg p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-slate-400 shrink-0">
-                    <User className="w-4 h-4" />
-                    <span className="text-sm">Ответственный</span>
+              {/* Progress Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Готовность</span>
+                  <span
+                    className={cn(
+                      'text-xs font-medium',
+                      isCompleted ? 'text-emerald-400' : 'text-slate-200'
+                    )}
+                  >
+                    {watchedProgress}%
+                  </span>
+                </div>
+                <Slider.Root
+                  value={[watchedProgress]}
+                  onValueCommit={handleProgressChange}
+                  max={100}
+                  step={5}
+                  disabled={savingField === 'progress'}
+                  className="relative flex items-center select-none touch-none w-full h-4"
+                  aria-label="Готовность задачи"
+                >
+                  <Slider.Track className="bg-slate-700 relative grow rounded-full h-1.5">
+                    <Slider.Range
+                      className={cn(
+                        'absolute rounded-full h-full transition-colors',
+                        isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
+                      )}
+                    />
+                  </Slider.Track>
+                  <Slider.Thumb
+                    className={cn(
+                      'block w-4 h-4 rounded-full shadow-lg transition-colors',
+                      'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900',
+                      isCompleted
+                        ? 'bg-emerald-500 focus:ring-emerald-500'
+                        : 'bg-amber-500 focus:ring-amber-500',
+                      savingField === 'progress' && 'opacity-50'
+                    )}
+                  />
+                </Slider.Root>
+              </div>
+
+              {/* Planned Hours */}
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-slate-500 text-[10px]">
+                    <Clock className="w-3 h-3" />
+                    Плановые часы
                   </div>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-[10px] bg-slate-700">
-                        {getInitials(task.responsible.firstName, task.responsible.lastName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm text-slate-200 truncate">
-                      {task.responsible.name || 'Не назначен'}
-                    </span>
-                  </div>
+
+                  {editingHours ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        ref={hoursInputRef}
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        {...form.register('plannedHours', { valueAsNumber: true })}
+                        className={cn(
+                          'w-16 px-2 py-0.5 text-xs text-right',
+                          'bg-slate-800 border border-slate-600 rounded',
+                          'text-slate-100',
+                          'focus:outline-none focus:border-amber-500/50'
+                        )}
+                        disabled={savingField === 'plannedHours'}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleHoursSave()
+                          if (e.key === 'Escape') {
+                            setEditingHours(false)
+                            setValue('plannedHours', task.plannedHours)
+                          }
+                        }}
+                        onBlur={handleHoursSave}
+                      />
+                      {savingField === 'plannedHours' && (
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      className="group flex items-center gap-1 text-slate-200 hover:text-white transition-colors"
+                      onClick={() => setEditingHours(true)}
+                    >
+                      <span className="text-sm font-medium">
+                        {form.watch('plannedHours')}ч
+                      </span>
+                      <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100" />
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
 
-            {/* Difficulty & Category */}
-            <div className="flex gap-3">
-              {task.difficulty.name && (
-                <div className="flex-1 bg-slate-800/40 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">Сложность</div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-1.5 py-0.5 bg-slate-700/50 rounded text-xs font-medium text-slate-300">
-                      {task.difficulty.abbr}
-                    </span>
-                    <span className="text-sm text-slate-300 truncate">
-                      {task.difficulty.name}
-                    </span>
+              {/* Responsible */}
+              {task.responsible.id && (
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[10px] shrink-0">
+                      <User className="w-3 h-3" />
+                      Ответственный
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[9px] bg-slate-700">
+                          {getInitials(task.responsible.firstName, task.responsible.lastName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs text-slate-200 truncate">
+                        {task.responsible.name || 'Не назначен'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {task.workCategoryName && (
-                <div className="flex-1 bg-slate-800/40 rounded-lg p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                    <Tag className="w-3 h-3" />
-                    Категория
+              {/* Difficulty & Category */}
+              <div className="grid grid-cols-2 gap-2">
+                {task.difficulty.name && (
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                    <div className="text-[10px] text-slate-500 mb-1">Сложность</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1 py-0.5 bg-slate-700/50 rounded text-[10px] font-medium text-slate-300">
+                        {task.difficulty.abbr}
+                      </span>
+                      <span className="text-xs text-slate-300 truncate">
+                        {task.difficulty.name}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-300 truncate">
-                    {task.workCategoryName}
+                )}
+
+                {task.workCategoryName && (
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                      <Tag className="w-3 h-3" />
+                      Категория
+                    </div>
+                    <div className="text-xs text-slate-300 truncate">
+                      {task.workCategoryName}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Budget */}
+              {task.budget && task.budget.total > 0 && (
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-2">
+                    <Wallet className="w-3 h-3" />
+                    Бюджет задачи
+                  </div>
+                  <div className="space-y-1.5">
+                    {/* Progress bar */}
+                    <div className="relative h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'absolute left-0 top-0 h-full rounded-full transition-all',
+                          task.budget.percentage >= 100
+                            ? 'bg-red-500'
+                            : task.budget.percentage >= 80
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                        )}
+                        style={{ width: `${Math.min(task.budget.percentage, 100)}%` }}
+                      />
+                    </div>
+                    {/* Stats row */}
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">
+                          Израсходовано:{' '}
+                          <span
+                            className={cn(
+                              'font-medium',
+                              task.budget.percentage >= 100
+                                ? 'text-red-400'
+                                : task.budget.percentage >= 80
+                                  ? 'text-amber-400'
+                                  : 'text-emerald-400'
+                            )}
+                          >
+                            {formatBudgetAmount(task.budget.spent)}
+                          </span>
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          'font-medium tabular-nums',
+                          task.budget.percentage >= 100
+                            ? 'text-red-400'
+                            : task.budget.percentage >= 80
+                              ? 'text-amber-400'
+                              : 'text-slate-400'
+                        )}
+                      >
+                        {Math.round(task.budget.percentage)}%
+                      </span>
+                    </div>
+                    {/* Total and remaining */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Всего: {formatBudgetAmount(task.budget.total)}</span>
+                      <span>Остаток: {formatBudgetAmount(task.budget.remaining)}</span>
+                    </div>
                   </div>
                 </div>
               )}

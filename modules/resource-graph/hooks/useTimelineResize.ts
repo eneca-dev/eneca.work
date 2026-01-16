@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { addDays, format, parseISO, differenceInDays } from 'date-fns'
+import { addDays, format, differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import { DAY_CELL_WIDTH } from '../constants'
 import type { TimelineRange } from '../types'
 
@@ -147,8 +148,8 @@ export function useTimelineResize({
       setIsResizing(true)
       setResizingEdge(edge)
       initialMouseXRef.current = e.clientX
-      initialStartDateRef.current = parseISO(startDate)
-      initialEndDateRef.current = parseISO(endDate)
+      initialStartDateRef.current = parseMinskDate(startDate)
+      initialEndDateRef.current = parseMinskDate(endDate)
       setPreviewDates({ startDate, endDate })
     },
     [disabled, startDate, endDate]
@@ -260,8 +261,8 @@ export function useTimelineResize({
    */
   const previewPosition = previewDates
     ? (() => {
-        const start = parseISO(previewDates.startDate)
-        const end = parseISO(previewDates.endDate)
+        const start = parseMinskDate(previewDates.startDate)
+        const end = parseMinskDate(previewDates.endDate)
 
         const dayFromStart = differenceInDays(start, range.start)
         const duration = differenceInDays(end, start) + 1

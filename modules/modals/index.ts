@@ -53,6 +53,10 @@ export type {
   ProgressUpdateData,
   // Checkpoint
   CheckpointCreateData,
+  CheckpointEditData,
+  // Template
+  TemplateSelectData,
+  TemplateSaveData,
 } from './types'
 
 // ============================================================================
@@ -85,6 +89,7 @@ export {
   useProgressUpdateModal,
   // Checkpoint
   useCheckpointCreateModal,
+  useCheckpointEditModal,
 } from './hooks'
 
 // ============================================================================
@@ -111,6 +116,7 @@ export {
   openEmployeeView,
   closeModal,
   openCheckpointCreate,
+  openCheckpointEdit,
 } from './stores/modal-store'
 
 // ============================================================================
@@ -131,13 +137,17 @@ export { ProgressUpdateDialog, type ProgressUpdateDialogProps } from './componen
 // Section
 export { SectionModal, type SectionModalProps } from './components/section'
 export { SectionMetrics } from './components/section'
+export { DeleteSectionModal, type DeleteSectionModalProps } from './components/section'
+export { SectionCreateModal, type SectionCreateModalProps } from './components/section'
 
 // Stage
 export { StageModal, type StageModalProps } from './components/stage'
+export { StageCreateModal, type StageCreateModalProps } from './components/stage'
 export { ResponsiblesDropdown } from './components/stage'
 
 // Item / Task
 export { TaskSidebar, type TaskSidebarProps } from './components/task'
+export { TaskCreateModal, type TaskCreateModalProps } from './components/task'
 
 // Loading
 export { LoadingModal, type LoadingModalProps } from './components/loading'
@@ -146,7 +156,37 @@ export { LoadingModal, type LoadingModalProps } from './components/loading'
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'
 
 // Checkpoint
-export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
+export {
+  CheckpointCreateModal,
+  type CheckpointCreateModalProps,
+  CheckpointEditModal,
+  type CheckpointEditModalProps,
+} from './components/checkpoint'
+
+// Template
+export {
+  TemplateSelectModal,
+  TemplateSaveModal,
+  type TemplateSelectModalProps,
+  type TemplateSaveModalProps,
+} from './components/templates'
+
+// Project Report
+export { ProjectReportModal, type ProjectReportModalProps } from './components/project-report/ProjectReportModal'
+
+// Object
+export {
+  DeleteObjectModal,
+  type DeleteObjectModalProps,
+  ObjectCreateModal,
+  type ObjectCreateModalProps,
+} from './components/object'
+
+// Project
+export {
+  ProjectQuickEditModal,
+  type ProjectQuickEditModalProps,
+} from './components/project'
 
 // Global
 // export { GlobalModals } from './components/GlobalModals'

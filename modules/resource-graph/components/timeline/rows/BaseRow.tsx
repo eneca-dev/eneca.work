@@ -64,7 +64,7 @@ export function BaseRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           depth === 0 && 'bg-muted/20'
         )}
         style={{ height, minWidth: totalWidth }}
@@ -73,7 +73,7 @@ export function BaseRow({
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20',
+            'sticky left-0 z-40',
             depth === 0 ? 'bg-card' : 'bg-background'
           )}
           style={{

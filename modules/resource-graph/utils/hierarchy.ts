@@ -2,11 +2,12 @@
  * Hierarchy Update Utilities
  *
  * Generic функции для обновления данных в иерархии проектов
+ *
+ * Иерархия: Project → Object → Section → DecompositionStage → DecompositionItem
  */
 
 import type {
   Project,
-  Stage,
   ProjectObject,
   Section,
   DecompositionStage,
@@ -22,7 +23,6 @@ import type {
  */
 export type HierarchyLevel =
   | 'project'
-  | 'stage'
   | 'object'
   | 'section'
   | 'decompositionStage'
@@ -33,7 +33,6 @@ export type HierarchyLevel =
  */
 type EntityAtLevel = {
   project: Project
-  stage: Stage
   object: ProjectObject
   section: Section
   decompositionStage: DecompositionStage
@@ -80,7 +79,7 @@ export function updateInHierarchy<L extends HierarchyLevel>(
   if (!projects || !Array.isArray(projects)) return projects || []
 
   return projects.map((project) => {
-    if (!project?.stages || !Array.isArray(project.stages)) {
+    if (!project?.objects || !Array.isArray(project.objects)) {
       return project
     }
 
@@ -94,74 +93,57 @@ export function updateInHierarchy<L extends HierarchyLevel>(
 
     return {
       ...project,
-      stages: project.stages.map((stage) => {
-        if (!stage?.objects || !Array.isArray(stage.objects)) {
-          return stage
+      objects: project.objects.map((obj) => {
+        if (!obj?.sections || !Array.isArray(obj.sections)) {
+          return obj
         }
 
-        // Уровень stage - это стадия проекта (не decompositionStage!)
-        if (level === 'stage') {
-          if (predicate(stage as EntityAtLevel[L])) {
-            return updater(stage as EntityAtLevel[L]) as Stage
+        // Уровень object
+        if (level === 'object') {
+          if (predicate(obj as EntityAtLevel[L])) {
+            return updater(obj as EntityAtLevel[L]) as ProjectObject
           }
-          return stage
+          return obj
         }
 
         return {
-          ...stage,
-          objects: stage.objects.map((obj) => {
-            if (!obj?.sections || !Array.isArray(obj.sections)) {
-              return obj
+          ...obj,
+          sections: obj.sections.map((section) => {
+            if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
+              return section
             }
 
-            // Уровень object
-            if (level === 'object') {
-              if (predicate(obj as EntityAtLevel[L])) {
-                return updater(obj as EntityAtLevel[L]) as ProjectObject
+            // Уровень section
+            if (level === 'section') {
+              if (predicate(section as EntityAtLevel[L])) {
+                return updater(section as EntityAtLevel[L]) as Section
               }
-              return obj
+              return section
             }
 
             return {
-              ...obj,
-              sections: obj.sections.map((section) => {
-                if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
-                  return section
-                }
-
-                // Уровень section
-                if (level === 'section') {
-                  if (predicate(section as EntityAtLevel[L])) {
-                    return updater(section as EntityAtLevel[L]) as Section
+              ...section,
+              decompositionStages: section.decompositionStages.map((dStage) => {
+                // Уровень decompositionStage
+                if (level === 'decompositionStage') {
+                  if (predicate(dStage as EntityAtLevel[L])) {
+                    return updater(dStage as EntityAtLevel[L]) as DecompositionStage
                   }
-                  return section
+                  return dStage
                 }
 
+                if (!dStage?.items || !Array.isArray(dStage.items)) {
+                  return dStage
+                }
+
+                // Уровень item
                 return {
-                  ...section,
-                  decompositionStages: section.decompositionStages.map((dStage) => {
-                    // Уровень decompositionStage
-                    if (level === 'decompositionStage') {
-                      if (predicate(dStage as EntityAtLevel[L])) {
-                        return updater(dStage as EntityAtLevel[L]) as DecompositionStage
-                      }
-                      return dStage
-                    }
-
-                    if (!dStage?.items || !Array.isArray(dStage.items)) {
-                      return dStage
-                    }
-
-                    // Уровень item
-                    return {
-                      ...dStage,
-                      items: dStage.items.map((item) =>
-                        predicate(item as EntityAtLevel[L])
-                          ? (updater(item as EntityAtLevel[L]) as DecompositionItem)
-                          : item
-                      ),
-                    }
-                  }),
+                  ...dStage,
+                  items: dStage.items.map((item) =>
+                    predicate(item as EntityAtLevel[L])
+                      ? (updater(item as EntityAtLevel[L]) as DecompositionItem)
+                      : item
+                  ),
                 }
               }),
             }

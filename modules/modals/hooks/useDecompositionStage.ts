@@ -38,7 +38,7 @@ export const useDecompositionBootstrap = createDetailCacheQuery<DecompositionBoo
  * const { data: employees, isLoading } = useEmployees()
  */
 export const useEmployees = createCacheQuery<Employee[], void>({
-  queryKey: () => ['employees', 'list'],
+  queryKey: () => queryKeys.employees.list(),
   queryFn: () => getEmployees(),
   staleTime: staleTimePresets.medium, // 5 минут - список сотрудников стабилен
 })

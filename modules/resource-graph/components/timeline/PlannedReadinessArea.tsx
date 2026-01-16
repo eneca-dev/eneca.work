@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO } from 'date-fns'
+import { differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type { ReadinessCheckpoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -28,7 +29,7 @@ export function PlannedReadinessArea({
 
     return checkpoints
       .map((cp) => {
-        const cpDate = parseISO(cp.date)
+        const cpDate = parseMinskDate(cp.date)
         const dayOffset = differenceInDays(cpDate, range.start)
 
         // X координата: центр ячейки дня
@@ -44,8 +45,6 @@ export function PlannedReadinessArea({
       .filter((p) => p.x >= 0 && p.x <= timelineWidth)
   }, [checkpoints, range, timelineWidth, rowHeight])
 
-  if (points.length === 0) return null
-
   // Создаём SVG path для пунктирной линии
   const linePath = useMemo(() => {
     if (points.length < 1) return ''
@@ -58,6 +57,9 @@ export function PlannedReadinessArea({
 
     return path
   }, [points])
+
+  // Early return ПОСЛЕ всех хуков
+  if (points.length === 0) return null
 
   return (
     <div
@@ -88,7 +90,7 @@ export function PlannedReadinessArea({
           className="absolute flex flex-col items-center pointer-events-none"
           style={{
             left: p.x,
-            top: p.y - 12,
+            top: Math.max(0, p.y - 12), // Не выходим за верхнюю границу контейнера
             transform: 'translateX(-50%)',
           }}
         >

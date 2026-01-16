@@ -45,3 +45,4 @@ Reviewing Screenshots/Code: If the user shares code/image and asks "How to impro
 HANDOFF INSTRUCTIONS:
 "Review the proposed UI plan for [Feature]. Focus on compactness, auto-save opportunities, and layout stability."
 "Check if this form flow can be simplified."
+ 

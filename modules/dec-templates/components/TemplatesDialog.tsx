@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,14 +31,15 @@ import { toast } from "@/components/ui/use-toast"
 import { Trash2, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
-import { loadTemplatesList, deleteTemplate } from "../api"
-import type { TemplateListItem } from "../types"
+import { useTemplatesList, useDeleteTemplate } from "../hooks"
 
 interface TemplatesDialogProps {
   isOpen: boolean
   onClose: () => void
   onApply: (templateId: string) => Promise<void>
   hasManagePermission: boolean
+  /** ID отдела пользователя для предвыбора фильтра */
+  defaultDepartmentId?: string
 }
 
 export function TemplatesDialog({
@@ -46,48 +47,54 @@ export function TemplatesDialog({
   onClose,
   onApply,
   hasManagePermission,
+  defaultDepartmentId,
 }: TemplatesDialogProps) {
-  const [templates, setTemplates] = useState<TemplateListItem[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [departmentFilter, setDepartmentFilter] = useState<string>("all")
-  const [isLoading, setIsLoading] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null)
 
-  // Загрузить список шаблонов при открытии
-  useEffect(() => {
-    if (isOpen) {
-      loadTemplates()
-    }
-  }, [isOpen])
+  // TanStack Query хуки
+  const { data: templates = [], isLoading, error } = useTemplatesList({ enabled: isOpen })
+  const { mutateAsync: deleteTemplateFn } = useDeleteTemplate()
 
-  const loadTemplates = async () => {
-    setIsLoading(true)
-    try {
-      const data = await loadTemplatesList()
-      setTemplates(data)
-    } catch (error) {
+  // Показать ошибку загрузки
+  useEffect(() => {
+    if (error) {
       console.error('Ошибка загрузки шаблонов:', error)
       toast({
         title: "Ошибка",
         description: "Не удалось загрузить список шаблонов",
         variant: "destructive"
       })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  }, [error])
+
+  // Устанавливаем фильтр по отделу пользователя при первом открытии
+  useEffect(() => {
+    if (isOpen && !isInitialized && defaultDepartmentId) {
+      setDepartmentFilter(defaultDepartmentId)
+      setIsInitialized(true)
+    }
+  }, [isOpen, defaultDepartmentId, isInitialized])
 
   // Фильтрация по отделам на клиенте
-  const filteredTemplates = templates.filter(template =>
-    departmentFilter === 'all' || template.departmentId === departmentFilter
+  const filteredTemplates = useMemo(
+    () => templates.filter(template =>
+      departmentFilter === 'all' || template.departmentId === departmentFilter
+    ),
+    [templates, departmentFilter]
   )
 
   // Уникальные отделы для фильтра
-  const departments = Array.from(
-    new Map(templates.map(t => [t.departmentId, { id: t.departmentId, name: t.departmentName }]))
-      .values()
+  const departments = useMemo(
+    () => Array.from(
+      new Map(templates.map(t => [t.departmentId, { id: t.departmentId, name: t.departmentName }]))
+        .values()
+    ),
+    [templates]
   )
 
   const handleApply = async () => {
@@ -114,9 +121,7 @@ export function TemplatesDialog({
     if (!templateToDelete) return
 
     try {
-      await deleteTemplate(templateToDelete)
-      // Обновить список локально
-      setTemplates(templates.filter(t => t.id !== templateToDelete))
+      await deleteTemplateFn({ templateId: templateToDelete })
       if (selectedTemplateId === templateToDelete) {
         setSelectedTemplateId(null)
       }
@@ -139,6 +144,7 @@ export function TemplatesDialog({
   const handleClose = () => {
     setSelectedTemplateId(null)
     setDepartmentFilter("all")
+    setIsInitialized(false)
     onClose()
   }
 

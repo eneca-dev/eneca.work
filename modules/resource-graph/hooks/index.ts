@@ -12,7 +12,6 @@ import {
   createDetailCacheQuery,
   createSimpleCacheQuery,
   createCacheMutation,
-  staleTimePresets,
   queryKeys,
 } from '@/modules/cache'
 
@@ -20,21 +19,22 @@ import {
   getResourceGraphData,
   getUserWorkload,
   getProjectTags,
+  getProjectTagsMap,
   getCompanyCalendarEvents,
+  getProjectStructure,
   getWorkLogsForSection,
   getLoadingsForSection,
   getStageReadinessForSection,
-  getStageReports,
   getStageResponsiblesForSection,
+  getSectionsBatchData,
   updateItemProgress,
   updateLoadingDates,
   updateStageDates,
   updateSectionDates,
-  upsertStageReport,
-  deleteStageReport,
   createLoading as createLoadingAction,
   updateLoading as updateLoadingAction,
   deleteLoading as deleteLoadingAction,
+  deleteDecompositionItem as deleteDecompositionItemAction,
 } from '../actions'
 
 import type {
@@ -44,9 +44,12 @@ import type {
   WorkLog,
   Loading,
   ReadinessPoint,
-  ProjectReport,
   StageResponsible,
+  SectionsBatchData,
+  SectionsBatchOptions,
 } from '../types'
+
+import { useQuery } from '@tanstack/react-query'
 
 import {
   updateItemProgressInHierarchy,
@@ -70,17 +73,23 @@ export const resourceGraphKeys = queryKeys.resourceGraph
 /**
  * Хук для получения данных графика ресурсов
  *
+ * Данные обновляются через Realtime подписки, поэтому staleTime = Infinity.
+ * При изменениях в таблицах (sections, loadings, decomposition_* и др.)
+ * Realtime автоматически инвалидирует кеш.
+ *
  * @example
  * const { data, isLoading, error } = useResourceGraphData({ project_id: 'xxx' })
  */
 export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParams>({
   queryKey: (filters) => queryKeys.resourceGraph.list(filters),
   queryFn: getResourceGraphData,
-  staleTime: staleTimePresets.fast,
+  staleTime: Infinity, // Обновляется через Realtime
 })
 
 /**
  * Хук для получения загрузки конкретного пользователя
+ *
+ * Данные обновляются через Realtime подписки (loadings, decomposition_*).
  *
  * @example
  * const { data, isLoading } = useUserWorkload('user-id-123')
@@ -88,7 +97,7 @@ export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParam
 export const useUserWorkload = createDetailCacheQuery<Project[]>({
   queryKey: (userId) => queryKeys.resourceGraph.user(userId),
   queryFn: (userId) => getUserWorkload(userId),
-  staleTime: staleTimePresets.fast,
+  staleTime: Infinity, // Обновляется через Realtime
 })
 
 // ============================================================================
@@ -98,27 +107,71 @@ export const useUserWorkload = createDetailCacheQuery<Project[]>({
 /**
  * Хук для получения списка тегов проектов
  *
+ * Справочник - загружается один раз за сессию.
+ *
  * @example
  * const { data: tags, isLoading } = useTagOptions()
  */
 export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
-  queryKey: ['project-tags', 'list'],
+  queryKey: queryKeys.projectTags.list(),
   queryFn: getProjectTags,
-  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
+})
+
+/**
+ * Хук для получения тегов всех проектов пакетом
+ *
+ * Возвращает Record<projectId, tags[]> для эффективного доступа
+ * к тегам каждого проекта в sidebar timeline.
+ *
+ * Оптимизация: один запрос вместо N запросов на каждый проект.
+ *
+ * @example
+ * const { data: tagsMap, isLoading } = useProjectTagsMap()
+ * const projectTags = tagsMap?.[project.id] || []
+ */
+export const useProjectTagsMap = createSimpleCacheQuery<Record<string, ProjectTag[]>>({
+  queryKey: queryKeys.projectTags.map(),
+  queryFn: getProjectTagsMap,
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 /**
  * Хук для получения праздников и переносов рабочих дней компании
  *
- * Данные кешируются на 24 часа, т.к. праздники очень редко меняются
+ * Справочник - загружается один раз за сессию.
  *
  * @example
  * const { data: events, isLoading } = useCompanyCalendarEvents()
  */
 export const useCompanyCalendarEvents = createSimpleCacheQuery<CompanyCalendarEvent[]>({
-  queryKey: ['company-calendar-events', 'list'],
+  queryKey: queryKeys.companyCalendar.events(),
   queryFn: getCompanyCalendarEvents,
-  staleTime: staleTimePresets.eternal, // 24 часа - праздники практически не меняются
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
+})
+
+/**
+ * Хук для получения структуры проектов (projects, stages, objects, sections)
+ *
+ * Справочник - загружается один раз за сессию.
+ * Используется для построения иерархии и фильтров.
+ *
+ * @example
+ * const { data: structure, isLoading } = useProjectStructure()
+ */
+export const useProjectStructure = createSimpleCacheQuery<{
+  projects: Array<{ id: string; name: string }>
+  stages: Array<{ id: string; name: string; projectId: string | null }>
+  objects: Array<{ id: string; name: string; stageId: string | null }>
+  sections: Array<{ id: string; name: string; objectId: string | null }>
+}>({
+  queryKey: queryKeys.filterStructure.project(),
+  queryFn: getProjectStructure,
+  staleTime: Infinity, // Справочник - не устаревает
+  gcTime: 24 * 60 * 60 * 1000, // 24 часа
 })
 
 // ============================================================================
@@ -188,62 +241,6 @@ export const useStageReadiness = createDetailCacheQuery<Record<string, Readiness
   staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
 })
 
-// ============================================================================
-// Project Reports Hooks - Отчеты к стадиям
-// ============================================================================
-
-/**
- * Хук для получения отчетов к стадии
- *
- * Загружается лениво при развороте стадии (enabled: true).
- * Данные кешируются навечно, обновляются только через Realtime.
- *
- * @param stageId - ID стадии
- * @param options - { enabled: boolean } - включить загрузку
- *
- * @example
- * const { data: reports, isLoading } = useStageReports(stageId, { enabled: isExpanded })
- */
-export const useStageReports = createDetailCacheQuery<ProjectReport[]>({
-  queryKey: (stageId) => queryKeys.resourceGraph.stageReports(stageId),
-  queryFn: getStageReports,
-  staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
-})
-
-/**
- * Хук для создания/обновления отчета к стадии
- *
- * Автоматически инвалидирует кеш отчетов стадии.
- *
- * @example
- * const saveMutation = useSaveStageReport()
- * saveMutation.mutate({ stageId: 'xxx', comment: 'Текст отчета' })
- */
-export const useSaveStageReport = createCacheMutation({
-  mutationFn: upsertStageReport,
-  invalidateKeys: (input) => [
-    queryKeys.resourceGraph.stageReports(input.stageId),
-    queryKeys.resourceGraph.all, // Ensure timeline refresh
-  ],
-})
-
-/**
- * Хук для удаления отчета к стадии
- *
- * Автоматически инвалидирует кеш отчетов стадии.
- *
- * @example
- * const deleteMutation = useDeleteStageReport()
- * deleteMutation.mutate({ reportId: 'xxx', stageId: 'yyy' })
- */
-export const useDeleteStageReport = createCacheMutation({
-  mutationFn: deleteStageReport,
-  invalidateKeys: (input) => [
-    queryKeys.resourceGraph.stageReports(input.stageId),
-    queryKeys.resourceGraph.all, // Ensure timeline refresh
-  ],
-})
-
 // Stage Responsibles Hooks - Ответственные за этапы
 // ============================================================================
 
@@ -265,6 +262,55 @@ export const useStageResponsibles = createDetailCacheQuery<Record<string, StageR
   queryFn: getStageResponsiblesForSection,
   staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
 })
+
+// ============================================================================
+// Batch Data Hook - Все данные для секций объекта одним запросом
+// ============================================================================
+
+/**
+ * Хук для получения всех данных для секций объекта одним запросом
+ *
+ * Заменяет 8 отдельных запросов (useWorkLogs, useLoadings, useStageReadiness, useStageResponsibles,
+ * useCheckpoints, useSectionBudgets) на 1 batch запрос при развороте объекта.
+ *
+ * @param objectId - ID объекта (для ключа кеша)
+ * @param sectionIds - Массив ID секций объекта
+ * @param options - Опции:
+ *   - enabled: включить загрузку
+ *   - includeBudgets: включить загрузку бюджетов (по умолчанию true, может быть false для пользователей без доступа)
+ *
+ * @example
+ * const sectionIds = object.sections.map(s => s.id)
+ * const { data: batchData, isLoading } = useSectionsBatch(object.id, sectionIds, { enabled: isExpanded })
+ *
+ * // Данные для конкретной секции:
+ * batchData?.workLogs[sectionId]
+ * batchData?.loadings[sectionId]
+ * batchData?.stageReadiness[sectionId][stageId]
+ * batchData?.stageResponsibles[sectionId][stageId]
+ * batchData?.checkpoints[sectionId]
+ * batchData?.budgets[sectionId] // может быть пустым если includeBudgets=false
+ */
+export function useSectionsBatch(
+  objectId: string,
+  sectionIds: string[],
+  options?: { enabled?: boolean } & SectionsBatchOptions
+) {
+  const { enabled, ...batchOptions } = options || {}
+
+  return useQuery<SectionsBatchData>({
+    queryKey: queryKeys.resourceGraph.sectionsBatch(objectId),
+    queryFn: async () => {
+      const result = await getSectionsBatchData(sectionIds, batchOptions)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result.data
+    },
+    staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
+    enabled: enabled !== false && sectionIds.length > 0,
+  })
+}
 
 // ============================================================================
 // Budgets Hooks - Re-export from budgets module
@@ -668,6 +714,38 @@ export const useDeleteLoading = createCacheMutation<
 })
 
 // ============================================================================
+// Decomposition Item Mutation Hooks
+// ============================================================================
+
+/**
+ * Тип входных данных для удаления задачи
+ */
+interface DeleteDecompositionItemInput {
+  itemId: string
+  sectionId: string // Нужен для инвалидации кеша work_logs
+}
+
+/**
+ * Мутация для удаления задачи с каскадным удалением отчётов
+ *
+ * @example
+ * const mutation = useDeleteDecompositionItem()
+ * mutation.mutate({ itemId: 'xxx', sectionId: 'yyy' })
+ */
+export const useDeleteDecompositionItem = createCacheMutation<
+  DeleteDecompositionItemInput,
+  { itemId: string }
+>({
+  mutationFn: ({ itemId }) => deleteDecompositionItemAction(itemId),
+
+  // Инвалидируем все связанные кеши
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.all, // Основные данные графика
+    queryKeys.resourceGraph.workLogs(input.sectionId), // Отчёты раздела
+  ],
+})
+
+// ============================================================================
 // Timeline Resize Hook
 // ============================================================================
 
@@ -677,3 +755,9 @@ export type {
   UseTimelineResizeReturn,
   ResizeEdge,
 } from './useTimelineResize'
+
+// ============================================================================
+// Prefetch Hooks
+// ============================================================================
+
+export { usePrefetchSectionsBatch, usePrefetchObjectData } from './usePrefetchSectionsBatch'

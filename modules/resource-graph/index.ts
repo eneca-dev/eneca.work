@@ -21,7 +21,8 @@
 // Components
 // ============================================================================
 
-export { ResourceGraph, ResourceGraphTimeline, StageReportMarkers } from './components'
+export { ResourceGraph, ResourceGraphTimeline } from './components'
+export { ProgressCircle } from './components/timeline/shared'
 
 // ============================================================================
 // Hooks
@@ -34,9 +35,6 @@ export {
   useWorkLogs,
   useLoadings,
   useStageReadiness,
-  useStageReports,
-  useSaveStageReport,
-  useDeleteStageReport,
 } from './hooks'
 
 // ============================================================================
@@ -64,9 +62,6 @@ export {
   getLoadingsForSection,
   getStageReadinessSnapshots,
   getStageReadinessForSection,
-  getStageReports,
-  upsertStageReport,
-  deleteStageReport,
 } from './actions'
 
 // ============================================================================
@@ -90,17 +85,14 @@ export type {
   ProjectStatusType,
   ViewRow,
   DbEnum,
-  // Domain types - hierarchy
+  // Domain types - hierarchy (Project → Object → Section → DecompositionStage → DecompositionItem)
   DecompositionItem,
   DecompositionStage,
   Section,
   ProjectObject,
-  Stage,
   Project,
   // Work logs
   WorkLog,
-  // Project reports
-  ProjectReport,
   // Loadings
   Loading,
   // Filter types
@@ -130,6 +122,8 @@ export {
   EMPLOYEE_COLORS,
   getEmployeeColor,
   getInitials,
+  // Progress colors
+  getProgressColor,
 } from './utils'
 
 // ============================================================================

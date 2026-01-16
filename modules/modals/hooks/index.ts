@@ -23,6 +23,10 @@ export {
   useWorkLogsAggregate,
 } from './useDecompositionStage'
 
+// Unified hook с кешированием из resourceGraph
+export { useDecompositionData } from './useDecompositionData'
+export type { DecompositionDataResult } from './useDecompositionData'
+
 // ============================================================================
 // Decomposition Stage Mutation Hooks
 // ============================================================================
@@ -60,6 +64,16 @@ export {
 } from './useReadinessCheckpoints'
 
 // ============================================================================
+// Work Logs Hooks
+// ============================================================================
+
+export {
+  useDecompositionItemsForWorkLog,
+  useUserHourlyRate,
+  useCreateWorkLog,
+} from './useWorkLogs'
+
+// ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================
 
@@ -80,6 +94,7 @@ import type {
   EmployeeViewData,
   ProgressUpdateData,
   CheckpointCreateData,
+  CheckpointEditData,
 } from '../types'
 
 /**
@@ -185,4 +200,11 @@ export function useProgressUpdateModal() {
  */
 export function useCheckpointCreateModal() {
   return useModal<CheckpointCreateData>()
+}
+
+/**
+ * Хук для модалки редактирования чекпоинта
+ */
+export function useCheckpointEditModal() {
+  return useModal<CheckpointEditData>()
 }

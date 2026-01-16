@@ -14,6 +14,7 @@ import {
   FileText,
   ListTodo,
   Target,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -28,13 +29,14 @@ import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
 import { DateRangeInput } from './DateRangeInput'
 import { OverviewTab, TasksTab, ReadinessTab } from './tabs'
+import { DeleteSectionModal } from './DeleteSectionModal'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const ANIMATION_DURATION = 300
-const PANEL_WIDTH = 1100
+const PANEL_WIDTH = 900  // Более компактная ширина
 
 // ============================================================================
 // Schema
@@ -58,6 +60,7 @@ type SectionFormData = z.infer<typeof sectionFormSchema>
 export interface SectionModalProps extends BaseModalProps {
   section: Section
   sectionId: string
+  initialTab?: 'overview' | 'tasks' | 'readiness'
 }
 
 // ============================================================================
@@ -70,6 +73,7 @@ export function SectionModal({
   onSuccess,
   section,
   sectionId,
+  initialTab = 'overview',
 }: SectionModalProps) {
   // ─────────────────────────────────────────────────────────────────────────
   // Animation state
@@ -146,18 +150,21 @@ export function SectionModal({
   const [editingName, setEditingName] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab)
+    }
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
-      setActiveTab('overview')
     }
-  }, [isOpen])
+  }, [isOpen, initialTab])
 
   // Focus name input when editing starts
   useEffect(() => {
@@ -331,42 +338,42 @@ export function SectionModal({
           style={{ width: PANEL_WIDTH }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <header className="relative px-5 pt-5 pb-4 border-b border-slate-800/60">
+          {/* Header - компактный с amber акцентами */}
+          <header className="relative px-4 pt-3 pb-3 border-b border-slate-700/50">
             {/* Close button */}
             <button
               onClick={onClose}
               aria-label="Закрыть"
               className={cn(
-                'absolute top-4 right-4',
-                'p-2 rounded-lg',
+                'absolute top-2.5 right-3',
+                'p-1.5 rounded',
                 'text-slate-500 hover:text-slate-300',
                 'hover:bg-slate-800/50',
                 'transition-all duration-200'
               )}
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            {/* Header content - 2 column grid */}
-            <div className="flex gap-4">
+            {/* Header content - компактный grid */}
+            <div className="flex gap-3">
               {/* Left column - Avatar & Name */}
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                {/* Avatar */}
-                <Avatar className="h-14 w-14 shrink-0 border-2 border-slate-700/50 shadow-lg">
+              <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                {/* Avatar - меньший размер */}
+                <Avatar className="h-10 w-10 shrink-0 border border-slate-700/50 shadow">
                   {displayResponsible.avatar_url && (
                     <AvatarImage src={displayResponsible.avatar_url} />
                   )}
-                  <AvatarFallback className="bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300 text-base font-medium">
+                  <AvatarFallback className="bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300 text-sm font-medium">
                     {getInitials(displayResponsible.first_name, displayResponsible.last_name)}
                   </AvatarFallback>
                 </Avatar>
 
                 {/* Name & Responsible */}
-                <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex-1 min-w-0">
                   {/* Editable name */}
                   {editingName ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <label htmlFor="section-name" className="sr-only">
                         Название раздела
                       </label>
@@ -383,10 +390,10 @@ export function SectionModal({
                           }
                         })()}
                         className={cn(
-                          'flex-1 px-3 py-1.5 text-base font-semibold',
+                          'flex-1 px-2.5 py-1 text-sm font-semibold',
                           'bg-slate-800/80 border border-slate-600',
-                          'rounded-lg text-slate-100',
-                          'focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20'
+                          'rounded text-slate-100',
+                          'focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20'
                         )}
                         disabled={savingField === 'name'}
                         onKeyDown={(e) => {
@@ -401,33 +408,33 @@ export function SectionModal({
                         onClick={handleNameSave}
                         disabled={savingField === 'name'}
                         aria-label="Сохранить название"
-                        className="p-2 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-amber-500 hover:bg-amber-500/10 rounded transition-colors"
                       >
                         {savingField === 'name' ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
-                          <Check className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5" />
                         )}
                       </button>
                     </div>
                   ) : (
                     <button
-                      className="group flex items-center gap-2 text-left max-w-full"
+                      className="group flex items-center gap-1.5 text-left max-w-full"
                       onClick={() => setEditingName(true)}
                       aria-label="Редактировать название"
                     >
                       <h2
                         id="section-modal-title"
-                        className="text-lg font-semibold text-slate-100 truncate"
+                        className="text-sm font-semibold text-slate-100 truncate"
                       >
                         {form.watch('name') || section.name}
                       </h2>
-                      <Edit3 className="w-3.5 h-3.5 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </button>
                   )}
 
-                  {/* Responsible selector */}
-                  <div className="mt-2">
+                  {/* Responsible selector - компактнее */}
+                  <div className="mt-1">
                     <ResponsibleDropdown
                       id="section-responsible"
                       value={selectedResponsible}
@@ -440,8 +447,8 @@ export function SectionModal({
                 </div>
               </div>
 
-              {/* Right column - Status & Dates */}
-              <div className="flex flex-col items-end gap-3 pr-8">
+              {/* Right column - Status & Dates & Delete - в одну линию */}
+              <div className="flex items-center gap-2 pr-6">
                 {/* Status badge */}
                 <StatusDropdown
                   id="section-status"
@@ -451,6 +458,9 @@ export function SectionModal({
                   isLoading={savingField === 'statusId'}
                   disabled={statusesLoading}
                 />
+
+                {/* Divider */}
+                <div className="h-4 w-px bg-slate-700/50" />
 
                 {/* Dates */}
                 <DateRangeInput
@@ -465,11 +475,28 @@ export function SectionModal({
                       : null
                   }
                 />
+
+                {/* Divider */}
+                <div className="h-4 w-px bg-slate-700/50" />
+
+                {/* Delete button - компактная */}
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 rounded',
+                    'text-[10px] text-slate-500 hover:text-red-400',
+                    'hover:bg-red-500/10',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Удалить</span>
+                </button>
               </div>
             </div>
 
-            {/* Metrics row */}
-            <div className="mt-4 pt-3 border-t border-slate-800/60">
+            {/* Metrics row - компактнее */}
+            <div className="mt-2.5 pt-2.5 border-t border-slate-800/40">
               <SectionMetrics section={section} compact />
             </div>
           </header>
@@ -490,39 +517,39 @@ export function SectionModal({
             onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks' | 'readiness')}
             className="flex-1 flex flex-col overflow-hidden"
           >
-            {/* Tab List */}
-            <Tabs.List className="flex gap-1 px-5 py-2 border-b border-slate-800/50 bg-slate-900/50">
+            {/* Tab List - компактный с amber акцентами */}
+            <Tabs.List className="flex gap-0.5 px-4 py-1.5 border-b border-slate-800/40 bg-slate-900/30">
               <Tabs.Trigger
                 value="overview"
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
-                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
-                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-all',
+                  'data-[state=active]:bg-amber-500/10 data-[state=active]:text-amber-400',
+                  'data-[state=inactive]:text-slate-500 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
                 )}
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-3.5 h-3.5" />
                 Обзор
               </Tabs.Trigger>
               <Tabs.Trigger
                 value="tasks"
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
-                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
-                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-all',
+                  'data-[state=active]:bg-amber-500/10 data-[state=active]:text-amber-400',
+                  'data-[state=inactive]:text-slate-500 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
                 )}
               >
-                <ListTodo className="w-4 h-4" />
+                <ListTodo className="w-3.5 h-3.5" />
                 Задачи
               </Tabs.Trigger>
               <Tabs.Trigger
                 value="readiness"
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
-                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
-                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-all',
+                  'data-[state=active]:bg-amber-500/10 data-[state=active]:text-amber-400',
+                  'data-[state=inactive]:text-slate-500 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
                 )}
               >
-                <Target className="w-4 h-4" />
+                <Target className="w-3.5 h-3.5" />
                 План
               </Tabs.Trigger>
             </Tabs.List>
@@ -555,6 +582,19 @@ export function SectionModal({
           </Tabs.Root>
         </div>
       </FocusScope.Root>
+
+      {/* Delete Section Modal */}
+      <DeleteSectionModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        sectionId={sectionId}
+        sectionName={section.name}
+        onSuccess={() => {
+          setIsDeleteModalOpen(false)
+          onClose()
+          onSuccess?.()
+        }}
+      />
     </>
   )
 }

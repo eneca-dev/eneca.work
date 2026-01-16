@@ -4,7 +4,8 @@
  * Вспомогательные функции для расчёта метрик в строках Timeline
  */
 
-import { parseISO, differenceInDays } from 'date-fns'
+import { differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import type {
   Section,
   DecompositionItem,
@@ -98,13 +99,13 @@ export interface AggregatedMetrics {
  * - Между чекпоинтами: линейная интерполяция
  */
 export function interpolateSectionPlan(section: Section, dateStr: string): number {
-  const date = parseISO(dateStr)
+  const date = parseMinskDate(dateStr)
 
   // Если нет дат раздела, возвращаем 0
   if (!section.startDate || !section.endDate) return 0
 
-  const startDate = parseISO(section.startDate)
-  const endDate = parseISO(section.endDate)
+  const startDate = parseMinskDate(section.startDate)
+  const endDate = parseMinskDate(section.endDate)
 
   // До начала раздела = 0%
   if (date < startDate) return 0
@@ -123,7 +124,7 @@ export function interpolateSectionPlan(section: Section, dateStr: string): numbe
     let rightPoint: { date: string; value: number } | null = null
 
     for (const cp of sorted) {
-      const cpDate = parseISO(cp.date)
+      const cpDate = parseMinskDate(cp.date)
       if (cpDate <= date) {
         leftPoint = cp
       }
@@ -139,7 +140,7 @@ export function interpolateSectionPlan(section: Section, dateStr: string): numbe
 
     // Если до первого чекпоинта - интерполируем от 0% на startDate до первого чекпоинта
     if (!leftPoint && rightPoint) {
-      const firstCpDate = parseISO(rightPoint.date)
+      const firstCpDate = parseMinskDate(rightPoint.date)
       const totalDays = differenceInDays(firstCpDate, startDate)
       if (totalDays <= 0) return rightPoint.value
       const daysFromStart = differenceInDays(date, startDate)
@@ -148,7 +149,7 @@ export function interpolateSectionPlan(section: Section, dateStr: string): numbe
 
     // Если после последнего чекпоинта - интерполируем от последнего чекпоинта до 100% на endDate
     if (leftPoint && !rightPoint) {
-      const lastCpDate = parseISO(leftPoint.date)
+      const lastCpDate = parseMinskDate(leftPoint.date)
       const totalDays = differenceInDays(endDate, lastCpDate)
       if (totalDays <= 0) return 100
       const daysFromLast = differenceInDays(date, lastCpDate)
@@ -157,8 +158,8 @@ export function interpolateSectionPlan(section: Section, dateStr: string): numbe
 
     // Между двумя чекпоинтами - линейная интерполяция
     if (leftPoint && rightPoint) {
-      const leftDate = parseISO(leftPoint.date)
-      const rightDate = parseISO(rightPoint.date)
+      const leftDate = parseMinskDate(leftPoint.date)
+      const rightDate = parseMinskDate(rightPoint.date)
       const totalDays = differenceInDays(rightDate, leftDate)
       if (totalDays <= 0) return leftPoint.value
       const daysFromLeft = differenceInDays(date, leftDate)
@@ -211,11 +212,11 @@ export function aggregateSectionsMetrics(sections: Section[]): AggregatedMetrics
 
   for (const section of sections) {
     if (section.startDate) {
-      const start = parseISO(section.startDate)
+      const start = parseMinskDate(section.startDate)
       if (!minDate || start < minDate) minDate = start
     }
     if (section.endDate) {
-      const end = parseISO(section.endDate)
+      const end = parseMinskDate(section.endDate)
       if (!maxDate || end > maxDate) maxDate = end
     }
   }

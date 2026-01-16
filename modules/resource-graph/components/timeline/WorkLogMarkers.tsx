@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, parseISO, differenceInDays } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import {
   Tooltip,
   TooltipContent,
@@ -50,7 +51,7 @@ export function WorkLogMarkers({
     const aggregateMap = new Map<number, DayAggregate>()
 
     for (const log of workLogs) {
-      const logDate = parseISO(log.date)
+      const logDate = parseMinskDate(log.date)
       const dayIndex = differenceInDays(logDate, range.start)
 
       // Пропускаем если за пределами диапазона
@@ -166,21 +167,21 @@ function WorkLogPill({ day }: WorkLogPillProps) {
         align="center"
         sideOffset={4}
         className="
-          bg-zinc-900/95 backdrop-blur-xl
-          border border-white/10
-          shadow-xl shadow-black/40
+          bg-popover backdrop-blur-xl
+          border border-border
+          shadow-xl
           rounded-lg px-3 py-2.5
           max-w-[220px]
         "
       >
         <div className="space-y-2">
           {/* Header with date */}
-          <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-white/10">
-            <span className="text-[11px] text-white/50">
+          <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
+            <span className="text-[11px] text-muted-foreground">
               {format(day.date, 'dd.MM.yyyy')}
             </span>
             {hasMultiple && (
-              <span className="text-[10px] text-white/40 bg-white/5 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded">
                 {day.logs.length} отчёта
               </span>
             )}
@@ -189,13 +190,13 @@ function WorkLogPill({ day }: WorkLogPillProps) {
           {/* Total summary */}
           <div className="flex items-baseline justify-between gap-4">
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-semibold text-white tabular-nums">
+              <span className="text-lg font-semibold text-popover-foreground tabular-nums">
                 {formatHours(day.totalHours)}
               </span>
-              <span className="text-[11px] text-white/40">часов</span>
+              <span className="text-[11px] text-muted-foreground/70">часов</span>
             </div>
             <div className="text-right">
-              <span className="text-sm font-medium text-emerald-400/90 tabular-nums">
+              <span className="text-sm font-medium text-emerald-500 dark:text-emerald-400/90 tabular-nums">
                 {formatAmount(day.totalAmount)}
               </span>
             </div>
@@ -203,13 +204,13 @@ function WorkLogPill({ day }: WorkLogPillProps) {
 
           {/* Individual logs (if multiple) */}
           {hasMultiple && (
-            <div className="pt-1.5 border-t border-white/10 space-y-2">
+            <div className="pt-1.5 border-t border-border space-y-2">
               {day.logs.map((log) => {
                 const logColor = getEmployeeColor(log.createdBy.id)
                 return (
                   <div key={log.id} className="space-y-0.5">
                     <div className="flex items-start justify-between gap-2 text-[11px]">
-                      <span className="text-white/60 truncate flex-1 min-w-0">
+                      <span className="text-muted-foreground truncate flex-1 min-w-0">
                         {log.description || 'Без описания'}
                       </span>
                       <span className="tabular-nums shrink-0" style={{ color: logColor }}>
@@ -223,7 +224,7 @@ function WorkLogPill({ day }: WorkLogPillProps) {
                           className="w-1.5 h-1.5 rounded-full shrink-0"
                           style={{ backgroundColor: log.budget.typeColor || '#6b7280' }}
                         />
-                        <span className="text-[9px] text-white/40 truncate">
+                        <span className="text-[9px] text-muted-foreground/70 truncate">
                           {log.budget.name}
                         </span>
                       </div>
@@ -241,7 +242,7 @@ function WorkLogPill({ day }: WorkLogPillProps) {
 
           {/* Single log description */}
           {!hasMultiple && day.logs[0]?.description && (
-            <p className="text-[11px] text-white/60 leading-relaxed">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
               {day.logs[0].description}
             </p>
           )}
@@ -253,10 +254,10 @@ function WorkLogPill({ day }: WorkLogPillProps) {
                 className="w-2 h-2 rounded-full shrink-0"
                 style={{ backgroundColor: day.logs[0].budget.typeColor || '#6b7280' }}
               />
-              <span className="text-[10px] text-white/50">
+              <span className="text-[10px] text-muted-foreground">
                 {day.logs[0].budget.name}
                 {day.logs[0].budget.typeName && (
-                  <span className="text-white/30 ml-1">({day.logs[0].budget.typeName})</span>
+                  <span className="text-muted-foreground/50 ml-1">({day.logs[0].budget.typeName})</span>
                 )}
               </span>
             </div>

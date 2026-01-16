@@ -58,6 +58,12 @@ export async function createDecompositionStage(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { data, error } = await supabase
       .from('decomposition_stages')
       .insert({
@@ -77,6 +83,11 @@ export async function createDecompositionStage(
     if (error) {
       console.error('[createDecompositionStage] Error:', error)
       return { success: false, error: error.message }
+    }
+
+    if (!data) {
+      console.error('[createDecompositionStage] No data returned')
+      return { success: false, error: 'Этап создан, но данные не вернулись' }
     }
 
     return {
@@ -109,6 +120,12 @@ export async function updateDecompositionStage(
 ): Promise<ActionResult<StageResult>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {}
@@ -171,6 +188,11 @@ export async function updateDecompositionStage(
 
 /**
  * Удалить этап декомпозиции
+ *
+ * Проверяет целостность данных:
+ * - Нельзя удалить если есть активные loadings (нагрузки сотрудников)
+ * - Нельзя удалить если есть связанные checkpoints
+ * - Элементы декомпозиции открепляются (stage_id = null)
  */
 export async function deleteDecompositionStage(
   stageId: string
@@ -178,12 +200,41 @@ export async function deleteDecompositionStage(
   try {
     const supabase = await createClient()
 
-    // Сначала обнуляем stage_id у всех items этого этапа
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
+    // Проверка 1: Есть ли активные loadings (нагрузки) на этом этапе
+    // Правильное имя колонки: loading_stage (не loading_decomposition_stage_id)
+    const { count: loadingsCount, error: loadingsError } = await supabase
+      .from('loadings')
+      .select('*', { count: 'exact', head: true })
+      .eq('loading_stage', stageId)
+
+    if (loadingsError) {
+      console.error('[deleteDecompositionStage] Loadings check error:', loadingsError)
+      return { success: false, error: 'Ошибка проверки нагрузок' }
+    }
+
+    if (loadingsCount && loadingsCount > 0) {
+      return {
+        success: false,
+        error: `Нельзя удалить этап: на него назначено ${loadingsCount} нагрузок сотрудников. Сначала удалите или перенесите нагрузки.`,
+      }
+    }
+
+    // Примечание: таблица section_checkpoints НЕ имеет связи с decomposition_stages
+    // (нет колонки decomposition_stage_id), поэтому проверка checkpoints не нужна
+
+    // Открепляем items от этапа (они останутся в разделе без этапа)
     await supabase
       .from('decomposition_items')
       .update({ decomposition_item_stage_id: null })
       .eq('decomposition_item_stage_id', stageId)
 
+    // Удаляем этап
     const { error } = await supabase
       .from('decomposition_stages')
       .delete()
@@ -212,6 +263,12 @@ export async function reorderDecompositionStages(
 ): Promise<ActionResult<{ reordered: boolean }>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // Обновляем порядок каждого этапа
     const updates = input.stages.map(({ stageId, order }) =>

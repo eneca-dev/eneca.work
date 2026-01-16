@@ -11,6 +11,8 @@ import {
   Loader2,
   ChevronsDown,
   ChevronsUp,
+  FileText,
+  Save,
 } from 'lucide-react'
 import {
   DndContext,
@@ -35,14 +37,21 @@ import type { Stage, Decomposition, StagesManagerProps } from './types'
 import { calculateTotalStats, generateTempId } from './utils'
 import { DEFAULT_STAGE, DEFAULT_DECOMPOSITION } from './constants'
 
+// Templates - new modals from modals module
+import {
+  TemplateSelectModal,
+  TemplateSaveModal,
+} from '@/modules/modals'
+import type { TemplateStage } from '@/modules/dec-templates'
+
+// Permissions and User
+import { useHasPermission } from '@/modules/permissions'
+import { useUserStore } from '@/stores'
+
 // Hooks
 import {
-  useDecompositionBootstrap,
+  useDecompositionData,
   useWorkLogsAggregate,
-  useEmployees,
-  useWorkCategories,
-  useDifficultyLevels,
-  useStageStatuses,
   useCreateDecompositionStage,
   useUpdateDecompositionStage,
   useDeleteDecompositionStage,
@@ -62,26 +71,37 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   const { toast } = useToast()
 
   // ============================================================================
-  // Data Fetching
+  // Data Fetching - Unified hook с кешированием из resourceGraph
   // ============================================================================
 
-  const { data: bootstrapData, isLoading: isLoadingBootstrap } = useDecompositionBootstrap(sectionId)
-  const { data: employees = [] } = useEmployees()
-  const { data: workCategories = [] } = useWorkCategories()
-  const { data: difficultyLevels = [] } = useDifficultyLevels()
-  const { data: stageStatuses = [] } = useStageStatuses()
+  const {
+    stages: initialStages,
+    workCategories,
+    difficultyLevels,
+    stageStatuses,
+    employees,
+    isLoading: isLoadingData,
+    dataSource,
+  } = useDecompositionData(sectionId)
 
   // Local state for stages (optimistic updates)
   const [stages, setStages] = useState<Stage[]>([])
-  const bootstrapVersionRef = useRef<number>(0)
 
-  // Sync bootstrap data to local state only when bootstrap changes
+  // Track if initial sync is complete for current section
+  const initializedForSectionRef = useRef<string | null>(null)
+
+  // Sync data to local state only on INITIAL load for this section
+  // After initial sync, mutations manage state optimistically
   useEffect(() => {
-    if (bootstrapData?.stages) {
-      bootstrapVersionRef.current += 1
-      setStages(bootstrapData.stages)
+    // Only sync if we haven't initialized for this section yet
+    if (
+      initializedForSectionRef.current !== sectionId &&
+      (initialStages.length > 0 || dataSource !== 'none')
+    ) {
+      initializedForSectionRef.current = sectionId
+      setStages(initialStages)
     }
-  }, [bootstrapData])
+  }, [initialStages, dataSource, sectionId])
 
   // Get all item IDs for work logs - memoize to prevent re-renders
   const allItemIds = useMemo(() => {
@@ -124,6 +144,32 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
     isOpen: boolean
     stageId: string | null
   }>({ isOpen: false, stageId: null })
+
+  // Templates state
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const hasManageTemplatesPermission = useHasPermission('dec.templates.manage')
+  const userDepartmentId = useUserStore((state) => state.profile?.department_id || state.profile?.departmentId)
+
+  // Template stages for save modal (memoized to avoid re-renders)
+  const templateStagesForSave = useMemo((): TemplateStage[] => {
+    return stages.map((stage, index) => ({
+      name: stage.name,
+      order: index,
+      items: stage.decompositions.map((d) => {
+        const workCat = workCategories.find((c) => c.work_category_name === d.typeOfWork)
+        const diffLevel = difficultyLevels.find((dl) => dl.difficulty_abbr === d.difficulty)
+        return {
+          description: d.description,
+          workCategoryId: workCat?.work_category_id || '',
+          workCategoryName: d.typeOfWork,
+          difficultyId: diffLevel?.difficulty_id || null,
+          difficultyName: d.difficulty || null,
+          plannedHours: d.plannedHours,
+        }
+      }),
+    }))
+  }, [stages, workCategories, difficultyLevels])
 
   // ============================================================================
   // DnD Sensors
@@ -243,7 +289,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         })
         toast({
           title: 'Ошибка',
-          description: 'Не удалось удалить этап',
+          description: error instanceof Error ? error.message : 'Не удалось удалить этап',
           variant: 'destructive',
         })
       }
@@ -525,6 +571,38 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   }, [])
 
   // ============================================================================
+  // Template Operations (callbacks for new modals)
+  // ============================================================================
+
+  const handleTemplateApplied = useCallback(
+    (newStages: Stage[]) => {
+      // Add new stages to local state
+      setStages((prev) => [...prev, ...newStages])
+
+      // Expand new stages
+      setExpandedStages((prev) => {
+        const next = new Set(prev)
+        newStages.forEach((s) => next.add(s.id))
+        return next
+      })
+
+      toast({
+        title: 'Шаблон применён',
+        description: `Добавлено ${newStages.length} этап(ов)`,
+      })
+    },
+    [toast]
+  )
+
+  const handleTemplateSaved = useCallback(() => {
+    toast({
+      title: 'Шаблон сохранён',
+      description: 'Шаблон успешно создан',
+    })
+    setSaveDialogOpen(false)
+  }, [toast])
+
+  // ============================================================================
   // Computed Values
   // ============================================================================
 
@@ -543,7 +621,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   // Loading State
   // ============================================================================
 
-  if (isLoadingBootstrap) {
+  if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -578,6 +656,32 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
             <span>{totalStats.totalTasks} зад.</span>
             <span>{totalStats.totalActualHours.toFixed(0)}/{totalStats.totalPlannedHours} ч</span>
             <span>{totalStats.totalProgress}%</span>
+          </div>
+
+          {/* Template buttons - right aligned */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTemplatesDialogOpen(true)}
+              className="h-7 px-2 text-xs"
+              title="Применить шаблон"
+            >
+              <FileText className="h-3.5 w-3.5 mr-1" />
+              Шаблон
+            </Button>
+            {hasManageTemplatesPermission && stages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSaveDialogOpen(true)}
+                className="h-7 px-2 text-xs"
+                title="Сохранить как шаблон"
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                Сохранить как шаблон
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -664,6 +768,25 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         employees={employees}
         currentResponsibles={currentStageForDialog?.responsibles || []}
         onAssign={handleAssignResponsibles}
+      />
+
+      {/* Template Select Modal (new design) */}
+      <TemplateSelectModal
+        isOpen={templatesDialogOpen}
+        onClose={() => setTemplatesDialogOpen(false)}
+        onApply={handleTemplateApplied}
+        sectionId={sectionId}
+        hasManagePermission={hasManageTemplatesPermission}
+        defaultDepartmentId={userDepartmentId || undefined}
+      />
+
+      {/* Template Save Modal (new design) */}
+      <TemplateSaveModal
+        isOpen={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSuccess={handleTemplateSaved}
+        stages={templateStagesForSave}
+        defaultDepartmentId={userDepartmentId || undefined}
       />
     </div>
   )

@@ -1,12 +1,13 @@
 'use client'
 
 import { forwardRef } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, SearchX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, TimelineRange } from '../../types'
 import { TimelineHeader, type DayCell } from './TimelineHeader'
 import { ProjectRow } from './rows'
 import { SIDEBAR_WIDTH } from '../../constants'
+import { CheckpointLinksProvider, CheckpointVerticalLinks } from '@/modules/checkpoints'
 
 interface ResourceGraphTimelineProps {
   projects: Project[]
@@ -40,56 +41,72 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
   ) {
     if (isLoading) {
       return (
-        <div className={cn('flex items-center justify-center h-full', className)}>
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <div className={cn('flex items-center justify-center h-full bg-background', className)}>
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">Загрузка...</span>
+          </div>
         </div>
       )
     }
 
     if (projects.length === 0) {
       return (
-        <div className={cn('flex items-center justify-center h-full text-muted-foreground', className)}>
-          Нет данных для отображения
+        <div className={cn('flex items-center justify-center h-full bg-background', className)}>
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <SearchX className="h-12 w-12 opacity-50" />
+            <span className="text-sm">Нет данных для отображения</span>
+            <span className="text-xs">Попробуйте изменить фильтры</span>
+          </div>
         </div>
       )
     }
 
     return (
-      <div
-        ref={ref}
-        onScroll={onScroll}
-        className={cn('flex flex-col h-full overflow-auto', className)}
-      >
-        {/* Header area - only shown when not hidden (header in parent sticky area) */}
-        {!hideHeader && (
-          <div className="flex border-b border-border/50 sticky top-0 z-20 bg-background">
-            {/* Sidebar header */}
-            <div
-              className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"
-              style={{ width: SIDEBAR_WIDTH }}
-            >
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Структура
-              </span>
-            </div>
+      <CheckpointLinksProvider>
+        <div
+          ref={ref}
+          onScroll={onScroll}
+          data-timeline-container
+          className={cn('flex flex-col h-full overflow-auto relative', className)}
+        >
+          {/* Header area - only shown when not hidden (header in parent sticky area) */}
+          {!hideHeader && (
+            <div className="flex border-b border-border/50 sticky top-0 z-20 bg-background">
+              {/* Sidebar header */}
+              <div
+                className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"
+                style={{ width: SIDEBAR_WIDTH }}
+              >
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Структура
+                </span>
+              </div>
 
-            {/* Timeline header */}
-            <div className="flex-1 overflow-hidden">
-              <TimelineHeader dayCells={dayCells} />
+              {/* Timeline header */}
+              <div className="flex-1 overflow-hidden">
+                <TimelineHeader dayCells={dayCells} />
+              </div>
             </div>
+          )}
+
+          {/* Content area - wrapper with relative positioning for absolute SVG */}
+          <div className="relative flex-1" data-timeline-content>
+            {/* Content area - project rows */}
+            {projects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                dayCells={dayCells}
+                range={range}
+              />
+            ))}
+
+            {/* Вертикальные линии между связанными чекпоинтами */}
+            <CheckpointVerticalLinks />
           </div>
-        )}
-
-        {/* Content area - project rows */}
-        {projects.map((project) => (
-          <ProjectRow
-            key={project.id}
-            project={project}
-            dayCells={dayCells}
-            range={range}
-          />
-        ))}
-      </div>
+        </div>
+      </CheckpointLinksProvider>
     )
   }
 )

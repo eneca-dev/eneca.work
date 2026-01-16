@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import {
   Tooltip,
   TooltipContent,
@@ -10,6 +11,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import type { Loading } from '../../types'
+import { getInitials } from '../../utils'
 
 interface LoadingBadgesProps {
   /** Загрузки для этого этапа */
@@ -56,11 +58,11 @@ export function LoadingBadges({ loadings, maxVisible = 4 }: LoadingBadgesProps) 
                   className="
                     relative flex items-center justify-center
                     w-[18px] h-[18px] rounded-full
-                    bg-gradient-to-b from-white/[0.12] to-white/[0.04]
-                    border border-white/[0.15]
-                    text-[9px] font-medium text-white/70
+                    bg-muted/50 dark:bg-gradient-to-b dark:from-white/[0.12] dark:to-white/[0.04]
+                    border border-border dark:border-white/[0.15]
+                    text-[9px] font-medium text-muted-foreground dark:text-white/70
                     cursor-default
-                    hover:from-white/[0.18] hover:to-white/[0.08]
+                    hover:bg-muted dark:hover:from-white/[0.18] dark:hover:to-white/[0.08]
                     transition-all duration-200
                   "
                   style={{ zIndex: maxVisible + 1 }}
@@ -71,15 +73,15 @@ export function LoadingBadges({ loadings, maxVisible = 4 }: LoadingBadgesProps) 
               <TooltipContent
                 side="top"
                 className="
-                  bg-zinc-900/95 backdrop-blur-xl
-                  border border-white/10
-                  shadow-xl shadow-black/40
+                  bg-popover backdrop-blur-xl
+                  border border-border
+                  shadow-xl
                   rounded-lg px-3 py-2
                 "
               >
                 <div className="space-y-1">
                   {activeLoadings.slice(maxVisible).map(l => (
-                    <div key={l.id} className="text-[11px] text-white/70">
+                    <div key={l.id} className="text-[11px] text-muted-foreground">
                       {l.employee.name || 'Не назначен'} · {formatRate(l.rate)}
                     </div>
                   ))}
@@ -118,10 +120,10 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
               relative
               rounded-full
               p-[1px]
-              bg-gradient-to-b from-white/[0.2] to-white/[0.05]
+              bg-border dark:bg-gradient-to-b dark:from-white/[0.2] dark:to-white/[0.05]
               transition-all duration-200
-              group-hover:from-white/[0.3] group-hover:to-white/[0.1]
-              group-hover:shadow-[0_0_8px_rgba(255,255,255,0.15)]
+              group-hover:bg-muted-foreground/30 dark:group-hover:from-white/[0.3] dark:group-hover:to-white/[0.1]
+              dark:group-hover:shadow-[0_0_8px_rgba(255,255,255,0.15)]
             "
           >
             <Avatar className="w-[16px] h-[16px] border-0">
@@ -134,8 +136,9 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
               <AvatarFallback
                 className="
                   text-[7px] font-medium
-                  bg-gradient-to-b from-zinc-700 to-zinc-800
-                  text-white/80
+                  bg-muted text-muted-foreground
+                  dark:bg-gradient-to-b dark:from-zinc-700 dark:to-zinc-800
+                  dark:text-white/80
                 "
               >
                 {initials}
@@ -168,9 +171,9 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
         align="center"
         sideOffset={6}
         className="
-          bg-zinc-900/95 backdrop-blur-xl
-          border border-white/10
-          shadow-xl shadow-black/40
+          bg-popover backdrop-blur-xl
+          border border-border
+          shadow-xl
           rounded-lg px-3 py-2.5
           max-w-[200px]
         "
@@ -185,23 +188,23 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
                   alt={loading.employee.name || ''}
                 />
               )}
-              <AvatarFallback className="text-[9px] bg-zinc-700 text-white/80">
+              <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div>
-              <div className="text-sm font-medium text-white">
+              <div className="text-sm font-medium text-popover-foreground">
                 {loading.employee.name || 'Не назначен'}
               </div>
-              <div className="text-[10px] text-white/50">
+              <div className="text-[10px] text-muted-foreground">
                 Ставка: {formatRate(loading.rate)}
               </div>
             </div>
           </div>
 
           {/* Period */}
-          <div className="flex items-center gap-2 text-[11px] text-white/60">
-            <span className="text-white/40">Период:</span>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="text-muted-foreground/70">Период:</span>
             <span className="tabular-nums">
               {formatDate(loading.startDate)} — {formatDate(loading.finishDate)}
             </span>
@@ -209,8 +212,8 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
 
           {/* Comment */}
           {loading.comment && (
-            <div className="pt-1 border-t border-white/10">
-              <p className="text-[11px] text-white/60 leading-relaxed">
+            <div className="pt-1 border-t border-border">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
                 {loading.comment}
               </p>
             </div>
@@ -219,15 +222,6 @@ function LoadingAvatar({ loading, index }: LoadingAvatarProps) {
       </TooltipContent>
     </Tooltip>
   )
-}
-
-/**
- * Получить инициалы из имени
- */
-function getInitials(firstName: string | null, lastName: string | null): string {
-  const first = firstName?.charAt(0)?.toUpperCase() || ''
-  const last = lastName?.charAt(0)?.toUpperCase() || ''
-  return first + last || '?'
 }
 
 /**
@@ -256,7 +250,7 @@ function formatRateCompact(rate: number): string {
  */
 function formatDate(dateStr: string): string {
   try {
-    return format(parseISO(dateStr), 'dd.MM')
+    return format(parseMinskDate(dateStr), 'dd.MM')
   } catch {
     return '—'
   }

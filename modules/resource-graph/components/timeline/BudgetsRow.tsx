@@ -21,8 +21,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { BudgetCreateModal } from '@/modules/modals'
-import { useDeactivateBudget, type BudgetCurrent } from '@/modules/budgets'
+import { useDeactivateBudget } from '@/modules/budgets'
 import type { DayCell } from './TimelineHeader'
+import type { BatchBudget } from '../../types'
 import type { TimelineRange } from '../../types'
 import { TimelineGrid } from './shared'
 import { calculateBarPosition } from './TimelineBar'
@@ -47,11 +48,13 @@ interface BudgetsRowProps {
   range: TimelineRange
   sectionStartDate: string | null
   sectionEndDate: string | null
-  /** Бюджеты раздела (загружаются в родительском компоненте) */
-  budgets: BudgetCurrent[] | undefined
+  /** Цвет статуса раздела (для палочек периода) */
+  sectionStatusColor?: string
+  /** Бюджеты раздела (загружаются в родительском компоненте через batch) */
+  budgets: BatchBudget[] | undefined
   /** Идёт загрузка бюджетов */
   budgetsLoading: boolean
-  /** Callback для перезагрузки данных */
+  /** Callback для перезагрузки данных (инвалидирует batch кеш) */
   onRefetch?: () => void
 }
 
@@ -71,6 +74,7 @@ export function BudgetsRow({
   range,
   sectionStartDate,
   sectionEndDate,
+  sectionStatusColor,
   budgets,
   budgetsLoading: isLoading,
   onRefetch: refetch,
@@ -103,12 +107,12 @@ export function BudgetsRow({
     <>
       {/* Заголовок строки бюджетов */}
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar */}
         <div
-          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+          className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -142,7 +146,7 @@ export function BudgetsRow({
 
           {/* Summary - compact */}
           {!isLoading && budgetCount > 0 && (
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className={cn(
@@ -171,7 +175,7 @@ export function BudgetsRow({
           )}
 
           {/* Add budget button */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -196,14 +200,17 @@ export function BudgetsRow({
           </TooltipProvider>
         </div>
 
-        {/* Timeline - показываем период раздела */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        {/* Timeline - показываем период раздела (серый, как у развёрнутого раздела) */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
-          <SectionPeriodFrame
-            startDate={sectionStartDate}
-            endDate={sectionEndDate}
-            range={range}
-          />
+          <div className="absolute inset-0 opacity-30 saturate-50">
+            <SectionPeriodFrame
+              startDate={sectionStartDate}
+              endDate={sectionEndDate}
+              range={range}
+              color={sectionStatusColor}
+            />
+          </div>
         </div>
       </div>
 
@@ -245,15 +252,7 @@ export function BudgetsRow({
 // ============================================================================
 
 interface BudgetItemRowProps {
-  budget: {
-    budget_id: string
-    name: string
-    planned_amount: number
-    spent_amount: number
-    spent_percentage: number
-    type_name: string | null
-    type_color: string | null
-  }
+  budget: BatchBudget
   dayCells: DayCell[]
   depth: number
   timelineWidth: number
@@ -296,12 +295,12 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
   return (
     <div
-      className="group flex border-b border-border/30 hover:bg-muted/20 transition-colors"
+      className="group flex border-b border-border/30"
       style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
     >
       {/* Sidebar */}
       <div
-        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background group-hover:bg-muted/20"
+        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-40 bg-background"
         style={{
           width: SIDEBAR_WIDTH,
           paddingLeft: 8 + depth * 16,
@@ -318,11 +317,11 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
         {/* Name */}
         <span className="text-[11px] text-muted-foreground truncate flex-1 min-w-0" title={budget.name}>
-          {budget.type_name || budget.name}
+          {budget.name}
         </span>
 
         {/* Amount */}
-        <TooltipProvider delayDuration={200}>
+        <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-[10px] tabular-nums shrink-0 ml-auto" style={{ color: progressColor }}>
@@ -342,7 +341,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
         {/* Delete button */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertDialogTrigger asChild>
@@ -400,7 +399,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
       </div>
 
       {/* Timeline - progress bar в пределах периода раздела */}
-      <div className="relative" style={{ width: timelineWidth }}>
+      <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
         <TimelineGrid dayCells={dayCells} />
 
         {/* Progress bar - позиционируется по датам раздела */}

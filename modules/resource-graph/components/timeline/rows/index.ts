@@ -3,7 +3,6 @@
  *
  * Иерархические компоненты строк для Timeline:
  * - ProjectRow - верхний уровень (проект)
- * - StageRow - стадия проекта
  * - ObjectRow - объект со сводными метриками
  * - SectionRow - раздел с графиками готовности и бюджета
  * - DecompositionStageRow - этап декомпозиции с загрузками
@@ -11,7 +10,6 @@
  */
 
 export { ProjectRow } from './ProjectRow'
-export { StageRow } from './StageRow'
 export { ObjectRow } from './ObjectRow'
 export { SectionRow } from './SectionRow'
 export { DecompositionStageRow } from './DecompositionStageRow'

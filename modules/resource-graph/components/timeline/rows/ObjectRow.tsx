@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { ChevronRight, Box } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProjectObject, TimelineRange } from '../../../types'
@@ -12,6 +12,9 @@ import { BudgetSpendingArea } from '../BudgetSpendingArea'
 import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
+import { usePrefetchCheckpoints } from '@/modules/checkpoints'
+import { useSectionsBatch, usePrefetchObjectData } from '../../../hooks'
+import { useRowExpanded } from '../../../stores'
 
 // ============================================================================
 // Object Row
@@ -27,8 +30,35 @@ interface ObjectRowProps {
  * Строка объекта - показывает агрегированные метрики из всех разделов
  */
 export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const { isExpanded, toggle } = useRowExpanded('object', object.id)
   const hasChildren = object.sections.length > 0
+
+  // Собираем ID секций для batch загрузки
+  const sectionIds = useMemo(() => object.sections.map((s) => s.id), [object.sections])
+
+  // Batch загрузка всех данных для секций объекта (1 запрос вместо 6×N)
+  const { data: batchData, isLoading: batchLoading } = useSectionsBatch(
+    object.id,
+    sectionIds,
+    { enabled: isExpanded }
+  )
+
+  // Prefetch чекпоинтов для всех разделов объекта
+  const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
+
+  // Prefetch batch данных объекта
+  const prefetchObjectData = usePrefetchObjectData()
+
+  // Prefetch данных при наведении на кнопку раскрытия (до клика)
+  const handleMouseEnter = useCallback(() => {
+    if (!isExpanded && object.sections.length > 0) {
+      // Prefetch чекпоинтов
+      prefetchForSections(sectionIds)
+      prefetchProjectSections(object.sections[0].id)
+      // Prefetch batch данных (workLogs, loadings, readiness, etc.)
+      prefetchObjectData(object)
+    }
+  }, [isExpanded, object, sectionIds, prefetchForSections, prefetchProjectSections, prefetchObjectData])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {
@@ -37,19 +67,19 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-  const depth = 2
+  const depth = 1
 
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: OBJECT_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}
         <div
           className={cn(
             'flex items-center gap-1 shrink-0 border-r border-border px-2',
-            'sticky left-0 z-20 bg-background'
+            'sticky left-0 z-40 bg-background'
           )}
           style={{
             width: SIDEBAR_WIDTH,
@@ -59,7 +89,8 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           {/* Expand/Collapse */}
           {hasChildren ? (
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={toggle}
+              onMouseEnter={handleMouseEnter}
               className="p-0.5 hover:bg-muted rounded transition-colors"
             >
               <ChevronRight
@@ -82,8 +113,8 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           </span>
         </div>
 
-        {/* Timeline area - fixed width */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        {/* Timeline area - fixed width, isolate creates stacking context, overflow-hidden clips bleeding elements */}
+        <div className="relative isolate overflow-hidden" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
           {/* Агрегированные графики объекта */}
           {aggregatedMetrics && (
@@ -134,6 +165,9 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           dayCells={dayCells}
           range={range}
           isObjectExpanded={isExpanded}
+          objectId={object.id}
+          batchData={batchData}
+          batchLoading={batchLoading}
         />
       ))}
     </>

@@ -1,0 +1,199 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "kanban",
+    "displayName": "Kanban Board",
+    "description": "Канбан-доска для управления разделами проектов по статусам",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": "/dashboard/tasks (вкладка Канбан)",
+    "tags": ["feature", "ui"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для работы с данными канбана",
+      "components/": "React компоненты канбан-доски",
+      "constants/": "Колонки канбана и статусы",
+      "filters/": "Хуки для фильтрации",
+      "hooks/": "React Query хуки",
+      "schemas/": "Zod схемы валидации",
+      "stores/": "Zustand stores (UI state, filters)",
+      "types/": "TypeScript типы",
+      "utils/": "Утилиты"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "KanbanBoard",
+      "useKanbanStore",
+      "useKanbanFiltersStore",
+      "useKanbanSections",
+      "KANBAN_FILTER_CONFIG",
+      "KANBAN_COLUMNS"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useKanbanSections",
+      "description": "Получение разделов для канбан-доски с фильтрацией",
+      "file": "hooks/index.ts",
+      "returns": "{ data: KanbanSection[], isLoading }"
+    },
+    {
+      "name": "useKanbanFilterOptions",
+      "description": "Опции для автокомплита фильтров",
+      "file": "filters/useFilterOptions.ts"
+    }
+  ],
+
+  "actions": [],
+
+  "stores": [
+    {
+      "name": "useKanbanStore",
+      "description": "UI состояние канбан-доски",
+      "file": "stores/index.ts",
+      "persistence": null,
+      "state": ["viewSettings"],
+      "actions": ["setViewSettings"]
+    },
+    {
+      "name": "useKanbanFiltersStore",
+      "description": "Состояние фильтров канбана",
+      "file": "stores/index.ts",
+      "persistence": "kanban-filters",
+      "state": ["filterString"],
+      "actions": ["setFilterString", "clearFilters"]
+    }
+  ],
+
+  "components": [
+    {
+      "name": "KanbanBoard",
+      "description": "Главный компонент канбан-доски",
+      "file": "components/KanbanBoard.tsx",
+      "props": ["filterString?", "queryParams?"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Column Status Mapping",
+      "description": "Статусы разделов маппятся на колонки через KANBAN_COLUMNS",
+      "example": "const column = getColumnById(section.status)"
+    }
+  ],
+
+  "antipatterns": [],
+
+  "technologies": ["@tanstack/react-query", "zustand", "@dnd-kit/core", "tailwindcss"],
+
+  "dependencies": {
+    "modules": ["cache", "inline-filter", "modals"],
+    "database": {
+      "tables": ["sections", "decomposition_stages"],
+      "views": ["v_kanban_sections"],
+      "enums": ["section_status_enum"],
+      "functions": []
+    }
+  },
+
+  "dependents": ["tasks"],
+
+  "cache": {
+    "queryKeys": ["kanban.sections"],
+    "realtimeChannels": ["sections"],
+    "invalidationRules": []
+  },
+
+  "permissions": ["kanban.view", "kanban.move_sections"],
+
+  "tasks": [
+    {
+      "id": "KB-001",
+      "title": "Исправлена ошибка при создании этапа в канбане",
+      "description": "При создании этапа через модалку StageCreateModal показывалась ошибка \"Неизвестная ошибка при создании этапа\", хотя этап создавался в БД успешно.\n\nПричина: createCacheMutation (TanStack Query) возвращает из mutateAsync только data, а не весь ActionResult { success, data, error }. Модалка проверяла stageResult.success и stageResult.data, которых не было.\n\nРешение: Изменили проверку с if (!stageResult.success || !stageResult.data) на if (!stageResult || !stageResult.id), проверяя наличие id напрямую.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-16",
+      "updatedAt": "2026-01-16",
+      "completedAt": "2026-01-16",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1
+    },
+    {
+      "id": "KB-AUDIT",
+      "title": "Full Module Audit: Kanban Board",
+      "description": "Полный аудит модуля канбан-доски для подтверждения качества.\n\nОсобое внимание на drag-and-drop логику, обновление статусов и производительность при большом количестве карточек.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 4,
+      "checklist": {
+        "database": [
+          "[ ] v_kanban_sections возвращает все нужные поля",
+          "[ ] Индексы на sections(status, project_id)",
+          "[ ] section_status_enum содержит все статусы колонок",
+          "[ ] UPDATE sections SET status работает корректно"
+        ],
+        "security": [
+          "[ ] updateSectionStatus (если есть) имеет auth check",
+          "[ ] RLS policies позволяют изменять только свои разделы",
+          "[ ] Permission check: kanban.move_sections"
+        ],
+        "businessLogic": [
+          "[ ] Drag-and-drop перемещает раздел в правильную колонку",
+          "[ ] Статус раздела обновляется в БД после drop",
+          "[ ] Порядок карточек в колонке сохраняется",
+          "[ ] Оптимистичное обновление + rollback при ошибке",
+          "[ ] Фильтры применяются корректно (проект, ответственный)",
+          "[ ] Edge case: перетаскивание в ту же колонку",
+          "[ ] Edge case: пустая колонка (должен работать drop)"
+        ],
+        "performance": [
+          "[ ] Загрузка 100+ карточек < 2 сек",
+          "[ ] Drag операция не тормозит UI",
+          "[ ] Нет лишних ре-рендеров при drag",
+          "[ ] dnd-kit оптимизирован (DragOverlay)"
+        ],
+        "codeQuality": [
+          "[ ] KANBAN_COLUMNS типизированы",
+          "[ ] Zustand stores минимальны по scope",
+          "[ ] Нет `any` в типах",
+          "[ ] KanbanBoard < 300 строк"
+        ],
+        "cache": [
+          "[ ] queryKeys.kanban.sections используется",
+          "[ ] Invalidation после перемещения",
+          "[ ] Realtime на sections обновляет UI"
+        ]
+      },
+      "auditProcedure": [
+        "1. Открыть /dashboard/tasks, вкладка 'Канбан'",
+        "2. Перетащить несколько карточек между колонками",
+        "3. Обновить страницу — статусы должны сохраниться",
+        "4. Проверить фильтрацию (по проекту, по ответственному)",
+        "5. Проверить Console на ошибки при drag-and-drop",
+        "6. Симулировать сетевую ошибку — проверить rollback"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": ["Initial release", "Drag-and-drop между колонками", "Интеграция с InlineFilter"]
+    }
+  ]
+}

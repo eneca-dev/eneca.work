@@ -20,7 +20,7 @@ interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
-  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'
+  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition' | 'reports'
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
@@ -73,8 +73,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition2' | 'tasks' | 'reports' | 'loadings'>(
-    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition2' | 'reports'>(
+    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : (initialTab as 'overview' | 'comments' | 'reports'))
   )
   const initializedRef = useRef(false)
 
@@ -362,7 +362,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   // Устанавливаем активную вкладку только при первой инициализации
   useEffect(() => {
     if (isOpen && !initializedRef.current) {
-      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : initialTab))
+      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : (initialTab as 'overview' | 'comments' | 'reports')))
       initializedRef.current = true
     }
   }, [isOpen, initialTab])
@@ -786,16 +786,6 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               Задачи
             </button>
             
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-                activeTab === 'tasks'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              Задания
-            </button>
             <button
               onClick={() => setActiveTab('comments')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${

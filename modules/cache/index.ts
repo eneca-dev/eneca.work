@@ -34,11 +34,12 @@ export type {
   CheckpointFilters,
 } from './keys/query-keys'
 
-// Provider
+// Providers
 export { QueryProvider } from './providers/query-provider'
+export { ReferencePrefetch } from './providers/reference-prefetch'
 
 // Client config
-export { getQueryClient, staleTimePresets, resetQueryClient } from './client/query-client'
+export { getQueryClient, staleTimePresets, resetQueryClient, invalidateAllQueries } from './client/query-client'
 
 // Hook Factories
 export {
@@ -51,6 +52,7 @@ export {
   // Mutation factories
   createCacheMutation,
   createSimpleMutation,
+  createCreateMutation,
   createDeleteMutation,
   createUpdateMutation,
 } from './hooks'
