@@ -1059,9 +1059,10 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
             {/* Ставка и Загруженность в одну строку */}
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
-              <Label className="text-right md:col-span-1 col-span-full pt-2">Ставка и Загруженность</Label>
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Загруженность</Label>
               <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="space-y-1">
+                {/* TEMPORARILY HIDDEN: Salary field */}
+                {/* <div className="space-y-1">
                   <Input
                     id="salary"
                     type="number"
@@ -1075,7 +1076,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     title={!canEditSalaryFields ? "Недостаточно прав для редактирования ставки" : ""}
                   />
                   <p className="text-xs text-gray-500">Ставка BYN/час {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
-                </div>
+                </div> */}
 
                 <div className="space-y-1">
                   <Select

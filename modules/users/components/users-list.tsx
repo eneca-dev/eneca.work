@@ -1133,12 +1133,13 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                           <span>Категория</span>
                         </div>
                       </TableHead>
-                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
+                      {/* TEMPORARILY HIDDEN: Salary column header */}
+                      {/* <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
                         <div className="flex items-center space-x-1">
                           <DollarSign className="h-3 w-3" />
                           <span>Ставка</span>
                         </div>
-                      </TableHead>
+                      </TableHead> */}
                       <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
                         <div className="flex items-center space-x-1">
                           <Tag className="h-3 w-3" />
@@ -1179,11 +1180,12 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                           <span>Должность</span>
                         </div>
                       </TableHead>
-                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
+                      {/* TEMPORARILY HIDDEN: Salary column header (no grouping mode) */}
+                      {/* <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
                         <div className="flex items-center space-x-1">
                           <span>Ставка</span>
                         </div>
-                      </TableHead>
+                      </TableHead> */}
                       <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
                         <div className="flex items-center space-x-1">
                           <Tag className="h-3 w-3" />
@@ -1253,7 +1255,8 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                {/* TEMPORARILY HIDDEN: Salary cell */}
+                                {/* <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                   <div className="text-center">
                                     <span className="text-xs sm:text-sm font-medium">
                                       {canViewRate(user) && user.salary ? (
@@ -1264,7 +1267,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                       ) : '—'}
                                     </span>
                                   </div>
-                                </TableCell>
+                                </TableCell> */}
 
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                   <div className="flex flex-col items-start space-y-0.5">
@@ -1444,8 +1447,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                             <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                               <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                             </TableCell>
+                                            {/* TEMPORARILY HIDDEN: Salary cell (expanded view) */}
                                             {/* Ставка */}
-                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                            {/* <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                               <div className="text-center">
                                                 <span className="text-xs sm:text-sm font-medium">
                                                   {canViewRate(user) && user.salary ? (
@@ -1456,7 +1460,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                                   ) : '—'}
                                                 </span>
                                               </div>
-                                            </TableCell>
+                                            </TableCell> */}
                                             {/* Роль */}
                                             <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                               <div className="flex flex-col items-start space-y-0.5">
