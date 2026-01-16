@@ -1,0 +1,261 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "tasks",
+    "displayName": "Tasks Page",
+    "description": "Страница Задачи с системой вкладок, объединяет Kanban, Timeline, Departments и Budgets представления",
+    "version": "2.0.0",
+    "status": "stable",
+    "route": "/dashboard/tasks",
+    "tags": ["page", "ui", "tabs"]
+  },
+
+  "documentation": {
+    "overview": "Модуль Tasks предоставляет единую страницу для работы с задачами. Поддерживает 4 системных вкладки (Канбан, График, Отделы, Бюджеты) и до 10 пользовательских вкладок. Каждая вкладка хранит свой набор фильтров и тип отображения.",
+
+    "features": [
+      "4 начальные системные вкладки: Канбан, График, Отделы, Бюджеты",
+      "Все вкладки можно удалить (включая системные)",
+      "Максимум 10 вкладок (MAX_USER_TABS)",
+      "Каждая вкладка хранит свой filterString и viewMode",
+      "Persist в localStorage (ключ: tasks-tabs)",
+      "Inline фильтр с автокомплитом",
+      "Locked filters на основе permissions",
+      "Empty state при удалении всех вкладок",
+      "Lazy loading: данные загружаются только при наличии фильтров или по запросу"
+    ],
+
+    "tabSystem": {
+      "systemTabs": {
+        "kanban": "Канбан-доска с проектами",
+        "timeline": "График ресурсов (Gantt)",
+        "departments": "Timeline по отделам",
+        "budgets": "Бюджеты проектов"
+      },
+      "userTabs": {
+        "maxCount": 10,
+        "capabilities": ["Создание", "Редактирование названия", "Удаление", "Сохранение фильтров"],
+        "restrictions": ["Нельзя переименовать системные вкладки"]
+      },
+      "deleteBehavior": {
+        "systemTabs": "Можно удалить",
+        "allTabsDeleted": "Показывается empty state с кнопкой создания",
+        "limit": "Максимум 10 вкладок всего"
+      }
+    },
+
+    "dataFlow": {
+      "filterChange": "InlineFilter → handleFilterChange → updateActiveTabFilters → tabs store (persisted)",
+      "tabSwitch": "TasksTabs → setActiveTab → store.activeTabId → TasksView re-renders with new filterString/viewMode",
+      "createTab": "TabModal → createTab → store adds tab → switches to new tab"
+    }
+  },
+
+  "architecture": {
+    "structure": {
+      "components/": "UI компоненты страницы",
+      "components/TasksView.tsx": "Главный компонент страницы",
+      "components/TasksTabs.tsx": "Компонент вкладок с кнопкой [+]",
+      "components/TabModal.tsx": "Модалка создания/редактирования вкладки",
+      "hooks/": "React хуки модуля",
+      "hooks/useTasksFilterOptions.ts": "Загрузка опций фильтров + locked filters",
+      "stores/": "Zustand stores",
+      "stores/tabs-store.ts": "Store вкладок с persist"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "TasksView",
+      "TasksTabs",
+      "TabModal",
+      "useTasksTabsStore",
+      "useTasksFilterOptions",
+      "TASKS_FILTER_CONFIG",
+      "VIEW_MODE_ICONS",
+      "MAX_USER_TABS",
+      "TaskTab",
+      "TasksViewMode"
+    ]
+  },
+
+  "stores": [
+    {
+      "name": "useTasksTabsStore",
+      "description": "Zustand store для управления вкладками",
+      "file": "stores/tabs-store.ts",
+      "persist": {
+        "key": "tasks-tabs",
+        "version": 1
+      },
+      "state": {
+        "tabs": "TaskTab[] — массив вкладок (системные + пользовательские)",
+        "activeTabId": "string — ID активной вкладки"
+      },
+      "actions": [
+        "setActiveTab(id) — переключить вкладку",
+        "createTab(input) — создать вкладку (возвращает id или null при лимите)",
+        "updateTab(id, updates) — обновить вкладку",
+        "deleteTab(id) — удалить вкладку (только пользовательские)",
+        "updateActiveTabFilters(filterString) — обновить фильтры активной вкладки",
+        "canCreateTab() — проверить можно ли создать ещё вкладку"
+      ]
+    }
+  ],
+
+  "hooks": [
+    {
+      "name": "useTasksFilterOptions",
+      "description": "Загружает опции для автокомплита фильтра + locked filters",
+      "file": "hooks/useTasksFilterOptions.ts",
+      "returns": "{ options: FilterOption[], lockedFilters: LockedFilter[], isLoading }"
+    }
+  ],
+
+  "components": [
+    {
+      "name": "TasksView",
+      "description": "Главный компонент страницы Задачи",
+      "file": "components/TasksView.tsx",
+      "props": "none",
+      "features": ["Tabs header", "Inline filter", "Dynamic view switching"]
+    },
+    {
+      "name": "TasksTabs",
+      "description": "GitHub-style вкладки с кнопкой добавления",
+      "file": "components/TasksTabs.tsx",
+      "props": "className?",
+      "features": ["System tabs", "User tabs with dropdown menu", "Add button (hidden at limit)"]
+    },
+    {
+      "name": "TabModal",
+      "description": "Модалка создания/редактирования вкладки (стиль BudgetCreateModal)",
+      "file": "components/TabModal.tsx",
+      "props": "open, onClose, editingTab"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Tab-specific Filters",
+      "description": "Каждая вкладка хранит свой filterString, который загружается при переключении",
+      "example": "const filterString = activeTab?.filterString ?? ''"
+    },
+    {
+      "name": "Granular Zustand Selectors",
+      "description": "Используем отдельные селекторы для tabs и activeTabId для правильной реактивности",
+      "example": "const tabs = useTasksTabsStore((s) => s.tabs)\nconst activeTabId = useTasksTabsStore((s) => s.activeTabId)"
+    },
+    {
+      "name": "View Mode Icons",
+      "description": "Иконки определяются по viewMode, не хранятся отдельно",
+      "example": "const Icon = VIEW_MODE_ICON_MAP[tab.viewMode]"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Subscribe to whole store",
+      "description": "Не подписывайся на весь store через деструктуризацию в TasksView",
+      "instead": "Используй отдельные селекторы: useStore(s => s.tabs), useStore(s => s.activeTabId)"
+    },
+    {
+      "name": "Store emoji as icon",
+      "description": "Не храни иконки как emoji — используй lucide icon names",
+      "instead": "Иконка вычисляется из viewMode через VIEW_MODE_ICONS"
+    }
+  ],
+
+  "technologies": ["zustand", "@tanstack/react-query", "lucide-react"],
+
+  "dependencies": {
+    "modules": ["inline-filter", "permissions", "kanban", "resource-graph", "departments-timeline", "budgets-page", "cache"],
+    "database": {
+      "tables": [],
+      "views": []
+    }
+  },
+
+  "dependents": [],
+
+  "cache": {
+    "localStorage": {
+      "tasks-tabs": "Вкладки и их настройки (version 1)"
+    },
+    "queryKeys": []
+  },
+
+  "permissions": [],
+
+  "tasks": [
+    {
+      "id": "TABS-001",
+      "title": "feat(tasks): Система пользовательских вкладок с сохранёнными фильтрами",
+      "description": "Реализована система вкладок для страницы /tasks с возможностью создания пользовательских вкладок с преднастроенными фильтрами",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-16",
+      "completedAt": "2026-01-16",
+      "relatedIssue": "https://github.com/eneca-dev/eneca.work/issues/249",
+      "relatedFiles": [
+        "stores/tabs-store.ts",
+        "components/TasksTabs.tsx",
+        "components/TabModal.tsx",
+        "components/TasksView.tsx"
+      ],
+      "acceptanceCriteria": [
+        "4 начальные вкладки: Канбан, График, Отделы, Бюджеты",
+        "Все вкладки можно удалить (включая системные)",
+        "Максимум 10 вкладок в сумме",
+        "Каждая вкладка хранит свои фильтры",
+        "Вкладки сохраняются в localStorage",
+        "Empty state при удалении всех вкладок"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "2.2.0",
+      "date": "2026-01-16",
+      "changes": [
+        "Все вкладки теперь требуют фильтр или явную загрузку всех данных",
+        "Добавлен empty state с кнопкой 'Загрузить всё' для каждой вкладки",
+        "Оптимизация: данные не загружаются без фильтров по умолчанию"
+      ]
+    },
+    {
+      "version": "2.1.0",
+      "date": "2026-01-16",
+      "changes": [
+        "Теперь можно удалять системные вкладки",
+        "Лимит 10 вкладок в сумме (не только пользовательских)",
+        "Empty state при удалении всех вкладок",
+        "Фикс: фильтры больше не переезжают между вкладками (key={activeTabId})"
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "date": "2026-01-16",
+      "changes": [
+        "Добавлена система пользовательских вкладок (issue #249)",
+        "Новый store: useTasksTabsStore с persist",
+        "Каждая вкладка хранит свой filterString и viewMode",
+        "Удалены старые stores: useTasksFiltersStore, useTasksViewStore",
+        "Лимит 10 пользовательских вкладок (MAX_USER_TABS)",
+        "Компоненты: TasksTabs, TabModal",
+        "Иконки lucide вместо emoji"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-12-01",
+      "changes": [
+        "Initial release",
+        "4 фиксированных вкладки",
+        "Общий filterString для всех вкладок"
+      ]
+    }
+  ]
+}

@@ -28,8 +28,18 @@ interface KanbanBoardInternalProps {
  * Используется в TasksView для встраивания в общую страницу с табами
  */
 export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardInternalProps) {
+  // State: загрузить все данные без фильтров
+  const [loadAll, setLoadAll] = useState(false)
+
+  // Проверяем, применены ли фильтры
+  const filtersApplied = useMemo(() => {
+    return Object.keys(queryParams).length > 0
+  }, [queryParams])
+
+  // Определяем, нужно ли загружать данные
+  const shouldFetchData = filtersApplied || loadAll
+
   // Infinite query для загрузки данных с пагинацией
-  // Всегда передаём queryParams (даже пустой {}) для стабильного cache key
   const {
     data,
     isLoading,
@@ -37,7 +47,9 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useKanbanSectionsInfinite(queryParams)
+  } = useKanbanSectionsInfinite(filtersApplied ? queryParams : undefined, {
+    enabled: shouldFetchData,
+  })
 
   // Собираем все секции из всех страниц
   const sections = useMemo(() => {
@@ -45,7 +57,14 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
   }, [data])
 
   // Mutation для обновления статуса этапа (с оптимистичным обновлением)
-  const { mutate: updateStatus } = useUpdateStageStatusOptimistic(queryParams)
+  const { mutate: updateStatus } = useUpdateStageStatusOptimistic(
+    filtersApplied ? queryParams : undefined
+  )
+
+  // Handle "Load All" button click
+  const handleLoadAll = useCallback(() => {
+    setLoadAll(true)
+  }, [])
 
   // UI state из Zustand store (сохраняется между переключениями вкладок)
   const { collapsedSections, showEmptySwimlanes, toggleSectionCollapse } = useKanbanUIStore()
@@ -108,6 +127,33 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
     setDraggedCard(null)
   }, [])
 
+  // Empty state - before data fetch (no filters, no loadAll)
+  if (!shouldFetchData) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center max-w-md">
+          <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+          <h2 className="text-lg font-medium mb-2">
+            Выберите данные для отображения
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Используйте фильтр выше для поиска проектов.
+          </p>
+          <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
+            подразделение:"ОВ" проект:"Название"
+          </p>
+          <button
+            onClick={handleLoadAll}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Database size={16} />
+            Загрузить всё
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Loading state
   if (isLoading) {
     return (
@@ -132,7 +178,7 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
     )
   }
 
-  // Empty state
+  // Empty state - after fetch with no results
   if (!board || board.sections.length === 0) {
     return (
       <div className="flex items-center justify-center h-full bg-background">

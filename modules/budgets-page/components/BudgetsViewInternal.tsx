@@ -7,7 +7,8 @@
 
 'use client'
 
-import { Loader2, Wallet, TrendingUp, FolderKanban, BarChart3 } from 'lucide-react'
+import { useState, useMemo, useCallback } from 'react'
+import { Loader2, Wallet, TrendingUp, FolderKanban, BarChart3, Database } from 'lucide-react'
 import { BudgetsHierarchy } from './BudgetsHierarchy'
 import { useBudgetsHierarchy } from '../hooks'
 import { formatAmount } from '../utils'
@@ -132,7 +133,53 @@ function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount, budgetsCount 
 export function BudgetsViewInternal({
   queryParams,
 }: BudgetsViewInternalProps) {
-  const { nodes, analytics, isLoading, error, refetch } = useBudgetsHierarchy(queryParams)
+  // State: загрузить все данные без фильтров
+  const [loadAll, setLoadAll] = useState(false)
+
+  // Проверяем, применены ли фильтры
+  const filtersApplied = useMemo(() => {
+    return Object.keys(queryParams).length > 0
+  }, [queryParams])
+
+  // Определяем, нужно ли загружать данные
+  const shouldFetchData = filtersApplied || loadAll
+
+  // Handle "Load All" button click
+  const handleLoadAll = useCallback(() => {
+    setLoadAll(true)
+  }, [])
+
+  const { nodes, analytics, isLoading, error, refetch } = useBudgetsHierarchy(
+    filtersApplied ? queryParams : undefined,
+    { enabled: shouldFetchData }
+  )
+
+  // Empty state - before data fetch (no filters, no loadAll)
+  if (!shouldFetchData) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center max-w-md">
+          <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+          <h2 className="text-lg font-medium mb-2">
+            Выберите данные для отображения
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Используйте фильтр выше для поиска проектов с бюджетами.
+          </p>
+          <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
+            подразделение:"ОВ" проект:"Название"
+          </p>
+          <button
+            onClick={handleLoadAll}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Database size={16} />
+            Загрузить всё
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Error state
   if (error) {

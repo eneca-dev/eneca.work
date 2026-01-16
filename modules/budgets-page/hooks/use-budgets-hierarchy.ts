@@ -407,20 +407,24 @@ export interface UseBudgetsHierarchyResult {
  * - useBudgets (все бюджеты)
  *
  * @param filters - Параметры фильтрации из InlineFilter
+ * @param options - Дополнительные опции (enabled)
  *
  * @example
- * const { nodes, analytics, isLoading } = useBudgetsHierarchy(queryParams)
+ * const { nodes, analytics, isLoading } = useBudgetsHierarchy(queryParams, { enabled: true })
  */
 export function useBudgetsHierarchy(
-  filters?: FilterQueryParams
+  filters?: FilterQueryParams,
+  options?: { enabled?: boolean }
 ): UseBudgetsHierarchyResult {
+  const { enabled = true } = options || {}
+
   // Загружаем иерархию проектов
   const {
     data: projects,
     isLoading: projectsLoading,
     error: projectsError,
     refetch: refetchProjects,
-  } = useResourceGraphData(filters || {})
+  } = useResourceGraphData(filters || {}, { enabled })
 
   // Загружаем все активные бюджеты
   const {
@@ -428,7 +432,7 @@ export function useBudgetsHierarchy(
     isLoading: budgetsLoading,
     error: budgetsError,
     refetch: refetchBudgets,
-  } = useBudgets({ is_active: true })
+  } = useBudgets({ is_active: true }, { enabled })
 
   // Функция для обновления всех данных
   const refetch = useCallback(() => {
