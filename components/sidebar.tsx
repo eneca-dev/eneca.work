@@ -118,7 +118,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
     <div
       data-sidebar
       className={cn(
-        "h-screen bg-[#0a0e13] border-r border-slate-700/50 transition-all duration-300",
+        "h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
         collapsed ? "w-20" : "w-64",
       )}
     >
