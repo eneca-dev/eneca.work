@@ -235,6 +235,23 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.checkpoints.all,
     ],
   },
+
+  // ============================================================================
+  // Роли и разрешения (для filter permissions)
+  // ============================================================================
+  {
+    table: 'user_roles',
+    invalidateKeys: [
+      queryKeys.filterPermissions.all,
+      queryKeys.users.all, // Роли влияют на пользователя
+    ],
+  },
+  {
+    table: 'role_permissions',
+    invalidateKeys: [
+      queryKeys.filterPermissions.all,
+    ],
+  },
 ]
 
 /**

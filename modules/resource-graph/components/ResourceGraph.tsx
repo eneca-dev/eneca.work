@@ -24,6 +24,7 @@ import { ResourceGraphTimeline, TimelineHeader, generateDayCells } from './timel
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
 import type { TimelineRange } from '../types'
 import { InlineFilter, parseFilterString, tokensToQueryParams, type FilterConfig, type FilterQueryParams } from '@/modules/inline-filter'
+import { LockedFiltersBadge } from '@/modules/permissions'
 import { UserSync } from '@/components/UserSync'
 import {
   CheckpointEditModal,
@@ -442,13 +443,17 @@ export function ResourceGraph() {
           </div>
 
           {/* InlineFilter - takes remaining space */}
-          <div className="flex-1 min-w-0 pr-4">
-            <InlineFilter
-              config={RESOURCE_GRAPH_FILTER_CONFIG}
-              value={filterString}
-              onChange={setFilterString}
-              options={filterOptions}
-            />
+          <div className="flex-1 min-w-0 flex items-center gap-2 pr-4">
+            <div className="flex-1 min-w-0">
+              <InlineFilter
+                config={RESOURCE_GRAPH_FILTER_CONFIG}
+                value={filterString}
+                onChange={setFilterString}
+                options={filterOptions}
+              />
+            </div>
+            {/* Badge showing locked filters for non-admin users */}
+            <LockedFiltersBadge />
           </div>
         </div>
 

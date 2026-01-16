@@ -58,6 +58,7 @@ export * from './components/PermissionGuard'
 export * from './components/RoleGuard'
 export * from './components/PermissionBoundary'
 export { PermissionsErrorBoundary } from './components/PermissionsErrorBoundary'
+export { LockedFiltersBadge } from './components/LockedFiltersBadge'
 
 // Экспорт хранилищ
 export {
