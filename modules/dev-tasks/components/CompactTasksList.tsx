@@ -71,12 +71,14 @@ interface CompactTasksListProps {
   tasks: AggregatedTask[]
   selectedTasks: Set<string>
   onSelectionChange: (selected: Set<string>) => void
+  enableGrouping?: boolean
 }
 
 export const CompactTasksList = memo(function CompactTasksList({
   tasks,
   selectedTasks,
   onSelectionChange,
+  enableGrouping = true,
 }: CompactTasksListProps) {
   const [showCompleted, setShowCompleted] = useState(false)
 
@@ -96,16 +98,23 @@ export const CompactTasksList = memo(function CompactTasksList({
     return { activeTasks: active, completedTasks: completed }
   }, [tasks])
 
-  // Group active tasks by module
+  // Group active tasks by module (if grouping is enabled)
   const groupedActiveTasks = useMemo(() => {
     const groups = new Map<string, AggregatedTask[]>()
+
+    if (!enableGrouping) {
+      // If grouping is disabled, put all tasks in a single group
+      groups.set('all', activeTasks)
+      return groups
+    }
+
     for (const task of activeTasks) {
       const existing = groups.get(task.moduleName) || []
       existing.push(task)
       groups.set(task.moduleName, existing)
     }
     return groups
-  }, [activeTasks])
+  }, [activeTasks, enableGrouping])
 
   const toggleTask = (taskId: string) => {
     const newSelected = new Set(selectedTasks)
@@ -147,11 +156,12 @@ export const CompactTasksList = memo(function CompactTasksList({
           <ModuleTaskGroup
             key={moduleName}
             moduleName={moduleName}
-            displayName={moduleTasks[0]?.moduleDisplayName || moduleName}
+            displayName={enableGrouping ? (moduleTasks[0]?.moduleDisplayName || moduleName) : 'Все задачи'}
             tasks={moduleTasks}
             selectedTasks={selectedTasks}
             onToggleTask={toggleTask}
             onToggleModule={toggleModule}
+            showModuleInTasks={!enableGrouping}
           />
         ))}
       </div>
@@ -195,6 +205,7 @@ interface ModuleTaskGroupProps {
   selectedTasks: Set<string>
   onToggleTask: (taskId: string) => void
   onToggleModule: (moduleName: string) => void
+  showModuleInTasks?: boolean
 }
 
 const ModuleTaskGroup = memo(function ModuleTaskGroup({
@@ -204,6 +215,7 @@ const ModuleTaskGroup = memo(function ModuleTaskGroup({
   selectedTasks,
   onToggleTask,
   onToggleModule,
+  showModuleInTasks = false,
 }: ModuleTaskGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const selectedCount = tasks.filter((t) => selectedTasks.has(t.id)).length
@@ -246,6 +258,7 @@ const ModuleTaskGroup = memo(function ModuleTaskGroup({
               task={task}
               isSelected={selectedTasks.has(task.id)}
               onToggle={() => onToggleTask(task.id)}
+              showModule={showModuleInTasks}
             />
           ))}
         </div>
@@ -259,6 +272,7 @@ interface CompactTaskRowProps {
   isSelected?: boolean
   isCompleted?: boolean
   onToggle?: () => void
+  showModule?: boolean
 }
 
 const CompactTaskRow = memo(function CompactTaskRow({
@@ -266,9 +280,16 @@ const CompactTaskRow = memo(function CompactTaskRow({
   isSelected,
   isCompleted,
   onToggle,
+  showModule = false,
 }: CompactTaskRowProps) {
   // Fallback to HelpCircle if category icon is not defined
   const CategoryIcon = categoryIcons[task.category] || HelpCircle
+
+  // Format date as dd.mm.yyyy
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
 
   return (
     <div
@@ -295,9 +316,21 @@ const CompactTaskRow = memo(function CompactTaskRow({
         </span>
       )}
 
+      {/* Module name - shown when grouping is disabled */}
+      {showModule && (
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+          {task.moduleDisplayName || task.moduleName}
+        </span>
+      )}
+
       {/* Title */}
       <span className="flex-1 truncate" title={task.title}>
         {task.title}
+      </span>
+
+      {/* Creation date */}
+      <span className="shrink-0 text-xs text-muted-foreground" title={new Date(task.createdAt).toLocaleString('ru-RU')}>
+        {formatDate(task.createdAt)}
       </span>
 
       {/* Status badge */}

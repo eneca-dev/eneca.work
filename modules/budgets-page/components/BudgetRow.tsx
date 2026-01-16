@@ -163,16 +163,16 @@ export const BudgetRow = React.memo(function BudgetRow({
 
   const rowStyles = cn(
     'group flex items-center border-b transition-colors',
-    // Проект - самый верхний уровень
-    isProject && 'bg-slate-800/50 border-slate-700 hover:bg-slate-800/70',
-    // Объект
-    isObject && 'bg-slate-900/50 border-slate-700 hover:bg-slate-900/70',
-    // Разделы - бирюзовый оттенок с левой полоской
-    isSection && 'bg-teal-950/40 border-slate-700 hover:bg-teal-950/60 border-l-2 border-l-teal-500/50',
-    // Этапы декомпозиции внутри раздела
-    isDecompStage && insideSection && 'bg-slate-800/30 border-slate-700/60 hover:bg-slate-800/50',
-    // Задачи внутри раздела
-    isItem && insideSection && 'bg-slate-900/60 border-slate-700/60 hover:bg-slate-900/80',
+    // Проект - самый верхний уровень (светлее)
+    isProject && 'bg-slate-700/40 border-slate-700 hover:bg-slate-700/60',
+    // Объект (светлее)
+    isObject && 'bg-slate-700/40 border-slate-700 hover:bg-slate-700/60',
+    // Разделы (светлее)
+    isSection && 'bg-slate-700/35 border-slate-700 hover:bg-slate-700/55',
+    // Этапы декомпозиции внутри раздела (темнее)
+    isDecompStage && insideSection && 'bg-slate-950/95 border-slate-700/60 hover:bg-slate-900/90',
+    // Задачи внутри раздела (темнее)
+    isItem && insideSection && 'bg-slate-950/95 border-slate-700/60 hover:bg-slate-900/90',
     // Высота строки
     'min-h-[32px]'
   )
@@ -217,7 +217,7 @@ export const BudgetRow = React.memo(function BudgetRow({
           <span
             className={cn(
               'truncate text-[12px]',
-              isSection && 'font-medium text-teal-200',
+              isSection && 'font-medium text-slate-200',
               isDecompStage && 'text-slate-300',
               isItem && 'text-slate-400',
               isTopLevel && 'font-medium text-slate-200'
@@ -300,7 +300,7 @@ export const BudgetRow = React.memo(function BudgetRow({
               <span className="text-[11px] text-slate-700">/</span>
             </div>
             {/* Распределено + ProgressCircle */}
-            <div className="w-[100px] px-1 flex items-center justify-center gap-1">
+            <div className="w-[100px] px-1 flex items-center justify-start gap-1">
               {distributedBudget > 0 ? (
                 <>
                   <span className={cn(
@@ -309,11 +309,13 @@ export const BudgetRow = React.memo(function BudgetRow({
                   )}>
                     {formatNumber(distributedBudget)}
                   </span>
-                  {allocatedBudget > 0 && (
+                  {/* ProgressCircle только для не-задач (проект/объект/раздел/этап) */}
+                  {allocatedBudget > 0 && !isItem && (
                     <ProgressCircle
-                      progress={Math.min(100, Math.round((distributedBudget / allocatedBudget) * 100))}
+                      progress={Math.round((distributedBudget / allocatedBudget) * 100)}
                       size={16}
                       strokeWidth={2}
+                      showCheckmarkAt100={true}
                     />
                   )}
                 </>
