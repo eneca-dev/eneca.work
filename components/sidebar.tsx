@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, BarChart, Users, MessageSquare, FolderOpen, List, FileText, LineChart } from "lucide-react"
+import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, List, FileText, LineChart } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
@@ -109,7 +109,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
     { title: "Главная", href: "/", icon: Home },
     { title: "Задачи", href: "/tasks", icon: List },
     { title: "Заметки", href: "/notions", icon: FolderOpen },
-    { title: "Отчёты", href: "/reports", icon: BarChart },
   ]
 
   const isUsersActiveInternal = isUsersActive ?? pathname === "/users"
