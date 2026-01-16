@@ -293,15 +293,14 @@ export function StageCreateModal({
         responsibles: responsibleIds.length > 0 ? responsibleIds : undefined,
       })
 
-      if (!stageResult.success || !stageResult.data) {
-        // Показываем фактическую ошибку
-        const errorMsg = stageResult.error || 'Неизвестная ошибка при создании этапа'
-        console.error('[StageCreateModal] Stage creation failed:', errorMsg)
-        setError(errorMsg)
+      // createCacheMutation возвращает данные напрямую (не обёрнутые в { success, data })
+      if (!stageResult || !stageResult.id) {
+        console.error('[StageCreateModal] Stage creation failed: no stage data returned')
+        setError('Не удалось создать этап')
         return
       }
 
-      const newStageId = stageResult.data.id
+      const newStageId = stageResult.id
 
       // 2. Создаём подзадачи, если есть
       if (validSubtasks.length > 0) {
@@ -320,9 +319,10 @@ export function StageCreateModal({
           sectionId,
         })
 
-        if (!itemsResult.success) {
+        // createCacheMutation возвращает данные напрямую
+        if (!itemsResult) {
           // Этап создан, но задачи - нет. Показываем предупреждение
-          setError(`Этап создан, но не удалось создать задачи: ${itemsResult.error}`)
+          setError('Этап создан, но не удалось создать задачи')
           return
         }
       }

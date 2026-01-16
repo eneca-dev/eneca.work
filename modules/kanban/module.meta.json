@@ -112,6 +112,21 @@
 
   "tasks": [
     {
+      "id": "KB-001",
+      "title": "Исправлена ошибка при создании этапа в канбане",
+      "description": "При создании этапа через модалку StageCreateModal показывалась ошибка \"Неизвестная ошибка при создании этапа\", хотя этап создавался в БД успешно.\n\nПричина: createCacheMutation (TanStack Query) возвращает из mutateAsync только data, а не весь ActionResult { success, data, error }. Модалка проверяла stageResult.success и stageResult.data, которых не было.\n\nРешение: Изменили проверку с if (!stageResult.success || !stageResult.data) на if (!stageResult || !stageResult.id), проверяя наличие id напрямую.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-16",
+      "updatedAt": "2026-01-16",
+      "completedAt": "2026-01-16",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1
+    },
+    {
       "id": "KB-AUDIT",
       "title": "Full Module Audit: Kanban Board",
       "description": "Полный аудит модуля канбан-доски для подтверждения качества.\n\nОсобое внимание на drag-and-drop логику, обновление статусов и производительность при большом количестве карточек.",

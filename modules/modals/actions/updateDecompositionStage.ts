@@ -85,6 +85,11 @@ export async function createDecompositionStage(
       return { success: false, error: error.message }
     }
 
+    if (!data) {
+      console.error('[createDecompositionStage] No data returned')
+      return { success: false, error: 'Этап создан, но данные не вернулись' }
+    }
+
     return {
       success: true,
       data: {
