@@ -6,7 +6,9 @@
 
 'use client'
 
-import { Plus, Settings2, Trash2 } from 'lucide-react'
+import { Plus, Settings2, Trash2, RefreshCw, Check, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { SyncStatus } from '../hooks'
 import { StageInlineDelete } from './StageInlineDelete'
 import { ItemCategorySelect } from './ItemCategorySelect'
 import { ItemInlineDelete } from './ItemInlineDelete'
@@ -29,6 +31,12 @@ interface BudgetRowActionsProps {
   onSectionDelete?: () => void
   onStageCreate?: () => void
   onItemCreate?: () => void
+  /** Callback для синхронизации с Worksection */
+  onProjectSync?: () => void
+  /** Статус синхронизации */
+  syncStatus?: SyncStatus
+  /** ID проекта который сейчас синхронизируется */
+  syncingProjectId?: string | null
   /** Для items - category info */
   workCategoryId?: string | null
   workCategoryName?: string | null
@@ -46,6 +54,9 @@ export function BudgetRowActions({
   onSectionDelete,
   onStageCreate,
   onItemCreate,
+  onProjectSync,
+  syncStatus = 'idle',
+  syncingProjectId,
   workCategoryId,
   workCategoryName,
 }: BudgetRowActionsProps) {
@@ -57,9 +68,49 @@ export function BudgetRowActions({
 
   return (
     <>
-      {/* Project action buttons (edit + add object) */}
+      {/* Project action buttons (sync + edit + add object) */}
       {isProject && (
         <div className="opacity-0 group-hover:opacity-100 ml-auto flex items-center gap-0.5">
+          {/* Sync to Worksection button */}
+          {(() => {
+            const isSyncing = syncStatus === 'syncing' && syncingProjectId === nodeId
+            const isSuccess = syncStatus === 'success' && syncingProjectId === nodeId
+            const isError = syncStatus === 'error' && syncingProjectId === nodeId
+
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onProjectSync?.()
+                }}
+                disabled={isSyncing}
+                className={cn(
+                  'p-1 rounded transition-all',
+                  isSyncing && 'text-blue-400 cursor-wait',
+                  isSuccess && 'text-green-400',
+                  isError && 'text-red-400',
+                  !isSyncing && !isSuccess && !isError && 'hover:bg-blue-500/20 text-slate-500 hover:text-blue-400'
+                )}
+                title={
+                  isSyncing
+                    ? 'Синхронизация...'
+                    : isSuccess
+                    ? 'Синхронизация завершена'
+                    : isError
+                    ? 'Ошибка синхронизации'
+                    : 'Синхронизировать с Worksection'
+                }
+              >
+                {isSuccess ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : isError ? (
+                  <X className="h-3.5 w-3.5" />
+                ) : (
+                  <RefreshCw className={cn('h-3.5 w-3.5', isSyncing && 'animate-spin')} />
+                )}
+              </button>
+            )
+          })()}
           <button
             onClick={(e) => {
               e.stopPropagation()

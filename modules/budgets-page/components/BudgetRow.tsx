@@ -23,6 +23,7 @@ import { ProgressCircle } from '@/modules/resource-graph'
 import { MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR } from '../config/constants'
 import { formatNumber } from '../utils'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
+import type { SyncStatus } from '../hooks'
 
 // ============================================================================
 // Types
@@ -55,6 +56,12 @@ interface BudgetRowProps {
   currentSectionId?: string
   /** Callback для автоматического раскрытия при создании */
   onAutoExpand?: (nodeId: string) => void
+  /** Callback для синхронизации проекта с Worksection */
+  onProjectSync?: (projectId: string, projectName?: string) => Promise<unknown>
+  /** Статус синхронизации */
+  syncStatus?: SyncStatus
+  /** ID проекта который сейчас синхронизируется */
+  syncingProjectId?: string | null
 }
 
 // ============================================================================
@@ -91,6 +98,9 @@ export const BudgetRow = React.memo(function BudgetRow({
   onRefresh,
   currentSectionId,
   onAutoExpand,
+  onProjectSync,
+  syncStatus,
+  syncingProjectId,
 }: BudgetRowProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -240,6 +250,9 @@ export const BudgetRow = React.memo(function BudgetRow({
             onSectionDelete={() => setSectionDeleteModalOpen(true)}
             onStageCreate={() => setStageCreateOpen(true)}
             onItemCreate={() => setItemCreateOpen(true)}
+            onProjectSync={() => onProjectSync?.(node.id, node.name)}
+            syncStatus={syncStatus}
+            syncingProjectId={syncingProjectId}
             workCategoryId={node.workCategoryId}
             workCategoryName={node.workCategoryName}
           />
@@ -359,6 +372,9 @@ export const BudgetRow = React.memo(function BudgetRow({
             onRefresh={onRefresh}
             currentSectionId={isSection ? node.id : currentSectionId}
             onAutoExpand={onAutoExpand}
+            onProjectSync={onProjectSync}
+            syncStatus={syncStatus}
+            syncingProjectId={syncingProjectId}
           />
         ))}
 
