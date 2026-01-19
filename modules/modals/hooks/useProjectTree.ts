@@ -80,16 +80,13 @@ function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
     rootsCount: roots.length,
     rootLevel: minLevel,
     rootTypes: roots.map(r => r.type),
-    rootChildren: roots.map(r => ({ name: r.name, childrenCount: r.children?.length || 0 }))
+    rootChildren: roots.map(r => ({ name: r.name, childrenCount: r.children?.length || 0 })),
+    rootDetails: roots.map(r => ({ id: r.id, type: r.type, name: r.name, hasChildren: !!r.children?.length }))
   })
 
-  // Если есть только один корень типа 'project', возвращаем его детей
-  // Это нужно для отображения дерева внутри проекта, без самого узла проекта
-  if (roots.length === 1 && roots[0].type === 'project' && roots[0].children && roots[0].children.length > 0) {
-    console.log('📦 Возвращаем детей корневого проекта:', roots[0].children.length)
-    return roots[0].children
-  }
-
+  // Возвращаем корневые узлы
+  // Корни могут быть любого типа (project, stage, object, section) в зависимости от того,
+  // какие данные есть в БД для этого проекта
   return roots
 }
 
@@ -144,7 +141,8 @@ export function useProjectTree(options: UseProjectTreeOptions) {
         projectId,
         nodesFlat: result.data.length,
         treeRoots: tree.length,
-        levels: Math.max(...result.data.map(n => n.level), 0),
+        minLevel: Math.min(...result.data.map(n => n.level), 0),
+        maxLevel: Math.max(...result.data.map(n => n.level), 0),
         nodeLevels: result.data.map(n => ({ type: n.type, level: n.level, name: n.name })),
         treeResult: tree.map(n => ({ type: n.type, name: n.name, childrenCount: n.children?.length || 0 }))
       })

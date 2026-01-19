@@ -4,8 +4,8 @@
  * Loading Modal 2 - Главный контейнер модального окна
  *
  * Двухпанельный layout:
- * - Левая панель: ProjectTree (навигация по проектам)
- * - Правая панель: LoadingForm (форма создания/редактирования)
+ * - Левая панель: ProjectTree (навигация по проектам, выбор раздела или этапа)
+ * - Правая панель: LoadingForm (форма создания/редактирования загрузки)
  *
  * Режимы:
  * - CREATE: создание новой загрузки
@@ -97,34 +97,31 @@ export function LoadingModal2({
       return
     }
 
-    // Проверка что раздел выбран
+    // Проверка что раздел/этап выбран
     if (!selectedSectionId) {
       return
     }
 
     if (mode === 'create') {
       // Создание новой загрузки
+      // selectedSectionId может быть как ID раздела, так и ID этапа декомпозиции
       await createLoading.mutateAsync({
-        sectionId: selectedSectionId,
+        stageId: selectedSectionId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
         endDate: formData.endDate,
         comment: formData.comment,
-        status: 'active',
       })
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
       await updateLoading.mutateAsync({
-        id: editData.loading.id,
-        data: {
-          sectionId: selectedSectionId,
-          employeeId: formData.employeeId,
-          rate: formData.rate,
-          startDate: formData.startDate,
-          endDate: formData.endDate,
-          comment: formData.comment,
-        },
+        loadingId: editData.loading.id,
+        employeeId: formData.employeeId,
+        rate: formData.rate,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        comment: formData.comment,
       })
     }
   }

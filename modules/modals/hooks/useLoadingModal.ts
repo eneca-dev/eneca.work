@@ -51,8 +51,11 @@ export interface UseLoadingModalResult {
   // Состояние навигации
   projectMode: 'my' | 'all'
   setProjectMode: (mode: 'my' | 'all') => void
+  /** ID выбранного раздела или этапа декомпозиции */
   selectedSectionId: string | null
+  /** Название выбранного раздела или этапа декомпозиции */
   selectedSectionName: string | null
+  /** Выбор раздела или этапа декомпозиции */
   selectSection: (id: string | null, name?: string) => void
 
   // Состояние формы

@@ -5,11 +5,11 @@
  *
  * Правая панель модального окна с формой для создания/редактирования загрузки
  * Включает:
+ * - Информация о выбранном разделе/этапе декомпозиции
  * - Селектор сотрудника (EmployeeSelector)
  * - Ввод ставки (RateInput)
  * - Выбор диапазона дат (DateRangePicker)
  * - Комментарий (Textarea)
- * - Информация о выбранном разделе
  */
 
 import { AlertCircle } from 'lucide-react'
@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils'
 import { EmployeeSelector } from './EmployeeSelector'
 import { RateInput } from './RateInput'
 import { DateRangePicker } from './DateRangePicker'
-import { DecompositionStageSelector } from './DecompositionStageSelector'
 import type { LoadingFormData } from '../../hooks/useLoadingModal'
 
 export interface LoadingFormProps {
@@ -49,10 +48,10 @@ export function LoadingForm({
 }: LoadingFormProps) {
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* Информация о выбранном разделе */}
+      {/* Информация о выбранном разделе/этапе */}
       {selectedSectionName && (
         <div className="p-4 border-b bg-muted/30">
-          <div className="text-xs text-muted-foreground mb-1">Раздел для загрузки:</div>
+          <div className="text-xs text-muted-foreground mb-1">Выбрано для загрузки:</div>
           <div className="text-sm font-medium">{selectedSectionName}</div>
         </div>
       )}
@@ -63,7 +62,7 @@ export function LoadingForm({
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1 text-xs text-amber-700 dark:text-amber-400">
-              Выберите раздел в дереве проектов слева, чтобы создать загрузку
+              Выберите раздел или этап декомпозиции в дереве проектов слева
             </div>
           </div>
         </div>
@@ -80,19 +79,6 @@ export function LoadingForm({
             error={errors.employeeId}
             disabled={disabled}
             placeholder="Выберите сотрудника"
-          />
-        </div>
-
-        {/* Этап декомпозиции */}
-        <div>
-          <label className="block text-sm font-medium mb-2">Этап декомпозиции</label>
-          <DecompositionStageSelector
-            sectionId={selectedSectionId}
-            value={formData.stageId}
-            onChange={(value) => onFieldChange('stageId', value)}
-            error={errors.stageId}
-            disabled={disabled}
-            placeholder="Выберите этап"
           />
         </div>
 
