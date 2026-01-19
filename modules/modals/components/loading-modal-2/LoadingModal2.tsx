@@ -76,8 +76,11 @@ export function LoadingModal2({
   })
 
   // Хук для мутаций
-  const { createLoading, updateLoading } = useLoadingMutations({
-    onSuccess: () => {
+  const { create: createLoading, update: updateLoading } = useLoadingMutations({
+    onCreateSuccess: () => {
+      onClose()
+    },
+    onUpdateSuccess: () => {
       onClose()
     },
   })
