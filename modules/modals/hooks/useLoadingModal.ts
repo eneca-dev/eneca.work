@@ -11,11 +11,8 @@
  */
 
 import { useState, useCallback } from 'react'
-import type { LoadingModal2CreateData, LoadingModal2EditData } from '../types'
 
 export interface LoadingFormData {
-  /** ID этапа декомпозиции */
-  stageId: string
   /** ID сотрудника */
   employeeId: string
   /** Дата начала (YYYY-MM-DD) */
@@ -28,47 +25,49 @@ export interface LoadingFormData {
   comment: string
 }
 
+/**
+ * Объект загрузки (минимальная структура для режима редактирования)
+ */
+export interface Loading {
+  id: string
+  employee_id: string
+  start_date: string
+  end_date: string
+  rate: number
+  comment: string | null
+  section_id: string
+}
+
 export interface UseLoadingModalOptions {
   /** Режим модалки */
   mode: 'create' | 'edit'
-  /** Данные для создания */
-  createData?: LoadingModal2CreateData
-  /** Данные для редактирования */
-  editData?: LoadingModal2EditData
-  /** ID текущего пользователя */
-  userId: string
+  /** Начальный ID раздела */
+  initialSectionId?: string
+  /** Данные загрузки для редактирования */
+  initialLoading?: Loading
 }
 
 export interface UseLoadingModalResult {
-  // Режим модалки
-  mode: 'create' | 'edit'
-
-  // Состояние левой панели (навигация по проектам)
-  projectsMode: 'my' | 'all'
-  setProjectsMode: (mode: 'my' | 'all') => void
+  // Состояние навигации
+  projectMode: 'my' | 'all'
+  setProjectMode: (mode: 'my' | 'all') => void
   selectedProjectId: string | null
-  setSelectedProjectId: (id: string | null) => void
+  selectProject: (id: string | null) => void
   selectedSectionId: string | null
-  setSelectedSectionId: (id: string | null) => void
+  selectedSectionName: string | null
+  selectSection: (id: string | null, name?: string) => void
 
-  // Состояние правой панели (форма)
+  // Состояние формы
   formData: LoadingFormData
-  setFormData: (data: LoadingFormData) => void
-  updateFormField: <K extends keyof LoadingFormData>(
-    field: K,
-    value: LoadingFormData[K]
-  ) => void
-
-  // Валидация
+  setFormField: <K extends keyof LoadingFormData>(field: K, value: LoadingFormData[K]) => void
   errors: Partial<Record<keyof LoadingFormData, string>>
-  validate: () => boolean
 
-  // Сброс формы
+  // Валидация и сброс
+  validateForm: () => boolean
   resetForm: () => void
 }
 
 const EMPTY_FORM: LoadingFormData = {
-  stageId: '',
   employeeId: '',
   startDate: '',
   endDate: '',
@@ -77,28 +76,45 @@ const EMPTY_FORM: LoadingFormData = {
 }
 
 export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModalResult {
-  const { mode, createData, editData, userId } = options
+  const { mode, initialSectionId, initialLoading } = options
 
-  // Левая панель (навигация)
-  const [projectsMode, setProjectsMode] = useState<'my' | 'all'>('my')
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    createData?.projectId || null
-  )
+  // Состояние навигации
+  const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
-    editData?.sectionId || null
+    initialSectionId ?? null
   )
+  const [selectedSectionName, setSelectedSectionName] = useState<string | null>(null)
 
-  // Правая панель (форма)
-  const [formData, setFormData] = useState<LoadingFormData>({
-    ...EMPTY_FORM,
-    stageId: createData?.stageId || '',
-    employeeId: createData?.employeeId || '',
+  // Состояние формы - предзаполняем из initialLoading если режим edit
+  const [formData, setFormData] = useState<LoadingFormData>(() => {
+    if (mode === 'edit' && initialLoading) {
+      return {
+        employeeId: initialLoading.employee_id,
+        startDate: initialLoading.start_date,
+        endDate: initialLoading.end_date,
+        rate: initialLoading.rate,
+        comment: initialLoading.comment ?? '',
+      }
+    }
+    return EMPTY_FORM
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof LoadingFormData, string>>>({})
 
+  // Выбор проекта
+  const selectProject = useCallback((id: string | null) => {
+    setSelectedProjectId(id)
+  }, [])
+
+  // Выбор раздела
+  const selectSection = useCallback((id: string | null, name?: string) => {
+    setSelectedSectionId(id)
+    setSelectedSectionName(name ?? null)
+  }, [])
+
   // Обновление одного поля формы
-  const updateFormField = useCallback(
+  const setFormField = useCallback(
     <K extends keyof LoadingFormData>(field: K, value: LoadingFormData[K]) => {
       setFormData((prev) => ({ ...prev, [field]: value }))
       // Очистить ошибку для этого поля
@@ -108,12 +124,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   )
 
   // Валидация формы
-  const validate = useCallback((): boolean => {
+  const validateForm = useCallback((): boolean => {
     const newErrors: Partial<Record<keyof LoadingFormData, string>> = {}
-
-    if (!formData.stageId.trim()) {
-      newErrors.stageId = 'Выберите этап декомпозиции'
-    }
 
     if (!formData.employeeId.trim()) {
       newErrors.employeeId = 'Выберите сотрудника'
@@ -156,23 +168,21 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setErrors({})
     setSelectedProjectId(null)
     setSelectedSectionId(null)
+    setSelectedSectionName(null)
   }, [])
 
   return {
-    mode,
-    projectsMode,
-    setProjectsMode,
+    projectMode,
+    setProjectMode,
     selectedProjectId,
-    setSelectedProjectId,
+    selectProject,
     selectedSectionId,
-    setSelectedSectionId,
+    selectedSectionName,
+    selectSection,
     formData,
-    setFormData,
-    updateFormField,
+    setFormField,
     errors,
-    validate,
+    validateForm,
     resetForm,
   }
 }
-
-export type { LoadingFormData }

@@ -151,8 +151,8 @@ export interface LoadingEditData {
 // ============================================================================
 
 export interface LoadingModal2CreateData {
-  /** ID этапа декомпозиции (опционально - можно выбрать в модалке) */
-  stageId?: string
+  /** ID раздела (опционально - можно выбрать в модалке) */
+  sectionId?: string
   /** ID сотрудника (опционально - можно выбрать в модалке) */
   employeeId?: string
   /** ID проекта (для автоматического выбора проекта в дереве) */
@@ -164,6 +164,16 @@ export interface LoadingModal2EditData {
   loadingId: string
   /** ID раздела (для мутаций и кеша) */
   sectionId: string
+  /** Объект загрузки */
+  loading: {
+    id: string
+    employee_id: string
+    start_date: string
+    end_date: string
+    rate: number
+    comment: string | null
+    section_id: string
+  }
 }
 
 // ============================================================================

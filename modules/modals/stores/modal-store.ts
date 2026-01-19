@@ -155,3 +155,18 @@ export const openCheckpointCreate = (sectionId: string, sectionName: string) =>
  */
 export const openCheckpointEdit = (checkpointId: string) =>
   useModalStore.getState().openModal('checkpoint-edit', { checkpointId })
+
+/**
+ * Открыть модалку создания загрузки (Loading Modal 2)
+ */
+export const openLoadingModal2Create = (data?: {
+  stageId?: string
+  employeeId?: string
+  projectId?: string
+}) => useModalStore.getState().openModal('loading2-create', data)
+
+/**
+ * Открыть модалку редактирования загрузки (Loading Modal 2)
+ */
+export const openLoadingModal2Edit = (loadingId: string, sectionId: string) =>
+  useModalStore.getState().openModal('loading2-edit', { loadingId, sectionId })
