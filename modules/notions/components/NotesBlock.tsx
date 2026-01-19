@@ -441,7 +441,7 @@ export function NotesBlock() {
   }
 
   return (
-    <div className="px-3 md:px-6 py-4 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
+    <div className="px-3 md:px-6 py-4 h-full flex flex-col max-h-full bg-card">
       {/* Заголовок блока */}
       <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">

@@ -55,7 +55,7 @@ export function RichTextEditor({ value, onChange, placeholder, label, required }
       {label && <Label>{label} {required && '*'}</Label>}
       
       {/* Панель форматирования */}
-      <div className="flex gap-1 p-2 border border-gray-200 dark:border-gray-700 rounded-t-md bg-gray-50 dark:bg-gray-800">
+      <div className="flex gap-1 p-2 border border-border rounded-t-md bg-muted">
         <Button
           type="button"
           variant="ghost"
@@ -95,12 +95,12 @@ export function RichTextEditor({ value, onChange, placeholder, label, required }
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className="min-h-[100px] w-full p-3 border border-gray-200 dark:border-gray-700 rounded-b-md bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 resize-vertical"
+        className="min-h-[100px] w-full p-3 border border-border rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground resize-vertical"
         style={{ fontFamily: 'inherit' }}
       />
       
       {/* Подсказка по форматированию */}
-      <div className="text-xs text-gray-500 dark:text-gray-400">
+      <div className="text-xs text-muted-foreground">
         Используйте: **жирный**, *курсив*, __подчеркнутый__
       </div>
     </div>

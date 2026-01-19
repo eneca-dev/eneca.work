@@ -102,7 +102,7 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
             <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Дедлайны</h3>
           </div>
         )}
-        <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 p-4">
+        <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
           <div className={`flex items-center justify-center text-center ${
             isCompact ? 'gap-2 py-2' : 'gap-4 py-4'
           }`}>
@@ -131,8 +131,9 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
           <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Дедлайны</h3>
         </div>
       )}
-      
-      <ScrollableContainer maxHeight="8rem">
+
+      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
+        <ScrollableContainer maxHeight="8rem">
         <div className="space-y-2">
           {deadlines.map((deadline) => {
             const daysFormat = formatDaysLeft(deadline.daysLeft)
@@ -162,6 +163,7 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
           })}
         </div>
       </ScrollableContainer>
+      </div>
     </div>
   )
 }

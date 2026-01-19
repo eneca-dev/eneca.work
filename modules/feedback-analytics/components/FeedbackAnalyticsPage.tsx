@@ -62,7 +62,7 @@ export function FeedbackAnalyticsPage() {
   const currentError = viewMode === 'feedback' ? error : reportsError
 
   return (
-    <div className="space-y-6 p-6 min-h-screen dark:bg-[rgb(17_24_39)]">
+    <div className="space-y-6 p-6 min-h-screen bg-card">
       {/* Заголовок с кнопками */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground dark:text-white">
@@ -73,7 +73,7 @@ export function FeedbackAnalyticsPage() {
             onClick={() => setViewMode(viewMode === 'feedback' ? 'reports' : 'feedback')}
             variant="outline"
             size="sm"
-            className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="bg-popover !border-border"
           >
             <MessageSquare className="h-4 w-4 mr-2" />
             {viewMode === 'feedback' ? 'Сообщения о проблемах' : 'Ответы пользователей'}
@@ -82,7 +82,7 @@ export function FeedbackAnalyticsPage() {
             onClick={() => setIsAddUserModalOpen(true)}
             variant="outline"
             size="sm"
-            className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="bg-popover !border-border"
           >
             <UserPlus className="h-4 w-4 mr-2" />
             Добавить
@@ -92,7 +92,7 @@ export function FeedbackAnalyticsPage() {
             disabled={currentLoading}
             variant="outline"
             size="sm"
-            className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="bg-popover !border-border"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${currentLoading ? "animate-spin" : ""}`} />
             Обновить

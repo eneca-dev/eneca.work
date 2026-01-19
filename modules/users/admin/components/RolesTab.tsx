@@ -173,15 +173,15 @@ export default function RolesTab() {
       if (pendingChange.action === 'add') {
         return "bg-green-500 text-white hover:bg-green-600"
       } else {
-        return "bg-gray-400 text-white hover:bg-gray-500"
+        return "bg-muted text-foreground hover:bg-accent"
       }
     }
     
     if (hasPermission) {
-      return "bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+      return "bg-primary text-primary-foreground hover:bg-primary/90"
     }
     
-    return "border border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
+    return "border border-border bg-card hover:bg-accent"
   }, [])
 
   const getCellIcon = useCallback((hasPermission: boolean, pendingChange?: PendingChange) => {
@@ -522,7 +522,7 @@ export default function RolesTab() {
             {orderedGroupEntries.map(([category, items]) => (
               <Fragment key={`group-${category}`}>
                 <TableRow key={`cat-${category}`}>
-                  <TableCell colSpan={1 + filteredRoles.length} className="bg-gray-50 dark:bg-gray-800/50 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  <TableCell colSpan={1 + filteredRoles.length} className="bg-muted text-xs font-semibold text-muted-foreground">
                     {category}
                   </TableCell>
                 </TableRow>
@@ -538,7 +538,7 @@ export default function RolesTab() {
                                 <Info className="h-4 w-4 text-muted-foreground cursor-help" />
                               </TooltipTrigger>
                               <TooltipContent 
-                                className="max-w-xs bg-gray-900 border-gray-700 text-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+                                className="max-w-xs bg-popover border-border text-popover-foreground"
                                 side="top"
                               >
                                 <p className="text-sm">{permission.description}</p>
@@ -792,7 +792,7 @@ export default function RolesTab() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
               <CardTitle className="text-xl font-semibold">Роли и разрешения</CardTitle>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">Только просмотр</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">Только просмотр</span>
             </div>
             <div className="flex justify-end gap-2">
               <Input

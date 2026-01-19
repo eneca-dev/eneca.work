@@ -160,7 +160,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
 
   // Функция для отображения занятости
   const getEmploymentRateBadge = (rate: number) => {
-    let color = "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+    let color = "bg-muted text-muted-foreground"
 
     if (rate < 0.5) {
       color = "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
@@ -248,7 +248,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
           </div>
 
           <div className="border-t border-gray-200 dark:border-gray-800">
-            <div className="p-4 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+            <div className="p-4 flex justify-between items-center bg-muted/50">
               <div className="text-sm font-medium">
                 Общий фонд оплаты труда:
                 <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-bold">
@@ -278,7 +278,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                   {Object.entries(groupedUsers).map(([groupName, groupUsers]) => (
                     <React.Fragment key={groupName || "ungrouped"}>
                       {groupName && (
-                        <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
+                        <TableRow className="bg-muted/50 hover:bg-muted/70 transition-colors">
                           <TableCell colSpan={7} className="py-1 border-l-4 border-gray-200 dark:border-gray-700">
                             <div className="flex items-center cursor-pointer" onClick={() => toggleGroup(groupName)}>
                               {expandedGroups[groupName] ? (

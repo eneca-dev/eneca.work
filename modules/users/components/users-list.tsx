@@ -621,7 +621,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
            {filters.subdivisions.length > 0 && (
              <Badge
                variant="secondary"
-               className="h-7 px-2 text-xs flex items-center gap-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600"
+               className="h-7 px-2 text-xs flex items-center gap-1 bg-muted text-muted-foreground hover:bg-accent"
              >
                <span>
                  {filters.subdivisions.length === 1
@@ -636,7 +636,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                      e.stopPropagation()
                      setFilters({...filters, subdivisions: []})
                    }}
-                   className="ml-1 hover:bg-slate-300/50 dark:hover:bg-slate-500/50 rounded-full p-0.5 transition-colors"
+                   className="ml-1 hover:bg-accent/50 rounded-full p-0.5 transition-colors"
                  >
                    <X className="h-3 w-3" />
                  </button>
@@ -1345,7 +1345,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                     ([subdivision, departments]) => (
                       <React.Fragment key={subdivision}>
                         {/* Заголовок подразделения */}
-                        <TableRow className="bg-slate-100/80 dark:bg-slate-900/60 hover:bg-slate-100/80 hover:dark:bg-slate-900/60">
+                        <TableRow className="bg-muted/80 hover:bg-muted/80">
                           <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-2.5 px-4">
                             <div
                               className="flex items-center cursor-pointer font-bold text-slate-800 dark:text-slate-100"
@@ -1371,7 +1371,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                           Object.entries(departments).map(([department, teams]) => (
                             <React.Fragment key={`${subdivision}-${department}`}>
                               {/* Заголовок отдела */}
-                              <TableRow className="bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-50/70 hover:dark:bg-slate-800/50">
+                              <TableRow className="bg-muted/50 hover:bg-muted/50">
                                 <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-2 pl-8 pr-4">
                                   <div
                                     className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
@@ -1395,7 +1395,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                 Object.entries(teams).map(([team, teamUsers]) => (
                                   <React.Fragment key={`${subdivision}-${department}-${team}`}>
                                     {/* Заголовок команды */}
-                                    <TableRow className="bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-100/50 hover:dark:bg-slate-800/30">
+                                    <TableRow className="bg-muted/30 hover:bg-muted/30">
                                       <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-1.5 pl-16 pr-4">
                                         <div
                                           className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300 cursor-pointer"
