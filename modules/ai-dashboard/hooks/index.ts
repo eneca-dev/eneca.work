@@ -1,0 +1,1 @@
+export { useAIAnalytics } from './useAIAnalytics'
