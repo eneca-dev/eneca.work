@@ -55,8 +55,6 @@ export function LoadingModal2({
     // Состояние навигации
     projectMode,
     setProjectMode,
-    selectedProjectId,
-    selectProject,
     selectedSectionId,
     selectedSectionName,
     selectSection,
@@ -160,8 +158,6 @@ export function LoadingModal2({
             <ProjectTree
               mode={projectMode}
               onModeChange={setProjectMode}
-              selectedProjectId={selectedProjectId}
-              onProjectSelect={selectProject}
               selectedSectionId={selectedSectionId}
               onSectionSelect={selectSection}
               userId={userId}
@@ -175,6 +171,7 @@ export function LoadingModal2({
               onFieldChange={setFormField}
               errors={errors}
               disabled={isSaving}
+              selectedSectionId={selectedSectionId}
               selectedSectionName={selectedSectionName}
             />
           </div>

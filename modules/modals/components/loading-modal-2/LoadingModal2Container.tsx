@@ -23,8 +23,17 @@ export function LoadingModal2Container() {
   // Получаем данные из store (без типизации, чтобы избежать constraint ошибок)
   const modalData = useModalStore((s) => s.modalData)
 
+  // Отладочные логи
+  console.log('🔍 LoadingModal2Container debug:', {
+    userId,
+    isCreateOpen,
+    isEditOpen,
+    hasModalData: !!modalData,
+  })
+
   // Если нет userId, не рендерим
   if (!userId) {
+    console.warn('⚠️ LoadingModal2Container: нет userId, модалка не отображается')
     return null
   }
 

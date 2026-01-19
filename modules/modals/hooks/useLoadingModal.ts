@@ -51,8 +51,6 @@ export interface UseLoadingModalResult {
   // Состояние навигации
   projectMode: 'my' | 'all'
   setProjectMode: (mode: 'my' | 'all') => void
-  selectedProjectId: string | null
-  selectProject: (id: string | null) => void
   selectedSectionId: string | null
   selectedSectionName: string | null
   selectSection: (id: string | null, name?: string) => void
@@ -80,7 +78,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
 
   // Состояние навигации
   const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
     initialSectionId ?? null
   )
@@ -101,11 +98,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof LoadingFormData, string>>>({})
-
-  // Выбор проекта
-  const selectProject = useCallback((id: string | null) => {
-    setSelectedProjectId(id)
-  }, [])
 
   // Выбор раздела
   const selectSection = useCallback((id: string | null, name?: string) => {
@@ -166,7 +158,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   const resetForm = useCallback(() => {
     setFormData(EMPTY_FORM)
     setErrors({})
-    setSelectedProjectId(null)
     setSelectedSectionId(null)
     setSelectedSectionName(null)
   }, [])
@@ -174,8 +165,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   return {
     projectMode,
     setProjectMode,
-    selectedProjectId,
-    selectProject,
     selectedSectionId,
     selectedSectionName,
     selectSection,

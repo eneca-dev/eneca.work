@@ -7,105 +7,37 @@
  * Включает:
  * - Переключатель "Мои проекты" / "Все проекты"
  * - Список проектов с поиском
- * - Иерархическое дерево: стадия → объект → раздел
- * - Хлебные крошки для текущего пути
+ * - Иерархическое дерево: проект → стадия → объект → раздел → этап
  */
 
 import { useState, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Folder, Target, Box, FileText, Search, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ChevronRight, ChevronDown, Folder, Target, Box, FileText, Search, Loader2, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { useProjectsList, useProjectTree } from '../../hooks'
-import { ProjectTreeBreadcrumbs } from './ProjectTreeBreadcrumbs'
-import type { ProjectTreeNode } from '../../actions/projects-tree'
+import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
+import type { ProjectListItem } from '../../hooks'
 
-export interface ProjectTreeProps {
-  /** Текущий режим: мои проекты или все */
-  mode: 'my' | 'all'
-  /** Callback при изменении режима */
-  onModeChange: (mode: 'my' | 'all') => void
-  /** ID текущего выбранного проекта */
-  selectedProjectId: string | null
-  /** Callback при выборе проекта */
-  onProjectSelect: (projectId: string) => void
-  /** ID текущего выбранного раздела */
+/**
+ * Компонент для отображения одного проекта и его дерева
+ */
+interface ProjectItemProps {
+  project: ProjectListItem
   selectedSectionId: string | null
-  /** Callback при выборе раздела */
-  onSectionSelect: (sectionId: string, path: ProjectTreeNode[]) => void
-  /** ID пользователя для фильтра "Мои проекты" */
-  userId: string
-  /** Класс для кастомизации */
-  className?: string
+  onSectionSelect: (sectionId: string, sectionName?: string) => void
 }
 
-export function ProjectTree({
-  mode,
-  onModeChange,
-  selectedProjectId,
-  onProjectSelect,
-  selectedSectionId,
-  onSectionSelect,
-  userId,
-  className,
-}: ProjectTreeProps) {
-  const [search, setSearch] = useState('')
+function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectItemProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
 
-  // Загрузка списка проектов
-  const { data: projects = [], isLoading: isLoadingProjects } = useProjectsList({
-    mode,
-    userId,
+  // Загружаем дерево только для раскрытого проекта
+  const { data: tree = [], isLoading } = useProjectTree({
+    projectId: project.id,
+    enabled: isExpanded,
   })
-
-  // Загрузка дерева выбранного проекта
-  const { data: tree = [], isLoading: isLoadingTree } = useProjectTree({
-    projectId: selectedProjectId,
-    enabled: Boolean(selectedProjectId),
-  })
-
-  // Фильтрация проектов по поиску
-  const filteredProjects = useMemo(() => {
-    if (!search.trim()) return projects
-
-    const query = search.toLowerCase()
-    return projects.filter((project) =>
-      project.name.toLowerCase().includes(query) ||
-      project.cipher?.toLowerCase().includes(query)
-    )
-  }, [projects, search])
-
-  // Построение пути до текущего раздела (для хлебных крошек)
-  const currentPath = useMemo(() => {
-    if (!selectedSectionId || tree.length === 0) return []
-
-    const path: ProjectTreeNode[] = []
-
-    // Находим раздел в дереве рекурсивно
-    const findSection = (nodes: ProjectTreeNode[]): boolean => {
-      for (const node of nodes) {
-        path.push(node)
-
-        if (node.type === 'section' && node.id === selectedSectionId) {
-          return true
-        }
-
-        if (node.children && node.children.length > 0) {
-          if (findSection(node.children)) {
-            return true
-          }
-        }
-
-        path.pop()
-      }
-      return false
-    }
-
-    findSection(tree)
-    return path
-  }, [tree, selectedSectionId])
 
   // Переключение раскрытия узла
   const toggleNode = (nodeId: string) => {
@@ -120,20 +52,19 @@ export function ProjectTree({
     })
   }
 
-  // Выбор раздела
-  const handleSectionClick = (node: ProjectTreeNode, path: ProjectTreeNode[]) => {
-    if (node.type === 'section') {
-      onSectionSelect(node.id, path)
+  // Выбор раздела или этапа декомпозиции
+  const handleSectionClick = (node: ProjectTreeNodeWithChildren) => {
+    if (node.type === 'section' || node.type === 'decomposition_stage') {
+      onSectionSelect(node.id, node.name)
     }
   }
 
   // Рекурсивный рендер узла дерева
-  const renderTreeNode = (node: ProjectTreeNode, depth: number = 0, path: ProjectTreeNode[] = []) => {
-    const currentPath = [...path, node]
-    const isExpanded = expandedNodes.has(node.id)
+  const renderTreeNode = (node: ProjectTreeNodeWithChildren, depth: number = 1): React.ReactNode => {
+    const isNodeExpanded = expandedNodes.has(node.id)
     const hasChildren = node.children && node.children.length > 0
-    const isSection = node.type === 'section'
-    const isSelected = isSection && node.id === selectedSectionId
+    const isClickable = node.type === 'section' || node.type === 'decomposition_stage'
+    const isSelected = isClickable && node.id === selectedSectionId
 
     const Icon =
       node.type === 'stage'
@@ -142,7 +73,9 @@ export function ProjectTree({
           ? Box
           : node.type === 'section'
             ? FileText
-            : Folder
+            : node.type === 'decomposition_stage'
+              ? ListChecks
+              : Folder
 
     return (
       <div key={node.id}>
@@ -152,42 +85,128 @@ export function ProjectTree({
             if (hasChildren) {
               toggleNode(node.id)
             }
-            if (isSection) {
-              handleSectionClick(node, currentPath)
+            if (isClickable) {
+              handleSectionClick(node)
             }
           }}
           className={cn(
-            'flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm transition-colors',
+            'flex items-center gap-1.5 w-full py-1 text-sm transition-colors',
             isSelected
               ? 'bg-primary text-primary-foreground font-medium'
               : 'hover:bg-accent hover:text-accent-foreground',
-            isSection && 'cursor-pointer',
-            !isSection && !hasChildren && 'cursor-default'
+            isClickable && 'cursor-pointer',
+            !isClickable && !hasChildren && 'cursor-default'
           )}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
-          {hasChildren && (
+          {hasChildren ? (
             <span className="shrink-0">
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
+              {isNodeExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5" />
               ) : (
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               )}
             </span>
+          ) : (
+            <span className="w-3.5" />
           )}
-          {!hasChildren && <span className="w-4" />}
-          <Icon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{node.name}</span>
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate text-xs">{node.name}</span>
         </button>
 
-        {hasChildren && isExpanded && (
+        {/* Рекурсивно рендерим детей */}
+        {isNodeExpanded && hasChildren && (
           <div>
-            {node.children!.map((child) => renderTreeNode(child, depth + 1, currentPath))}
+            {node.children!.map((child) => renderTreeNode(child, depth + 1))}
           </div>
         )}
       </div>
     )
   }
+
+  return (
+    <div>
+      {/* Заголовок проекта */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1.5 w-full py-1 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+        style={{ paddingLeft: '4px' }}
+      >
+        <span className="shrink-0">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </span>
+        <Folder className="h-3.5 w-3.5 shrink-0 text-green-600" />
+        <span className="truncate text-xs font-medium">{project.name}</span>
+        {isLoading && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
+      </button>
+
+      {/* Дерево проекта */}
+      {isExpanded && !isLoading && tree.length > 0 && (
+        <div>
+          {tree.map((node) => renderTreeNode(node))}
+        </div>
+      )}
+
+      {isExpanded && !isLoading && tree.length === 0 && (
+        <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: '20px' }}>
+          Пусто
+        </div>
+      )}
+    </div>
+  )
+}
+
+export interface ProjectTreeProps {
+  /** Текущий режим: мои проекты или все */
+  mode: 'my' | 'all'
+  /** Callback при изменении режима */
+  onModeChange: (mode: 'my' | 'all') => void
+  /** ID текущего выбранного раздела/этапа */
+  selectedSectionId: string | null
+  /** Callback при выборе раздела/этапа */
+  onSectionSelect: (sectionId: string, sectionName?: string) => void
+  /** ID пользователя для фильтра "Мои проекты" */
+  userId: string
+  /** Класс для кастомизации */
+  className?: string
+}
+
+export function ProjectTree({
+  mode,
+  onModeChange,
+  selectedSectionId,
+  onSectionSelect,
+  userId,
+  className,
+}: ProjectTreeProps) {
+  const [search, setSearch] = useState('')
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+
+  // Загрузка списка проектов
+  const { data: projects = [], isLoading: isLoadingProjects } = useProjectsList({
+    mode,
+    userId,
+  })
+
+  console.log('🌳 ProjectTree render:', {
+    mode,
+    userId,
+    projectsCount: projects.length,
+    isLoadingProjects,
+  })
+
+  // Фильтрация проектов по поиску
+  const filteredProjects = useMemo(() => {
+    if (!search.trim()) return projects
+
+    const query = search.toLowerCase()
+    return projects.filter((project) => project.name.toLowerCase().includes(query))
+  }, [projects, search])
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -215,104 +234,32 @@ export function ProjectTree({
         </div>
       </div>
 
-      {/* Список проектов */}
-      {!selectedProjectId && (
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {isLoadingProjects && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
+      {/* Список проектов с деревом */}
+      <ScrollArea className="flex-1">
+        <div className="py-1">
+          {isLoadingProjects && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
 
-            {!isLoadingProjects && filteredProjects.length === 0 && (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                {search ? 'Проекты не найдены' : 'Нет доступных проектов'}
-              </div>
-            )}
+          {!isLoadingProjects && filteredProjects.length === 0 && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              {search ? 'Проекты не найдены' : 'Нет доступных проектов'}
+            </div>
+          )}
 
-            {!isLoadingProjects &&
-              filteredProjects.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => onProjectSelect(project.id)}
-                  className="flex items-center gap-2 w-full px-2 py-2 rounded text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
-                  <Folder className="h-4 w-4 shrink-0 text-green-600" />
-                  <div className="flex-1 text-left truncate">
-                    <div className="font-medium truncate">{project.name}</div>
-                    {project.cipher && (
-                      <div className="text-xs text-muted-foreground">{project.cipher}</div>
-                    )}
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </button>
-              ))}
-          </div>
-        </ScrollArea>
-      )}
-
-      {/* Дерево проекта */}
-      {selectedProjectId && (
-        <div className="flex-1 flex flex-col">
-          {/* Хлебные крошки */}
-          {currentPath.length > 0 && (
-            <div className="p-4 border-b">
-              <ProjectTreeBreadcrumbs
-                path={currentPath}
-                onNavigate={(node) => {
-                  // При клике на проект - вернуться к списку проектов
-                  if (node.type === 'project') {
-                    onProjectSelect('')
-                    onSectionSelect('', [])
-                  }
-                  // При клике на другие узлы - раскрыть их
-                  else {
-                    setExpandedNodes((prev) => new Set(prev).add(node.id))
-                  }
-                }}
+          {!isLoadingProjects &&
+            filteredProjects.map((project) => (
+              <ProjectItem
+                key={project.id}
+                project={project}
+                selectedSectionId={selectedSectionId}
+                onSectionSelect={onSectionSelect}
               />
-            </div>
-          )}
-
-          {/* Кнопка "Назад к проектам" если нет выбранного раздела */}
-          {currentPath.length === 0 && (
-            <div className="p-4 border-b">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  onProjectSelect('')
-                  onSectionSelect('', [])
-                }}
-                className="w-full"
-              >
-                ← Назад к проектам
-              </Button>
-            </div>
-          )}
-
-          {/* Дерево */}
-          <ScrollArea className="flex-1">
-            <div className="p-2">
-              {isLoadingTree && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
-
-              {!isLoadingTree && tree.length === 0 && (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  Дерево проекта пусто
-                </div>
-              )}
-
-              {!isLoadingTree && tree.map((node) => renderTreeNode(node))}
-            </div>
-          </ScrollArea>
+            ))}
         </div>
-      )}
+      </ScrollArea>
     </div>
   )
 }

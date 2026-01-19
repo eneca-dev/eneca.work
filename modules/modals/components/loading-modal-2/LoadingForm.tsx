@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { EmployeeSelector } from './EmployeeSelector'
 import { RateInput } from './RateInput'
 import { DateRangePicker } from './DateRangePicker'
+import { DecompositionStageSelector } from './DecompositionStageSelector'
 import type { LoadingFormData } from '../../hooks/useLoadingModal'
 
 export interface LoadingFormProps {
@@ -29,6 +30,8 @@ export interface LoadingFormProps {
   errors: Partial<Record<keyof LoadingFormData, string>>
   /** Disabled состояние */
   disabled?: boolean
+  /** ID выбранного раздела */
+  selectedSectionId?: string | null
   /** Название выбранного раздела */
   selectedSectionName?: string
   /** Класс для кастомизации */
@@ -40,6 +43,7 @@ export function LoadingForm({
   onFieldChange,
   errors,
   disabled = false,
+  selectedSectionId,
   selectedSectionName,
   className,
 }: LoadingFormProps) {
@@ -76,6 +80,19 @@ export function LoadingForm({
             error={errors.employeeId}
             disabled={disabled}
             placeholder="Выберите сотрудника"
+          />
+        </div>
+
+        {/* Этап декомпозиции */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Этап декомпозиции</label>
+          <DecompositionStageSelector
+            sectionId={selectedSectionId}
+            value={formData.stageId}
+            onChange={(value) => onFieldChange('stageId', value)}
+            error={errors.stageId}
+            disabled={disabled}
+            placeholder="Выберите этап"
           />
         </div>
 

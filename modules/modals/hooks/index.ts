@@ -113,6 +113,12 @@ export {
   type LoadingFormData,
 } from './useLoadingModal'
 
+export {
+  useDecompositionStages,
+  type UseDecompositionStagesOptions,
+  type DecompositionStage,
+} from './useDecompositionStages'
+
 // ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================

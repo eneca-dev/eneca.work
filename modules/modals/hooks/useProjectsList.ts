@@ -24,16 +24,26 @@ export interface UseProjectsListOptions {
 export function useProjectsList(options: UseProjectsListOptions) {
   const { mode, userId, enabled = true } = options
 
+  console.log('🔍 useProjectsList debug:', {
+    mode,
+    userId,
+    enabled,
+    shouldQuery: enabled && Boolean(userId?.trim()),
+  })
+
   return useQuery({
     queryKey: queryKeys.projects.listForModal(mode, userId),
     queryFn: async () => {
+      console.log('📡 Запрос списка проектов:', { mode, userId })
       const input: FetchProjectsListInput = { mode, userId }
       const result = await fetchProjectsList(input)
 
       if (!result.success) {
+        console.error('❌ Ошибка загрузки проектов:', result.error)
         throw new Error(result.error)
       }
 
+      console.log('✅ Проекты загружены:', result.data.length)
       return result.data
     },
     enabled: enabled && Boolean(userId?.trim()),

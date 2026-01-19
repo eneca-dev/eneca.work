@@ -3,7 +3,7 @@
 /**
  * Loading Modal 2 - Hook для загрузки дерева проекта
  *
- * Возвращает иерархию: project -> stage -> object -> section
+ * Возвращает иерархию: project -> stage -> object -> section -> decomposition_stage
  * Используется в левой панели для навигации по структуре проекта
  */
 
@@ -11,6 +11,107 @@ import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
 import { fetchProjectTree } from '../actions/projects-tree'
 import type { ProjectTreeNode, FetchProjectTreeInput } from '../actions/projects-tree'
+
+export interface ProjectTreeNodeWithChildren extends ProjectTreeNode {
+  children?: ProjectTreeNodeWithChildren[]
+}
+
+/**
+ * Построение иерархического дерева из плоского списка
+ */
+function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
+  if (nodes.length === 0) {
+    return []
+  }
+
+  // Группируем узлы по уровням
+  const byLevel: Record<number, ProjectTreeNode[]> = {}
+  const minLevel = Math.min(...nodes.map(n => n.level))
+  const maxLevel = Math.max(...nodes.map(n => n.level))
+
+  console.log('🔧 buildTree start:', {
+    totalNodes: nodes.length,
+    minLevel,
+    maxLevel,
+    nodesByType: nodes.reduce((acc, n) => {
+      acc[n.type] = (acc[n.type] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  })
+
+  for (const node of nodes) {
+    if (!byLevel[node.level]) {
+      byLevel[node.level] = []
+    }
+    byLevel[node.level].push(node)
+  }
+
+  // Строим дерево снизу вверх
+  const nodeMap = new Map<string, ProjectTreeNodeWithChildren>()
+
+  // Сначала создаем все узлы
+  for (const node of nodes) {
+    nodeMap.set(node.id, { ...node, children: [] })
+  }
+
+  // Связываем родителей с детьми (от низа к верху)
+  for (let level = maxLevel; level > minLevel; level--) {
+    const currentLevelNodes = byLevel[level] || []
+
+    for (const node of currentLevelNodes) {
+      const nodeWithChildren = nodeMap.get(node.id)!
+
+      // Находим родителя по уровню выше
+      const parent = findParent(node, byLevel[level - 1] || [])
+
+      if (parent) {
+        const parentWithChildren = nodeMap.get(parent.id)
+        if (parentWithChildren && !parentWithChildren.children!.find(c => c.id === node.id)) {
+          parentWithChildren.children!.push(nodeWithChildren)
+        }
+      }
+    }
+  }
+
+  // Возвращаем узлы минимального уровня (корневые)
+  const roots = (byLevel[minLevel] || []).map(node => nodeMap.get(node.id)!).filter(Boolean)
+
+  console.log('🔍 buildTree debug:', {
+    rootsCount: roots.length,
+    rootLevel: minLevel,
+    rootTypes: roots.map(r => r.type),
+    rootChildren: roots.map(r => ({ name: r.name, childrenCount: r.children?.length || 0 }))
+  })
+
+  // Если есть только один корень типа 'project', возвращаем его детей
+  // Это нужно для отображения дерева внутри проекта, без самого узла проекта
+  if (roots.length === 1 && roots[0].type === 'project' && roots[0].children && roots[0].children.length > 0) {
+    console.log('📦 Возвращаем детей корневого проекта:', roots[0].children.length)
+    return roots[0].children
+  }
+
+  return roots
+}
+
+/**
+ * Находит родителя узла на основе связей через ID
+ */
+function findParent(node: ProjectTreeNode, potentialParents: ProjectTreeNode[]): ProjectTreeNode | null {
+  // Поиск по типу узла
+  if (node.type === 'decomposition_stage') {
+    return potentialParents.find(p => p.sectionId === node.sectionId && p.type === 'section') || null
+  }
+  if (node.type === 'section') {
+    return potentialParents.find(p => p.objectId === node.objectId && p.type === 'object') || null
+  }
+  if (node.type === 'object') {
+    return potentialParents.find(p => p.stageId === node.stageId && p.type === 'stage') || null
+  }
+  if (node.type === 'stage') {
+    return potentialParents.find(p => p.projectId === node.projectId && p.type === 'project') || null
+  }
+  return null
+}
 
 export interface UseProjectTreeOptions {
   /** ID проекта */
@@ -36,7 +137,19 @@ export function useProjectTree(options: UseProjectTreeOptions) {
         throw new Error(result.error)
       }
 
-      return result.data
+      // Строим иерархическое дерево из плоского списка
+      const tree = buildTree(result.data)
+
+      console.log('🌲 Построено дерево проекта:', {
+        projectId,
+        nodesFlat: result.data.length,
+        treeRoots: tree.length,
+        levels: Math.max(...result.data.map(n => n.level), 0),
+        nodeLevels: result.data.map(n => ({ type: n.type, level: n.level, name: n.name })),
+        treeResult: tree.map(n => ({ type: n.type, name: n.name, childrenCount: n.children?.length || 0 }))
+      })
+
+      return tree
     },
     enabled: enabled && Boolean(projectId?.trim()),
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -44,4 +157,4 @@ export function useProjectTree(options: UseProjectTreeOptions) {
   })
 }
 
-export type { ProjectTreeNode }
+export type { ProjectTreeNode, ProjectTreeNodeWithChildren }
