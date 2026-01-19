@@ -74,6 +74,46 @@ export {
 } from './useWorkLogs'
 
 // ============================================================================
+// Loading Modal 2 Hooks
+// ============================================================================
+
+export {
+  useProjectsList,
+  type UseProjectsListOptions,
+  type ProjectListItem,
+} from './useProjectsList'
+
+export {
+  useProjectTree,
+  type UseProjectTreeOptions,
+  type ProjectTreeNode,
+} from './useProjectTree'
+
+export {
+  useLoadingMutations,
+  type UseLoadingMutationsOptions,
+  type CreateLoadingInput,
+  type UpdateLoadingInput,
+  type ArchiveLoadingInput,
+  type DeleteLoadingInput,
+  type LoadingResult,
+} from './useLoadingMutations'
+
+export {
+  useDecompositionStageMutations,
+  type UseDecompositionStageMutationsOptions,
+  type CreateDecompositionStageFromModalInput,
+  type DecompositionStageResult,
+} from './useDecompositionStageMutations'
+
+export {
+  useLoadingModal,
+  type UseLoadingModalOptions,
+  type UseLoadingModalResult,
+  type LoadingFormData,
+} from './useLoadingModal'
+
+// ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================
 

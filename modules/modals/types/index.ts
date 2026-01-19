@@ -147,6 +147,26 @@ export interface LoadingEditData {
 }
 
 // ============================================================================
+// Loading Modal 2 Types
+// ============================================================================
+
+export interface LoadingModal2CreateData {
+  /** ID этапа декомпозиции (опционально - можно выбрать в модалке) */
+  stageId?: string
+  /** ID сотрудника (опционально - можно выбрать в модалке) */
+  employeeId?: string
+  /** ID проекта (для автоматического выбора проекта в дереве) */
+  projectId?: string
+}
+
+export interface LoadingModal2EditData {
+  /** ID загрузки */
+  loadingId: string
+  /** ID раздела (для мутаций и кеша) */
+  sectionId: string
+}
+
+// ============================================================================
 // Employee Modal Types
 // ============================================================================
 
@@ -231,6 +251,8 @@ export type ModalType =
   | 'item-edit'
   | 'loading-create'
   | 'loading-edit'
+  | 'loading2-create'
+  | 'loading2-edit'
   | 'employee-view'
   | 'progress-update'
   | 'checkpoint-create'
