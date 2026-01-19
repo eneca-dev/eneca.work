@@ -571,7 +571,7 @@ export function LoadingModal({
         console.log(`💾 Кеш ПУСТОЙ, загружаем данные из БД для проекта ${node.projectId}`)
         // Fetch all project data from view in ONE query
         const { data, error } = await supabase
-          .from("view_project_tree_with_loadings_v2")
+          .from("view_project_tree_with_loadings")
           .select("*")
           .eq("project_id", node.projectId)
 
@@ -2117,7 +2117,7 @@ export function LoadingModal({
 
           // Fetch project and section names
           const { data: sectionData } = await supabase
-            .from("view_section_hierarchy_v2")
+            .from("view_section_hierarchy")
             .select("project_id, project_name, section_id, section_name")
             .eq("section_id", selectedNode!.sectionId!)
             .limit(1)
@@ -2232,7 +2232,7 @@ export function LoadingModal({
 
             // Fetch section info for new stage
             const { data: sectionData } = await supabase
-              .from("view_section_hierarchy_v2")
+              .from("view_section_hierarchy")
               .select("project_id, project_name, section_id, section_name")
               .eq("section_id", selectedNode.sectionId!)
               .limit(1)

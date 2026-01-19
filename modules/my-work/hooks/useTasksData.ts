@@ -29,7 +29,7 @@ export function useTasksData() {
           updated_at,
           due_date,
           status,
-          from_section:view_section_hierarchy_v2!from_section_id(
+          from_section:view_section_hierarchy!from_section_id(
             section_name,
             project_name
           ),
@@ -45,7 +45,7 @@ export function useTasksData() {
         // Fallback на старый метод если JOIN не работает
         const [assignmentsResult, sectionsResult, profilesResult] = await Promise.all([
           supabase.from('assignments').select('*').eq('to_section_id', sectionId),
-          supabase.from('view_section_hierarchy_v2').select('section_id, section_name, project_name'),
+          supabase.from('view_section_hierarchy').select('section_id, section_name, project_name'),
           supabase.from('profiles').select('user_id, first_name, last_name')
         ])
 

@@ -1616,7 +1616,7 @@ export function ProjectsTree({
           // Функция построения базового запроса с фильтрами
           const buildQuery = () => {
             let q = supabase
-              .from('view_project_tree_v2')
+              .from('view_project_tree')
               .select('*')
             if (selectedManagerId && selectedManagerId !== 'no-manager') {
               q = q.eq('manager_id', selectedManagerId)
@@ -1683,7 +1683,7 @@ export function ProjectsTree({
 
           let data = aggregated
 
-          console.log('📊 Данные из view_project_tree_v2 с фильтрацией:', data)
+          console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
           try {
             const currentUserId = useUserStore.getState().id || null
@@ -1691,7 +1691,7 @@ export function ProjectsTree({
             const managerFilterAllowsSelf = !selectedManagerId || selectedManagerId === currentUserId
             if (currentUserId && !orgFiltersActive && managerFilterAllowsSelf) {
               const { data: ownProjectsNoSections, error: extraErr } = await supabase
-                .from('view_project_tree_v2')
+                .from('view_project_tree')
                 .select('*')
                 .eq('manager_id', currentUserId)
                 .is('section_id', null)
@@ -1720,7 +1720,7 @@ export function ProjectsTree({
               const allowDrafts = !selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')
               if (allowDrafts) {
                 let draftQuery = supabase
-                  .from('view_project_tree_v2')
+                  .from('view_project_tree')
                   .select('*')
                   .eq('project_status', 'draft')
                 if (selectedManagerId && selectedManagerId !== 'no-manager') {
@@ -1824,7 +1824,7 @@ export function ProjectsTree({
       children: []
     }
 
-    // Обрабатываем все записи из view_project_tree_v2
+    // Обрабатываем все записи из view_project_tree
     data.forEach(row => {
       // 1. Заказчики (если включена группировка по заказчикам)
       const clientId = row.client_id || NO_CLIENT_ID
@@ -1860,9 +1860,9 @@ export function ProjectsTree({
           clientId: clientId,
           projectStatus: normalizeProjectStatus(row.project_status),
           children: [],
-          // Признак избранного приходит из view_project_tree_v2
+          // Признак избранного приходит из view_project_tree
           isFavorite: Boolean(row.is_favorite),
-          // Теги проекта из view_project_tree_v2
+          // Теги проекта из view_project_tree
           projectTags: row.project_tags || [],
           // Ведущий инженер проекта
           leadEngineerId: row.lead_engineer_id || null

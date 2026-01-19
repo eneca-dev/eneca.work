@@ -53,7 +53,7 @@ export function CreateObjectAssignmentModal({
   const { toast } = useToast()
   const supabase = createClient()
 
-  // Разделы из view_project_tree_v2 загружаются ниже в эффекте
+  // Разделы из view_project_tree загружаются ниже в эффекте
 
   // Если objectId не передали (например, запуск из панели раздела),
   // пробуем получить его по sectionId
@@ -109,7 +109,7 @@ export function CreateObjectAssignmentModal({
     })()
   }, [isOpen, effectiveObjectId, treeSections.length])
 
-  // Основной источник: грузим разделы из view_project_tree_v2 по проекту и объекту
+  // Основной источник: грузим разделы из view_project_tree по проекту и объекту
   useEffect(() => {
     ;(async () => {
       try {
@@ -118,14 +118,14 @@ export function CreateObjectAssignmentModal({
           return
         }
         const { data, error } = await supabase
-          .from('view_project_tree_v2')
+          .from('view_project_tree')
           .select('section_id, section_name, project_id, object_id')
           .eq('project_id', projectId)
           .eq('object_id', effectiveObjectId)
           .order('section_name')
 
         if (error) {
-          console.error('Ошибка загрузки разделов из view_project_tree_v2:', error)
+          console.error('Ошибка загрузки разделов из view_project_tree:', error)
           setTreeSections([])
           return
         }
@@ -136,9 +136,9 @@ export function CreateObjectAssignmentModal({
           .filter((section, index, self) => index === self.findIndex(s => s.id === section.id))
 
         setTreeSections(mapped)
-        console.log('🌳 Разделы из view_project_tree_v2:', mapped)
+        console.log('🌳 Разделы из view_project_tree:', mapped)
       } catch (e) {
-        console.error('Не удалось загрузить разделы из view_project_tree_v2:', e)
+        console.error('Не удалось загрузить разделы из view_project_tree:', e)
         setTreeSections([])
       }
     })()

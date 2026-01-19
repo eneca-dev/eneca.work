@@ -221,7 +221,7 @@ export const useProjectsStore = create<ProjectsState>()(
       
       // Функция обновления ответственного за раздел
       updateSectionResponsible: (sectionId, updates) => {
-        // Пока что это заглушка, так как мы работаем с данными из view_section_hierarchy_v2
+        // Пока что это заглушка, так как мы работаем с данными из view_section_hierarchy
         // В реальном приложении здесь можно было бы обновить локальное состояние
         console.log('Обновление ответственного за раздел:', sectionId, updates)
       },

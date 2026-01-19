@@ -135,7 +135,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     setIsLoadingSections(true)
     try {
       let query = supabase
-        .from("view_section_hierarchy_v2")
+        .from("view_section_hierarchy")
         .select("section_id, section_name, project_id, stage_id, stage_name, object_id, object_name")
         .eq("project_id", projectId)
         .order("section_name")
@@ -213,7 +213,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
       try {
         const { data, error } = await supabase
-          .from("view_section_hierarchy_v2")
+          .from("view_section_hierarchy")
           .select("project_id, project_name, stage_id, stage_name, object_id, object_name")
           .eq("section_id", loading.sectionId)
           .limit(1)
@@ -282,9 +282,9 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
           setStages([]); setObjects([])
           return
         }
-        // Стадии - загружаем только те, у которых есть разделы в view_section_hierarchy_v2
+        // Стадии - загружаем только те, у которых есть разделы в view_section_hierarchy
         const { data: stageRows } = await supabase
-          .from("view_section_hierarchy_v2")
+          .from("view_section_hierarchy")
           .select("stage_id, stage_name")
           .eq("project_id", formData.projectId)
           .not("stage_id", "is", null)
@@ -301,7 +301,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
         // Объекты проекта (через представление, с уникализацией)
         const { data: objectRows } = await supabase
-          .from("view_section_hierarchy_v2")
+          .from("view_section_hierarchy")
           .select("object_id, object_name")
           .eq("project_id", formData.projectId)
           .not("object_id", "is", null)

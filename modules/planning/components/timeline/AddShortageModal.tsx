@@ -85,7 +85,7 @@ export function AddShortageModal({ teamId, teamName, departmentId, departmentNam
     if (!pId) { setSections([]); return }
     try {
       let query = supabase
-        .from("view_section_hierarchy_v2")
+        .from("view_section_hierarchy")
         .select("section_id, section_name")
         .eq("project_id", pId)
         .order("section_name")
@@ -164,7 +164,7 @@ export function AddShortageModal({ teamId, teamName, departmentId, departmentNam
                           setStages(stageRows || [])
                           // Объекты (уникальные) и разделы
                           const { data: hier } = await supabase
-                            .from("view_section_hierarchy_v2")
+                            .from("view_section_hierarchy")
                             .select("section_id, section_name, object_id, object_name")
                             .eq("project_id", project.project_id)
                           const objectsMap = new Map<string, { object_id: string; object_name: string }>()

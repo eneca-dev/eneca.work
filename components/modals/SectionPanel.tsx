@@ -184,7 +184,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
       // Сначала пробуем загрузить через представление
       const { data: viewData, error: viewError } = await supabase
-        .from('view_section_hierarchy_v2')
+        .from('view_section_hierarchy')
         .select('object_id, object_name, stage_id, stage_name, project_id, project_name, project_manager_name:manager_name')
         .eq('section_id', sectionId)
         .single()

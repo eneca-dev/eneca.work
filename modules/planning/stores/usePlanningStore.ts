@@ -884,7 +884,7 @@ export const usePlanningStore = create<PlanningState>()(
                   const uniqueSectionIds = Array.from(new Set(shortageSectionIds))
                   if (uniqueSectionIds.length > 0) {
                     const { data: sectionInfos } = await supabase
-                      .from("view_section_hierarchy_v2")
+                      .from("view_section_hierarchy")
                       .select("section_id, section_name, project_name")
                       .in("section_id", uniqueSectionIds)
                     const sectionMap = new Map<string, { section_name: string; project_name: string }>()

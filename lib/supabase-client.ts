@@ -156,10 +156,10 @@ export interface ShortageLoadingRow {
 }
 
 
-// Функция для получения разделов из представления view_section_hierarchy_v2
+// Функция для получения разделов из представления view_section_hierarchy
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
-    const { data, error } = await supabase.from("view_section_hierarchy_v2").select("*")
+    const { data, error } = await supabase.from("view_section_hierarchy").select("*")
 
     if (error) {
       console.error("Ошибка при загрузке разделов:", error)
@@ -1200,9 +1200,9 @@ export async function fetchProjectObjects(
     }
 
     // Сначала проверим, существует ли представление
-    console.log("fetchProjectObjects: проверяем доступность представления view_section_hierarchy_v2")
+    console.log("fetchProjectObjects: проверяем доступность представления view_section_hierarchy")
     const { data: viewExists, error: viewError } = await supabase
-      .from("view_section_hierarchy_v2")
+      .from("view_section_hierarchy")
       .select("object_id")
       .limit(1)
 
@@ -1216,19 +1216,19 @@ export async function fetchProjectObjects(
         originalError: JSON.stringify(viewError, null, 2)
       }
 
-      console.error("fetchProjectObjects: представление view_section_hierarchy_v2 недоступно:", errorInfo)
+      console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
       return {
         success: false,
-        error: `Представление view_section_hierarchy_v2 недоступно: ${errorInfo.message}`,
+        error: `Представление view_section_hierarchy недоступно: ${errorInfo.message}`,
         details: errorInfo
       }
     }
 
     console.log("fetchProjectObjects: представление доступно, найдено записей для проверки:", viewExists?.length || 0)
 
-    // Получаем уникальные объекты для проекта через представление view_section_hierarchy_v2
+    // Получаем уникальные объекты для проекта через представление view_section_hierarchy
     const query = supabase
-      .from("view_section_hierarchy_v2")
+      .from("view_section_hierarchy")
       .select("object_id, object_name")
       .eq("project_id", projectId)
       .not("object_id", "is", null)
