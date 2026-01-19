@@ -235,7 +235,7 @@ export async function fetchAssignments(filters: TaskFilters = {}): Promise<Assig
   )
 }
 
-// Функция для получения иерархии проектов из view_section_hierarchy
+// Функция для получения иерархии проектов из view_section_hierarchy_v2
 export async function fetchProjectHierarchy() {
   return Sentry.startSpan(
     {
@@ -244,11 +244,11 @@ export async function fetchProjectHierarchy() {
     },
     async (span) => {
       try {
-        span.setAttribute("table", "view_section_hierarchy")
+        span.setAttribute("table", "view_section_hierarchy_v2")
         span.setAttribute("operation", "fetch_hierarchy")
-        
+
         const { data, error } = await supabase
-          .from('view_section_hierarchy')
+          .from('view_section_hierarchy_v2')
           .select('*')
           .order('project_name, stage_name, object_name, section_name')
 
@@ -260,7 +260,7 @@ export async function fetchProjectHierarchy() {
             tags: {
               module: 'task_transfer',
               action: 'fetch_project_hierarchy',
-              table: 'view_section_hierarchy'
+              table: 'view_section_hierarchy_v2'
             },
             extra: {
               error_code: error.code,
@@ -403,10 +403,10 @@ export async function fetchEmployees() {
         span.setAttribute("db.success", true)
         span.setAttribute("employees.raw_count", data?.length || 0)
 
-        // Дедупликация по имени (для связи с view_section_hierarchy)
+        // Дедупликация по имени (для связи с view_section_hierarchy_v2)
         const employeesMap = new Map()
         data?.forEach((row: any) => {
-          // Используем имя как ключ для дедупликации, так как в view_section_hierarchy используются имена
+          // Используем имя как ключ для дедупликации, так как в view_section_hierarchy_v2 используются имена
           const key = row.full_name
           if (!employeesMap.has(key)) {
             employeesMap.set(key, {

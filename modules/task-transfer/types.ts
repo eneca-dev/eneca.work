@@ -89,7 +89,7 @@ export interface TaskFilters {
   sectionId?: string | null
 }
 
-// Интерфейс для данных из view_section_hierarchy
+// Интерфейс для данных из view_section_hierarchy_v2
 export interface SectionHierarchy {
   section_id: string | null
   section_name: string | null

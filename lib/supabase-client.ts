@@ -156,10 +156,10 @@ export interface ShortageLoadingRow {
 }
 
 
-// Функция для получения разделов из представления view_section_hierarchy
+// Функция для получения разделов из представления view_section_hierarchy_v2
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
-    const { data, error } = await supabase.from("view_section_hierarchy").select("*")
+    const { data, error } = await supabase.from("view_section_hierarchy_v2").select("*")
 
     if (error) {
       console.error("Ошибка при загрузке разделов:", error)
@@ -1200,9 +1200,9 @@ export async function fetchProjectObjects(
     }
 
     // Сначала проверим, существует ли представление
-    console.log("fetchProjectObjects: проверяем доступность представления view_section_hierarchy")
+    console.log("fetchProjectObjects: проверяем доступность представления view_section_hierarchy_v2")
     const { data: viewExists, error: viewError } = await supabase
-      .from("view_section_hierarchy")
+      .from("view_section_hierarchy_v2")
       .select("object_id")
       .limit(1)
 
@@ -1215,20 +1215,20 @@ export async function fetchProjectObjects(
         hint: viewError.hint || 'Нет подсказки',
         originalError: JSON.stringify(viewError, null, 2)
       }
-      
-      console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
+
+      console.error("fetchProjectObjects: представление view_section_hierarchy_v2 недоступно:", errorInfo)
       return {
         success: false,
-        error: `Представление view_section_hierarchy недоступно: ${errorInfo.message}`,
+        error: `Представление view_section_hierarchy_v2 недоступно: ${errorInfo.message}`,
         details: errorInfo
       }
     }
 
     console.log("fetchProjectObjects: представление доступно, найдено записей для проверки:", viewExists?.length || 0)
 
-    // Получаем уникальные объекты для проекта через представление view_section_hierarchy
+    // Получаем уникальные объекты для проекта через представление view_section_hierarchy_v2
     const query = supabase
-      .from("view_section_hierarchy")
+      .from("view_section_hierarchy_v2")
       .select("object_id, object_name")
       .eq("project_id", projectId)
       .not("object_id", "is", null)

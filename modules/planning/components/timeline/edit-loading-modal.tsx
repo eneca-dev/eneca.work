@@ -135,7 +135,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     setIsLoadingSections(true)
     try {
       let query = supabase
-        .from("view_section_hierarchy")
+        .from("view_section_hierarchy_v2")
         .select("section_id, section_name, project_id, stage_id, stage_name, object_id, object_name")
         .eq("project_id", projectId)
         .order("section_name")
@@ -213,7 +213,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
       try {
         const { data, error } = await supabase
-          .from("view_section_hierarchy")
+          .from("view_section_hierarchy_v2")
           .select("project_id, project_name, stage_id, stage_name, object_id, object_name")
           .eq("section_id", loading.sectionId)
           .limit(1)
@@ -282,17 +282,26 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
           setStages([]); setObjects([])
           return
         }
-        // Стадии
+        // Стадии - загружаем только те, у которых есть разделы в view_section_hierarchy_v2
         const { data: stageRows } = await supabase
-          .from("stages")
+          .from("view_section_hierarchy_v2")
           .select("stage_id, stage_name")
-          .eq("stage_project_id", formData.projectId)
-          .order("stage_name")
-        setStages(stageRows || [])
+          .eq("project_id", formData.projectId)
+          .not("stage_id", "is", null)
+          .not("stage_name", "is", null)
+
+        // Уникализация стадий (в VIEW могут быть дубликаты)
+        const stageMap = new Map<string, { stage_id: string; stage_name: string }>()
+        ;(stageRows || []).forEach((r: any) => {
+          if (r.stage_id && r.stage_name && !stageMap.has(r.stage_id)) {
+            stageMap.set(r.stage_id, { stage_id: r.stage_id, stage_name: r.stage_name })
+          }
+        })
+        setStages(Array.from(stageMap.values()).sort((a, b) => a.stage_name.localeCompare(b.stage_name)))
 
         // Объекты проекта (через представление, с уникализацией)
         const { data: objectRows } = await supabase
-          .from("view_section_hierarchy")
+          .from("view_section_hierarchy_v2")
           .select("object_id, object_name")
           .eq("project_id", formData.projectId)
           .not("object_id", "is", null)

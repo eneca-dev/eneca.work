@@ -1616,7 +1616,7 @@ export function ProjectsTree({
           // Функция построения базового запроса с фильтрами
           const buildQuery = () => {
             let q = supabase
-              .from('view_project_tree')
+              .from('view_project_tree_v2')
               .select('*')
             if (selectedManagerId && selectedManagerId !== 'no-manager') {
               q = q.eq('manager_id', selectedManagerId)
@@ -1683,7 +1683,7 @@ export function ProjectsTree({
 
           let data = aggregated
 
-          console.log('📊 Данные из view_project_tree с фильтрацией:', data)
+          console.log('📊 Данные из view_project_tree_v2 с фильтрацией:', data)
 
           try {
             const currentUserId = useUserStore.getState().id || null
@@ -1691,7 +1691,7 @@ export function ProjectsTree({
             const managerFilterAllowsSelf = !selectedManagerId || selectedManagerId === currentUserId
             if (currentUserId && !orgFiltersActive && managerFilterAllowsSelf) {
               const { data: ownProjectsNoSections, error: extraErr } = await supabase
-                .from('view_project_tree')
+                .from('view_project_tree_v2')
                 .select('*')
                 .eq('manager_id', currentUserId)
                 .is('section_id', null)
@@ -1720,7 +1720,7 @@ export function ProjectsTree({
               const allowDrafts = !selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')
               if (allowDrafts) {
                 let draftQuery = supabase
-                  .from('view_project_tree')
+                  .from('view_project_tree_v2')
                   .select('*')
                   .eq('project_status', 'draft')
                 if (selectedManagerId && selectedManagerId !== 'no-manager') {
@@ -1803,6 +1803,8 @@ export function ProjectsTree({
     const projects = new Map<string, ProjectNode>()
     const stages = new Map<string, ProjectNode>()
     const objects = new Map<string, ProjectNode>()
+    const sections = new Map<string, ProjectNode>()
+    const objectSectionLinks = new Set<string>() // Отслеживаем связи object -> section
 
     // Создаем специальную категорию для проектов без руководителя
     const NO_MANAGER_ID = 'no-manager'
@@ -1822,7 +1824,7 @@ export function ProjectsTree({
       children: []
     }
 
-    // Обрабатываем все записи из view_project_tree
+    // Обрабатываем все записи из view_project_tree_v2
     data.forEach(row => {
       // 1. Заказчики (если включена группировка по заказчикам)
       const clientId = row.client_id || NO_CLIENT_ID
@@ -1858,9 +1860,9 @@ export function ProjectsTree({
           clientId: clientId,
           projectStatus: normalizeProjectStatus(row.project_status),
           children: [],
-          // Признак избранного приходит из view_project_tree
+          // Признак избранного приходит из view_project_tree_v2
           isFavorite: Boolean(row.is_favorite),
-          // Теги проекта из view_project_tree
+          // Теги проекта из view_project_tree_v2
           projectTags: row.project_tags || [],
           // Ведущий инженер проекта
           leadEngineerId: row.lead_engineer_id || null
@@ -1898,9 +1900,9 @@ export function ProjectsTree({
         })
       }
 
-      // 6. Разделы
-      if (row.section_id) {
-        const section: ProjectNode = {
+      // 6. Разделы - создаём Map для дедупликации
+      if (row.section_id && !sections.has(row.section_id)) {
+        sections.set(row.section_id, {
           id: row.section_id,
           name: row.section_name,
           type: 'section',
@@ -1918,11 +1920,18 @@ export function ProjectsTree({
           statusId: row.section_status_id,
           statusName: row.section_status_name,
           statusColor: row.section_status_color
-        }
+        })
+      }
 
-        // Добавляем раздел к объекту
-        if (row.object_id && objects.has(row.object_id)) {
-          objects.get(row.object_id)!.children!.push(section)
+      // Добавляем раздел к объекту (только один раз)
+      if (row.section_id && row.object_id && objects.has(row.object_id)) {
+        const linkKey = `${row.object_id}:${row.section_id}`
+
+        if (!objectSectionLinks.has(linkKey)) {
+          objectSectionLinks.add(linkKey)
+          const obj = objects.get(row.object_id)!
+          const section = sections.get(row.section_id)!
+          obj.children!.push(section)
         }
       }
     })

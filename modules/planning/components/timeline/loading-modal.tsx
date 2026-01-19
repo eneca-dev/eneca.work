@@ -481,8 +481,30 @@ export function LoadingModal({
     return Array.from(objectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [])
 
+  // Helper: Build object nodes for stageless objects (stage_id = null)
+  const buildStagelessObjectNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
+    const objectMap = new Map<string, FileTreeNode>()
+
+    data.forEach((row) => {
+      if (row.stage_id === null && row.object_id && !objectMap.has(row.object_id)) {
+        objectMap.set(row.object_id, {
+          id: `object-${row.object_id}`,
+          name: row.object_name!,
+          type: "folder",
+          parentId: `project-${projectId}`,
+          children: [],
+          objectId: row.object_id,
+          stageId: null,
+          projectId,
+        })
+      }
+    })
+
+    return Array.from(objectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
   // Helper: Build section nodes from view data
-  const buildSectionNodes = useCallback((data: ProjectTreeViewRow[], objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
+  const buildSectionNodes = useCallback((data: ProjectTreeViewRow[], objectId: string, stageId: string | null, projectId: string): FileTreeNode[] => {
     const sectionMap = new Map<string, FileTreeNode>()
 
     data.forEach((row) => {
@@ -505,7 +527,7 @@ export function LoadingModal({
   }, [])
 
   // Helper: Build decomposition stage nodes from view data
-  const buildDecompositionStageNodes = useCallback((data: ProjectTreeViewRow[], sectionId: string, objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
+  const buildDecompositionStageNodes = useCallback((data: ProjectTreeViewRow[], sectionId: string, objectId: string, stageId: string | null, projectId: string): FileTreeNode[] => {
     const decompMap = new Map<string, FileTreeNode>()
 
     data.forEach((row) => {
@@ -549,7 +571,7 @@ export function LoadingModal({
         console.log(`💾 Кеш ПУСТОЙ, загружаем данные из БД для проекта ${node.projectId}`)
         // Fetch all project data from view in ONE query
         const { data, error } = await supabase
-          .from("view_project_tree_with_loadings")
+          .from("view_project_tree_with_loadings_v2")
           .select("*")
           .eq("project_id", node.projectId)
 
@@ -657,11 +679,17 @@ export function LoadingModal({
       const stageNodes = buildStageNodes(projectData, node.projectId)
       console.log(`📊 stageNodes построено: ${stageNodes.length}`)
 
+      // Check if project has stageless objects (objects with stage_id = null)
+      const hasStages = projectData.some(row => row.stage_id !== null)
+      const stagelessObjectNodes = hasStages ? [] : buildStagelessObjectNodes(projectData, node.projectId)
+      console.log(`📊 stagelessObjectNodes построено: ${stagelessObjectNodes.length}`)
+
       // Build full hierarchy
       let totalObjectNodes = 0
       let totalSectionNodes = 0
       let totalDecompNodes = 0
 
+      // Process stages (if any)
       for (const stageNode of stageNodes) {
         const objectNodes = buildObjectNodes(projectData, stageNode.stageId!, node.projectId)
         totalObjectNodes += objectNodes.length
@@ -703,14 +731,53 @@ export function LoadingModal({
         stageNode.children = objectNodes
       }
 
+      // Process stageless objects (if project has no stages)
+      for (const objectNode of stagelessObjectNodes) {
+        const sectionNodes = buildSectionNodes(projectData, objectNode.objectId!, null, node.projectId)
+        totalSectionNodes += sectionNodes.length
+
+        for (const sectionNode of sectionNodes) {
+          const decompNodes = buildDecompositionStageNodes(
+            projectData,
+            sectionNode.sectionId!,
+            objectNode.objectId!,
+            null,
+            node.projectId
+          )
+          totalDecompNodes += decompNodes.length
+
+          // Create navigation node to open SectionPanel
+          const navigationNode: FileTreeNode = {
+            id: `nav-${sectionNode.sectionId}`,
+            name: "Перейти к декомпозиции",
+            type: "file",
+            parentId: sectionNode.id,
+            sectionId: sectionNode.sectionId,
+            objectId: sectionNode.objectId,
+            stageId: null,
+            projectId: sectionNode.projectId,
+            isNavigationNode: true,
+          }
+
+          // Add navigation node BEFORE decomposition stages
+          sectionNode.children = [navigationNode, ...decompNodes]
+        }
+
+        objectNode.children = sectionNodes
+      }
+      totalObjectNodes += stagelessObjectNodes.length
+
       // Update tree with loaded children
+      // If project has no stages, show stageless objects directly under project
+      const projectChildren = stageNodes.length > 0 ? stageNodes : stagelessObjectNodes
+
       setTreeData((prevTree) => {
         const updateNode = (nodes: FileTreeNode[]): FileTreeNode[] => {
           return nodes.map((n) => {
             if (n.id === node.id) {
               // Устанавливаем children как пустой массив даже если нет детей
               // Это важно для отличия "не загружено" (undefined) от "загружено но пусто" ([])
-              return { ...n, children: stageNodes }
+              return { ...n, children: projectChildren }
             }
             if (n.children) {
               return { ...n, children: updateNode(n.children) }
@@ -722,7 +789,7 @@ export function LoadingModal({
       })
 
       // Return true if we have children, false otherwise
-      const hasChildren = stageNodes.length > 0
+      const hasChildren = projectChildren.length > 0
 
       if (!hasChildren) {
         // Определяем, что именно отсутствует
@@ -1563,7 +1630,7 @@ export function LoadingModal({
       }
 
       const node = findNode(treeData, folderId)
-      if (node && node.children?.length === 0) {
+      if (node && (node.children === undefined || node.children.length === 0)) {
         // Children not loaded yet, load them
         await loadNodeChildren(node)
 
@@ -1689,10 +1756,14 @@ export function LoadingModal({
       return <FileUser className="h-4 w-4 text-gray-500" />
     }
 
-    // Project level
-    if (node.projectId && !node.stageId) {
-      const IconComponent = isExpanded ? FolderOpen : Folder
-      return <IconComponent className="h-4 w-4 text-green-600 dark:text-green-400" />
+    // Section level (проверяем ПЕРВЫМ, самый специфичный)
+    if (node.sectionId && !node.decompositionStageId) {
+      return <CircleDashed className="h-4 w-4 text-teal-500" />
+    }
+
+    // Object level (проверяем ВТОРЫМ)
+    if (node.objectId && !node.sectionId && !node.decompositionStageId) {
+      return <Package className="h-4 w-4 text-orange-600" />
     }
 
     // Stage level
@@ -1700,14 +1771,10 @@ export function LoadingModal({
       return <SquareStack className="h-4 w-4 text-purple-600" />
     }
 
-    // Object level
-    if (node.objectId && !node.sectionId) {
-      return <Package className="h-4 w-4 text-orange-600" />
-    }
-
-    // Section level
-    if (node.sectionId && !node.decompositionStageId) {
-      return <CircleDashed className="h-4 w-4 text-teal-500" />
+    // Project level (проверяем ПОСЛЕДНИМ, самый общий)
+    if (node.projectId && !node.stageId && !node.objectId && !node.sectionId) {
+      const IconComponent = isExpanded ? FolderOpen : Folder
+      return <IconComponent className="h-4 w-4 text-green-600 dark:text-green-400" />
     }
 
     // Fallback
@@ -2050,7 +2117,7 @@ export function LoadingModal({
 
           // Fetch project and section names
           const { data: sectionData } = await supabase
-            .from("view_section_hierarchy")
+            .from("view_section_hierarchy_v2")
             .select("project_id, project_name, section_id, section_name")
             .eq("section_id", selectedNode!.sectionId!)
             .limit(1)
@@ -2165,7 +2232,7 @@ export function LoadingModal({
 
             // Fetch section info for new stage
             const { data: sectionData } = await supabase
-              .from("view_section_hierarchy")
+              .from("view_section_hierarchy_v2")
               .select("project_id, project_name, section_id, section_name")
               .eq("section_id", selectedNode.sectionId!)
               .limit(1)

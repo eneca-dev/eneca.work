@@ -197,13 +197,13 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       async (span) => {
         setIsLoadingSections(true)
         try {
-          span.setAttribute("table", "view_section_hierarchy")
+          span.setAttribute("table", "view_section_hierarchy_v2")
           span.setAttribute("project_id", projectId)
           span.setAttribute("modal_type", "add_loading")
           span.setAttribute("employee_id", employee.id)
-          
+
           let query = supabase
-            .from("view_section_hierarchy")
+            .from("view_section_hierarchy_v2")
             .select("section_id, section_name, project_id")
             .eq("project_id", projectId)
             .order("section_name")
@@ -464,7 +464,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         }
         // Объекты проекта с учетом выбранной стадии
         let query = supabase
-          .from("view_section_hierarchy")
+          .from("view_section_hierarchy_v2")
           .select("object_id, object_name, stage_id")
           .eq("project_id", formData.projectId)
           .not("object_id", "is", null)
@@ -501,7 +501,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
 
       try {
         const { data, error } = await supabase
-          .from("view_section_hierarchy")
+          .from("view_section_hierarchy_v2")
           .select("project_id, project_name, section_id, section_name")
           .eq("section_id", sectionId)
           .limit(1)

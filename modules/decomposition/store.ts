@@ -70,7 +70,7 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
 
       // Используем правильное поле section_responsible_id для фильтрации
       const { data, error } = await supabase
-        .from("view_section_hierarchy")
+        .from("view_section_hierarchy_v2")
         .select("*")
         .eq("section_responsible_id", userId)
 

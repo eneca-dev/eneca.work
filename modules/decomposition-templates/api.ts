@@ -437,7 +437,7 @@ export async function validateTemplateApplicability(section_id: string, template
 
   // 1) Секция: отдел
   const { data: sec, error: secErr } = await supabase
-    .from('view_section_hierarchy')
+    .from('view_section_hierarchy_v2')
     .select('section_id, responsible_department_id')
     .eq('section_id', section_id)
     .single()

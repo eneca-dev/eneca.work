@@ -10,9 +10,9 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[]> {
     },
     async (span) => {
       try {
-        span.setAttribute("table", "view_section_hierarchy")
-        
-        const { data, error } = await supabase.from("view_section_hierarchy").select("*")
+        span.setAttribute("table", "view_section_hierarchy_v2")
+
+        const { data, error } = await supabase.from("view_section_hierarchy_v2").select("*")
 
         if (error) {
           span.setAttribute("db.success", false)
@@ -22,7 +22,7 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[]> {
             tags: { 
               module: 'planning', 
               action: 'fetch_section_hierarchy',
-              table: 'view_section_hierarchy'
+              table: 'view_section_hierarchy_v2'
             },
             extra: {
               error_code: error.code,

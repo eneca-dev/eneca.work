@@ -70,7 +70,7 @@ export const getFilteredAssignments = (
     )
   }
 
-  // Фильтрация по отделу - используем данные из view_section_hierarchy
+  // Фильтрация по отделу - используем данные из view_section_hierarchy_v2
   if (filters.departmentId && !filters.teamId && !filters.specialistId) {
     // Получаем разделы, за которые отвечают сотрудники данного отдела
     const sectionsInDepartment = sectionHierarchy
@@ -83,12 +83,12 @@ export const getFilteredAssignments = (
     )
   }
 
-  // Фильтрация по команде - используем данные из view_section_hierarchy
+  // Фильтрация по команде - используем данные из view_section_hierarchy_v2
   if (filters.teamId && !filters.specialistId) {
     // Получаем разделы, за которые отвечают сотрудники данной команды
     const sectionsInTeam = sectionHierarchy
       .filter(sh => {
-        // Ищем команду по имени, так как в view_section_hierarchy только название команды
+        // Ищем команду по имени, так как в view_section_hierarchy_v2 только название команды
         const team = teams.find(t => t.id === filters.teamId)
         return team && sh.responsible_team_name === team.name
       })
@@ -109,7 +109,7 @@ export const getFilteredAssignments = (
       // Получаем разделы, за которые отвечает данный специалист
       const sectionsResponsibleBy = sectionHierarchy
         .filter(sh => {
-          // Проверяем по имени ответственного в view_section_hierarchy
+          // Проверяем по имени ответственного в view_section_hierarchy_v2
           return sh.section_responsible_name === specialist.name
         })
         .map(sh => sh.section_id)

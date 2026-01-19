@@ -139,7 +139,7 @@ const DecompositionPage = () => {
       try {
         // Получаем только разделы, где есть ответственный
         const { data, error } = await supabase
-          .from("view_section_hierarchy")
+          .from("view_section_hierarchy_v2")
           .select("*")
           .not("section_responsible_id", "is", null)
 
