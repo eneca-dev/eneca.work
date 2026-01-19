@@ -1215,7 +1215,7 @@ export async function fetchProjectObjects(
         hint: viewError.hint || 'Нет подсказки',
         originalError: JSON.stringify(viewError, null, 2)
       }
-      
+
       console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
       return {
         success: false,

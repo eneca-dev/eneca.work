@@ -201,7 +201,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           span.setAttribute("project_id", projectId)
           span.setAttribute("modal_type", "add_loading")
           span.setAttribute("employee_id", employee.id)
-          
+
           let query = supabase
             .from("view_section_hierarchy")
             .select("section_id, section_name, project_id")

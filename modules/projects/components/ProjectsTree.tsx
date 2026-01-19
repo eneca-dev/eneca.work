@@ -1803,6 +1803,8 @@ export function ProjectsTree({
     const projects = new Map<string, ProjectNode>()
     const stages = new Map<string, ProjectNode>()
     const objects = new Map<string, ProjectNode>()
+    const sections = new Map<string, ProjectNode>()
+    const objectSectionLinks = new Set<string>() // Отслеживаем связи object -> section
 
     // Создаем специальную категорию для проектов без руководителя
     const NO_MANAGER_ID = 'no-manager'
@@ -1898,9 +1900,9 @@ export function ProjectsTree({
         })
       }
 
-      // 6. Разделы
-      if (row.section_id) {
-        const section: ProjectNode = {
+      // 6. Разделы - создаём Map для дедупликации
+      if (row.section_id && !sections.has(row.section_id)) {
+        sections.set(row.section_id, {
           id: row.section_id,
           name: row.section_name,
           type: 'section',
@@ -1918,11 +1920,18 @@ export function ProjectsTree({
           statusId: row.section_status_id,
           statusName: row.section_status_name,
           statusColor: row.section_status_color
-        }
+        })
+      }
 
-        // Добавляем раздел к объекту
-        if (row.object_id && objects.has(row.object_id)) {
-          objects.get(row.object_id)!.children!.push(section)
+      // Добавляем раздел к объекту (только один раз)
+      if (row.section_id && row.object_id && objects.has(row.object_id)) {
+        const linkKey = `${row.object_id}:${row.section_id}`
+
+        if (!objectSectionLinks.has(linkKey)) {
+          objectSectionLinks.add(linkKey)
+          const obj = objects.get(row.object_id)!
+          const section = sections.get(row.section_id)!
+          obj.children!.push(section)
         }
       }
     })
