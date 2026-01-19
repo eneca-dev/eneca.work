@@ -123,12 +123,7 @@ export function FreshnessIndicator({
             side={tooltipSide}
             sideOffset={12}
             collisionPadding={16}
-            className={cn(
-              "max-w-xs px-2 py-1.5 whitespace-pre-line text-xs border-2 z-[999999]",
-              theme === 'dark'
-                ? 'bg-slate-800 text-slate-100 border-slate-700'
-                : 'bg-white text-slate-800 border-slate-200'
-            )}
+            className="max-w-xs px-2 py-1.5 whitespace-pre-line text-xs border-2 z-[999999] bg-popover text-popover-foreground border-border"
           >
             {tooltipText}
           </TooltipContent>
@@ -208,7 +203,7 @@ function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/5"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose()
@@ -216,32 +211,22 @@ function ConfirmModal({
       }}
     >
       <div
-        className={cn(
-          "rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl border",
-          theme === 'dark'
-            ? 'bg-slate-800 text-slate-200 border-slate-700'
-            : 'bg-white text-slate-800 border-slate-200'
-        )}
+        className="rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl border bg-card text-card-foreground border-border"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold mb-2">
+        <h3 className="text-lg font-semibold mb-2 text-foreground">
           Актуализировать данные?
         </h3>
-        <p className={cn("text-sm mb-4", theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+        <p className="text-sm mb-4 text-muted-foreground">
         {teamIds && onConfirmMultiple ? (
-            <>Вы подтверждаете, что данные всех команд отдела <strong>{teamName}</strong> актуальны на данный момент</>
+            <>Вы подтверждаете, что данные всех команд отдела <strong className="text-foreground">{teamName}</strong> актуальны на данный момент</>
           ) : (
-            <>Вы подтверждаете, что данные команды <strong>{teamName}</strong> актуальны на данный момент</>
+            <>Вы подтверждаете, что данные команды <strong className="text-foreground">{teamName}</strong> актуальны на данный момент</>
           )}
         </p>
 
         {error && (
-          <div className={cn(
-            "mb-4 p-3 rounded text-sm",
-            theme === 'dark'
-              ? 'bg-red-900/30 text-red-300 border border-red-800'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          )}>
+          <div className="mb-4 p-3 rounded text-sm bg-destructive/10 text-destructive border border-destructive/50">
             {error}
           </div>
         )}
@@ -254,10 +239,7 @@ function ConfirmModal({
             }}
             disabled={isConfirming}
             className={cn(
-              "px-4 py-2 rounded transition-colors",
-              theme === 'dark'
-                ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                : 'bg-slate-200 hover:bg-slate-300 text-slate-800',
+              "px-4 py-2 rounded transition-colors bg-secondary text-secondary-foreground hover:bg-secondary/80",
               isConfirming && 'opacity-50 cursor-not-allowed'
             )}
           >
@@ -267,8 +249,7 @@ function ConfirmModal({
             onClick={handleConfirm}
             disabled={isConfirming}
             className={cn(
-              "px-4 py-2 rounded transition-colors",
-              "bg-teal-600 hover:bg-teal-700 text-white",
+              "px-4 py-2 rounded transition-colors bg-primary text-primary-foreground hover:bg-primary/90",
               isConfirming && 'opacity-50 cursor-not-allowed'
             )}
           >

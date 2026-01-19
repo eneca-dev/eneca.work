@@ -65,7 +65,7 @@ export function FeedbackAnalyticsPage() {
     <div className="space-y-6 p-6 min-h-screen bg-card">
       {/* Заголовок с кнопками */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground dark:text-white">
+        <h1 className="text-3xl font-bold text-foreground">
           Аналитика опросов
         </h1>
         <div className="flex gap-2">

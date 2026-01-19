@@ -347,3 +347,305 @@
 
 **⚠️ Замечание:**
 Некоторые ui/ компоненты имеют изменения только в line endings (LF → CRLF), без изменений кода. Это нормально и можно коммитить.
+
+## 11. Base UI Components (Фаза 4) - Критические исправления
+
+### Select Component
+`components/ui/select.tsx`
+- Строка 22 (SelectTrigger): `dark:bg-slate-700 dark:border-slate-500 dark:hover:bg-slate-600` → удалено
+- Строка 78 (SelectContent): `dark:bg-slate-700 dark:border-slate-500` → удалено
+- Строка 121 (SelectItem): `dark:focus:bg-slate-600 dark:hover:bg-slate-600` → удалено
+- **Важно:** Влияет на ВСЕ выпадающие списки в приложении
+
+### Input Component
+`components/ui/input.tsx`
+- Строка 11: `dark:bg-slate-700 dark:border-slate-500` → удалено
+- **Важно:** Влияет на ВСЕ input поля в приложении
+
+### Button Component
+`components/ui/button.tsx`
+- Строка 16 (outline variant): `dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-500` → удалено
+- **Важно:** Влияет на ВСЕ outline кнопки
+
+### Textarea Component
+`components/ui/textarea.tsx`
+- Строка 12: `dark:bg-slate-700 dark:border-slate-500` → удалено
+- **Важно:** Влияет на ВСЕ textarea поля
+
+### Modal Components
+`components/modals/base/Modal.tsx`
+- Строка 34: `bg-white dark:bg-slate-800` → `bg-card`
+- Строка 37: `border-gray-200 dark:border-slate-700` → `border-border`
+
+`components/modals/base/ModalHeader.tsx`
+- Строка 17: `border-gray-200 dark:border-slate-700` → `border-border`
+- Строка 18: `bg-gray-50/50 dark:bg-slate-800/50` → `bg-muted/50`
+- Строка 23: `text-gray-900 dark:text-white` → `text-foreground`
+- Строка 27: `text-gray-600 dark:text-slate-400` → `text-muted-foreground`
+- Строка 38: `text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300` → `text-muted-foreground hover:text-foreground`
+- Строка 40: `hover:bg-gray-100 dark:hover:bg-slate-700` → `hover:bg-accent`
+
+`components/modals/base/ModalFooter.tsx`
+- Строка 21: `border-gray-200 dark:border-slate-700` → `border-border`
+- Строка 22: `bg-gray-50/30 dark:bg-slate-800/30` → `bg-muted/30`
+
+## 12. Feedback Module (Фаза 4)
+
+### FeedbackBanner
+`modules/feedback/components/FeedbackBanner.tsx`
+- Строка 72: `bg-background dark:bg-[rgb(31_41_55)]` → `bg-card`
+- Строка 73: `dark:text-white` → `text-foreground`
+
+## 13. Notions Module (Фаза 4)
+
+### NoteCard
+`modules/notions/components/NoteCard.tsx`
+- Строка 102: `bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600` → `bg-card border-border`
+- Строка 103: `bg-gray-50 dark:bg-gray-600/60` → `bg-muted`
+- Строка 104: `bg-gray-50 dark:bg-gray-800/50` → `bg-muted/50`
+- Строка 132: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 133: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 145: `text-gray-700 dark:text-gray-300` → `text-foreground`
+- Строка 147: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 162: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 177: `hover:bg-gray-100 dark:hover:bg-gray-600` → `hover:bg-accent`
+- Строка 181: `text-gray-600 dark:text-gray-400` → `text-muted-foreground`
+- Строка 206: `text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300` → `text-destructive hover:text-destructive/80`
+- Строка 216: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+
+### NotesBlock
+`modules/notions/components/NotesBlock.tsx`
+- Строка 406: `hover:bg-gray-100 dark:hover:bg-gray-700` → `hover:bg-accent`
+- Строка 448: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 450: `bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300` → `bg-muted text-muted-foreground`
+- Строка 483: `text-gray-400 dark:text-gray-500` → `text-muted-foreground`
+- Строка 488: `bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400` → убрано (наследуется из Input)
+- Строка 493: `text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300` → `text-muted-foreground hover:text-foreground`
+- Строки 508, 517: `border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700` → `border-border text-foreground hover:bg-accent` (replace_all)
+- Строки 540-541: `text-gray-400 dark:text-gray-500` и `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 544: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 587: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 596: `hover:bg-gray-100 dark:hover:bg-gray-700` → `hover:bg-accent`
+
+### BulkDeleteConfirm
+`modules/notions/components/BulkDeleteConfirm.tsx`
+- Строка 67: `bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700` → `bg-card border-border`
+- Строка 69: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 86: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 87: `text-gray-600 dark:text-gray-400` → `text-muted-foreground`
+- Строка 99: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 100: `text-gray-600 dark:text-gray-400` → `text-muted-foreground`
+- Строка 106: `text-gray-500 dark:text-gray-400` → `text-muted-foreground`
+- Строка 126: `border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700` → `border-border text-foreground hover:bg-accent`
+
+### SingleDeleteConfirm
+`modules/notions/components/SingleDeleteConfirm.tsx`
+- Строка 50: `bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700` → `bg-card border-border`
+- Строка 52: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 69: `text-gray-900 dark:text-gray-100` → `text-foreground`
+- Строка 70: `bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600` → `bg-muted text-foreground border-border`
+- Строка 91: `border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700` → `border-border text-foreground hover:bg-accent`
+
+## 14. Feedback Analytics Module (Фаза 4)
+
+### FeedbackAnalyticsPage
+`modules/feedback-analytics/components/FeedbackAnalyticsPage.tsx`
+- Строка 68: `text-foreground dark:text-white` → `text-foreground`
+
+### UserReportsList
+`modules/feedback-analytics/components/UserReportsList.tsx`
+- Все: `bg-gray-200 dark:bg-gray-700` → `bg-muted` (replace_all, skeleton loaders)
+- Все: `bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600` → `bg-popover border-border` (replace_all)
+- Все: `text-foreground dark:text-gray-` → `text-foreground` (replace_all)
+- Строка 57: `dark:bg-[rgb(15_23_42)]` → `bg-card` (основная карточка)
+
+### FeedbackStats
+`modules/feedback-analytics/components/FeedbackStats.tsx`
+- Все: `bg-gray-200 dark:bg-gray-700` → `bg-muted` (replace_all, skeleton loaders)
+- Все: `text-foreground dark:text-white` → `text-foreground` (replace_all)
+- Строки 38, 53, 67, 85: `dark:bg-[rgb(15_23_42)]` → `bg-card` (4 карточки статистики)
+
+### FeedbackCommentsList
+`modules/feedback-analytics/components/FeedbackCommentsList.tsx`
+- Все: `bg-gray-200 dark:bg-gray-700` → `bg-muted` (replace_all, skeleton loaders)
+- Все: `bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600` → `bg-popover border-border` (replace_all)
+- Все: `border-gray-400 text-gray-500 dark:border-gray-600 dark:text-gray-400` → `border-border text-muted-foreground` (replace_all)
+- Все: `text-gray-500 dark:text-gray-400` → `text-muted-foreground` (replace_all)
+- Все: `text-foreground dark:text-gray-300` → `text-foreground` (replace_all)
+- Строка 109: `dark:bg-[rgb(15_23_42)]` → `bg-card` (основная карточка)
+
+### AddUserModal
+`modules/feedback-analytics/components/AddUserModal.tsx`
+- Все: `bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600` → `bg-popover border-border` (replace_all)
+
+## Итого Фаза 4
+
+**Файлов изменено:** 16
+**Критические UI компоненты:** 5 (влияют на ВСЁ приложение)
+- Select, Input, Button, Textarea, Modal components
+
+**Модулей исправлено:** 3
+- Feedback (1 файл)
+- Notions (4 файла)
+- Feedback-analytics (5 файлов)
+
+**Замен сделано:** ~90+
+
+**Основные паттерны замен:**
+- `bg-white dark:bg-gray-X` / `dark:bg-slate-X` → `bg-card` / `bg-popover` / `bg-muted`
+- `text-gray-X dark:text-gray-Y` → `text-foreground` / `text-muted-foreground`
+- `border-gray-X dark:border-gray-Y` → `border-border`
+- `hover:bg-gray-X dark:hover:bg-gray-Y` → `hover:bg-accent`
+- `dark:bg-[rgb(...)]` → CSS переменные
+
+**Общий итог всех фаз: ~130 замен в 56 файлах**
+
+---
+
+## 12. Text Editor (Фаза 5) - TipTap редактор заметок
+
+### TipTapEditor Component
+`modules/text-editor/components/TipTapEditor.tsx`
+
+**Проблема:** Блок редактирования заметок использовал hardcoded цвета для фона, панели инструментов и всех элементов контента.
+
+#### Основные изменения
+
+**1. Панель инструментов (строка 1040)**
+```tsx
+// БЫЛО:
+<div className="border border-gray-200 dark:border-gray-700 rounded-t-lg bg-gray-50 dark:bg-gray-700 p-2 flex flex-wrap gap-1 flex-shrink-0">
+
+// СТАЛО:
+<div className="border border-border rounded-t-lg bg-muted p-2 flex flex-wrap gap-1 flex-shrink-0">
+```
+
+**2. Контейнер редактора (строка 1346)**
+```tsx
+// БЫЛО:
+<div className="border border-t-0 border-gray-200 dark:border-gray-700 rounded-b-lg bg-white dark:bg-gray-800 overflow-y-auto flex-1 min-h-0">
+
+// СТАЛО:
+<div className="border border-t-0 border-border rounded-b-lg bg-card overflow-y-auto flex-1 min-h-0">
+```
+
+**3. Tooltip предупреждений (строка 1007)**
+```tsx
+// БЫЛО:
+className="absolute top-16 right-2 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 text-sm px-3 py-1 rounded-xl shadow-xl whitespace-nowrap border border-red-600 dark:border-red-800 z-50"
+
+// СТАЛО:
+className="absolute top-16 right-2 bg-destructive/10 text-destructive text-sm px-3 py-1 rounded-xl shadow-xl whitespace-nowrap border border-destructive z-50"
+```
+
+**4. Стили контента редактора (EditorContent, строки 1349-1367)**
+
+Массовые замены через `replace_all`:
+
+| Было | Стало | Применяется к |
+|------|-------|---------------|
+| `text-gray-900 dark:text-gray-100` | `text-foreground` | Текст редактора, заголовки h1-h3 |
+| `text-gray-500 dark:text-gray-400` | `text-muted-foreground` | Зачеркнутый текст, completed tasks |
+| `text-gray-700 dark:text-gray-300` | `text-muted-foreground` | Blockquote текст |
+| `bg-gray-100 dark:bg-gray-700` | `bg-muted` | Inline code, code blocks (pre) |
+| `text-gray-800 dark:text-gray-200` | `text-foreground` | Code, pre текст |
+| `border-gray-300 dark:border-gray-600` | `border-border` | Blockquote border |
+| `border-gray-200 dark:border-gray-700` | `border-border` | Input заголовка |
+| `bg-gray-300 dark:bg-gray-600` | `bg-border` | Разделители в toolbar |
+| `hover:bg-gray-200 dark:hover:bg-gray-600` | `hover:bg-accent` | Кнопки toolbar |
+| `hover:bg-gray-200` | `hover:bg-accent` | Кнопки заголовков |
+| `dark:text-gray-100` | Удалено | Дубликаты после замены |
+
+**5. Списки (ul, ol)**
+```tsx
+// БЫЛО:
+[&_.ProseMirror_ul]:text-gray-900 dark:[&_.ProseMirror_ul]:text-gray-100
+[&_.ProseMirror_ul_::marker]:text-gray-900 dark:[&_.ProseMirror_ul_::marker]:text-gray-100
+
+// СТАЛО:
+[&_.ProseMirror_ul]:text-foreground
+[&_.ProseMirror_ul_::marker]:text-foreground
+```
+
+Аналогично для `ol` (ordered lists).
+
+**6. Task Lists (чекбоксы)**
+```tsx
+// БЫЛО:
+[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500
+dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400
+
+// СТАЛО:
+[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-muted-foreground
+```
+
+**7. Highlight (mark)**
+```tsx
+// БЫЛО:
+dark:[&_.ProseMirror_mark]:text-gray-100
+
+// СТАЛО:
+dark:[&_.ProseMirror_mark]:text-foreground
+```
+*Примечание: желтый фон highlight (`bg-yellow-200 dark:bg-yellow-700/75`) оставлен как функциональный цвет для визуального выделения.*
+
+#### Детали замен
+
+**Кнопки toolbar:**
+- Hover состояния: ~10 кнопок
+- Разделители: 5 элементов
+
+**Стили контента ProseMirror:**
+- Заголовки (h1, h2, h3): текст → `text-foreground`
+- Списки (ul, ol): текст и маркеры → `text-foreground`
+- Зачеркнутый текст: → `text-muted-foreground`
+- Blockquote: border → `border-border`, текст → `text-muted-foreground`
+- Code (inline): фон → `bg-muted`, текст → `text-foreground`
+- Code blocks (pre): фон → `bg-muted`, текст → `text-foreground`
+- Task lists (checked): → `text-muted-foreground`
+
+#### Итого по TipTapEditor
+
+**Замен сделано:** ~35
+**Категорий цветов:**
+- Фоны: 6 замен
+- Текст: 15+ замен
+- Borders: 5 замен
+- Hover состояния: 10+ замен
+
+**Критичность:** Высокая - редактор используется во всех заметках приложения.
+
+---
+
+## Итого Фаза 5
+
+**Файлов изменено:** 1
+**Модуль:** text-editor
+
+**Замен сделано:** ~35
+
+**Затронутые элементы:**
+- Панель инструментов редактора
+- Фон блока редактирования
+- Все текстовые элементы (заголовки, списки, код, цитаты)
+- Hover состояния кнопок
+- Tooltip предупреждений
+
+---
+
+## Общий итог всех фаз: ~165 замен в 57 файлах
+
+**По модулям:**
+- Base UI components: 5 файлов (критические)
+- Modal components: 3 файла
+- Feedback: 1 файл
+- Notions: 4 файла
+- Feedback Analytics: 5 файлов
+- Text Editor: 1 файл (TipTapEditor)
+- Остальные модули: ~38 файлов
+
+**По типам изменений:**
+- Фоны блоков и карточек: ~50 замен
+- Цвета текста: ~60 замен
+- Borders: ~30 замен
+- Hover/Focus состояния: ~25 замен

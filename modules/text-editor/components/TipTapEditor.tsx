@@ -1003,8 +1003,8 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     <div className={cn('w-full h-full flex flex-col relative', className)}>
       {/* Подсказка о таблицах */}
       {tooltipState.show && (
-        <div 
-          className="absolute top-16 right-2 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 text-sm px-3 py-1 rounded-xl shadow-xl whitespace-nowrap border border-red-600 dark:border-red-800 z-50"
+        <div
+          className="absolute top-16 right-2 bg-destructive/10 text-destructive text-sm px-3 py-1 rounded-xl shadow-xl whitespace-nowrap border border-destructive z-50"
         >
           {tooltipState.message}
         </div>
@@ -1030,14 +1030,14 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               }
             }}
             placeholder={titlePlaceholder}
-            className="!text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 focus:border-primary focus:ring-0 text-foreground dark:text-gray-100 bg-transparent"
+            className="!text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-border rounded-none px-0 focus:border-primary focus:ring-0 text-foreground bg-transparent"
             autoFocus={autoFocus}
           />
         </div>
       )}
 
       {/* Панель инструментов */}
-      <div className="border border-gray-200 dark:border-gray-700 rounded-t-lg bg-gray-50 dark:bg-gray-700 p-2 flex flex-wrap gap-1 flex-shrink-0">
+      <div className="border border-border rounded-t-lg bg-muted p-2 flex flex-wrap gap-1 flex-shrink-0">
         {/* Заголовки */}
         <div className="flex gap-1 mr-2">
           <Button
@@ -1048,7 +1048,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('heading', { level: 1 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200'
+                : 'hover:bg-accent'
             )}
             title="Заголовок 1 (# )"
           >
@@ -1062,7 +1062,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('heading', { level: 2 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200'
+                : 'hover:bg-accent'
             )}
             title="Заголовок 2 (## )"
           >
@@ -1076,7 +1076,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('heading', { level: 3 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200'
+                : 'hover:bg-accent'
             )}
             title="Заголовок 3 (### )"
           >
@@ -1085,7 +1085,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Форматирование текста */}
         <div className="flex gap-1 mr-2">
@@ -1097,7 +1097,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('bold') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Жирный (Ctrl+B)"
           >
@@ -1111,7 +1111,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('italic') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Курсив (Ctrl+I)"
           >
@@ -1125,7 +1125,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('underline') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Подчеркнутый (Ctrl+U)"
           >
@@ -1139,7 +1139,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('strike') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Зачеркнутый (Ctrl+Shift+S)"
           >
@@ -1153,7 +1153,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('highlight') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Выделение (Ctrl+Shift+H)"
           >
@@ -1162,7 +1162,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Списки */}
         <div className="flex gap-1 mr-2">
@@ -1186,7 +1186,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('bulletList')
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Маркированный список (- )"
           >
@@ -1212,7 +1212,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('orderedList')
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Нумерованный список"
           >
@@ -1238,7 +1238,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('taskList')
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Список задач"
           >
@@ -1248,7 +1248,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Цитата и код */}
         <div className="flex gap-1 mr-2">
@@ -1260,7 +1260,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('blockquote') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Цитата"
           >
@@ -1274,7 +1274,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('code') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Инлайн код"
           >
@@ -1288,7 +1288,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               'h-8 w-8 p-0',
               editor.isActive('codeBlock')
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'hover:bg-accent'
             )}
             title="Блок кода"
           >
@@ -1297,7 +1297,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Отмена/Повтор */}
         <div className="flex gap-1 mr-2">
@@ -1324,7 +1324,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Таблицы */}
         <div className="flex gap-1 mr-2">
@@ -1343,27 +1343,27 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       </div>
 
       {/* Редактор */}
-      <div className="border border-t-0 border-gray-200 dark:border-gray-700 rounded-b-lg bg-white dark:bg-gray-800 overflow-y-auto flex-1 min-h-0">
+      <div className="border border-t-0 border-border rounded-b-lg bg-card overflow-y-auto flex-1 min-h-0">
         <EditorContent 
           editor={editor} 
           className="prose prose-sm max-w-none h-full dark:prose-invert
-                     [&_.ProseMirror]:min-h-full [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-gray-900 dark:[&_.ProseMirror]:text-gray-100
-                     [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-4 [&_.ProseMirror_h1]:mt-6 [&_.ProseMirror_h1]:text-gray-900 dark:[&_.ProseMirror_h1]:text-gray-100
-                     [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5 [&_.ProseMirror_h2]:text-gray-900 dark:[&_.ProseMirror_h2]:text-gray-100
-                     [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4 [&_.ProseMirror_h3]:text-gray-900 dark:[&_.ProseMirror_h3]:text-gray-100
-                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-gray-500 dark:[&_.ProseMirror_s]:text-gray-400
-                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2 [&_.ProseMirror_ul]:text-gray-900 dark:[&_.ProseMirror_ul]:text-gray-100 [&_.ProseMirror_ul_::marker]:text-gray-900 dark:[&_.ProseMirror_ul_::marker]:text-gray-100
-                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2 [&_.ProseMirror_ol]:text-gray-900 dark:[&_.ProseMirror_ol]:text-gray-100 [&_.ProseMirror_ol_::marker]:text-gray-900 dark:[&_.ProseMirror_ol_::marker]:text-gray-100
+                     [&_.ProseMirror]:min-h-full [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-foreground
+                     [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-4 [&_.ProseMirror_h1]:mt-6 [&_.ProseMirror_h1]:text-foreground
+                     [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5 [&_.ProseMirror_h2]:text-foreground
+                     [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4 [&_.ProseMirror_h3]:text-foreground
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-muted-foreground
+                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2 [&_.ProseMirror_ul]:text-foreground [&_.ProseMirror_ul_::marker]:text-foreground
+                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2 [&_.ProseMirror_ol]:text-foreground [&_.ProseMirror_ol_::marker]:text-foreground
                      [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
                      [&_.ProseMirror_ul_ul]:list-[circle] [&_.ProseMirror_ul_ul]:ml-4
                      [&_.ProseMirror_ul_ul_ul]:list-[square] [&_.ProseMirror_ul_ul_ul]:ml-4
                      [&_.ProseMirror_ol_ol]:list-[lower-alpha] [&_.ProseMirror_ol_ol]:ml-4
                      [&_.ProseMirror_ol_ol_ol]:list-[lower-roman] [&_.ProseMirror_ol_ol_ol]:ml-4
-                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 dark:[&_.ProseMirror_blockquote]:border-gray-600 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-gray-700 dark:[&_.ProseMirror_blockquote]:text-gray-300 [&_.ProseMirror_blockquote_::before]:content-none
-                     [&_.ProseMirror_code]:bg-gray-100 dark:[&_.ProseMirror_code]:bg-gray-700 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-gray-800 dark:[&_.ProseMirror_code]:text-gray-200 [&_.ProseMirror_code_::before]:content-[``]!important [&_.ProseMirror_code_::after]:content-['']!important
-                     [&_.ProseMirror_pre]:bg-gray-100 dark:[&_.ProseMirror_pre]:bg-gray-700 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:my-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre]:text-gray-800 dark:[&_.ProseMirror_pre]:text-gray-200
-                     [&_.ProseMirror_mark]:bg-yellow-200 dark:[&_.ProseMirror_mark]:bg-yellow-700/75 dark:[&_.ProseMirror_mark]:text-gray-100 [&_.ProseMirror_mark_s]:!text-gray-500 dark:[&_.ProseMirror_mark_s]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_[&_.ProseMirror_mark]]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_[&_.ProseMirror_mark]]:!text-gray-400
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li]:pt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:mt-[0.25rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:w-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:h-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:mt-[-0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:leading-relaxed [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-border [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_blockquote_::before]:content-none
+                     [&_.ProseMirror_code]:bg-muted [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-foreground [&_.ProseMirror_code_::before]:content-[``]!important [&_.ProseMirror_code_::after]:content-['']!important
+                     [&_.ProseMirror_pre]:bg-muted [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:my-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre]:text-foreground
+                     [&_.ProseMirror_mark]:bg-yellow-200 dark:[&_.ProseMirror_mark]:bg-yellow-700/75 dark:[&_.ProseMirror_mark]:text-foreground [&_.ProseMirror_mark_s]:!text-muted-foreground [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_[&_.ProseMirror_mark]]:!text-muted-foreground
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li]:pt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:mt-[0.25rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:w-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:h-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:mt-[-0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:leading-relaxed [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-muted-foreground [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-muted-foreground [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
                      [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4 [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4"
         />
       </div>

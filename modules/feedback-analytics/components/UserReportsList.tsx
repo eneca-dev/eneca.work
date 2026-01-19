@@ -42,9 +42,9 @@ export function UserReportsList({ reports, isLoading, sortOrder, onToggleSortOrd
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="border rounded-lg p-4 space-y-2">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/4" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-full" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-3/4" />
+                <div className="h-4 bg-muted rounded animate-pulse w-1/4" />
+                <div className="h-3 bg-muted rounded animate-pulse w-full" />
+                <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
               </div>
             ))}
           </div>
@@ -54,7 +54,7 @@ export function UserReportsList({ reports, isLoading, sortOrder, onToggleSortOrd
   }
 
   return (
-    <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+    <Card className="rounded-sm bg-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Сообщения о проблемах</CardTitle>
@@ -64,7 +64,7 @@ export function UserReportsList({ reports, isLoading, sortOrder, onToggleSortOrd
             variant="outline"
             size="sm"
             onClick={onToggleSortOrder}
-            className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="bg-popover border-border"
           >
             <ArrowUpDown className="h-4 w-4 mr-2" />
             {sortOrder === 'desc' ? 'Сначала новые' : 'Сначала старые'}
@@ -77,7 +77,7 @@ export function UserReportsList({ reports, isLoading, sortOrder, onToggleSortOrd
             placeholder="Поиск по имени или тексту сообщения..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 rounded-sm bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="pl-9 rounded-sm bg-popover border-border"
           />
         </div>
       </CardHeader>
@@ -112,12 +112,12 @@ export function UserReportsList({ reports, isLoading, sortOrder, onToggleSortOrd
                     </span>
                   </div>
 
-                  <div className="text-sm font-medium text-foreground dark:text-gray-200">
+                  <div className="text-sm font-medium text-foreground200">
                     {report.user_report_short_description}
                   </div>
 
                   {report.user_report_detailed_description && (
-                    <p className="text-sm text-foreground dark:text-gray-300 whitespace-pre-wrap">
+                    <p className="text-sm text-foreground300 whitespace-pre-wrap">
                       {report.user_report_detailed_description}
                     </p>
                   )}

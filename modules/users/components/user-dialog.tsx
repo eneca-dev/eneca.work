@@ -889,15 +889,15 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   <div className="flex flex-wrap gap-2 flex-1 min-w-0">
                     {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
                       <div key={role.roleId} className="group relative">
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground max-w-full">
                           <span className="truncate">{role.roleName}</span>
                         </span>
                         {/* Tooltip с информацией о роли */}
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-popover text-popover-foreground border border-border text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                           Назначена: {new Date(role.assignedAt).toLocaleDateString()}
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-popover"></div>
+                        </div>                     
                         </div>
-                      </div>
                     )) : (
                       <span className="text-sm text-gray-500">Роли не назначены</span>
                     )}
@@ -1279,7 +1279,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               <Label className="text-sm font-medium mb-2 block">Текущие роли:</Label>
               <div className="flex flex-wrap gap-2 min-w-0">
                 {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
-                  <div key={role.roleId} className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
+                  <div key={role.roleId} className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-muted text-muted-foreground max-w-full">
                     <span className="truncate">{role.roleName}</span>
                   </div>
                 )) : (

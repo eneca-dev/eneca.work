@@ -541,10 +541,10 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
       <Card className="w-full">
              <CardHeader className="pb-4 px-4">
          {/* Адаптивная строка с фильтрами */}
-         <div className="flex items-center gap-0.5 flex-wrap w-full border-b border-gray-200 dark:border-gray-700 pb-4">
+         <div className="flex items-center gap-0.5 flex-wrap w-full border-b border-border pb-4">
            {/* Поиск */}
            <div className="relative">
-             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Поиск сотрудников"
                   value={searchTerm}
@@ -1067,7 +1067,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
           {/* Навигация по страницам - скрываем при группировке */}
           {groupBy === "none" && !showAll && totalPages > 1 && (
             <>
-              <div className="flex items-center gap-0.5 text-xs text-gray-500">
+              <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1224,7 +1224,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                       <div className="font-medium text-xs sm:text-sm">
                                         <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.name}</span>
                                       </div>
-                                      <div className="text-xs text-gray-400 hidden sm:block">
+                                      <div className="text-xs text-muted-foreground hidden sm:block">
                                         <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none text-[10px]">{user.email}</span>
                                       </div>
                                     </div>
@@ -1240,7 +1240,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     <span className="block text-xs sm:text-sm font-medium">
                                       {user.department || '—'}
                                     </span>
-                                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    <span className="block text-xs text-muted-foreground">
                                       {user.team || '—'}
                                     </span>
                                   </div>
@@ -1250,7 +1250,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     <span className="block text-xs sm:text-sm font-medium">
                                       {user.position || '—'}
                                     </span>
-                                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    <span className="block text-xs text-muted-foreground">
                                       {user.category || '—'}
                                     </span>
                                   </div>
@@ -1262,7 +1262,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                       {canViewRate(user) && user.salary ? (
                                         <>
                                           <span>{user.salary}</span>
-                                          <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
+                                          <span className="text-[10px] text-muted-foreground ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
                                         </>
                                       ) : '—'}
                                     </span>
@@ -1295,7 +1295,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
                                   <div className="flex justify-center">
                                     {workLocationInfo?.icon || (
-                                      <span className="text-gray-400 text-xs">—</span>
+                                      <span className="text-muted-foreground text-xs">—</span>
                                     )}
                                   </div>
                                 </TableCell>
@@ -1348,7 +1348,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                         <TableRow className="bg-muted/80 hover:bg-muted/80">
                           <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-2.5 px-4">
                             <div
-                              className="flex items-center cursor-pointer font-bold text-slate-800 dark:text-slate-100"
+                              className="flex items-center cursor-pointer font-bold text-foreground"
                               onClick={() => toggleGroup(subdivision)}
                             >
                               {expandedGroups[subdivision] ? (
@@ -1356,9 +1356,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                               ) : (
                                 <ChevronRight className="h-4 w-4 mr-2" />
                               )}
-                              <Network className="h-4 w-4 mr-2 text-slate-600" />
+                              <Network className="h-4 w-4 mr-2 text-muted-foreground" />
                               <span className="text-sm">{subdivision}</span>
-                              <span className="ml-2 text-[11px] text-slate-500">
+                              <span className="ml-2 text-[11px] text-muted-foreground">
                                 {Object.values(departments).reduce((sum, deptTeams) =>
                                   sum + Object.values(deptTeams).reduce((teamSum, teamUsers) => teamSum + teamUsers.length, 0), 0
                                 )}
@@ -1374,7 +1374,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                               <TableRow className="bg-muted/50 hover:bg-muted/50">
                                 <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-2 pl-8 pr-4">
                                   <div
-                                    className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
+                                    className="flex items-center cursor-pointer font-semibold text-foreground"
                                     onClick={() => toggleGroup(`${subdivision}-${department}`)}
                                   >
                                     {expandedGroups[`${subdivision}-${department}`] ? (
@@ -1382,9 +1382,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     ) : (
                                       <ChevronRight className="h-4 w-4 mr-2" />
                                     )}
-                                    <Building2 className="h-4 w-4 mr-2 text-slate-500" />
+                                    <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
                                     <span className="text-sm">{department}</span>
-                                    <span className="ml-2 text-[11px] text-slate-500">
+                                    <span className="ml-2 text-[11px] text-muted-foreground">
                                       {Object.values(teams).reduce((sum, teamUsers) => sum + teamUsers.length, 0)}
                                     </span>
                                   </div>
@@ -1398,7 +1398,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                                       <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-1.5 pl-16 pr-4">
                                         <div
-                                          className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300 cursor-pointer"
+                                          className="flex items-center text-[13px] font-medium text-foreground cursor-pointer"
                                           onClick={() => toggleGroup(`${subdivision}-${department}-${team}`)}
                                         >
                                           {expandedGroups[`${subdivision}-${department}-${team}`] ? (
@@ -1406,9 +1406,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                           ) : (
                                             <ChevronRight className="h-3.5 w-3.5 mr-2" />
                                           )}
-                                          <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
+                                          <Users className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                                           <span>{team}</span>
-                                          <span className="ml-2 text-[11px] text-slate-400">{teamUsers.length}</span>
+                                          <span className="ml-2 text-[11px] text-muted-foreground">{teamUsers.length}</span>
                                         </div>
                                       </TableCell>
                                     </TableRow>
@@ -1433,7 +1433,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                                   <div className="font-medium text-xs sm:text-sm">
                                                     <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
                                                   </div>
-                                                  <div className="text-xs text-gray-400 hidden sm:block">
+                                                  <div className="text-xs text-muted-foreground hidden sm:block">
                                                     <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
                                                   </div>
                                                 </div>
@@ -1455,7 +1455,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                                   {canViewRate(user) && user.salary ? (
                                                     <>
                                                       <span>{user.salary}</span>
-                                                      <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
+                                                      <span className="text-[10px] text-muted-foreground ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
                                                     </>
                                                   ) : '—'}
                                                 </span>
@@ -1479,7 +1479,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                             <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
                                               <div className="flex justify-center">
                                                 {workLocationInfo?.icon || (
-                                                  <span className="text-gray-400 text-xs">—</span>
+                                                  <span className="text-muted-foreground text-xs">—</span>
                                                 )}
                                               </div>
                                             </TableCell>

@@ -219,7 +219,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
           <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
               <div className="relative w-full sm:w-64 lg:w-96">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
                   placeholder="Поиск сотрудников..."
@@ -240,14 +240,14 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 ml-auto">
+              <div className="flex items-center text-sm text-muted-foreground ml-auto">
                 <Users className="h-4 w-4 mr-1" />
                 <span>{getCounterText()}</span>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-800">
+          <div className="border-t border-border">
             <div className="p-4 flex justify-between items-center bg-muted/50">
               <div className="text-sm font-medium">
                 Общий фонд оплаты труда:
@@ -279,7 +279,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                     <React.Fragment key={groupName || "ungrouped"}>
                       {groupName && (
                         <TableRow className="bg-muted/50 hover:bg-muted/70 transition-colors">
-                          <TableCell colSpan={7} className="py-1 border-l-4 border-gray-200 dark:border-gray-700">
+                          <TableCell colSpan={7} className="py-1 border-l-4 border-border">
                             <div className="flex items-center cursor-pointer" onClick={() => toggleGroup(groupName)}>
                               {expandedGroups[groupName] ? (
                                 <svg
@@ -316,7 +316,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                                 {groupBy === "department" ? "Отдел: " : groupBy === "team" ? "Команда: " : ""}
                                 {groupName}
                               </span>
-                              <span className="ml-2 text-gray-500 dark:text-gray-400 text-sm">
+                              <span className="ml-2 text-muted-foreground text-sm">
                                 ({groupUsers.length})
                               </span>
                             </div>
@@ -340,13 +340,13 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                                 </Avatar>
                                 <div>
                                   <div className="font-medium text-sm">{user.name}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                                  <div className="text-xs text-muted-foreground">{user.email}</div>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell className="py-1">
                               <div className="text-sm">{user.department}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{user.team}</div>
+                              <div className="text-xs text-muted-foreground">{user.team}</div>
                             </TableCell>
                             <TableCell className="py-1">
                               <div className="text-sm">{user.position}</div>
