@@ -292,26 +292,26 @@ export function LoadingModal(props: LoadingModalProps) {
         <div
           className={cn(
             'pointer-events-auto w-full max-w-md',
-            'bg-white border border-slate-300',
-            'dark:bg-slate-900/95 dark:backdrop-blur-md dark:border-slate-700/50',
+            'bg-white border border-border',
+            'dark:bg-card/95 dark:backdrop-blur-md dark:border-border/50',
             'rounded-lg shadow-2xl',
-            'shadow-slate-500/20 dark:shadow-black/50',
+            'shadow-black/10 dark:shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-300 dark:border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-amber-500" />
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-xs font-medium text-foreground">
                 {isEditMode ? 'Редактировать загрузку' : 'Новая загрузка'}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -321,7 +321,7 @@ export function LoadingModal(props: LoadingModalProps) {
           <div className="px-4 py-3 space-y-4">
             {/* Employee Selection - Collapsible dropdown */}
             <div className="relative">
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Ответственный
               </label>
 
@@ -331,7 +331,7 @@ export function LoadingModal(props: LoadingModalProps) {
                   className={cn(
                     'flex items-center gap-2 px-2.5 py-1.5',
                     'bg-amber-500/5 border border-amber-500/30',
-                    'rounded text-slate-800 dark:text-slate-200 cursor-pointer',
+                    'rounded text-foreground cursor-pointer',
                     'hover:border-amber-500/50 transition-colors'
                   )}
                   onClick={() => !isPending && setIsDropdownOpen(true)}
@@ -340,7 +340,7 @@ export function LoadingModal(props: LoadingModalProps) {
                     {selectedUser.avatar_url && (
                       <AvatarImage src={selectedUser.avatar_url} />
                     )}
-                    <AvatarFallback className="text-[8px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                    <AvatarFallback className="text-[8px] bg-muted text-muted-foreground">
                       {getInitials(selectedUser)}
                     </AvatarFallback>
                   </Avatar>
@@ -353,7 +353,7 @@ export function LoadingModal(props: LoadingModalProps) {
                       setResponsibleId('')
                       setSearchQuery('')
                     }}
-                    className="p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+                    className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                     disabled={isPending}
                   >
                     <X className="w-3.5 h-3.5" />
@@ -363,9 +363,9 @@ export function LoadingModal(props: LoadingModalProps) {
                 <div
                   className={cn(
                     'flex items-center gap-2 px-2.5 py-1.5',
-                    'bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700',
-                    'rounded text-slate-400 dark:text-slate-500 cursor-pointer',
-                    'hover:border-slate-400 dark:hover:border-slate-600 transition-colors'
+                    'bg-muted border border-border',
+                    'rounded text-muted-foreground cursor-pointer',
+                    'hover:border-border transition-colors'
                   )}
                   onClick={() => !isPending && setIsDropdownOpen(true)}
                 >
@@ -384,11 +384,11 @@ export function LoadingModal(props: LoadingModalProps) {
                   />
 
                   {/* Dropdown content */}
-                  <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-xl shadow-slate-500/20 dark:shadow-black/50 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-card border border-border rounded-lg shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden">
                     {/* Search Input */}
-                    <div className="p-2 border-b border-slate-200 dark:border-slate-700/50">
+                    <div className="p-2 border-b border-border">
                       <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                         <input
                           type="text"
                           value={searchQuery}
@@ -397,10 +397,10 @@ export function LoadingModal(props: LoadingModalProps) {
                           autoFocus
                           className={cn(
                             'w-full pl-8 pr-3 py-1.5 text-xs',
-                            'bg-slate-100 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600',
-                            'rounded text-slate-800 dark:text-slate-200',
-                            'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                            'focus:outline-none focus:border-slate-400 dark:focus:border-slate-500 focus:ring-1 focus:ring-slate-400/50 dark:focus:ring-slate-500/50',
+                            'bg-muted border border-border',
+                            'rounded text-foreground',
+                            'placeholder:text-muted-foreground',
+                            'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/50',
                             'transition-colors'
                           )}
                           disabled={isPending}
@@ -412,10 +412,10 @@ export function LoadingModal(props: LoadingModalProps) {
                     <div className="max-h-[200px] overflow-y-auto">
                       {usersLoading ? (
                         <div className="flex items-center justify-center py-6">
-                          <Loader2 className="w-4 h-4 animate-spin text-slate-400 dark:text-slate-500" />
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                         </div>
                       ) : filteredUsers.length === 0 ? (
-                        <div className="flex items-center justify-center py-6 text-[11px] text-slate-400 dark:text-slate-500">
+                        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
                           {searchQuery ? 'Ничего не найдено' : 'Нет сотрудников'}
                         </div>
                       ) : (
@@ -431,7 +431,7 @@ export function LoadingModal(props: LoadingModalProps) {
                                   'transition-colors',
                                   isSelected
                                     ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                    : 'hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'
+                                    : 'hover:bg-muted text-foreground'
                                 )}
                                 disabled={isPending}
                               >
@@ -439,7 +439,7 @@ export function LoadingModal(props: LoadingModalProps) {
                                   {user.avatar_url && (
                                     <AvatarImage src={user.avatar_url} />
                                   )}
-                                  <AvatarFallback className="text-[8px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                                  <AvatarFallback className="text-[8px] bg-muted text-muted-foreground">
                                     {getInitials(user)}
                                   </AvatarFallback>
                                 </Avatar>
@@ -461,7 +461,7 @@ export function LoadingModal(props: LoadingModalProps) {
 
             {/* Rate Selection */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Ставка
               </label>
 
@@ -478,7 +478,7 @@ export function LoadingModal(props: LoadingModalProps) {
                         'border transition-all duration-150',
                         rate === preset.value
                           ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                          : 'border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-300',
+                          : 'border-border border-border bg-muted text-muted-foreground hover:border-border hover:text-foreground',
                         isPending && 'opacity-50 cursor-not-allowed'
                       )}
                     >
@@ -497,15 +497,15 @@ export function LoadingModal(props: LoadingModalProps) {
                     placeholder="Или введите своё значение"
                     className={cn(
                       'w-full px-2.5 py-1.5 pr-8 text-xs text-center',
-                      'bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700',
-                      'rounded text-slate-800 dark:text-slate-200 font-mono',
-                      'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                      'focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-400/50 dark:focus:ring-slate-600/50',
+                      'bg-muted border border-border',
+                      'rounded text-foreground font-mono',
+                      'placeholder:text-muted-foreground',
+                      'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/50',
                       'transition-colors'
                     )}
                     disabled={isPending}
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500">
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
                     %
                   </span>
                 </div>
@@ -514,7 +514,7 @@ export function LoadingModal(props: LoadingModalProps) {
 
             {/* Comment */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Комментарий
               </label>
               <textarea
@@ -524,10 +524,10 @@ export function LoadingModal(props: LoadingModalProps) {
                 rows={2}
                 className={cn(
                   'w-full px-2.5 py-1.5 text-xs',
-                  'bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700',
-                  'rounded text-slate-800 dark:text-slate-200 resize-none',
-                  'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                  'focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-400/50 dark:focus:ring-slate-600/50',
+                  'bg-muted border border-border',
+                  'rounded text-foreground resize-none',
+                  'placeholder:text-muted-foreground',
+                  'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/50',
                   'transition-colors'
                 )}
                 disabled={isPending}
@@ -541,7 +541,7 @@ export function LoadingModal(props: LoadingModalProps) {
                   <AlertCircle className="w-3.5 h-3.5" />
                   <span className="font-medium">Удалить загрузку?</span>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                <p className="text-[11px] text-muted-foreground mb-3">
                   Это действие нельзя отменить.
                 </p>
                 <div className="flex gap-2">
@@ -549,9 +549,9 @@ export function LoadingModal(props: LoadingModalProps) {
                     onClick={() => setShowDeleteConfirm(false)}
                     className={cn(
                       'flex-1 px-2 py-1 text-[11px] font-medium rounded',
-                      'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
-                      'border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600',
-                      'bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800',
+                      'text-muted-foreground hover:text-foreground',
+                      'border border-border hover:border-border',
+                      'bg-muted hover:bg-muted',
                       'transition-colors'
                     )}
                   >
@@ -573,7 +573,7 @@ export function LoadingModal(props: LoadingModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-300 dark:border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border border-border/50">
             {/* Delete Button (edit mode only) */}
             {isEditMode && !showDeleteConfirm ? (
               <button
@@ -601,9 +601,9 @@ export function LoadingModal(props: LoadingModalProps) {
                 disabled={isPending}
                 className={cn(
                   'px-3 py-1.5 text-[11px] font-medium rounded',
-                  'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
-                  'border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600',
-                  'bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800',
+                  'text-muted-foreground hover:text-foreground',
+                  'border border-border hover:border-border',
+                  'bg-muted hover:bg-muted',
                   'transition-colors',
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
@@ -615,9 +615,9 @@ export function LoadingModal(props: LoadingModalProps) {
                 disabled={!isFormValid || isPending || (isEditMode && !hasChanges)}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
-                  'text-slate-900 bg-amber-500 hover:bg-amber-400',
+                  'text-black bg-amber-500 hover:bg-amber-400',
                   'transition-colors',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
                 )}
               >
                 {isPending ? (

@@ -22,10 +22,10 @@ export function DocumentationLayout() {
   } = useDocumentationFiles()
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[300px_1fr] h-full bg-background">
+    <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[300px_1fr] h-full bg-card">
       {/* Sidebar с деревом файлов */}
-      <div className="flex flex-col overflow-hidden bg-background dark:bg-[rgb(31,41,55)] border-r border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-3 border-b border-border bg-background dark:bg-[rgb(31,41,55)]">
+      <div className="flex flex-col overflow-hidden bg-card border-r border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-3 border-b border-border bg-card">
           <h2 className="text-lg font-semibold text-foreground mb-3">Документация</h2>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -44,7 +44,7 @@ export function DocumentationLayout() {
             )}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 bg-background dark:bg-[rgb(31,41,55)]">
+        <div className="flex-1 overflow-y-auto p-3 bg-card">
           <FileTree
             files={files}
             selectedFile={selectedFile}
@@ -56,7 +56,7 @@ export function DocumentationLayout() {
       </div>
 
       {/* Основная область просмотра */}
-      <div className="flex flex-col h-full overflow-hidden bg-background dark:bg-[rgb(31,41,55)]">
+      <div className="flex flex-col h-full overflow-hidden bg-card">
         <MarkdownViewer
           filePath={selectedFile}
           getFileContent={getFileContent}

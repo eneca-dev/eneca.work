@@ -43,8 +43,8 @@ function formatDateForInput(dateStr: string | null): string {
 
 const dateInputClasses = cn(
   'w-[110px] px-2 py-1 text-xs',
-  'bg-slate-800/60 border border-slate-700/50',
-  'rounded-md text-slate-300',
+  'bg-muted/60 border border-border/50',
+  'rounded-md text-foreground',
   'focus:outline-none focus:border-amber-500/50',
   'transition-colors',
   '[&::-webkit-calendar-picker-indicator]:invert',
@@ -71,7 +71,7 @@ export function DateRangeInput({
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <CalendarDays className="w-4 h-4 text-slate-500" aria-hidden="true" />
+      <CalendarDays className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
 
       <div className="flex items-center gap-1.5">
         {/* Start date */}
@@ -91,7 +91,7 @@ export function DateRangeInput({
           )}
         />
 
-        <ArrowRight className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
 
         {/* End date */}
         <label htmlFor={`${idPrefix}-end`} className="sr-only">

@@ -321,16 +321,16 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
                         {event.calendar_event_type}
                       </span>
                     </TableCell>
-                    <TableCell className={cn(isPast && "text-gray-500")}>{event.calendar_event_comment || "-"}</TableCell>
-                    <TableCell className={cn(isPast && "text-gray-500")}>{formatDate(parseDateFromString(event.calendar_event_date_start))}</TableCell>
-                    <TableCell className={cn(isPast && "text-gray-500")}>
+                    <TableCell className={cn(isPast && "text-muted-foreground")}>{event.calendar_event_comment || "-"}</TableCell>
+                    <TableCell className={cn(isPast && "text-muted-foreground")}>{formatDate(parseDateFromString(event.calendar_event_date_start))}</TableCell>
+                    <TableCell className={cn(isPast && "text-muted-foreground")}>
                       {event.calendar_event_date_end ? formatDate(parseDateFromString(event.calendar_event_date_end)) : "-"}
                     </TableCell>
                     <TableCell>
                       <span
                         className={cn(
                           "px-2 py-1 rounded text-xs",
-                          event.calendar_event_is_global ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800",
+                          event.calendar_event_is_global ? "bg-blue-100 text-blue-800" : "bg-muted text-muted-foreground",
                           isPast && "opacity-70"
                         )}
                       >

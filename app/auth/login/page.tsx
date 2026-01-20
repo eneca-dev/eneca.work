@@ -175,7 +175,7 @@ export default function LoginPage() {
     <>
       <div className="space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Вход в систему</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Вход в систему</h1>
           <p className="text-sm text-muted-foreground">Введите ваши данные для входа</p>
         </div>
 
@@ -235,10 +235,10 @@ export default function LoginPage() {
         {/* Регистрация отключена */}
         {/* <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t dark:border-gray-700" />
+            <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white dark:bg-gray-800 px-2 text-muted-foreground">Или</span>
+            <span className="bg-card px-2 text-muted-foreground">Или</span>
           </div>
         </div>
 

@@ -263,7 +263,7 @@ function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUplo
           <div className="grid gap-4">
             {preview ? (
               <div className="flex flex-col items-center gap-2">
-                <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-700">
+                <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-border">
                   <img src={preview} alt="Предпросмотр" className="object-cover w-full h-full" />
                 </div>
                 <Button 
@@ -278,13 +278,13 @@ function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUplo
               </div>
             ) : (
               <div 
-                className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center cursor-pointer"
+                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
                 <div className="mt-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Нажмите для выбора файла</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">JPEG или PNG, максимум 5 МБ</p>
+                  <p className="text-sm font-medium text-foreground">Нажмите для выбора файла</p>
+                  <p className="text-xs text-muted-foreground">JPEG или PNG, максимум 5 МБ</p>
                 </div>
               </div>
             )}

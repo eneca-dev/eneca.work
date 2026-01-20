@@ -58,7 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Показываем загрузку пока AuthProvider инициализируется
   if (!isInitialized || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Инициализация...</p>
@@ -70,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Новый layout с верхним навбаром
   if (USE_TOP_NAVBAR) {
     return (
-      <div className="min-h-screen bg-[#0a0f14] transition-colors duration-200">
+      <div className="min-h-screen bg-background transition-colors duration-200">
         {/* Верхний навбар */}
         <TopNavbar
           user={{
@@ -95,7 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const sidebarWidth = sidebarCollapsed ? "w-20" : "w-64"
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-background transition-colors duration-200">
       {/* Фиксированное меню */}
       <div className={`fixed inset-y-0 left-0 z-40 h-screen ${sidebarWidth} transition-all duration-300`}>
         <Sidebar

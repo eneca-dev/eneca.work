@@ -55,7 +55,7 @@ export function TasksView() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-card">
       {/* Header with tabs and filter */}
       <header className="shrink-0 sticky top-0 z-50 bg-card border-b">
         {/* Tabs row */}

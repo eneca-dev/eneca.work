@@ -86,7 +86,7 @@ export function DecompositionTable({
       <div className="flex items-center justify-center py-4">
         <button
           onClick={onAddDecomposition}
-          className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 px-2.5 py-1.5 rounded transition-colors"
+          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted px-2.5 py-1.5 rounded transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Добавить задачу
@@ -100,13 +100,13 @@ export function DecompositionTable({
       <div className="overflow-x-auto">
         <table className="w-full text-[11px]">
           <thead>
-            <tr className="border-b border-slate-800/60 bg-slate-900/50">
+            <tr className="border-b border-border/60 bg-muted/50">
               <th className="w-6 px-0.5 py-1" />
-              <th className="px-1.5 py-1 text-left font-medium text-slate-500">Описание</th>
-              <th className="w-[110px] px-1.5 py-1 text-left font-medium text-slate-500">Тип</th>
-              <th className="w-[55px] px-1.5 py-1 text-center font-medium text-slate-500">Сл.</th>
-              <th className="w-[70px] px-1.5 py-1 text-center font-medium text-slate-500">Часы</th>
-              <th className="w-[80px] px-1.5 py-1 text-left font-medium text-slate-500">%</th>
+              <th className="px-1.5 py-1 text-left font-medium text-muted-foreground">Описание</th>
+              <th className="w-[110px] px-1.5 py-1 text-left font-medium text-muted-foreground">Тип</th>
+              <th className="w-[55px] px-1.5 py-1 text-center font-medium text-muted-foreground">Сл.</th>
+              <th className="w-[70px] px-1.5 py-1 text-center font-medium text-muted-foreground">Часы</th>
+              <th className="w-[80px] px-1.5 py-1 text-left font-medium text-muted-foreground">%</th>
               <th className="w-8 px-1 py-1" />
             </tr>
           </thead>
@@ -132,10 +132,10 @@ export function DecompositionTable({
       </div>
 
       {/* Add button */}
-      <div className="px-1.5 py-1 border-t border-slate-800/40">
+      <div className="px-1.5 py-1 border-t border-border/40">
         <button
           onClick={onAddDecomposition}
-          className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-400 px-1.5 py-0.5 rounded transition-colors"
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded transition-colors"
         >
           <Plus className="h-3 w-3" />
           Задача

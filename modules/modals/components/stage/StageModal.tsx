@@ -321,8 +321,8 @@ export function StageModal({
           aria-labelledby="stage-modal-title"
           className={cn(
             'fixed inset-y-0 right-0 z-50',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border-l border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border-l border-border/50',
             'shadow-2xl shadow-black/50',
             'flex flex-col',
             'transition-transform',
@@ -332,11 +332,11 @@ export function StageModal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <header className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2 min-w-0">
-              <Layers className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-xs font-medium text-slate-300">Этап</span>
-              <span className="text-[10px] text-slate-500">·</span>
+              <Layers className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-medium text-foreground">Этап</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
               {editingName ? (
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <input
@@ -344,8 +344,8 @@ export function StageModal({
                     {...form.register('name')}
                     className={cn(
                       'flex-1 min-w-0 px-2 py-1 text-xs font-medium',
-                      'bg-slate-800 border border-slate-600 rounded',
-                      'text-slate-100',
+                      'bg-muted border border-border rounded',
+                      'text-foreground',
                       'focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
                     )}
                     disabled={savingField === 'name'}
@@ -359,7 +359,7 @@ export function StageModal({
                     onBlur={handleNameSave}
                   />
                   {savingField === 'name' && (
-                    <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
                   )}
                 </div>
               ) : (
@@ -369,18 +369,18 @@ export function StageModal({
                 >
                   <span
                     id="stage-modal-title"
-                    className="text-xs text-slate-200 truncate max-w-[180px]"
+                    className="text-xs text-foreground truncate max-w-[180px]"
                     title={stage.name}
                   >
                     {form.watch('name') || stage.name}
                   </span>
-                  <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 shrink-0" />
+                  <Edit3 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               )}
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -397,13 +397,13 @@ export function StageModal({
           <div className="flex-1 overflow-y-auto p-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Status */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Статус
                   </label>
                   <StatusDropdown
@@ -418,7 +418,7 @@ export function StageModal({
 
                 {/* Period - full width to prevent overflow */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Период
                   </label>
                   <DateRangeInput
@@ -437,7 +437,7 @@ export function StageModal({
 
                 {/* Responsibles - Full Width */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Ответственные
                   </label>
                   <ResponsiblesDropdown
@@ -472,13 +472,13 @@ export function StageModal({
 
                 {/* Tasks list */}
                 <div>
-                  <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-2">
+                  <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     <ListTodo className="w-3 h-3" />
                     Задачи ({totalTasks})
                   </h3>
 
                   {stage.items.length === 0 ? (
-                    <div className="text-center py-4 text-slate-500 text-xs">
+                    <div className="text-center py-4 text-muted-foreground text-xs">
                       Нет задач в этапе
                     </div>
                   ) : (
@@ -511,16 +511,16 @@ interface MetricCardProps {
 
 function MetricCard({ icon, label, value, progress }: MetricCardProps) {
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
-      <div className="flex items-center gap-1.5 text-slate-500 text-[10px] mb-1">
+    <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
+      <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] mb-1">
         {icon}
         {label}
       </div>
-      <div className="text-slate-200 text-sm font-medium">{value}</div>
+      <div className="text-foreground text-sm font-medium">{value}</div>
       {progress !== undefined && (
-        <div className="mt-1.5 h-1 bg-slate-700 rounded-full overflow-hidden">
+        <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-amber-500 rounded-full transition-all"
+            className="h-full bg-primary rounded-full transition-all"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -543,16 +543,16 @@ function TaskRow({ item }: { item: DecompositionItem }) {
         'flex items-center gap-2 px-2.5 py-2 rounded border transition-colors',
         isCompleted
           ? 'bg-emerald-500/5 border-emerald-500/20'
-          : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'
+          : 'bg-muted/30 border-border/50 hover:bg-muted/50'
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-slate-300 truncate">
+        <div className="text-xs text-foreground truncate">
           {item.description || 'Без описания'}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted-foreground">
           {item.difficulty.abbr && (
-            <span className="px-1 py-0.5 bg-slate-700/50 rounded text-[9px]">
+            <span className="px-1 py-0.5 bg-muted/50 rounded text-[9px]">
               {item.difficulty.abbr}
             </span>
           )}
@@ -561,11 +561,11 @@ function TaskRow({ item }: { item: DecompositionItem }) {
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
-        <div className="w-12 h-1 bg-slate-700 rounded-full overflow-hidden">
+        <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
           <div
             className={cn(
               'h-full rounded-full transition-all',
-              isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
+              isCompleted ? 'bg-emerald-500' : 'bg-primary'
             )}
             style={{ width: `${progress}%` }}
           />
@@ -573,7 +573,7 @@ function TaskRow({ item }: { item: DecompositionItem }) {
         <span
           className={cn(
             'text-[10px] font-medium w-7 text-right',
-            isCompleted ? 'text-emerald-400' : 'text-slate-400'
+            isCompleted ? 'text-emerald-400' : 'text-muted-foreground'
           )}
         >
           {progress}%

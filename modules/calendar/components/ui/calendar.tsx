@@ -24,7 +24,7 @@ function Calendar({
         caption_label: "text-sm font-medium text-foreground",
         nav: "flex items-center gap-1",
         nav_button: cn(
-          "size-7 bg-background border border-input text-foreground hover:bg-gray-100 dark:hover:bg-gray-600 hover:text-accent-foreground p-0 opacity-100 transition-colors"
+          "size-7 bg-background border border-input text-foreground hover:bg-accent hover:text-accent-foreground p-0 opacity-100 transition-colors"
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
@@ -41,7 +41,7 @@ function Calendar({
         ),
         day: cn(
           "h-8 w-8 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground transition-colors",
-          "bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-sm"
+          "bg-muted border border-border rounded-sm"
         ),
         day_range_start: "day-range-start",
         day_range_end: "day-range-end",

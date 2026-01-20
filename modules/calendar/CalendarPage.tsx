@@ -135,8 +135,9 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
-      <h1 className="text-6xl font-bold mb-6" style={{ fontSize: '4rem !important', lineHeight: '1.1' }}>Календарь</h1>
+    <div className="bg-card min-h-screen">
+      <div className="container mx-auto py-6 px-4">
+        <h1 className="text-6xl font-bold mb-6" style={{ fontSize: '4rem !important', lineHeight: '1.1' }}>Календарь</h1>
 
       <div className="mb-6 space-y-4">
         {/* Toggles and action buttons in the same line */}
@@ -182,7 +183,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-4">
+      <div className="bg-card rounded-lg shadow p-4">
         <CalendarHeader />
         <CalendarGrid />
       </div>
@@ -215,6 +216,7 @@ export default function CalendarPage() {
         onClose={() => setShowVacationManagement(false)}
       />
       */}
+      </div>
     </div>
   )
 } 

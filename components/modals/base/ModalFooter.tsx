@@ -17,9 +17,9 @@ export function ModalFooter({
 
   return (
     <div className={`
-      px-6 py-4 
-      border-t border-gray-200 dark:border-slate-700
-      bg-gray-50/30 dark:bg-slate-800/30
+      px-6 py-4
+      border-t border-border
+      bg-muted/30
       ${className}
     `}>
       <div className={`flex items-center gap-3 ${alignmentClasses[align]}`}>

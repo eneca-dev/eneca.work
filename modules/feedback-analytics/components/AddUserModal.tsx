@@ -183,7 +183,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent aria-labelledby="add-users-title" aria-describedby={undefined} className="sm:max-w-2xl rounded-sm max-h-[80vh] flex flex-col bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600">
+      <DialogContent aria-labelledby="add-users-title" aria-describedby={undefined} className="sm:max-w-2xl rounded-sm max-h-[80vh] flex flex-col bg-popover border-border">
         {/* Визуально скрытый заголовок для Radix a11y-валидности */}
         <DialogTitle className="sr-only">Управление доступом к аналитике</DialogTitle>
         <DialogHeader>
@@ -197,7 +197,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
             placeholder="Поиск по имени или email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 rounded-sm bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="pl-9 rounded-sm bg-popover border-border"
           />
         </div>
 
