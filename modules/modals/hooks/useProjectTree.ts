@@ -3,7 +3,7 @@
 /**
  * Loading Modal 2 - Hook для загрузки дерева проекта
  *
- * Возвращает иерархию: project -> stage -> object -> section -> decomposition_stage
+ * Возвращает иерархию: project (со stage_type) -> object -> section -> decomposition_stage
  * Используется в левой панели для навигации по структуре проекта
  */
 
@@ -96,15 +96,15 @@ function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
 function findParent(node: ProjectTreeNode, potentialParents: ProjectTreeNode[]): ProjectTreeNode | null {
   // Поиск по типу узла
   if (node.type === 'decomposition_stage') {
+    // Родитель - section
     return potentialParents.find(p => p.sectionId === node.sectionId && p.type === 'section') || null
   }
   if (node.type === 'section') {
+    // Родитель - object
     return potentialParents.find(p => p.objectId === node.objectId && p.type === 'object') || null
   }
   if (node.type === 'object') {
-    return potentialParents.find(p => p.stageId === node.stageId && p.type === 'stage') || null
-  }
-  if (node.type === 'stage') {
+    // Родитель - project (stage убран из иерархии)
     return potentialParents.find(p => p.projectId === node.projectId && p.type === 'project') || null
   }
   return null

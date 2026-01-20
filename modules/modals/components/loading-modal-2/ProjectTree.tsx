@@ -7,14 +7,15 @@
  * Включает:
  * - Переключатель "Мои проекты" / "Все проекты"
  * - Список проектов с поиском
- * - Иерархическое дерево: проект → стадия → объект → раздел → этап
+ * - Иерархическое дерево (4 уровня): проект (со стадией) → объект → раздел → этап
  */
 
-import { useState, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Folder, Target, Box, FileText, Search, Loader2, ListChecks } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useProjectsList, useProjectTree } from '../../hooks'
 import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
@@ -30,24 +31,73 @@ interface ProjectItemProps {
 }
 
 function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [isProjectExpanded, setIsProjectExpanded] = useState(false)
 
-  // Загружаем дерево только для раскрытого проекта
+  // Загружаем дерево только когда проект раскрыт
   const { data: tree = [], isLoading } = useProjectTree({
     projectId: project.id,
-    enabled: isExpanded,
+    enabled: isProjectExpanded,
   })
 
-  // Переключение раскрытия узла
-  const toggleNode = (nodeId: string) => {
+  // Функция для сбора всех ID узлов рекурсивно
+  const collectAllNodeIds = (nodes: ProjectTreeNodeWithChildren[]): string[] => {
+    const ids: string[] = []
+    for (const node of nodes) {
+      ids.push(node.id)
+      if (node.children && node.children.length > 0) {
+        ids.push(...collectAllNodeIds(node.children))
+      }
+    }
+    return ids
+  }
+
+  // Цвет чипа в зависимости от стадии проекта (стиль как в графике)
+  const getStageColor = (stage: string | null | undefined) => {
+    if (!stage) return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    const s = stage.toUpperCase()
+
+    // Сначала проверяем более специфичные комбинации
+    if (s.includes('РД')) return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-700' // Рабочая документация
+    if (s.includes('ПД')) return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700' // Проектная документация
+    if (s.includes('ИД')) return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-700' // Исходные данные
+
+    // Затем основные стадии А, С, Р, П
+    if (s.includes(' А') || s === 'А' || s.endsWith('А')) return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700' // Архитектура
+    if (s.includes(' С') || s === 'С' || s.endsWith('С')) return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700' // Строительство
+    if (s.includes(' Р') || s === 'Р' || s.endsWith('Р')) return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700' // Рабочий проект
+    if (s.includes(' П') || s === 'П' || s.endsWith('П')) return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700' // Проект
+
+    return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700' // Другие стадии
+  }
+
+  // Переключение раскрытия проекта (корневой уровень)
+  const toggleProject = () => {
+    setIsProjectExpanded((prev) => {
+      const newState = !prev
+      // Если сворачиваем - очищаем все раскрытые узлы
+      if (!newState) {
+        setExpandedNodes(new Set())
+      }
+      // Если разворачиваем - автораскрытие будет выполнено в useEffect
+      return newState
+    })
+  }
+
+  // Переключение раскрытия узла внутри дерева
+  const toggleNode = (node: ProjectTreeNodeWithChildren) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev)
-      if (next.has(nodeId)) {
-        next.delete(nodeId)
+      const isCurrentlyExpanded = next.has(node.id)
+
+      if (isCurrentlyExpanded) {
+        // Сворачиваем - убираем только этот узел
+        next.delete(node.id)
       } else {
-        next.add(nodeId)
+        // Разворачиваем
+        next.add(node.id)
       }
+
       return next
     })
   }
@@ -59,6 +109,20 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
     }
   }
 
+  // Цвет иконки и текста в зависимости от типа узла
+  const getNodeColor = (nodeType: string) => {
+    switch (nodeType) {
+      case 'object':
+        return 'text-blue-600 dark:text-blue-400' // Объекты - синий
+      case 'section':
+        return 'text-emerald-600 dark:text-emerald-400' // Разделы - зеленый
+      case 'decomposition_stage':
+        return '' // Этапы декомпозиции - стандартный цвет (белый/черный)
+      default:
+        return 'text-slate-600 dark:text-slate-400' // Проект - серый
+    }
+  }
+
   // Рекурсивный рендер узла дерева
   const renderTreeNode = (node: ProjectTreeNodeWithChildren, depth: number = 1): React.ReactNode => {
     const isNodeExpanded = expandedNodes.has(node.id)
@@ -67,15 +131,15 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
     const isSelected = isClickable && node.id === selectedSectionId
 
     const Icon =
-      node.type === 'stage'
-        ? Target
-        : node.type === 'object'
-          ? Box
-          : node.type === 'section'
-            ? FileText
-            : node.type === 'decomposition_stage'
-              ? ListChecks
-              : Folder
+      node.type === 'object'
+        ? Box
+        : node.type === 'section'
+          ? CircleDashed
+          : node.type === 'decomposition_stage'
+            ? ListChecks
+            : Folder // project
+
+    const nodeColor = getNodeColor(node.type)
 
     return (
       <div key={node.id}>
@@ -83,7 +147,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
           type="button"
           onClick={() => {
             if (hasChildren) {
-              toggleNode(node.id)
+              handleNodeClick(node)
             }
             if (isClickable) {
               handleSectionClick(node)
@@ -110,8 +174,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
           ) : (
             <span className="w-3.5" />
           )}
-          <Icon className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate text-xs">{node.name}</span>
+          <Icon className={cn('h-3.5 w-3.5 shrink-0', nodeColor)} />
+          <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
         </button>
 
         {/* Рекурсивно рендерим детей */}
@@ -124,37 +188,91 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
     )
   }
 
+  // При раскрытии проекта - автоматически разворачиваем всех детей
+  useEffect(() => {
+    if (!isLoading && tree.length > 0 && isProjectExpanded) {
+      // Собираем все ID детей для автораскрытия
+      const allIds = new Set<string>()
+      tree.forEach((node) => {
+        if (node.type === 'project' && node.children && node.children.length > 0) {
+          const allChildIds = collectAllNodeIds(node.children)
+          allChildIds.forEach(id => allIds.add(id))
+        }
+      })
+      // Обновляем expandedNodes для полного раскрытия дерева
+      if (allIds.size > 0) {
+        setExpandedNodes(allIds)
+      }
+    }
+  }, [tree, isLoading, isProjectExpanded])
+
+  // Переопределяем toggleNode для узла проекта - используем toggleProject
+  const handleNodeClick = (node: ProjectTreeNodeWithChildren) => {
+    if (node.type === 'project') {
+      toggleProject()
+    } else {
+      toggleNode(node)
+    }
+  }
+
   return (
     <div>
-      {/* Заголовок проекта */}
+      {/* Кнопка проекта - всегда показываем */}
       <button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-1.5 w-full py-1 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+        onClick={toggleProject}
+        className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
         style={{ paddingLeft: '4px' }}
       >
         <span className="shrink-0">
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          {isProjectExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronRight className="h-3.5 w-3.5" />
           )}
         </span>
-        <Folder className="h-3.5 w-3.5 shrink-0 text-green-600" />
+        <Folder className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate text-xs font-medium">{project.name}</span>
-        {isLoading && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
+        {project.stage_type && (
+          <span className={cn(
+            'px-1.5 py-0.5 text-[10px] font-medium rounded border whitespace-nowrap',
+            getStageColor(project.stage_type)
+          )}>
+            {project.stage_type}
+          </span>
+        )}
       </button>
 
-      {/* Дерево проекта */}
-      {isExpanded && !isLoading && tree.length > 0 && (
+      {/* Дерево детей проекта */}
+      {isProjectExpanded && (
         <div>
-          {tree.map((node) => renderTreeNode(node))}
-        </div>
-      )}
+          {/* Показываем индикатор загрузки */}
+          {isLoading && (
+            <div className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground" style={{ paddingLeft: '16px' }}>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Загрузка...</span>
+            </div>
+          )}
 
-      {isExpanded && !isLoading && tree.length === 0 && (
-        <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: '20px' }}>
-          Пусто
+          {/* Рендерим узлы из view (только детей проекта, не сам проект) */}
+          {!isLoading && tree.length > 0 && (
+            <div>
+              {tree.map((node) => {
+                // Пропускаем узел проекта, показываем только его детей
+                if (node.type === 'project' && node.children) {
+                  return node.children.map((child) => renderTreeNode(child, 0))
+                }
+                return renderTreeNode(node, 0)
+              })}
+            </div>
+          )}
+
+          {/* Пустое состояние */}
+          {!isLoading && tree.length === 0 && (
+            <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: '16px' }}>
+              Проект пуст
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -186,12 +304,21 @@ export function ProjectTree({
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Загрузка списка проектов
-  const { data: projects = [], isLoading: isLoadingProjects } = useProjectsList({
+  const { data: projects = [], isLoading: isLoadingProjects, refetch: refetchProjects } = useProjectsList({
     mode,
     userId,
   })
+
+  // Функция перезагрузки с анимацией
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetchProjects()
+    // Даем анимации завершиться
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
 
   console.log('🌳 ProjectTree render:', {
     mode,
@@ -212,12 +339,30 @@ export function ProjectTree({
     <div className={cn('flex flex-col h-full', className)}>
       {/* Переключатель "Мои проекты" / "Все проекты" */}
       <div className="p-4 border-b">
-        <Tabs value={mode} onValueChange={(value) => onModeChange(value as 'my' | 'all')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="my">Мои проекты</TabsTrigger>
-            <TabsTrigger value="all">Все проекты</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          <Tabs value={mode} onValueChange={(value) => onModeChange(value as 'my' | 'all')} className="flex-1">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="my">Мои проекты</TabsTrigger>
+              <TabsTrigger value="all">Все проекты</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Кнопка перезагрузки */}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoadingProjects}
+            title="Обновить список"
+            className={cn(
+              'flex items-center justify-center h-9 w-9 shrink-0',
+              'rounded-md border transition-colors',
+              'hover:bg-accent hover:text-accent-foreground',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+          </button>
+        </div>
       </div>
 
       {/* Поиск */}
@@ -237,18 +382,32 @@ export function ProjectTree({
       {/* Список проектов с деревом */}
       <ScrollArea className="flex-1">
         <div className="py-1">
+          {/* Индикатор загрузки */}
           {isLoadingProjects && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Загрузка проектов...</p>
             </div>
           )}
 
+          {/* Пустое состояние */}
           {!isLoadingProjects && filteredProjects.length === 0 && (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              {search ? 'Проекты не найдены' : 'Нет доступных проектов'}
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <div className="text-4xl">📁</div>
+              <p className="text-sm font-medium">
+                {search ? 'Проекты не найдены' : 'Нет доступных проектов'}
+              </p>
+              {!search && (
+                <p className="text-xs text-muted-foreground">
+                  {mode === 'my'
+                    ? 'У вас пока нет проектов'
+                    : 'В системе пока нет проектов'}
+                </p>
+              )}
             </div>
           )}
 
+          {/* Список проектов */}
           {!isLoadingProjects &&
             filteredProjects.map((project) => (
               <ProjectItem

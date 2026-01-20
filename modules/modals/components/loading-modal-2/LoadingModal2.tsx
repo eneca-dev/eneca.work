@@ -13,7 +13,7 @@
  */
 
 import { useEffect } from 'react'
-import { X, Save, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -137,15 +137,6 @@ export function LoadingModal2({
           <DialogTitle>
             {mode === 'create' ? 'Создание загрузки' : 'Редактирование загрузки'}
           </DialogTitle>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Закрыть</span>
-          </button>
         </DialogHeader>
 
         {/* Двухпанельный layout */}

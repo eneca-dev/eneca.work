@@ -29,18 +29,19 @@ export interface ProjectListItem {
   managerName: string | null
   managerAvatar: string | null
   isFavorite: boolean
+  stage_type: string | null
 }
 
 export interface ProjectTreeNode {
   id: string
   name: string
-  type: 'project' | 'stage' | 'object' | 'section' | 'decomposition_stage'
+  type: 'project' | 'object' | 'section' | 'decomposition_stage'
   level: number
   projectId: string | null
-  stageId: string | null
   objectId: string | null
   sectionId: string | null
   decompositionStageId: string | null
+  stageType: string | null // Стадия проекта как параметр (из projects.stage_type)
   description: string | null
   responsibleId: string | null
   responsibleName: string | null
@@ -125,16 +126,19 @@ export async function fetchProjectsList(
   input: FetchProjectsListInput
 ): Promise<ActionResult<ProjectListItem[]>> {
   try {
+    const startTime = performance.now()
     console.log('📡 [fetchProjectsList] Начало запроса:', input)
     const supabase = await createClient()
+    const clientCreatedTime = performance.now()
+    console.log(`⏱️ [fetchProjectsList] Client created: ${(clientCreatedTime - startTime).toFixed(2)}ms`)
 
-    // Получаем уникальные проекты из view (берем записи stage, т.к. project_id есть там)
-    // Используем DISTINCT для получения уникальных проектов
+    // Получаем уникальные проекты из view (используем view_project_tree_optimized)
+    // Фильтруем только узлы типа 'project' для получения списка проектов
     let query = supabase
-      .from('view_project_tree')
-      .select('project_id, project_name, project_status, manager_id, manager_name, manager_avatar, is_favorite')
-      .not('project_id', 'is', null)
-      .order('project_name')
+      .from('view_project_tree_optimized')
+      .select('project_id, node_name, stage_type, project_status, manager_id, manager_name, manager_avatar, is_favorite, involved_users')
+      .eq('node_type', 'project')
+      .order('node_name')
 
     // Фильтрация "Мои проекты"
     if (input.mode === 'my') {
@@ -145,16 +149,16 @@ export async function fetchProjectsList(
 
       console.log('[fetchProjectsList] Фильтрация: проекты пользователя', input.userId)
 
-      // Получаем все записи где пользователь задействован:
-      // 1. Менеджер проекта (manager_id)
-      // 2. Ответственный за раздел (section_responsible_id)
-      // 3. Имеет загрузку (через таблицу loadings)
-
-      // Для начала фильтруем по manager_id ИЛИ section_responsible_id
-      query = query.or(`manager_id.eq.${input.userId},section_responsible_id.eq.${input.userId}`)
+      // Фильтруем по массиву involved_users (содержит менеджера, ответственных за разделы и пользователей с загрузками)
+      // Используем оператор @> (contains) для проверки вхождения UUID в массив
+      query = query.contains('involved_users', [input.userId])
     }
 
+    const queryStartTime = performance.now()
+    console.log(`⏱️ [fetchProjectsList] Starting query...`)
     const { data, error } = await query
+    const queryEndTime = performance.now()
+    console.log(`⏱️ [fetchProjectsList] Query completed: ${(queryEndTime - queryStartTime).toFixed(2)}ms`)
 
     if (error) {
       console.error('[fetchProjectsList] Supabase error:', error)
@@ -166,25 +170,25 @@ export async function fetchProjectsList(
 
     console.log('[fetchProjectsList] Загружено строк:', data?.length || 0)
 
-    // Дедупликация проектов (один проект может встречаться в разных узлах дерева)
-    const uniqueProjects = new Map<string, ProjectListItem>()
-
-    for (const row of data || []) {
-      const projectId = row.project_id
-      if (projectId && !uniqueProjects.has(projectId)) {
-        uniqueProjects.set(projectId, {
-          id: projectId,
-          name: row.project_name || 'Неизвестный проект',
-          status: row.project_status || 'unknown',
-          managerId: row.manager_id,
-          managerName: row.manager_name,
-          managerAvatar: row.manager_avatar,
-          isFavorite: row.is_favorite || false,
-        })
-      }
+    if (input.mode === 'my' && data && data.length > 0) {
+      console.log('[fetchProjectsList] Первые 3 проекта:', data.slice(0, 3).map(r => ({
+        project_id: r.project_id,
+        node_name: r.node_name,
+        involved_users: r.involved_users,
+      })))
     }
 
-    const projects = Array.from(uniqueProjects.values())
+    // Маппинг данных из view в ProjectListItem
+    const projects: ProjectListItem[] = (data || []).map(row => ({
+      id: row.project_id!,
+      name: row.node_name || 'Неизвестный проект',
+      status: row.project_status || 'unknown',
+      managerId: row.manager_id,
+      managerName: row.manager_name,
+      managerAvatar: row.manager_avatar,
+      isFavorite: row.is_favorite || false,
+      stage_type: row.stage_type,
+    }))
 
     if (projects.length > 0) {
       console.log('[fetchProjectsList] Первые 3 уникальных проекта:', projects.slice(0, 3).map(p => ({
@@ -196,7 +200,8 @@ export async function fetchProjectsList(
       console.warn('[fetchProjectsList] ⚠️ Нет проектов после дедупликации')
     }
 
-    console.log('[fetchProjectsList] Успех, проектов:', projects.length)
+    const totalTime = performance.now() - startTime
+    console.log(`✅ [fetchProjectsList] Total time: ${totalTime.toFixed(2)}ms | Projects: ${projects.length}`)
     return { success: true, data: projects }
   } catch (error) {
     console.error('[fetchProjectsList] Error:', error)
@@ -211,12 +216,15 @@ export async function fetchProjectsList(
 }
 
 /**
- * Загрузка дерева конкретного проекта (иерархия: project -> stage -> object -> section -> decomposition_stage)
+ * Загрузка дерева конкретного проекта
+ * Иерархия (4 уровня): project (со stage_type) -> object -> section -> decomposition_stage
+ * Использует оптимизированный view для загрузки всей иерархии одним запросом
  */
 export async function fetchProjectTree(
   input: FetchProjectTreeInput
 ): Promise<ActionResult<ProjectTreeNode[]>> {
   try {
+    const startTime = performance.now()
     const supabase = await createClient()
 
     // Валидация
@@ -224,189 +232,59 @@ export async function fetchProjectTree(
       return { success: false, error: 'ID проекта обязателен' }
     }
 
-    // 1. Загрузка самого проекта (уровень 1)
-    const { data: projectData, error: projectError } = await supabase
-      .from('projects')
+    // Загрузка всей иерархии проекта одним запросом через оптимизированный view
+    const { data, error } = await supabase
+      .from('view_project_tree_optimized')
       .select('*')
       .eq('project_id', input.projectId)
-      .single()
+      .order('hierarchy_level')
+      .order('sort_path')
+      .order('sort_order')
 
-    if (projectError || !projectData) {
-      console.error('[fetchProjectTree] Project error:', projectError)
+    const queryTime = performance.now() - startTime
+    console.log(`⏱️ [fetchProjectTree] Query time: ${queryTime.toFixed(2)}ms for project ${input.projectId}`)
+
+    if (error) {
+      console.error('[fetchProjectTree] Supabase error:', error)
       return {
         success: false,
-        error: `Не удалось загрузить проект: ${projectError?.message || 'Проект не найден'}`,
+        error: `Не удалось загрузить дерево проекта: ${error.message}`,
       }
     }
 
-    const tree: ProjectTreeNode[] = []
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: 'Проект не найден или не имеет данных',
+      }
+    }
 
-    // Добавляем сам проект как корневой узел (уровень 1)
-    const projectNode: ProjectTreeNode = {
-      id: projectData.project_id,
-      name: projectData.project_name,
-      type: 'project',
-      level: 1,
-      projectId: projectData.project_id,
-      stageId: null,
-      objectId: null,
-      sectionId: null,
-      decompositionStageId: null,
-      description: projectData.project_description,
-      responsibleId: projectData.project_manager,
+    // Маппинг данных из view в ProjectTreeNode
+    const tree: ProjectTreeNode[] = data.map((row: any) => ({
+      id: row.node_id,
+      name: row.node_name,
+      type: row.node_type as 'project' | 'object' | 'section' | 'decomposition_stage',
+      level: row.hierarchy_level,
+      projectId: row.project_id,
+      objectId: row.object_id,
+      sectionId: row.section_id,
+      decompositionStageId: row.decomposition_stage_id,
+      stageType: row.stage_type, // Стадия проекта как параметр
+      description: row.description,
+      responsibleId: row.responsible_id,
       responsibleName: null,
       responsibleAvatar: null,
       departmentId: null,
       departmentName: null,
       teamId: null,
       teamName: null,
-      startDate: null,
-      endDate: null,
-      hasChildren: true,
-    }
-    tree.push(projectNode)
+      startDate: row.start_date,
+      endDate: row.end_date,
+      hasChildren: row.node_type !== 'decomposition_stage', // только decomposition_stage не имеет детей
+    }))
 
-    // 2. Загрузка стадий проекта (уровень 2)
-    const { data: stagesData, error: stagesError } = await supabase
-      .from('stages')
-      .select('*')
-      .eq('stage_project_id', input.projectId)
-      .order('stage_name')
-
-    if (!stagesError && stagesData && stagesData.length > 0) {
-      for (const stage of stagesData) {
-        const stageNode: ProjectTreeNode = {
-          id: stage.stage_id,
-          name: stage.stage_name,
-          type: 'stage',
-          level: 2,
-          projectId: projectData.project_id,
-          stageId: stage.stage_id,
-          objectId: null,
-          sectionId: null,
-          decompositionStageId: null,
-          description: stage.stage_description,
-          responsibleId: null,
-          responsibleName: null,
-          responsibleAvatar: null,
-          departmentId: null,
-          departmentName: null,
-          teamId: null,
-          teamName: null,
-          startDate: null,
-          endDate: null,
-          hasChildren: true,
-        }
-        tree.push(stageNode)
-
-        // 3. Загрузка объектов стадии (уровень 3)
-        const { data: objectsData, error: objectsError } = await supabase
-          .from('objects')
-          .select('*')
-          .eq('object_stage_id', stage.stage_id)
-          .order('object_name')
-
-        if (!objectsError && objectsData && objectsData.length > 0) {
-          for (const object of objectsData) {
-            const objectNode: ProjectTreeNode = {
-              id: object.object_id,
-              name: object.object_name,
-              type: 'object',
-              level: 3,
-              projectId: projectData.project_id,
-              stageId: stage.stage_id,
-              objectId: object.object_id,
-              sectionId: null,
-              decompositionStageId: null,
-              description: object.object_description,
-              responsibleId: null,
-              responsibleName: null,
-              responsibleAvatar: null,
-              departmentId: null,
-              departmentName: null,
-              teamId: null,
-              teamName: null,
-              startDate: object.object_start_date,
-              endDate: object.object_end_date,
-              hasChildren: true,
-            }
-            tree.push(objectNode)
-
-            // 4. Загрузка разделов объекта (уровень 4)
-            const { data: sectionsData, error: sectionsError } = await supabase
-              .from('sections')
-              .select('*')
-              .eq('section_object_id', object.object_id)
-              .order('section_name')
-
-            if (!sectionsError && sectionsData && sectionsData.length > 0) {
-              for (const section of sectionsData) {
-                const sectionNode: ProjectTreeNode = {
-                  id: section.section_id,
-                  name: section.section_name,
-                  type: 'section',
-                  level: 4,
-                  projectId: projectData.project_id,
-                  stageId: stage.stage_id,
-                  objectId: object.object_id,
-                  sectionId: section.section_id,
-                  decompositionStageId: null,
-                  description: section.section_description,
-                  responsibleId: section.section_responsible,
-                  responsibleName: null,
-                  responsibleAvatar: null,
-                  departmentId: null,
-                  departmentName: null,
-                  teamId: null,
-                  teamName: null,
-                  startDate: section.section_start_date,
-                  endDate: section.section_end_date,
-                  hasChildren: true,
-                }
-                tree.push(sectionNode)
-
-                // 5. Загрузка этапов декомпозиции раздела (уровень 5)
-                const { data: decompositionData, error: decompositionError } = await supabase
-                  .from('decomposition_stages')
-                  .select('*')
-                  .eq('decomposition_stage_section_id', section.section_id)
-                  .order('decomposition_stage_order')
-
-                if (!decompositionError && decompositionData && decompositionData.length > 0) {
-                  for (const decomp of decompositionData) {
-                    const decompNode: ProjectTreeNode = {
-                      id: decomp.decomposition_stage_id,
-                      name: decomp.decomposition_stage_name,
-                      type: 'decomposition_stage',
-                      level: 5,
-                      projectId: projectData.project_id,
-                      stageId: stage.stage_id,
-                      objectId: object.object_id,
-                      sectionId: section.section_id,
-                      decompositionStageId: decomp.decomposition_stage_id,
-                      description: decomp.decomposition_stage_description,
-                      responsibleId: null,
-                      responsibleName: null,
-                      responsibleAvatar: null,
-                      departmentId: null,
-                      departmentName: null,
-                      teamId: null,
-                      teamName: null,
-                      startDate: decomp.decomposition_stage_start,
-                      endDate: decomp.decomposition_stage_finish,
-                      hasChildren: false,
-                    }
-                    tree.push(decompNode)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    console.log('[fetchProjectTree] Tree built:', {
+    const totalTime = performance.now() - startTime
+    console.log(`✅ [fetchProjectTree] Total time: ${totalTime.toFixed(2)}ms | Nodes: ${tree.length}`, {
       projectId: input.projectId,
       totalNodes: tree.length,
       byLevel: tree.reduce((acc, node) => {
