@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 export interface RateInputProps {
-  /** Текущее значение ставки (0.01 - 1.0) */
+  /** Текущее значение ставки (0.01 - 2.0) */
   value: number
   /** Callback при изменении */
   onChange: (rate: number) => void
@@ -34,14 +34,44 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
   }
 
   const handleCustomInput = (inputValue: string) => {
-    setCustomValue(inputValue)
+    // Валидация: только цифры, точка и запятая
+    // Первый символ должен быть цифрой
+    // Максимум 2 знака после точки
 
-    // Парсинг и валидация
-    const parsed = parseFloat(inputValue.replace(',', '.'))
-    if (!isNaN(parsed) && parsed >= 0.01 && parsed <= 1.0) {
+    let processedValue = inputValue
+
+    // Если пустая строка - разрешаем
+    if (processedValue === '') {
+      setCustomValue('')
+      return
+    }
+
+    // Первый символ должен быть цифрой
+    if (!/^\d/.test(processedValue)) {
+      return
+    }
+
+    // Заменяем запятую на точку
+    processedValue = processedValue.replace(',', '.')
+
+    // Проверяем паттерн: цифра, опционально точка и до 2 цифр после
+    const validPattern = /^\d(\.\d{0,2})?$/
+    if (!validPattern.test(processedValue)) {
+      return
+    }
+
+    // Обновляем отображаемое значение
+    setCustomValue(processedValue)
+
+    // Парсим и валидируем
+    const parsed = parseFloat(processedValue)
+    if (!isNaN(parsed)) {
       onChange(parsed)
     }
   }
+
+  // Проверка валидности значения для отображения ошибки
+  const isInvalidRange = customValue && value && (value < 0.01 || value > 2.0)
 
   const isQuickRateSelected = (rate: number) => {
     return !customValue && Math.abs(value - rate) < 0.001
@@ -79,12 +109,17 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
           value={customValue}
           onChange={(e) => handleCustomInput(e.target.value)}
           disabled={disabled}
-          className={cn(error && 'border-red-500')}
+          className={cn((error || isInvalidRange) && 'border-red-500')}
         />
         {error && <p className="text-sm text-red-500">{error}</p>}
-        {!error && (
+        {!error && isInvalidRange && (
+          <p className="text-sm text-red-500">
+            Ставка должна быть от 0.01 до 2.0
+          </p>
+        )}
+        {!error && !isInvalidRange && (
           <p className="text-xs text-muted-foreground">
-            Введите значение от 0.01 до 1.0
+            Введите значение от 0.01 до 2.0
           </p>
         )}
       </div>
