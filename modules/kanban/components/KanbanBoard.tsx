@@ -153,7 +153,7 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
   return (
     <div className="flex flex-col h-full">
       {/* Swimlanes */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div className="flex-1 overflow-x-auto overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
         <div className="min-w-fit">
           {sectionsToShow.map((section) => (
             <KanbanSwimlane
@@ -467,7 +467,7 @@ export function KanbanBoard() {
       />
 
       {/* Swimlanes */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div className="flex-1 overflow-x-auto overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
         <div className="min-w-fit">
           {sectionsToShow.map((section) => (
             <KanbanSwimlane
