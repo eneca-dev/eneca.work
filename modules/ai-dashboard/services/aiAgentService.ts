@@ -51,7 +51,6 @@ const MOCK_RESPONSES: Record<string, AIResponse> = {
 
 // Конфигурация
 const USE_MOCK = process.env.NEXT_PUBLIC_AI_MOCK === 'true'
-const AI_AGENT_URL = process.env.NEXT_PUBLIC_AI_AGENT_URL || 'https://ai-bot.eneca.work/analytics'
 
 /**
  * Отправить запрос к AI агенту
@@ -85,10 +84,10 @@ export async function fetchAIAnalysis(query: string): Promise<AIResponse> {
     return MOCK_RESPONSES.default
   }
 
-  // Real API запрос
-  console.log('[AI Service] Fetching from real API:', AI_AGENT_URL)
+  // Real API через Next.js API route
+  console.log('[AI Service] Fetching from API route')
 
-  const response = await fetch(AI_AGENT_URL, {
+  const response = await fetch('/api/ai-dashboard/analytics', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -97,13 +96,21 @@ export async function fetchAIAnalysis(query: string): Promise<AIResponse> {
   })
 
   if (!response.ok) {
-    throw new Error(`AI Agent error: ${response.statusText}`)
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || `Server error: ${response.statusText}`)
   }
 
-  const data = await response.json()
+  const { data, executionTime } = await response.json()
 
-  // Универсальная обработка ответа
-  return parseAIResponse(data)
+  // Парсинг ответа от AI агента
+  const parsedResponse = parseAIResponse(data)
+
+  // Добавляем метаданные если есть
+  if (executionTime) {
+    ;(parsedResponse as any).executionTime = executionTime
+  }
+
+  return parsedResponse
 }
 
 /**
