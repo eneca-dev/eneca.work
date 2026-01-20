@@ -130,22 +130,22 @@ export function BudgetCreatePopover({
       <PopoverContent
         className={cn(
           'w-72 p-0',
-          'bg-slate-900/95 backdrop-blur-md',
-          'border border-slate-700/50',
+          'bg-card/95 backdrop-blur-md',
+          'border border-border/50',
           'shadow-2xl shadow-black/50'
         )}
         align="end"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/50">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Wallet className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-[11px] font-medium text-slate-300">Создать бюджет</span>
+            <span className="text-[11px] font-medium text-foreground">Создать бюджет</span>
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-0.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+            className="p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -154,14 +154,14 @@ export function BudgetCreatePopover({
         {/* Body */}
         <div className="px-3 py-2.5 space-y-2.5">
           {/* Entity info */}
-          <div className="text-[10px] text-slate-400">
-            {ENTITY_TYPE_LABELS[entityType]}: <span className="text-slate-300">{entityName}</span>
+          <div className="text-[10px] text-muted-foreground">
+            {ENTITY_TYPE_LABELS[entityType]}: <span className="text-foreground">{entityName}</span>
           </div>
 
           {/* Budget Name (optional) */}
           <div>
-            <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">
-              Название <span className="text-slate-600">(опционально)</span>
+            <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              Название <span className="text-muted-foreground/50">(опционально)</span>
             </label>
             <input
               type="text"
@@ -170,10 +170,10 @@ export function BudgetCreatePopover({
               placeholder="Бюджет"
               className={cn(
                 'w-full px-2 py-1.5 text-[11px]',
-                'bg-slate-800/50 border border-slate-700',
-                'rounded text-slate-200',
-                'placeholder:text-slate-600',
-                'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                'bg-muted/50 border border-border',
+                'rounded text-foreground',
+                'placeholder:text-muted-foreground/50',
+                'focus:outline-none focus:border-muted-foreground/50 focus:ring-1 focus:ring-muted-foreground/30',
                 'transition-colors'
               )}
             />
@@ -181,7 +181,7 @@ export function BudgetCreatePopover({
 
           {/* Amount */}
           <div>
-            <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+            <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
               Сумма бюджета
             </label>
             <div className="relative">
@@ -195,34 +195,34 @@ export function BudgetCreatePopover({
                 autoFocus
                 className={cn(
                   'w-full px-2 py-1.5 pr-10 text-[11px] text-right',
-                  'bg-slate-800/50 border border-slate-700',
-                  'rounded text-slate-200 font-mono',
-                  'placeholder:text-slate-600',
-                  'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                  'bg-muted/50 border border-border',
+                  'rounded text-foreground font-mono',
+                  'placeholder:text-muted-foreground/50',
+                  'focus:outline-none focus:border-muted-foreground/50 focus:ring-1 focus:ring-muted-foreground/30',
                   'transition-colors'
                 )}
               />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
                 BYN
               </span>
             </div>
           </div>
 
           {/* Info */}
-          <div className="text-[10px] text-slate-500 leading-relaxed">
+          <div className="text-[10px] text-muted-foreground leading-relaxed">
             Бюджет создаётся с основной частью (main). Премиальную часть можно добавить позже.
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-700/50">
+        <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border/50">
           <button
             onClick={() => setIsOpen(false)}
             className={cn(
               'px-2.5 py-1 text-[11px] font-medium rounded',
-              'text-slate-400 hover:text-slate-300',
-              'border border-slate-700 hover:border-slate-600',
-              'bg-slate-800/50 hover:bg-slate-800',
+              'text-muted-foreground hover:text-foreground',
+              'border border-border hover:border-muted-foreground/50',
+              'bg-muted/50 hover:bg-muted',
               'transition-colors'
             )}
           >
@@ -235,7 +235,7 @@ export function BudgetCreatePopover({
               'flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded',
               'text-slate-900 bg-amber-500 hover:bg-amber-400',
               'transition-colors',
-              'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
             )}
           >
             {isCreating ? (

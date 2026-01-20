@@ -66,12 +66,15 @@ interface AnalyticsPanelProps {
   totalPlanned: number
   totalSpent: number
   projectsCount: number
-  budgetsCount: number
 }
 
-function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount, budgetsCount }: AnalyticsPanelProps) {
+function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount }: AnalyticsPanelProps) {
   const percentage = totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0
   const isOverBudget = percentage > 100
+
+  // Склонение слова "проект"
+  const projectWord = projectsCount === 1 ? 'проект' :
+    projectsCount >= 2 && projectsCount <= 4 ? 'проекта' : 'проектов'
 
   return (
     <div className="shrink-0 border-b bg-muted/20 px-4 py-2">
@@ -80,15 +83,7 @@ function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount, budgetsCount 
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <FolderKanban className="h-3.5 w-3.5" />
           <span>{projectsCount}</span>
-          <span className="text-muted-foreground/50">проекта</span>
-        </div>
-
-        <div className="w-px h-4 bg-border" />
-
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Wallet className="h-3.5 w-3.5" />
-          <span>{budgetsCount}</span>
-          <span className="text-muted-foreground/50">бюджетов</span>
+          <span className="text-muted-foreground/50">{projectWord}</span>
         </div>
 
         <div className="flex-1" />
@@ -208,7 +203,6 @@ export function BudgetsViewInternal({
             totalPlanned={analytics.totalPlanned}
             totalSpent={analytics.totalSpent}
             projectsCount={analytics.projectsCount}
-            budgetsCount={analytics.budgetsCount}
           />
 
           {/* Hierarchy content */}

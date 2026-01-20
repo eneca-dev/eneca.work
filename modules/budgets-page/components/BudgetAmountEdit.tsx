@@ -250,15 +250,15 @@ export function BudgetAmountEdit({
           className={cn(
             'w-20 h-6 px-1 pr-7 text-xs tabular-nums text-right',
             'bg-transparent border-0 outline-none',
-            'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+            'hover:bg-muted/50 focus:bg-muted/70 rounded',
             'transition-colors',
             isPending && 'opacity-50',
             isOverBudget && 'text-destructive',
-            !isOverBudget && 'text-slate-200'
+            !isOverBudget && 'text-foreground'
           )}
           placeholder="0"
         />
-        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 pointer-events-none">
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground pointer-events-none">
           BYN
         </span>
         {isPending && (
@@ -284,13 +284,13 @@ export function BudgetAmountEdit({
             className={cn(
               'w-12 h-6 px-1 pr-4 text-xs tabular-nums text-right',
               'bg-transparent border-0 outline-none',
-              'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
-              'transition-colors text-slate-400',
+              'hover:bg-muted/50 focus:bg-muted/70 rounded',
+              'transition-colors text-muted-foreground',
               isPending && 'opacity-50'
             )}
             placeholder="0"
           />
-          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 pointer-events-none">
+          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground pointer-events-none">
             %
           </span>
         </div>
@@ -306,8 +306,8 @@ export function BudgetAmountEdit({
         trigger={
           <button
             className={cn(
-              'p-1 rounded text-slate-500 hover:text-slate-300',
-              'hover:bg-slate-800 transition-colors',
+              'p-1 rounded text-muted-foreground hover:text-foreground',
+              'hover:bg-muted transition-colors',
               'opacity-0 group-hover:opacity-100'
             )}
             title="Управление частями"
@@ -323,7 +323,7 @@ export function BudgetAmountEdit({
         <TooltipTrigger asChild>
           <div
             className={cn(
-              'w-16 bg-slate-800 rounded-full overflow-hidden cursor-help shrink-0',
+              'w-16 bg-muted rounded-full overflow-hidden cursor-help shrink-0',
               'h-[4px]'
             )}
           >
