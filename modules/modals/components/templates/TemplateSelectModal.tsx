@@ -134,8 +134,8 @@ export function TemplateSelectModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-md',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -143,14 +143,14 @@ export function TemplateSelectModal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-teal-500" />
-              <span className="text-xs font-medium text-slate-300">Применить шаблон</span>
+              <span className="text-xs font-medium text-foreground">Применить шаблон</span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -160,7 +160,7 @@ export function TemplateSelectModal({
           <div className="px-4 py-3">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -180,7 +180,7 @@ export function TemplateSelectModal({
                         'border transition-all duration-150',
                         departmentFilter === 'all'
                           ? 'border-teal-500/50 bg-teal-500/10 text-teal-400'
-                          : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                          : 'border-border bg-muted text-muted-foreground hover:border-border'
                       )}
                     >
                       Все
@@ -195,7 +195,7 @@ export function TemplateSelectModal({
                           'border transition-all duration-150',
                           departmentFilter === dept.id
                             ? 'border-teal-500/50 bg-teal-500/10 text-teal-400'
-                            : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                            : 'border-border bg-muted text-muted-foreground hover:border-border'
                         )}
                       >
                         {dept.name}
@@ -207,7 +207,7 @@ export function TemplateSelectModal({
                 {/* Templates list */}
                 <div className="max-h-[280px] overflow-y-auto -mx-1 px-1 space-y-1.5">
                   {filteredTemplates.length === 0 ? (
-                    <div className="flex items-center justify-center py-8 text-xs text-slate-500">
+                    <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
                       Нет доступных шаблонов
                     </div>
                   ) : (
@@ -223,7 +223,7 @@ export function TemplateSelectModal({
                             'border transition-all duration-150',
                             isSelected
                               ? 'border-teal-500/50 bg-teal-500/10'
-                              : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600 hover:bg-slate-800/50'
+                              : 'border-border/50 bg-muted/30 hover:border-border hover:bg-muted/50'
                           )}
                           onClick={() => setSelectedTemplateId(template.id)}
                         >
@@ -236,13 +236,13 @@ export function TemplateSelectModal({
                                 <span
                                   className={cn(
                                     'text-xs font-medium truncate',
-                                    isSelected ? 'text-teal-300' : 'text-slate-300'
+                                    isSelected ? 'text-teal-300' : 'text-foreground'
                                   )}
                                 >
                                   {template.name}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
+                              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
                                 <span className="truncate">{template.departmentName}</span>
                                 <span>·</span>
                                 <span className="truncate">{template.creatorName}</span>
@@ -271,7 +271,7 @@ export function TemplateSelectModal({
                                         e.stopPropagation()
                                         setDeleteConfirmId(null)
                                       }}
-                                      className="px-1.5 py-0.5 text-[9px] font-medium bg-slate-700 text-slate-400 rounded hover:bg-slate-600 transition-colors"
+                                      className="px-1.5 py-0.5 text-[9px] font-medium bg-muted text-muted-foreground rounded hover:bg-muted transition-colors"
                                     >
                                       Нет
                                     </button>
@@ -282,7 +282,7 @@ export function TemplateSelectModal({
                                       e.stopPropagation()
                                       setDeleteConfirmId(template.id)
                                     }}
-                                    className="p-1 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                    className="p-1 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -300,15 +300,15 @@ export function TemplateSelectModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border/50">
             <button
               onClick={onClose}
               disabled={isApplying}
               className={cn(
                 'px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-slate-400 hover:text-slate-300',
-                'border border-slate-700 hover:border-slate-600',
-                'bg-slate-800/50 hover:bg-slate-800',
+                'text-muted-foreground hover:text-foreground',
+                'border border-border hover:border-border',
+                'bg-muted hover:bg-muted',
                 'transition-colors',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
@@ -322,7 +322,7 @@ export function TemplateSelectModal({
                 'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
                 'text-slate-900 bg-teal-500 hover:bg-teal-400',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
               )}
             >
               {isApplying ? (

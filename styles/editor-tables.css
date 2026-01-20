@@ -11,7 +11,7 @@
 }
 
 .dark .ProseMirror table {
-  border-color: #4b5563;
+  border-color: #383838;
 }
 
 /* Стили для неудаляемых параграфов между таблицами */
@@ -82,8 +82,8 @@
 }
 
 .dark .ProseMirror td {
-  border-color: #4b5563;
-  background-color: #1f2937;
+  border-color: #383838;
+  background-color: #191919;
   color: #f9fafb;
 }
 
@@ -100,8 +100,8 @@
 }
 
 .dark .ProseMirror th {
-  border-color: #4b5563;
-  background-color: #374151;
+  border-color: #383838;
+  background-color: #262626;
   color: #f9fafb;
 }
 
@@ -116,7 +116,7 @@
 
 .dark .ProseMirror table tr:first-child td,
 .dark .ProseMirror table tr:first-child th {
-  background-color: #374151;
+  background-color: #262626;
   color: #f9fafb;
 }
 
@@ -131,7 +131,7 @@
 
 .dark .ProseMirror table tr:not(:first-child) th,
 .dark .ProseMirror table tr:not(:first-child) td {
-  background-color: #1f2937;
+  background-color: #191919;
   color: #f9fafb;
 }
 
@@ -220,6 +220,6 @@ th:focus-within .col-resize-handle {
 
 /* Dark theme for table size selector */
 .dark .table-size-grid {
-  border-color: #374151;
-  background-color: #1f2937;
+  border-color: #262626;
+  background-color: #191919;
 } 

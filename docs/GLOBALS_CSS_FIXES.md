@@ -633,19 +633,832 @@ dark:[&_.ProseMirror_mark]:text-foreground
 
 ---
 
-## Общий итог всех фаз: ~165 замен в 57 файлах
+## 13. Modals & Panels (Фаза 6.1) - Боковые панели и модальные окна
+
+### TaskSidebar Component
+**Файл:** `modules/modals/components/task/TaskSidebar.tsx`
+
+#### Основные замены:
+```tsx
+// Panel background (Line 276):
+// БЫЛО: 'bg-slate-900/95 backdrop-blur-md border-l border-slate-700/50'
+// СТАЛО: 'bg-card/95 backdrop-blur-md border-l border-border/50'
+
+// Text colors:
+text-slate-300, text-slate-200 → text-foreground
+text-slate-500, text-slate-400 → text-muted-foreground
+
+// Primary accent:
+text-amber-500, bg-amber-500 → text-primary, bg-primary
+
+// Backgrounds:
+bg-slate-800, bg-slate-700 → bg-muted
+bg-slate-900/50 → bg-card/50
+
+// Borders:
+border-slate-700, border-slate-600 → border-border
+```
+
+**Замен:** ~18
+
+---
+
+### SectionModal Component
+**Файл:** `modules/modals/components/section/SectionModal.tsx`
+
+#### Основные замены:
+```tsx
+// Modal background (Line 331):
+// БЫЛО: 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950'
+// СТАЛО: 'bg-card'
+
+// Avatar fallback:
+// БЫЛО: className="bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300"
+// СТАЛО: className="bg-muted text-foreground"
+
+// Tab active state:
+// БЫЛО: 'data-[state=active]:bg-amber-500/10 data-[state=active]:text-amber-400'
+// СТАЛО: 'data-[state=active]:bg-primary/10 data-[state=active]:text-primary'
+
+// Text colors:
+text-slate-400, text-slate-300 → text-muted-foreground
+text-slate-200 → text-foreground
+
+// Backgrounds:
+bg-slate-800/50, bg-slate-700 → bg-muted
+bg-slate-900/95 → bg-card/95
+
+// Borders:
+border-slate-700/50, border-slate-800/80 → border-border
+```
+
+**Замен:** ~30
+
+---
+
+### StageModal Component
+**Файл:** `modules/modals/components/stage/StageModal.tsx`
+
+#### Основные замены:
+```tsx
+// Consistent pattern with TaskSidebar:
+bg-slate-900/95 → bg-card/95
+bg-slate-800, bg-slate-700 → bg-muted
+text-slate-* → text-foreground / text-muted-foreground
+text-amber-500, bg-amber-500 → text-primary, bg-primary
+border-slate-* → border-border
+hover:bg-slate-800/50 → hover:bg-muted
+```
+
+**Замен:** ~25
+
+---
+
+### WorkLogCreateModal Component
+**Файл:** `modules/modals/components/worklog/WorkLogCreateModal.tsx`
+
+#### Основные замены:
+```tsx
+// Light/Dark mode duality (most complex):
+// БЫЛО: bg-white/95 dark:bg-slate-900/95
+// СТАЛО: bg-card/95
+
+// БЫЛО: bg-slate-50 dark:bg-slate-800/50
+// СТАЛО: bg-muted/50
+
+// БЫЛО: border-slate-200 dark:border-slate-700
+// СТАЛО: border-border
+
+// Text colors:
+text-slate-700 dark:text-slate-300 → text-foreground
+text-slate-700 dark:text-slate-200 → text-foreground
+text-slate-500 dark:text-slate-400 → text-muted-foreground
+text-slate-400 dark:text-slate-500 → text-muted-foreground
+text-slate-600 dark:text-slate-300 → text-foreground
+
+// Backgrounds:
+bg-slate-100 dark:bg-slate-800/50 → bg-muted
+bg-white dark:bg-slate-800 → bg-card
+hover:bg-slate-100 dark:hover:bg-slate-800 → hover:bg-muted
+hover:bg-slate-50 dark:hover:bg-slate-700/50 → hover:bg-muted
+
+// Borders & Focus:
+border-slate-200 dark:border-slate-700 → border-border
+focus:border-slate-300 dark:focus:border-slate-600 → focus:border-border
+focus:ring-slate-300/50 dark:focus:ring-slate-600/50 → focus:ring-border/50
+
+// Placeholders:
+placeholder:text-slate-400 dark:placeholder:text-slate-600 → placeholder:text-muted-foreground
+
+// Hover text:
+hover:text-slate-600 dark:hover:text-slate-300 → hover:text-foreground
+hover:text-slate-700 dark:hover:text-slate-300 → hover:text-foreground
+
+// Disabled states:
+disabled:bg-slate-300 dark:disabled:bg-slate-700 → disabled:bg-muted
+disabled:text-slate-500 → disabled:text-muted-foreground
+
+// Avatar fallbacks:
+bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 → bg-muted text-foreground
+
+// Separator:
+text-slate-300 dark:text-slate-600 → text-muted-foreground
+
+// Buttons:
+bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 → bg-card hover:bg-muted
+hover:border-slate-300 dark:hover:border-slate-600 → hover:border-border
+```
+
+**Функциональные цвета сохранены:**
+- `text-green-600` - статус бюджета (достаточно средств)
+- `text-amber-700 dark:text-amber-400` - предупреждение о бюджете
+- `text-red-700 dark:text-red-400` - превышение бюджета
+- `bg-green-500 hover:bg-green-400` - кнопка сохранения
+
+**Замен:** ~23
+
+---
+
+### NotificationsPanel Component
+**Файл:** `modules/notifications/components/NotificationsPanel.tsx`
+
+**Статус:** ✅ Уже использует CSS переменные
+
+Файл изначально правильно использует CSS переменные:
+- `bg-card` для фона панели
+- `border-border` для границ
+- `text-foreground` для основного текста
+- `text-muted-foreground` для второстепенного текста
+
+Функциональные цвета для badge-ей типов уведомлений сохранены:
+- `bg-purple-100 text-purple-800` - объявления
+- `bg-orange-100 text-orange-800` - передача заданий
+- `bg-blue-100 text-blue-800` - комментарии
+- `bg-green-100 text-green-800` - задачи
+
+**Замен:** 0 (изменений не требуется)
+
+---
+
+### Итого по Фазе 6.1
+
+**Файлов изменено:** 4 (5-й уже был корректен)
+**Модули:** modals, notifications
+
+**Замен сделано:** ~96
+
+**Затронутые компоненты:**
+- TaskSidebar - боковая панель редактирования задачи
+- SectionModal - модальное окно раздела с вкладками
+- StageModal - модальное окно этапа декомпозиции
+- WorkLogCreateModal - модальное окно создания отчёта о работе
+- NotificationsPanel - панель уведомлений (проверена, изменений не требуется)
+
+**Паттерны замен:**
+1. Dual-mode colors (light/dark) → single CSS variable
+2. Slate backgrounds → `bg-card`, `bg-muted`
+3. Slate text → `text-foreground`, `text-muted-foreground`
+4. Slate borders → `border-border`
+5. Amber accents → `text-primary`, `bg-primary`
+6. Focus/hover states → unified variables
+
+**Критичность:** Высокая - эти компоненты используются во всех основных рабочих процессах (управление задачами, разделами, этапами, отчётами).
+
+---
+
+## 14. Create & Template Modals (Фаза 6.2) - Модалки создания и выбора шаблонов
+
+### TemplateSaveModal Component
+**Файл:** `modules/modals/components/templates/TemplateSaveModal.tsx`
+
+#### Основные замены:
+```tsx
+// Modal background & borders:
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+
+// Text colors:
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+
+// Input styling:
+bg-slate-800/50 border border-slate-700 → bg-muted border border-border
+text-slate-200 → text-foreground
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+
+// Department chips:
+border-slate-700 bg-slate-800/50 text-slate-400 → border-border bg-muted text-muted-foreground
+hover:border-slate-600 → hover:border-border
+
+// Close button:
+text-slate-500 hover:text-slate-300 hover:bg-slate-800 → text-muted-foreground hover:text-foreground hover:bg-muted
+
+// Footer buttons:
+text-slate-400 hover:text-slate-300 → text-muted-foreground hover:text-foreground
+border-slate-700 hover:border-slate-600 → border-border hover:border-border
+bg-slate-800/50 hover:bg-slate-800 → bg-muted hover:bg-muted
+disabled:bg-slate-700 disabled:text-slate-500 → disabled:bg-muted disabled:text-muted-foreground
+```
+
+**Функциональные цвета сохранены:**
+- `text-teal-500`, `bg-teal-500`, `border-teal-500` - primary для template actions
+
+**Замен:** ~18
+
+---
+
+### TemplateSelectModal Component
+**Файл:** `modules/modals/components/templates/TemplateSelectModal.tsx`
+
+#### Основные замены (массовые через replace_all):
+```tsx
+// Все slate-* паттерны заменены единообразно:
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+border-slate-700 → border-border
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+bg-slate-800/50 → bg-muted
+bg-slate-800/30 → bg-muted/30
+hover:border-slate-600 → hover:border-border
+hover:bg-slate-800 → hover:bg-muted
+text-slate-600 → text-muted-foreground
+bg-slate-700 → bg-muted
+hover:bg-slate-600 → hover:bg-muted
+```
+
+**Функциональные цвета сохранены:**
+- `text-teal-*`, `bg-teal-*`, `border-teal-*` - для выбранных шаблонов
+- `text-red-*`, `bg-red-*` - для delete confirmation
+
+**Замен:** ~28
+
+---
+
+### TaskCreateModal Component
+**Файл:** `modules/modals/components/task/TaskCreateModal.tsx`
+
+#### Основные замены (массовые через replace_all):
+```tsx
+// Систематические замены всех slate паттернов:
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+text-slate-200 → text-foreground
+bg-slate-800/50 → bg-muted
+border-slate-700 → border-border
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+focus:border-slate-600 → focus:border-border
+focus:ring-slate-600/50 → focus:ring-border/50
+hover:bg-slate-800 → hover:bg-muted
+hover:border-slate-600 → hover:border-border
+disabled:bg-slate-700 → disabled:bg-muted
+text-slate-600 → text-muted-foreground
+```
+
+**Функциональные цвета сохранены:**
+- `text-slate-900` - для текста на amber кнопке
+- `bg-amber-500`, `hover:bg-amber-400` - primary action button
+
+**Замен:** ~29
+
+---
+
+### Итого по Фазе 6.2
+
+**Файлов изменено:** 3
+**Модуль:** modals (templates, task)
+
+**Замен сделано:** ~75
+
+**Затронутые компоненты:**
+- TemplateSaveModal - сохранение шаблона декомпозиции
+- TemplateSelectModal - выбор и применение шаблона
+- TaskCreateModal - создание задачи в этапе
+
+**⚠️ ОТМЕНЕНО пользователем (откачены изменения):**
+- SectionCreateModal - создание раздела в объекте
+- StageCreateModal - создание этапа декомпозиции
+- ObjectCreateModal - создание объекта в проекте
+
+**Причина отмены:** Эти модалки используются на странице бюджетов, исправления будут применены после завершения работы над бюджетами.
+
+**Паттерны замен:**
+1. Единообразные замены через `replace_all=true` для эффективности
+2. Slate backgrounds → `bg-card`, `bg-muted`
+3. Slate text → `text-foreground`, `text-muted-foreground`
+4. Slate borders → `border-border`
+5. Focus/hover states → unified variables
+6. Placeholder colors → `placeholder:text-muted-foreground`
+
+---
+
+## 15. Auxiliary Modals (Фаза 6.3) - Вспомогательные модалки
+
+### CheckpointCreateModal Component
+**Файл:** `modules/modals/components/checkpoint/CheckpointCreateModal.tsx`
+
+#### Основные замены:
+```tsx
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+bg-slate-800/50 → bg-muted
+border-slate-700 → border-border
+hover:bg-slate-800 → hover:bg-muted
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+```
+
+**Замен:** ~37
+
+---
+
+### CheckpointEditModal Component
+**Файл:** `modules/modals/components/checkpoint/CheckpointEditModal.tsx`
+
+#### Основные замены:
+Аналогичные CheckpointCreateModal
+
+**Замен:** ~39
+
+---
+
+### LoadingModal Component
+**Файл:** `modules/modals/components/loading/LoadingModal.tsx`
+
+#### Основные замены:
+```tsx
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+text-slate-300 → text-foreground
+text-slate-400 → text-muted-foreground
+```
+
+**Замен:** ~11
+
+---
+
+### ProgressUpdateDialog Component
+**Файл:** `modules/modals/components/progress/ProgressUpdateDialog.tsx`
+
+#### Основные замены:
+```tsx
+// Dialog container:
+bg-white/95 dark:bg-slate-900/95 → bg-card/95
+border-slate-200 dark:border-slate-700/50 → border-border/50
+
+// Text colors:
+text-slate-700 dark:text-slate-300 → text-foreground
+text-slate-500 dark:text-slate-400 → text-muted-foreground
+text-slate-400 dark:text-slate-500 → text-muted-foreground
+text-slate-800 dark:text-slate-100 → text-foreground
+
+// Backgrounds:
+bg-slate-200 dark:bg-slate-700 → bg-muted
+bg-slate-100 dark:bg-slate-800 → bg-muted
+
+// Buttons:
+hover:bg-slate-100 dark:hover:bg-slate-800 → hover:bg-muted
+hover:bg-slate-200 dark:hover:bg-slate-700 → hover:bg-accent
+bg-white dark:bg-slate-800/50 → bg-card
+hover:bg-slate-50 dark:hover:bg-slate-800 → hover:bg-muted
+
+// Borders:
+border-slate-200 dark:border-slate-700 → border-border
+hover:border-slate-300 dark:hover:border-slate-600 → hover:border-border
+
+// Disabled states:
+disabled:bg-slate-300 dark:disabled:bg-slate-700 → disabled:bg-muted
+disabled:text-slate-500 → disabled:text-muted-foreground
+```
+
+**Функциональные цвета сохранены:**
+- `text-emerald-500`, `bg-emerald-500` - progress indicator (зелёный для готовности)
+
+**Замен:** ~18
+
+---
+
+### Итого по Фазе 6.3
+
+**Файлов изменено:** 4
+**Модуль:** modals (checkpoint, loading, progress)
+
+**Замен сделано:** ~105
+
+**Затронутые компоненты:**
+- CheckpointCreateModal - создание чекпоинта
+- CheckpointEditModal - редактирование чекпоинта
+- LoadingModal - модалка загрузки
+- ProgressUpdateDialog - диалог обновления готовности
+
+**⚠️ ОТЛОЖЕНО (страница бюджетов):**
+- BudgetCreateModal
+- DeleteObjectModal
+- DeleteSectionModal
+- ProjectQuickEditModal
+
+---
+
+## 16. Section Tabs (Фаза 6.4) - Вкладки модалки раздела
+
+### ReadinessTab Component
+**Файл:** `modules/modals/components/section/tabs/ReadinessTab.tsx`
+
+#### Основные замены:
+```tsx
+// Input/Label styling:
+text-slate-300 → text-foreground
+text-slate-400 → text-muted-foreground
+text-slate-500 → text-muted-foreground
+bg-slate-800/50 → bg-muted
+border-slate-700 → border-border
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+
+// Button styling:
+hover:bg-slate-700/50 → hover:bg-muted
+text-slate-500 → text-muted-foreground
+```
+
+**Замен:** ~28
+
+---
+
+### OverviewTab Component
+**Файл:** `modules/modals/components/section/tabs/OverviewTab.tsx`
+
+#### Основные замены:
+```tsx
+text-slate-300 → text-foreground
+text-slate-400 → text-muted-foreground
+bg-slate-800/50 → bg-muted
+border-slate-700 → border-border
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+```
+
+**Замен:** ~10
+
+---
+
+### Итого по Фазе 6.4
+
+**Файлов изменено:** 2
+**Модуль:** modals (section tabs)
+
+**Замен сделано:** ~38
+
+---
+
+## 17. Decomposition Components (Фаза 6.5) - Компоненты декомпозиции
+
+### StageHeader Component
+**Файл:** `modules/modals/components/section/decomposition/StageHeader.tsx`
+
+#### Основные замены:
+```tsx
+bg-slate-900/30 → bg-muted/30
+text-slate-300 → text-foreground
+text-slate-400 → text-muted-foreground
+text-slate-500 → text-muted-foreground
+border-slate-700 → border-border
+hover:bg-slate-800 → hover:bg-muted
+```
+
+**Замен:** ~21
+
+---
+
+### DecompositionRow Component
+**Файл:** `modules/modals/components/section/decomposition/DecompositionRow.tsx`
+
+#### Основные замены:
+```tsx
+bg-slate-800/30 → bg-muted/30
+text-slate-300 → text-foreground
+text-slate-400 → text-muted-foreground
+border-slate-700 → border-border
+hover:bg-slate-700 → hover:bg-muted
+```
+
+**Замен:** ~15
+
+---
+
+### DecompositionTable Component
+**Файл:** `modules/modals/components/section/decomposition/DecompositionTable.tsx`
+
+#### Основные замены:
+```tsx
+bg-slate-800/50 → bg-muted/50
+border-slate-700/60 → border-border/60
+text-slate-400 → text-muted-foreground
+hover:bg-slate-800 → hover:bg-muted
+```
+
+**Замен:** ~9
+
+---
+
+### StageCard Component
+**Файл:** `modules/modals/components/section/decomposition/StageCard.tsx`
+
+#### Основные замены:
+```tsx
+border-slate-800/60 → border-border/60
+bg-slate-900/40 → bg-muted/40
+```
+
+**Замен:** ~2
+
+---
+
+### StagesManager Component
+**Файл:** `modules/modals/components/section/decomposition/StagesManager.tsx`
+
+#### Основные замены:
+```tsx
+border-slate-800/50 → border-border/50
+bg-slate-900/30 → bg-muted/30
+text-slate-400 → text-muted-foreground
+```
+
+**Замен:** ~2
+
+---
+
+### utils.ts (Декомпозиция)
+**Файл:** `modules/modals/components/section/decomposition/utils.ts`
+
+**Статус:** ✅ Сохранены функциональные цвета
+
+Функция `getProgressBarColor` использует семантические цвета:
+- `bg-slate-700` - для "Не начато" (0% progress) → **сохранено как функциональный цвет**
+- `bg-emerald-500` - для завершённых задач
+- `bg-amber-500` - для задач в работе
+
+---
+
+### Итого по Фазе 6.5
+
+**Файлов изменено:** 5 (1 файл с функциональными цветами не изменён)
+**Модуль:** modals (decomposition)
+
+**Замен сделано:** ~49
+
+---
+
+## 18. Special Modals (Фаза 6.6) - Специальные модалки
+
+### ProjectReportModal Component
+**Файл:** `modules/modals/components/project-report/ProjectReportModal.tsx`
+
+#### Основные замены:
+```tsx
+// Modal container:
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+
+// Header:
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+hover:text-slate-300 hover:bg-slate-800 → hover:text-foreground hover:bg-muted
+
+// Metadata section:
+text-slate-500 → text-muted-foreground
+
+// Textarea:
+bg-slate-800/50 border-slate-700 → bg-muted/50 border-border
+text-slate-200 → text-foreground
+placeholder:text-slate-600 → placeholder:text-muted-foreground
+focus:border-slate-500/50 focus:ring-slate-500/30 → focus:border-border focus:ring-ring/30
+
+// Metrics cards:
+bg-slate-800/30 → bg-muted/30
+text-slate-400 → text-muted-foreground
+
+// Delete confirmation:
+text-slate-400 mb-3 → text-muted-foreground
+
+// Buttons (Cancel):
+text-slate-400 hover:text-slate-300 → text-muted-foreground hover:text-foreground
+border-slate-700 hover:border-slate-600 → border-border hover:border-border
+bg-slate-800/50 hover:bg-slate-800 → bg-muted/50 hover:bg-muted
+
+// Disabled save button:
+disabled:bg-slate-700 disabled:text-slate-500 → disabled:bg-muted disabled:text-muted-foreground
+```
+
+**Функциональные цвета сохранены:**
+- `text-blue-500`, `text-blue-400`, `bg-blue-500`, `border-blue-500/20` - фактическая готовность
+- `text-green-600`, `text-green-400`, `bg-green-500`, `border-green-500/20` - плановая готовность
+- `bg-green-600 hover:bg-green-500` - кнопка сохранения
+- `text-amber-400`, `bg-amber-500`, `border-amber-500/20` - расход бюджета
+- `text-red-400`, `bg-red-*`, `border-red-*` - delete confirmation
+
+**Замен:** ~33
+
+---
+
+### ResponsiblesDropdown Component
+**Файл:** `modules/modals/components/section/ResponsiblesDropdown.tsx`
+
+**Статус:** ✅ Уже использует CSS переменные (0 slate- цветов)
+
+---
+
+### Итого по Фазе 6.6
+
+**Файлов изменено:** 1 (второй файл уже исправлен)
+**Модуль:** modals (project-report)
+
+**Замен сделано:** ~33
+
+---
+
+## 19. Дополнительные исправления (Фаза 6.7)
+
+### DeleteSectionModal Component
+**Файл:** `modules/modals/components/section/DeleteSectionModal.tsx`
+
+#### Основные замены:
+```tsx
+// Modal container:
+bg-slate-900/95 → bg-card/95
+border-slate-700/50 → border-border/50
+
+// Header:
+text-slate-300 → text-foreground
+text-slate-500 → text-muted-foreground
+text-slate-400 → text-muted-foreground
+hover:text-slate-300 hover:bg-slate-800 → hover:text-foreground hover:bg-muted
+
+// Loading spinner:
+text-slate-400 → text-muted-foreground
+
+// Stats section:
+bg-slate-800/50 → bg-muted/50
+border-slate-700/50 → border-border/50
+text-slate-400 → text-muted-foreground
+text-slate-500 → text-muted-foreground
+text-slate-300 → text-foreground
+
+// Cancel button:
+text-slate-400 hover:text-slate-300 → text-muted-foreground hover:text-foreground
+border-slate-700 hover:border-slate-600 → border-border hover:border-border
+bg-slate-800/50 hover:bg-slate-800 → bg-muted/50 hover:bg-muted
+```
+
+**Функциональные цвета сохранены:**
+- `text-red-400`, `bg-red-500/*`, `border-red-500/*` - warning/delete UI
+
+**Замен:** ~35
+
+---
+
+### CommentEditor Component
+**Файл:** `modules/comments/components/CommentEditor.tsx`
+
+#### Основные замены:
+```tsx
+// Container border:
+dark:border-slate-600 → border-border
+
+// Bottom panel:
+bg-slate-50 dark:bg-slate-800 → bg-muted
+border-gray-200 dark:border-gray-700 → border-border
+
+// Hint text:
+text-slate-400 dark:text-slate-500 → text-muted-foreground
+```
+
+**Замен:** ~4
+
+---
+
+### StageModal Component
+**Файл:** `modules/modals/components/stage/StageModal.tsx`
+
+#### Основные замены:
+```tsx
+text-slate-100 → text-foreground
+```
+
+**Замен:** ~1
+
+---
+
+### LoadingModal Component
+**Файл:** `modules/modals/components/loading/LoadingModal.tsx`
+
+#### Основные замены:
+```tsx
+// Modal container:
+dark:bg-slate-900/95 → dark:bg-card/95
+dark:border-slate-700/50 → dark:border-border/50
+
+// Header:
+text-slate-700 dark:text-slate-300 → text-foreground
+text-slate-400 dark:text-slate-500 → text-muted-foreground
+hover:text-slate-600 dark:hover:text-slate-300 → hover:text-foreground
+hover:bg-slate-100 dark:hover:bg-slate-800 → hover:bg-muted
+
+// Labels:
+text-slate-500 dark:text-slate-400 → text-muted-foreground
+
+// User selection:
+text-slate-800 dark:text-slate-200 → text-foreground
+bg-slate-200 dark:bg-slate-700 → bg-muted
+bg-slate-100 dark:bg-slate-800/50 → bg-muted
+
+// Inputs:
+placeholder:text-slate-400 dark:placeholder:text-slate-600 → placeholder:text-muted-foreground
+focus:border-slate-400 dark:focus:border-slate-600 → focus:border-border
+
+// Rate presets:
+text-slate-500 dark:text-slate-400 → text-muted-foreground
+hover:text-slate-700 dark:hover:text-slate-300 → hover:text-foreground
+
+// Cancel buttons:
+hover:bg-slate-200 dark:hover:bg-slate-800 → hover:bg-muted
+
+// Save button:
+text-slate-900 → text-black
+disabled:bg-slate-700 disabled:text-slate-500 → disabled:bg-muted disabled:text-muted-foreground
+```
+
+**Функциональные цвета сохранены:**
+- `text-amber-*`, `bg-amber-*`, `border-amber-*` - accent/primary UI
+- `text-red-*`, `bg-red-*`, `border-red-*` - delete confirmation
+
+**Замен:** ~45
+
+---
+
+### ResponsiblesDropdown Component (Stage)
+**Файл:** `modules/modals/components/stage/ResponsiblesDropdown.tsx`
+
+#### Основные замены:
+```tsx
+// Trigger button:
+text-slate-400 hover:text-slate-200 → text-muted-foreground hover:text-foreground
+text-slate-600 → text-muted-foreground
+
+// Selected chips:
+bg-slate-800/60 → bg-muted/60
+bg-slate-700 → bg-muted
+text-slate-300 → text-foreground
+text-slate-500 hover:text-slate-300 → text-muted-foreground hover:text-foreground
+
+// Dropdown:
+bg-slate-800/95 → bg-card/95
+border-slate-700 → border-border
+
+// Search input:
+bg-slate-900/50 border-slate-600/50 → bg-muted border-border/50
+text-slate-200 placeholder:text-slate-500 → text-foreground placeholder:text-muted-foreground
+
+// Options:
+hover:bg-slate-700/50 → hover:bg-muted/50
+border-slate-600 → border-border
+text-slate-200 → text-foreground
+text-slate-500 → text-muted-foreground
+```
+
+**Замен:** ~17
+
+---
+
+### Итого по Фазе 6.7
+
+**Файлов изменено:** 5
+**Модули:** section, comments, stage, loading
+
+**Замен сделано:** ~102
+
+---
+
+## Общий итог всех фаз: ~648 замен в 80 файлах
 
 **По модулям:**
 - Base UI components: 5 файлов (критические)
-- Modal components: 3 файла
+- Modal components: 17 файлов
+- Comments: 1 файл
 - Feedback: 1 файл
 - Notions: 4 файла
 - Feedback Analytics: 5 файлов
 - Text Editor: 1 файл (TipTapEditor)
-- Остальные модули: ~38 файлов
+- Остальные модули: ~46 файлов
 
 **По типам изменений:**
-- Фоны блоков и карточек: ~50 замен
-- Цвета текста: ~60 замен
-- Borders: ~30 замен
-- Hover/Focus состояния: ~25 замен
+- Фоны блоков и карточек: ~75 замен
+- Цвета текста: ~100 замен
+- Borders: ~55 замен
+- Hover/Focus состояния: ~45 замен
+- Placeholder/Disabled: ~20 замен

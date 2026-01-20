@@ -119,8 +119,8 @@ export function TaskCreateModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-md',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -129,18 +129,18 @@ export function TaskCreateModal({
           onKeyDown={handleKeyDown}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2 min-w-0">
               <ListTodo className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-xs font-medium text-slate-300">Создать задачу</span>
-              <span className="text-[10px] text-slate-500">·</span>
-              <span className="text-[10px] text-slate-400 truncate" title={stageName}>
+              <span className="text-xs font-medium text-foreground">Создать задачу</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
+              <span className="text-[10px] text-muted-foreground truncate" title={stageName}>
                 {stageName}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -150,7 +150,7 @@ export function TaskCreateModal({
           <div className="px-4 py-3 space-y-3">
             {/* Task description */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Название задачи
               </label>
               <input
@@ -161,10 +161,10 @@ export function TaskCreateModal({
                 autoFocus
                 className={cn(
                   'w-full px-2.5 py-1.5 text-xs',
-                  'bg-slate-800/50 border border-slate-700',
-                  'rounded text-slate-200',
-                  'placeholder:text-slate-600',
-                  'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                  'bg-muted border border-border',
+                  'rounded text-foreground',
+                  'placeholder:text-muted-foreground',
+                  'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                   'transition-colors'
                 )}
                 disabled={isCreating}
@@ -175,7 +175,7 @@ export function TaskCreateModal({
             <div className="grid grid-cols-2 gap-3">
               {/* Hours */}
               <div>
-                <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                   Плановые часы
                 </label>
                 <div className="relative">
@@ -187,15 +187,15 @@ export function TaskCreateModal({
                     placeholder="0"
                     className={cn(
                       'w-full px-2.5 py-1.5 pr-6 text-xs',
-                      'bg-slate-800/50 border border-slate-700',
-                      'rounded text-slate-200 font-mono',
-                      'placeholder:text-slate-600',
-                      'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                      'bg-muted border border-border',
+                      'rounded text-foreground font-mono',
+                      'placeholder:text-muted-foreground',
+                      'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                       'transition-colors'
                     )}
                     disabled={isCreating}
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
                     ч
                   </span>
                 </div>
@@ -203,12 +203,12 @@ export function TaskCreateModal({
 
               {/* Work category */}
               <div>
-                <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                   Категория работ
                 </label>
                 {categoriesLoading ? (
                   <div className="flex items-center justify-center h-[30px]">
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <select
@@ -216,11 +216,11 @@ export function TaskCreateModal({
                     onChange={(e) => setSelectedCategoryId(e.target.value)}
                     className={cn(
                       'w-full px-2.5 py-1.5 text-xs',
-                      'bg-slate-800/50 border border-slate-700',
-                      'rounded text-slate-200',
-                      'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                      'bg-muted border border-border',
+                      'rounded text-foreground',
+                      'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                       'transition-colors',
-                      !selectedCategoryId && 'text-slate-600'
+                      !selectedCategoryId && 'text-muted-foreground'
                     )}
                     disabled={isCreating}
                   >
@@ -237,15 +237,15 @@ export function TaskCreateModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border/50">
             <button
               onClick={onClose}
               disabled={isCreating}
               className={cn(
                 'px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-slate-400 hover:text-slate-300',
-                'border border-slate-700 hover:border-slate-600',
-                'bg-slate-800/50 hover:bg-slate-800',
+                'text-muted-foreground hover:text-foreground',
+                'border border-border hover:border-border',
+                'bg-muted hover:bg-muted',
                 'transition-colors',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
@@ -259,7 +259,7 @@ export function TaskCreateModal({
                 'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
                 'text-slate-900 bg-amber-500 hover:bg-amber-400',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
               )}
             >
               {isCreating ? (

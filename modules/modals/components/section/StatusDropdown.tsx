@@ -119,7 +119,7 @@ export function StatusDropdown({
         <div
           role="listbox"
           aria-label="Выберите статус"
-          className="absolute top-full right-0 mt-2 z-20 w-48 bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+          className="absolute top-full right-0 mt-2 z-20 w-48 bg-card/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl overflow-hidden"
         >
           <div className="py-1">
             {/* No status option */}
@@ -129,12 +129,12 @@ export function StatusDropdown({
               aria-selected={!value}
               onClick={() => handleSelect(null)}
               className={cn(
-                'w-full px-3 py-2.5 text-left text-sm text-slate-400',
-                'hover:bg-slate-700/50 flex items-center gap-2.5 transition-colors',
+                'w-full px-3 py-2.5 text-left text-sm text-muted-foreground',
+                'hover:bg-muted flex items-center gap-2.5 transition-colors',
                 !value && 'bg-amber-500/10'
               )}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-600" />
+              <div className="w-2.5 h-2.5 rounded-full bg-muted" />
               Без статуса
             </button>
 
@@ -147,8 +147,8 @@ export function StatusDropdown({
                 aria-selected={value?.id === status.id}
                 onClick={() => handleSelect(status.id)}
                 className={cn(
-                  'w-full px-3 py-2.5 text-left text-sm text-slate-300',
-                  'hover:bg-slate-700/50 flex items-center gap-2.5 transition-colors',
+                  'w-full px-3 py-2.5 text-left text-sm text-foreground',
+                  'hover:bg-muted flex items-center gap-2.5 transition-colors',
                   value?.id === status.id && 'bg-amber-500/10'
                 )}
               >

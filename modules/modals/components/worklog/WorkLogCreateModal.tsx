@@ -275,8 +275,8 @@ export function WorkLogCreateModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-xl',
-            'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-200 dark:border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/20 dark:shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -285,15 +285,15 @@ export function WorkLogCreateModal({
           onKeyDown={onKey}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-green-500" />
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-xs font-medium text-foreground">
                 Добавить отчёт
               </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500">·</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
               <span
-                className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]"
+                className="text-[10px] text-muted-foreground truncate max-w-[200px]"
                 title={sectionName}
               >
                 Раздел: {sectionName}
@@ -301,7 +301,7 @@ export function WorkLogCreateModal({
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -311,23 +311,23 @@ export function WorkLogCreateModal({
           <div className="px-4 py-3">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400 dark:text-slate-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="space-y-3">
                 {/* Строка декомпозиции */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Строка декомпозиции
                   </label>
                   {defaultItemId ? (
-                    <div className="px-2.5 py-1.5 rounded text-xs bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      <span className="text-slate-400 dark:text-slate-500">
+                    <div className="px-2.5 py-1.5 rounded text-xs bg-muted text-foreground border border-border">
+                      <span className="text-muted-foreground">
                         {categoryById.get(
                           items.find((i) => i.id === selectedItemId)?.work_category_id || ''
                         ) || '—'}
                       </span>
-                      <span className="mx-2 text-slate-300 dark:text-slate-600">•</span>
+                      <span className="mx-2 text-muted-foreground">•</span>
                       <span>{items.find((i) => i.id === selectedItemId)?.description}</span>
                     </div>
                   ) : (
@@ -339,10 +339,10 @@ export function WorkLogCreateModal({
                         onChange={(e) => setSearch(e.target.value)}
                         className={cn(
                           'w-full px-2.5 py-1.5 text-xs',
-                          'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                          'rounded text-slate-700 dark:text-slate-200',
-                          'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                          'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                          'bg-muted/50 border border-border',
+                          'rounded text-foreground',
+                          'placeholder:text-muted-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                           'transition-colors'
                         )}
                       />
@@ -351,9 +351,9 @@ export function WorkLogCreateModal({
                         onChange={(e) => setSelectedItemId(e.target.value)}
                         className={cn(
                           'w-full px-2.5 py-1.5 text-xs',
-                          'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                          'rounded text-slate-700 dark:text-slate-200',
-                          'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                          'bg-muted/50 border border-border',
+                          'rounded text-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                           'transition-colors'
                         )}
                       >
@@ -372,7 +372,7 @@ export function WorkLogCreateModal({
                 {/* Выбор исполнителя (только для админов) */}
                 {isAdmin && (
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                       Исполнитель <span className="text-red-500">*</span>
                     </label>
                     {selectedUser ? (
@@ -380,10 +380,10 @@ export function WorkLogCreateModal({
                         type="button"
                         className={cn(
                           'w-full text-left flex items-center gap-2.5 px-2.5 py-1.5',
-                          'border border-slate-200 dark:border-slate-700 rounded',
-                          'bg-slate-50 dark:bg-slate-800/50',
+                          'border border-border rounded',
+                          'bg-muted/50',
                           canEditExecutor
-                            ? 'hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer'
+                            ? 'hover:bg-muted cursor-pointer'
                             : 'cursor-not-allowed opacity-60'
                         )}
                         onClick={(e) => {
@@ -399,37 +399,37 @@ export function WorkLogCreateModal({
                       >
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={selectedUser.avatar_url || undefined} />
-                          <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          <AvatarFallback className="text-[10px] bg-muted text-foreground">
                             {selectedUser.first_name?.[0]}
                             {selectedUser.last_name?.[0]}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                          <div className="text-xs font-medium text-foreground truncate">
                             {selectedUser.full_name}
                           </div>
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                          <div className="text-[10px] text-muted-foreground truncate">
                             {selectedUser.email}
                           </div>
                         </div>
                         {canEditExecutor && (
-                          <User className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                          <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                         )}
                       </button>
                     ) : (
                       <div className="space-y-1.5">
                         <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                           <input
                             placeholder="Найти пользователя..."
                             value={userSearch}
                             onChange={(e) => setUserSearch(e.target.value)}
                             className={cn(
                               'w-full pl-8 pr-2.5 py-1.5 text-xs',
-                              'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                              'rounded text-slate-700 dark:text-slate-200',
-                              'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                              'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                              'bg-muted/50 border border-border',
+                              'rounded text-foreground',
+                              'placeholder:text-muted-foreground',
+                              'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                               'transition-colors',
                               !canEditExecutor && 'cursor-not-allowed opacity-60'
                             )}
@@ -438,14 +438,14 @@ export function WorkLogCreateModal({
                           />
                         </div>
                         {filteredUsers.length > 0 && (
-                          <div className="max-h-28 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
+                          <div className="max-h-28 overflow-y-auto border border-border rounded bg-card">
                             {filteredUsers.slice(0, 5).map((user) => (
                               <div
                                 key={user.user_id}
                                 className={cn(
                                   'flex items-center gap-2.5 px-2.5 py-1.5',
                                   canEditExecutor
-                                    ? 'hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer'
+                                    ? 'hover:bg-muted cursor-pointer'
                                     : 'cursor-not-allowed opacity-60'
                                 )}
                                 onClick={() => {
@@ -456,16 +456,16 @@ export function WorkLogCreateModal({
                               >
                                 <Avatar className="h-6 w-6">
                                   <AvatarImage src={user.avatar_url || undefined} />
-                                  <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                  <AvatarFallback className="text-[10px] bg-muted text-foreground">
                                     {user.first_name?.[0]}
                                     {user.last_name?.[0]}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                                  <div className="text-xs font-medium text-foreground truncate">
                                     {user.full_name}
                                   </div>
-                                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                  <div className="text-[10px] text-muted-foreground truncate">
                                     {user.email}
                                   </div>
                                 </div>
@@ -489,7 +489,7 @@ export function WorkLogCreateModal({
                     <span className={cn(
                       'text-xs',
                       hasBudget
-                        ? 'text-green-700 dark:text-green-400'
+                        ? 'text-green-600'
                         : 'text-amber-700 dark:text-amber-400'
                     )}>
                       {hasBudget ? (
@@ -517,7 +517,7 @@ export function WorkLogCreateModal({
                 {/* Дата / Часы / Ставка - 3 колонки */}
                 <div className="grid grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                       Дата
                     </label>
                     <DatePicker
@@ -529,15 +529,15 @@ export function WorkLogCreateModal({
                       offsetY={-40}
                       inputClassName={cn(
                         'w-full px-2.5 py-1.5 text-xs',
-                        'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                        'rounded text-slate-700 dark:text-slate-200',
-                        'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                        'bg-muted/50 border border-border',
+                        'rounded text-foreground',
+                        'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                         canEditDate ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 pointer-events-none'
                       )}
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                       Часы
                     </label>
                     <input
@@ -549,17 +549,17 @@ export function WorkLogCreateModal({
                       placeholder="0"
                       className={cn(
                         'w-full px-2.5 py-1.5 text-xs text-center font-mono',
-                        'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                        'rounded text-slate-700 dark:text-slate-200',
-                        'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                        'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                        'bg-muted/50 border border-border',
+                        'rounded text-foreground',
+                        'placeholder:text-muted-foreground',
+                        'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                         'transition-colors',
                         '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
                       )}
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                       Ставка
                     </label>
                     <div className="relative">
@@ -572,10 +572,10 @@ export function WorkLogCreateModal({
                         placeholder="0"
                         className={cn(
                           'w-full px-2.5 py-1.5 pr-12 text-xs text-right font-mono',
-                          'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                          'rounded text-slate-700 dark:text-slate-200',
-                          'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                          'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                          'bg-muted/50 border border-border',
+                          'rounded text-foreground',
+                          'placeholder:text-muted-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                           'transition-colors',
                           '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
                           (!isAdmin || !canEditRate) && 'opacity-60'
@@ -590,7 +590,7 @@ export function WorkLogCreateModal({
                               : 'Недостаточно прав'
                         }
                       />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500">
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
                         BYN/ч
                       </span>
                     </div>
@@ -600,10 +600,10 @@ export function WorkLogCreateModal({
                 {/* Описание */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                       Описание
                     </label>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">обязательно</span>
+                    <span className="text-[10px] text-muted-foreground">обязательно</span>
                   </div>
                   <textarea
                     value={description}
@@ -613,10 +613,10 @@ export function WorkLogCreateModal({
                     required
                     className={cn(
                       'w-full px-2.5 py-1.5 text-xs',
-                      'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
-                      'rounded text-slate-700 dark:text-slate-200 resize-none',
-                      'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                      'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                      'bg-muted/50 border border-border',
+                      'rounded text-foreground resize-none',
+                      'placeholder:text-muted-foreground',
+                      'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
                       'transition-colors'
                     )}
                   />
@@ -626,15 +626,15 @@ export function WorkLogCreateModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-200 dark:border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border/50">
             <button
               onClick={onClose}
               disabled={saving}
               className={cn(
                 'px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
-                'border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                'bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800',
+                'text-muted-foreground hover:text-foreground',
+                'border border-border hover:border-border',
+                'bg-card hover:bg-muted',
                 'transition-colors',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
@@ -648,7 +648,7 @@ export function WorkLogCreateModal({
                 'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
                 'text-white bg-green-500 hover:bg-green-400',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500'
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
               )}
             >
               {saving ? (

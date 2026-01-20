@@ -101,7 +101,7 @@ function CheckpointRow({
     <div
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-lg',
-        'bg-slate-800/30 border border-slate-800/50',
+        'bg-muted/30 border border-border/50',
         'transition-all duration-200',
         isDisabled && 'opacity-60'
       )}
@@ -119,9 +119,9 @@ function CheckpointRow({
             disabled={isDisabled}
             className={cn(
               'w-full px-2 py-1 text-sm',
-              'bg-slate-700/50 border border-amber-500/50 rounded',
-              'text-slate-200',
-              'focus:outline-none focus:ring-2 focus:ring-amber-500/20'
+              'bg-muted border border-primary/50 rounded',
+              'text-foreground',
+              'focus:outline-none focus:ring-2 focus:ring-primary/20'
             )}
           />
         ) : (
@@ -129,12 +129,12 @@ function CheckpointRow({
             onClick={() => !isDisabled && setEditingDate(true)}
             disabled={isDisabled}
             className={cn(
-              'flex items-center gap-1.5 text-sm text-slate-300',
-              'hover:text-slate-100 transition-colors',
+              'flex items-center gap-1.5 text-sm text-foreground',
+              'hover:text-foreground transition-colors',
               'disabled:cursor-not-allowed'
             )}
           >
-            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
             {format(parseISO(checkpoint.date), 'd MMMM yyyy', { locale: ru })}
           </button>
         )}
@@ -156,12 +156,12 @@ function CheckpointRow({
               disabled={isDisabled}
               className={cn(
                 'w-16 px-2 py-1 text-sm text-right',
-                'bg-slate-700/50 border border-amber-500/50 rounded',
-                'text-slate-200',
-                'focus:outline-none focus:ring-2 focus:ring-amber-500/20'
+                'bg-muted border border-primary/50 rounded',
+                'text-foreground',
+                'focus:outline-none focus:ring-2 focus:ring-primary/20'
               )}
             />
-            <span className="text-sm text-slate-500">%</span>
+            <span className="text-sm text-muted-foreground">%</span>
           </div>
         ) : (
           <button
@@ -186,7 +186,7 @@ function CheckpointRow({
         disabled={isDisabled}
         className={cn(
           'p-1.5 rounded',
-          'text-slate-500 hover:text-red-400',
+          'text-muted-foreground hover:text-red-400',
           'hover:bg-red-500/10 transition-colors',
           'disabled:opacity-50 disabled:cursor-not-allowed'
         )}
@@ -252,7 +252,7 @@ function AddCheckpointForm({ onAdd, isAdding, existingDates }: AddCheckpointForm
         <div className="flex-1">
           <label
             htmlFor="checkpoint-date"
-            className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5"
+            className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5"
           >
             Дата
           </label>
@@ -267,9 +267,9 @@ function AddCheckpointForm({ onAdd, isAdding, existingDates }: AddCheckpointForm
             disabled={isAdding}
             className={cn(
               'w-full px-3 py-2 text-sm',
-              'bg-slate-800/50 border border-slate-700 rounded-lg',
-              'text-slate-200 placeholder:text-slate-500',
-              'focus:outline-none focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20',
+              'bg-muted border border-border rounded-lg',
+              'text-foreground placeholder:text-muted-foreground',
+              'focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20',
               'disabled:opacity-50'
             )}
           />
@@ -279,7 +279,7 @@ function AddCheckpointForm({ onAdd, isAdding, existingDates }: AddCheckpointForm
         <div className="w-24">
           <label
             htmlFor="checkpoint-value"
-            className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5"
+            className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5"
           >
             Готовность
           </label>
@@ -297,13 +297,13 @@ function AddCheckpointForm({ onAdd, isAdding, existingDates }: AddCheckpointForm
               disabled={isAdding}
               className={cn(
                 'w-full px-3 py-2 pr-8 text-sm text-right',
-                'bg-slate-800/50 border border-slate-700 rounded-lg',
-                'text-slate-200',
-                'focus:outline-none focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20',
+                'bg-muted border border-border rounded-lg',
+                'text-foreground',
+                'focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20',
                 'disabled:opacity-50'
               )}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
               %
             </span>
           </div>
@@ -405,7 +405,7 @@ export function ReadinessTab({ sectionId }: ReadinessTabProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -425,20 +425,20 @@ export function ReadinessTab({ sectionId }: ReadinessTabProps) {
     <div className="px-5 py-5 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Target className="w-4 h-4 text-slate-500" aria-hidden="true" />
-        <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+        <Target className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+        <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
           Контрольные точки плановой готовности
         </h3>
       </div>
 
       {/* Description */}
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-xs text-muted-foreground leading-relaxed">
         Задайте контрольные точки с плановым процентом готовности раздела на указанные даты.
         Эти точки используются для построения графика плановой готовности.
       </p>
 
       {/* Add form */}
-      <div className="p-4 rounded-xl bg-slate-800/20 border border-slate-800/40">
+      <div className="p-4 rounded-xl bg-muted/20 border border-border/40">
         <AddCheckpointForm
           onAdd={handleAdd}
           isAdding={createMutation.isPending}
@@ -449,7 +449,7 @@ export function ReadinessTab({ sectionId }: ReadinessTabProps) {
       {/* Checkpoints list */}
       <div className="space-y-2">
         {sortedCheckpoints.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-8 text-sm text-muted-foreground">
             <Percent className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p>Контрольные точки не заданы</p>
             <p className="text-xs mt-1">
@@ -472,15 +472,15 @@ export function ReadinessTab({ sectionId }: ReadinessTabProps) {
 
       {/* Summary */}
       {sortedCheckpoints.length > 0 && (
-        <div className="pt-3 border-t border-slate-800/50">
+        <div className="pt-3 border-t border-border/50">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Всего контрольных точек:</span>
-            <span className="font-medium text-slate-300">{sortedCheckpoints.length}</span>
+            <span className="text-muted-foreground">Всего контрольных точек:</span>
+            <span className="font-medium text-foreground">{sortedCheckpoints.length}</span>
           </div>
           {sortedCheckpoints.length >= 2 && (
             <div className="flex items-center justify-between text-xs mt-1">
-              <span className="text-slate-500">Период:</span>
-              <span className="font-medium text-slate-300">
+              <span className="text-muted-foreground">Период:</span>
+              <span className="font-medium text-foreground">
                 {format(parseISO(sortedCheckpoints[0].date), 'd MMM', { locale: ru })} -{' '}
                 {format(parseISO(sortedCheckpoints[sortedCheckpoints.length - 1].date), 'd MMM yyyy', { locale: ru })}
               </span>
