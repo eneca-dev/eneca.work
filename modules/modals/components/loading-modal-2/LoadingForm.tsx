@@ -15,6 +15,7 @@
 import { AlertCircle, ChevronRight } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { differenceInBusinessDays } from 'date-fns'
 import { EmployeeSelector } from './EmployeeSelector'
 import { RateInput } from './RateInput'
 import { DateRangePicker } from './DateRangePicker'
@@ -102,17 +103,55 @@ export function LoadingForm({
         {/* Даты */}
         <div>
           <label className="block text-sm font-medium mb-2">Период загрузки</label>
-          <DateRangePicker
-            startDate={formData.startDate}
-            endDate={formData.endDate}
-            onChange={(start, end) => {
-              onFieldChange('startDate', start)
-              onFieldChange('endDate', end)
-            }}
-            error={errors.startDate || errors.endDate}
-            disabled={disabled}
-            rate={formData.rate}
-          />
+          <div className="space-y-2">
+            <DateRangePicker
+              value={{
+                from: formData.startDate ? new Date(formData.startDate) : null,
+                to: formData.endDate ? new Date(formData.endDate) : null,
+              }}
+              onChange={(range) => {
+                // Форматируем даты в локальный формат YYYY-MM-DD без учёта часового пояса
+                const formatDate = (date: Date | null) => {
+                  if (!date) return ''
+                  const year = date.getFullYear()
+                  const month = String(date.getMonth() + 1).padStart(2, '0')
+                  const day = String(date.getDate()).padStart(2, '0')
+                  return `${year}-${month}-${day}`
+                }
+
+                const start = formatDate(range?.from ?? null)
+                const end = formatDate(range?.to ?? null)
+                onFieldChange('startDate', start)
+                onFieldChange('endDate', end)
+              }}
+              placeholder="дд.мм.гггг - дд.мм.гггг"
+              hideSingleDateActions={true}
+            />
+
+            {/* Информация о периоде */}
+            {(() => {
+              const start = formData.startDate ? new Date(formData.startDate) : undefined
+              const end = formData.endDate ? new Date(formData.endDate) : undefined
+              const businessDays =
+                start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())
+                  ? differenceInBusinessDays(end, start) + 1
+                  : 0
+              const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
+
+              return businessDays > 0 ? (
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Количество рабочих дней: {businessDays}</p>
+                  <p>
+                    Количество рабочих часов с учётом ставки: {totalHours} ч
+                  </p>
+                </div>
+              ) : null
+            })()}
+
+            {(errors.startDate || errors.endDate) && (
+              <p className="text-sm text-red-500">{errors.startDate || errors.endDate}</p>
+            )}
+          </div>
         </div>
 
         {/* Комментарий */}

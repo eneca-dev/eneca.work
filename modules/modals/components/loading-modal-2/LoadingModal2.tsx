@@ -127,7 +127,16 @@ export function LoadingModal2({
   }
 
   const isSaving = createLoading.isPending || updateLoading.isPending
-  const canSave = selectedSectionId && !isSaving
+  const canSave =
+    !!selectedSectionId &&
+    !!selectedBreadcrumbs &&
+    selectedBreadcrumbs.length > 0 &&
+    !!formData.employeeId.trim() &&
+    formData.rate >= 0.01 &&
+    formData.rate <= 2.0 &&
+    !!formData.startDate.trim() &&
+    !!formData.endDate.trim() &&
+    !isSaving
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
