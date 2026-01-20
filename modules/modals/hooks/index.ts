@@ -120,6 +120,12 @@ export {
   type DecompositionStage,
 } from './useDecompositionStages'
 
+export {
+  useBreadcrumbs,
+  type UseBreadcrumbsOptions,
+  type UseBreadcrumbsResult,
+} from './useBreadcrumbs'
+
 // ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================

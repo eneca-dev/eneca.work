@@ -11,15 +11,18 @@
  */
 
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useProjectsList, useProjectTree } from '../../hooks'
 import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
 import type { ProjectListItem } from '../../hooks'
+import { createDecompositionStage } from '../../actions/projects-tree'
+import { useToast } from '@/hooks/use-toast'
 
 /**
  * Breadcrumb item для отображения пути
@@ -37,17 +40,46 @@ interface ProjectItemProps {
   project: ProjectListItem
   selectedSectionId: string | null
   onSectionSelect: (sectionId: string, sectionName?: string, breadcrumbs?: BreadcrumbItem[]) => void
+  /** Нужно ли автоматически развернуть этот проект */
+  shouldAutoExpand?: boolean
+  /** Breadcrumbs для автоматического разворачивания пути */
+  autoExpandBreadcrumbs?: BreadcrumbItem[] | null
 }
 
-function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectItemProps) {
+function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs }: ProjectItemProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
-  const [isProjectExpanded, setIsProjectExpanded] = useState(false)
+  const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
+  const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
+  const { toast } = useToast()
 
   // Загружаем дерево только когда проект раскрыт
-  const { data: tree = [], isLoading } = useProjectTree({
+  const { data: tree = [], isLoading, refetch: refetchTree } = useProjectTree({
     projectId: project.id,
     enabled: isProjectExpanded,
   })
+
+  // Автоматическое разворачивание пути по breadcrumbs
+  useEffect(() => {
+    if (
+      shouldAutoExpand &&
+      !hasAutoExpanded &&
+      autoExpandBreadcrumbs &&
+      autoExpandBreadcrumbs.length > 0 &&
+      tree.length > 0 &&
+      !isLoading
+    ) {
+      // Извлекаем ID всех узлов из breadcrumbs (кроме проекта)
+      const nodeIdsToExpand = autoExpandBreadcrumbs
+        .filter(b => b.type !== 'project')
+        .map(b => b.id)
+
+      if (nodeIdsToExpand.length > 0) {
+        setExpandedNodes(new Set(nodeIdsToExpand))
+        setHasAutoExpanded(true)
+      }
+    }
+  }, [shouldAutoExpand, hasAutoExpanded, autoExpandBreadcrumbs, tree, isLoading])
 
   // Функция для сбора всех ID узлов рекурсивно
   const collectAllNodeIds = (nodes: ProjectTreeNodeWithChildren[]): string[] => {
@@ -109,6 +141,64 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
 
       return next
     })
+  }
+
+  // Создание базового этапа для раздела
+  const handleCreateBaseStage = async (section: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем выбор раздела
+
+    if (!section.sectionId) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось определить ID раздела',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setCreatingStageForSection(section.id)
+
+    try {
+      const stageName = `Этап ${section.name}`
+      const result = await createDecompositionStage({
+        sectionId: section.sectionId,
+        name: stageName,
+      })
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      toast({
+        title: 'Этап создан',
+        description: `Создан этап "${stageName}"`,
+      })
+
+      // Обновляем дерево проекта
+      await refetchTree()
+
+      // Автоматически выбираем созданный этап
+      if (result.data) {
+        // Строим breadcrumbs для нового этапа
+        const breadcrumbs = buildBreadcrumbs(section)
+        breadcrumbs.push({
+          id: result.data.id,
+          name: stageName,
+          type: 'decomposition_stage',
+        })
+
+        onSectionSelect(result.data.id, stageName, breadcrumbs)
+      }
+    } catch (error) {
+      console.error('Ошибка создания базового этапа:', error)
+      toast({
+        title: 'Ошибка',
+        description: error instanceof Error ? error.message : 'Не удалось создать этап',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingStageForSection(null)
+    }
   }
 
   // Функция для сбора пути от корня до узла
@@ -178,6 +268,10 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
     const hasChildren = node.children && node.children.length > 0
     const isClickable = node.type === 'section' || node.type === 'decomposition_stage'
     const isSelected = isClickable && node.id === selectedSectionId
+    const isCreatingStage = creatingStageForSection === node.id
+
+    // Проверяем, является ли узел разделом без этапов
+    const isSectionWithoutStages = node.type === 'section' && !hasChildren
 
     const Icon =
       node.type === 'object'
@@ -197,6 +291,9 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
           onClick={() => {
             if (hasChildren) {
               handleNodeClick(node)
+            } else if (isSectionWithoutStages) {
+              // Для раздела без этапов - переключаем раскрытие для показа кнопки
+              toggleNode(node)
             }
             if (isClickable) {
               handleSectionClick(node)
@@ -212,7 +309,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
           )}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
-          {hasChildren ? (
+          {hasChildren || isSectionWithoutStages ? (
             <span className="shrink-0">
               {isNodeExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -226,6 +323,32 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
           <Icon className={cn('h-3.5 w-3.5 shrink-0', nodeColor)} />
           <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
         </button>
+
+        {/* Кнопка создания базового этапа для разделов без этапов */}
+        {isSectionWithoutStages && isNodeExpanded && (
+          <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }} className="py-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={(e) => handleCreateBaseStage(node, e)}
+              disabled={isCreatingStage}
+              className="h-6 text-xs gap-1.5 text-muted-foreground hover:text-foreground w-full justify-start"
+            >
+              {isCreatingStage ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Создание...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3" />
+                  <span>Создать базовый этап</span>
+                </>
+              )}
+            </Button>
+          </div>
+        )}
 
         {/* Рекурсивно рендерим детей */}
         {isNodeExpanded && hasChildren && (
@@ -339,6 +462,12 @@ export interface ProjectTreeProps {
   onSectionSelect: (sectionId: string, sectionName?: string, breadcrumbs?: BreadcrumbItem[]) => void
   /** ID пользователя для фильтра "Мои проекты" */
   userId: string
+  /** ID проекта для автоматического разворачивания (режим редактирования) */
+  initialProjectId?: string | null
+  /** Breadcrumbs для автоматического разворачивания пути (режим редактирования) */
+  initialBreadcrumbs?: BreadcrumbItem[] | null
+  /** Данные для автопереключения на "Все проекты" и фильтрации */
+  autoSwitchProject?: { projectId: string; projectName: string } | null
   /** Класс для кастомизации */
   className?: string
 }
@@ -349,11 +478,15 @@ export function ProjectTree({
   selectedSectionId,
   onSectionSelect,
   userId,
+  initialProjectId,
+  initialBreadcrumbs,
+  autoSwitchProject,
   className,
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [hasAutoSwitched, setHasAutoSwitched] = useState(false)
 
   // Загрузка списка проектов
   const { data: projects = [], isLoading: isLoadingProjects, refetch: refetchProjects } = useProjectsList({
@@ -375,6 +508,37 @@ export function ProjectTree({
     projectsCount: projects.length,
     isLoadingProjects,
   })
+
+  // Автопереключение на "Все проекты" и установка фильтра, если проект не найден в "Мои проекты"
+  useEffect(() => {
+    if (
+      !hasAutoSwitched &&
+      !isLoadingProjects &&
+      autoSwitchProject &&
+      mode === 'my'
+    ) {
+      // Проверяем, есть ли проект в текущем списке
+      const projectExists = projects.some(p => p.id === autoSwitchProject.projectId)
+
+      if (!projectExists) {
+        console.log('🔄 Проект не найден в "Мои проекты", переключаемся на "Все проекты"', {
+          projectId: autoSwitchProject.projectId,
+          projectName: autoSwitchProject.projectName,
+        })
+
+        // Переключаемся на "Все проекты"
+        onModeChange('all')
+
+        // Устанавливаем фильтр поиска
+        setSearch(autoSwitchProject.projectName)
+
+        setHasAutoSwitched(true)
+      } else {
+        // Проект найден в "Мои проекты", просто помечаем что проверка выполнена
+        setHasAutoSwitched(true)
+      }
+    }
+  }, [hasAutoSwitched, isLoadingProjects, autoSwitchProject, mode, projects, onModeChange])
 
   // Фильтрация проектов по поиску
   const filteredProjects = useMemo(() => {
@@ -464,6 +628,8 @@ export function ProjectTree({
                 project={project}
                 selectedSectionId={selectedSectionId}
                 onSectionSelect={onSectionSelect}
+                shouldAutoExpand={initialProjectId === project.id}
+                autoExpandBreadcrumbs={initialProjectId === project.id ? initialBreadcrumbs : null}
               />
             ))}
         </div>

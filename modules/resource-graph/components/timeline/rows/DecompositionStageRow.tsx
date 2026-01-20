@@ -283,7 +283,7 @@ export function DecompositionStageRow({
             onClick={(e) => {
               e.stopPropagation()
               openLoadingModal2Create({
-                sectionId,
+                sectionId: stage.id, // ID этапа декомпозиции
               })
             }}
           >

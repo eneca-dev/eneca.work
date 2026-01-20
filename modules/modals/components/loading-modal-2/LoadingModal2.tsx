@@ -12,7 +12,7 @@
  * - EDIT: редактирование существующей загрузки
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Loader2, Folder, Box, CircleDashed, ListChecks, ChevronRight } from 'lucide-react'
 import {
   Dialog,
@@ -22,7 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useLoadingModal, useLoadingMutations } from '../../hooks'
+import { useLoadingModal, useLoadingMutations, useBreadcrumbs } from '../../hooks'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
 import type { LoadingModal2CreateData, LoadingModal2EditData } from '../../types'
@@ -86,7 +86,22 @@ export function LoadingModal2({
   } = useLoadingModal({
     mode,
     initialSectionId: mode === 'create' ? createData?.sectionId : editData?.sectionId,
+    initialEmployeeId: mode === 'create' ? createData?.employeeId : undefined,
     initialLoading: mode === 'edit' ? editData?.loading : undefined,
+  })
+
+  // Загрузка breadcrumbs для режима редактирования или создания с sectionId
+  const shouldLoadBreadcrumbs =
+    (mode === 'edit' && editData?.loading) ||
+    (mode === 'create' && createData?.sectionId)
+
+  const breadcrumbsNodeId = mode === 'edit' && editData?.loading
+    ? editData.loading.section_id
+    : createData?.sectionId ?? null
+
+  const { breadcrumbs: loadedBreadcrumbs, projectId: loadedProjectId } = useBreadcrumbs({
+    nodeId: breadcrumbsNodeId,
+    enabled: !!(shouldLoadBreadcrumbs && open),
   })
 
   // Хук для мутаций
@@ -102,20 +117,65 @@ export function LoadingModal2({
   // Состояние для отображения формы (только для режима создания)
   const [isFormVisible, setIsFormVisible] = useState(mode === 'edit')
 
+  // Состояние для отслеживания, был ли уже выполнен автовыбор в режиме редактирования
+  const [hasAutoSelected, setHasAutoSelected] = useState(false)
+
   // Сброс формы при открытии/закрытии
   useEffect(() => {
     if (!open) {
       resetForm()
       setIsFormVisible(mode === 'edit')
+      setHasAutoSelected(false)
     }
   }, [open, resetForm, mode])
 
-  // Сброс состояния формы при изменении выбранного раздела (только в режиме создания)
+  // Автоматический выбор раздела и установка breadcrumbs в режиме редактирования или создания с sectionId
   useEffect(() => {
-    if (mode === 'create') {
+    if (
+      open &&
+      !hasAutoSelected &&
+      loadedBreadcrumbs &&
+      loadedBreadcrumbs.length > 0
+    ) {
+      if (mode === 'edit' && editData?.loading) {
+        // Режим редактирования
+        const sectionId = editData.loading.section_id
+        const lastBreadcrumb = loadedBreadcrumbs[loadedBreadcrumbs.length - 1]
+        selectSection(sectionId, lastBreadcrumb.name, loadedBreadcrumbs)
+        setHasAutoSelected(true)
+      } else if (mode === 'create' && createData?.sectionId) {
+        // Режим создания с предзаполненным sectionId
+        const sectionId = createData.sectionId
+        const lastBreadcrumb = loadedBreadcrumbs[loadedBreadcrumbs.length - 1]
+        selectSection(sectionId, lastBreadcrumb.name, loadedBreadcrumbs)
+        setHasAutoSelected(true)
+        // В режиме создания сразу показываем форму
+        setIsFormVisible(true)
+      }
+    }
+  }, [mode, open, hasAutoSelected, loadedBreadcrumbs, editData, createData, selectSection])
+
+  // Сброс состояния формы при изменении выбранного раздела (только в режиме создания без предзаполнения)
+  useEffect(() => {
+    if (mode === 'create' && !createData?.sectionId) {
       setIsFormVisible(false)
     }
-  }, [selectedSectionId, mode])
+  }, [selectedSectionId, mode, createData?.sectionId])
+
+  // Данные для автопереключения режима и фильтрации
+  const projectAutoSwitchData = useMemo(() => {
+    if (!loadedProjectId || !loadedBreadcrumbs || loadedBreadcrumbs.length === 0) {
+      return null
+    }
+
+    // Находим имя проекта из breadcrumbs
+    const projectBreadcrumb = loadedBreadcrumbs.find(b => b.type === 'project')
+
+    return {
+      projectId: loadedProjectId,
+      projectName: projectBreadcrumb?.name ?? '',
+    }
+  }, [loadedProjectId, loadedBreadcrumbs])
 
   // Обработчик сохранения
   const handleSave = async () => {
@@ -185,6 +245,9 @@ export function LoadingModal2({
               selectedSectionId={selectedSectionId}
               onSectionSelect={selectSection}
               userId={userId}
+              initialProjectId={loadedProjectId}
+              initialBreadcrumbs={loadedBreadcrumbs}
+              autoSwitchProject={projectAutoSwitchData}
             />
           </div>
 

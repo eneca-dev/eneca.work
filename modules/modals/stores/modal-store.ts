@@ -160,7 +160,7 @@ export const openCheckpointEdit = (checkpointId: string) =>
  * Открыть модалку создания загрузки (Loading Modal 2)
  */
 export const openLoadingModal2Create = (data?: {
-  stageId?: string
+  sectionId?: string // ID раздела или этапа декомпозиции
   employeeId?: string
   projectId?: string
 }) => useModalStore.getState().openModal('loading2-create', data)

@@ -52,6 +52,8 @@ export interface UseLoadingModalOptions {
   mode: 'create' | 'edit'
   /** Начальный ID раздела */
   initialSectionId?: string
+  /** Начальный ID сотрудника (для режима создания) */
+  initialEmployeeId?: string
   /** Данные загрузки для редактирования */
   initialLoading?: Loading
 }
@@ -79,16 +81,40 @@ export interface UseLoadingModalResult {
   resetForm: () => void
 }
 
-const EMPTY_FORM: LoadingFormData = {
-  employeeId: '',
-  startDate: '',
-  endDate: '',
-  rate: 1.0,
-  comment: '',
+/**
+ * Функция для получения даты в формате YYYY-MM-DD
+ */
+function formatDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * Функция для получения даты через N дней от сегодня
+ */
+function getDateInDays(daysFromNow: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + daysFromNow)
+  return formatDate(date)
+}
+
+/**
+ * Получение дефолтной формы с предзаполненными датами
+ */
+function getDefaultFormData(): LoadingFormData {
+  return {
+    employeeId: '',
+    startDate: getDateInDays(0), // Сегодня
+    endDate: getDateInDays(7), // Через неделю
+    rate: 1.0,
+    comment: '',
+  }
 }
 
 export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModalResult {
-  const { mode, initialSectionId, initialLoading } = options
+  const { mode, initialSectionId, initialEmployeeId, initialLoading } = options
 
   // Состояние навигации
   const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
@@ -98,7 +124,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   const [selectedSectionName, setSelectedSectionName] = useState<string | null>(null)
   const [selectedBreadcrumbs, setSelectedBreadcrumbs] = useState<BreadcrumbItem[] | null>(null)
 
-  // Состояние формы - предзаполняем из initialLoading если режим edit
+  // Состояние формы - предзаполняем из initialLoading если режим edit, иначе дефолтные значения
   const [formData, setFormData] = useState<LoadingFormData>(() => {
     if (mode === 'edit' && initialLoading) {
       return {
@@ -109,7 +135,12 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
         comment: initialLoading.comment ?? '',
       }
     }
-    return EMPTY_FORM
+    // Режим создания - предзаполняем даты, ставку и employeeId если есть
+    const defaultForm = getDefaultFormData()
+    if (initialEmployeeId) {
+      defaultForm.employeeId = initialEmployeeId
+    }
+    return defaultForm
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof LoadingFormData, string>>>({})
@@ -172,7 +203,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
 
   // Сброс формы
   const resetForm = useCallback(() => {
-    setFormData(EMPTY_FORM)
+    setFormData(getDefaultFormData())
     setErrors({})
     setSelectedSectionId(null)
     setSelectedSectionName(null)

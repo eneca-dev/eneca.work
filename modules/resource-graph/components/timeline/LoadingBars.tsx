@@ -15,7 +15,8 @@ import type { Loading, TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { getEmployeeColor, getInitials } from '../../utils'
 import { useTimelineResize } from '../../hooks'
-import { LoadingModal } from '@/modules/modals'
+import { LoadingModal2 } from '@/modules/modals'
+import { useAuth } from '@/modules/auth'
 
 // Константы для расчёта высоты
 const CHIP_HEIGHT = 18
@@ -128,6 +129,8 @@ function LoadingChip({
   sectionId,
   onResize,
 }: LoadingChipProps) {
+  // Get current user
+  const { user } = useAuth()
   // State for modal
   const [isModalOpen, setIsModalOpen] = useState(false)
   // State for dragging
@@ -414,14 +417,26 @@ function LoadingChip({
         {tooltipContent}
       </Tooltip>
 
-      {/* Модалка редактирования (только если sectionId) */}
-      {sectionId && (
-        <LoadingModal
+      {/* Модалка редактирования (только если sectionId, user и employee) */}
+      {sectionId && user && loading.employee.id && (
+        <LoadingModal2
           mode="edit"
-          isOpen={isModalOpen}
+          open={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          loading={loading}
-          sectionId={sectionId}
+          editData={{
+            loadingId: loading.id,
+            sectionId: sectionId,
+            loading: {
+              id: loading.id,
+              employee_id: loading.employee.id,
+              start_date: loading.startDate,
+              end_date: loading.finishDate,
+              rate: loading.rate,
+              comment: loading.comment || null,
+              section_id: loading.stageId, // stageId = section_id в контексте загрузки
+            },
+          }}
+          userId={user.id}
         />
       )}
     </>

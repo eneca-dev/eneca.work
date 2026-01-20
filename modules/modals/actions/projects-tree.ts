@@ -307,6 +307,145 @@ export async function fetchProjectTree(
 }
 
 /**
+ * Получение breadcrumbs для section_id или decomposition_stage_id
+ * Возвращает путь от проекта до указанного узла
+ */
+export interface FetchBreadcrumbsInput {
+  /** ID раздела или этапа декомпозиции */
+  nodeId: string
+}
+
+export interface BreadcrumbItem {
+  id: string
+  name: string
+  type: 'project' | 'object' | 'section' | 'decomposition_stage'
+}
+
+export interface FetchBreadcrumbsResult {
+  /** Breadcrumbs от проекта до узла */
+  breadcrumbs: BreadcrumbItem[]
+  /** ID проекта для раскрытия дерева */
+  projectId: string
+}
+
+export async function fetchBreadcrumbs(
+  input: FetchBreadcrumbsInput
+): Promise<ActionResult<FetchBreadcrumbsResult>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация
+    if (!input.nodeId?.trim()) {
+      return { success: false, error: 'ID узла обязателен' }
+    }
+
+    // Ищем узел в view_project_tree_optimized
+    const { data, error } = await supabase
+      .from('view_project_tree_optimized')
+      .select('*')
+      .eq('node_id', input.nodeId)
+      .single()
+
+    if (error || !data) {
+      console.error('[fetchBreadcrumbs] Node not found:', error)
+      return {
+        success: false,
+        error: 'Узел не найден в дереве проектов',
+      }
+    }
+
+    // Строим breadcrumbs на основе типа узла и связей
+    const breadcrumbs: BreadcrumbItem[] = []
+    const projectId = data.project_id
+
+    if (!projectId) {
+      return {
+        success: false,
+        error: 'Не удалось определить проект',
+      }
+    }
+
+    // Добавляем проект
+    const { data: projectData } = await supabase
+      .from('view_project_tree_optimized')
+      .select('*')
+      .eq('node_id', projectId)
+      .eq('node_type', 'project')
+      .single()
+
+    if (projectData && projectData.node_id && projectData.node_name) {
+      breadcrumbs.push({
+        id: projectData.node_id,
+        name: projectData.node_name,
+        type: 'project',
+      })
+    }
+
+    // Добавляем объект (если есть)
+    if (data.object_id && data.node_type !== 'object') {
+      const { data: objectData } = await supabase
+        .from('view_project_tree_optimized')
+        .select('*')
+        .eq('node_id', data.object_id)
+        .eq('node_type', 'object')
+        .single()
+
+      if (objectData && objectData.node_id && objectData.node_name) {
+        breadcrumbs.push({
+          id: objectData.node_id,
+          name: objectData.node_name,
+          type: 'object',
+        })
+      }
+    }
+
+    // Добавляем раздел (если есть)
+    if (data.section_id && data.node_type !== 'section') {
+      const { data: sectionData } = await supabase
+        .from('view_project_tree_optimized')
+        .select('*')
+        .eq('node_id', data.section_id)
+        .eq('node_type', 'section')
+        .single()
+
+      if (sectionData && sectionData.node_id && sectionData.node_name) {
+        breadcrumbs.push({
+          id: sectionData.node_id,
+          name: sectionData.node_name,
+          type: 'section',
+        })
+      }
+    }
+
+    // Добавляем сам узел
+    if (data.node_id && data.node_name) {
+      breadcrumbs.push({
+        id: data.node_id,
+        name: data.node_name,
+        type: data.node_type as 'project' | 'object' | 'section' | 'decomposition_stage',
+      })
+    }
+
+    return {
+      success: true,
+      data: {
+        breadcrumbs,
+        projectId,
+      },
+    }
+  } catch (error) {
+    console.error('[fetchBreadcrumbs] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при загрузке breadcrumbs',
+    }
+  }
+}
+
+/**
  * Создание нового этапа декомпозиции
  */
 export async function createDecompositionStage(

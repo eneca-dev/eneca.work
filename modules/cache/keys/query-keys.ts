@@ -107,6 +107,8 @@ export const queryKeys = {
     /** Список проектов для loading-modal-2 (с фильтрацией my/all) */
     listForModal: (mode: 'my' | 'all', userId?: string) =>
       [...queryKeys.projects.lists(), 'modal', mode, userId] as const,
+    /** Breadcrumbs для узла дерева проекта (section или decomposition_stage) */
+    breadcrumbs: (nodeId: string) => [...queryKeys.projects.all, 'breadcrumbs', nodeId] as const,
   },
 
   // -------------------------------------------------------------------------
