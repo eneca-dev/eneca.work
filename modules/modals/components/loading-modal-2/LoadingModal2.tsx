@@ -12,8 +12,8 @@
  * - EDIT: редактирование существующей загрузки
  */
 
-import { useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Loader2, Folder, Box, CircleDashed, ListChecks, ChevronRight } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,22 @@ export function LoadingModal2({
   editData,
   userId,
 }: LoadingModal2Props) {
+  // Функция получения иконки по типу элемента
+  const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
+    switch (type) {
+      case 'project':
+        return Folder
+      case 'object':
+        return Box
+      case 'section':
+        return CircleDashed
+      case 'decomposition_stage':
+        return ListChecks
+      default:
+        return Folder
+    }
+  }
+
   // Хук для управления состоянием модалки
   const {
     // Состояние навигации
@@ -83,12 +99,23 @@ export function LoadingModal2({
     },
   })
 
+  // Состояние для отображения формы (только для режима создания)
+  const [isFormVisible, setIsFormVisible] = useState(mode === 'edit')
+
   // Сброс формы при открытии/закрытии
   useEffect(() => {
     if (!open) {
       resetForm()
+      setIsFormVisible(mode === 'edit')
     }
-  }, [open, resetForm])
+  }, [open, resetForm, mode])
+
+  // Сброс состояния формы при изменении выбранного раздела (только в режиме создания)
+  useEffect(() => {
+    if (mode === 'create') {
+      setIsFormVisible(false)
+    }
+  }, [selectedSectionId, mode])
 
   // Обработчик сохранения
   const handleSave = async () => {
@@ -162,14 +189,75 @@ export function LoadingModal2({
           </div>
 
           {/* Правая панель: Форма */}
-          <div className="w-1/2">
-            <LoadingForm
-              formData={formData}
-              onFieldChange={setFormField}
-              errors={errors}
-              disabled={isSaving}
-              selectedBreadcrumbs={selectedBreadcrumbs}
-            />
+          <div className="w-1/2 relative">
+            {mode === 'create' && !isFormVisible ? (
+              /* Состояние до открытия формы */
+              <div className="h-full flex items-center justify-center relative">
+                {/* Блюр формы на фоне */}
+                <div className="absolute inset-0 blur-sm pointer-events-none opacity-30">
+                  <LoadingForm
+                    formData={formData}
+                    onFieldChange={setFormField}
+                    errors={errors}
+                    disabled={true}
+                    selectedBreadcrumbs={selectedBreadcrumbs}
+                  />
+                </div>
+
+                {/* Контент по центру */}
+                <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center">
+                  {!selectedSectionId || !selectedBreadcrumbs || selectedBreadcrumbs.length === 0 ? (
+                    /* Этап не выбран */
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="text-lg font-medium text-muted-foreground">
+                        Выберите этап в дереве слева,
+                        <br />
+                        чтобы создать загрузку
+                      </div>
+                    </div>
+                  ) : (
+                    /* Этап выбран - показываем кнопку */
+                    <div className="flex flex-col items-center gap-4">
+                      <Button
+                        size="lg"
+                        onClick={() => setIsFormVisible(true)}
+                        className="text-lg px-8 py-6 h-auto"
+                      >
+                        Создать загрузку
+                      </Button>
+                      {selectedBreadcrumbs && selectedBreadcrumbs.length > 0 && (
+                        <div className="text-sm text-muted-foreground max-w-md">
+                          <div className="mb-1">Загрузка будет создана для</div>
+                          <div className="font-medium text-foreground flex items-center gap-1 flex-wrap justify-center">
+                            {selectedBreadcrumbs.map((item, index) => {
+                              const Icon = getIcon(item.type)
+                              return (
+                                <span key={item.id} className="flex items-center gap-1">
+                                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{item.name}</span>
+                                  {index < selectedBreadcrumbs.length - 1 && (
+                                    <ChevronRight className="h-3 w-3 mx-0.5 text-muted-foreground" />
+                                  )}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Форма открыта или режим редактирования */
+              <LoadingForm
+                formData={formData}
+                onFieldChange={setFormField}
+                errors={errors}
+                disabled={isSaving}
+                selectedBreadcrumbs={selectedBreadcrumbs}
+              />
+            )}
           </div>
         </div>
 

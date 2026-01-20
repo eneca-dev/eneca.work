@@ -12,7 +12,7 @@
  * - Комментарий (Textarea)
  */
 
-import { AlertCircle, ChevronRight } from 'lucide-react'
+import { AlertCircle, ChevronRight, Folder, Box, CircleDashed, ListChecks } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { differenceInBusinessDays } from 'date-fns'
@@ -44,6 +44,22 @@ export function LoadingForm({
   selectedBreadcrumbs,
   className,
 }: LoadingFormProps) {
+  // Функция получения иконки по типу элемента
+  const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
+    switch (type) {
+      case 'project':
+        return Folder
+      case 'object':
+        return Box
+      case 'section':
+        return CircleDashed
+      case 'decomposition_stage':
+        return ListChecks
+      default:
+        return Folder
+    }
+  }
+
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Breadcrumbs с полным путем */}
@@ -51,14 +67,18 @@ export function LoadingForm({
         <div className="p-4 border-b bg-muted/30">
           <div className="text-xs text-muted-foreground mb-1">Выбрано для загрузки:</div>
           <div className="flex items-center gap-1 flex-wrap">
-            {selectedBreadcrumbs.map((item, index) => (
-              <div key={item.id} className="flex items-center gap-1">
-                <span className="text-xs font-medium text-foreground/80">{item.name}</span>
-                {index < selectedBreadcrumbs.length - 1 && (
-                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                )}
-              </div>
-            ))}
+            {selectedBreadcrumbs.map((item, index) => {
+              const Icon = getIcon(item.type)
+              return (
+                <div key={item.id} className="flex items-center gap-1">
+                  <Icon className="h-3 w-3 shrink-0 text-foreground/60" />
+                  <span className="text-xs font-medium text-foreground/80">{item.name}</span>
+                  {index < selectedBreadcrumbs.length - 1 && (
+                    <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
