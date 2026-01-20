@@ -77,9 +77,24 @@ export function useAIAnalytics() {
     } catch (error) {
       console.error('[useAIAnalytics] Error:', error)
 
+      let errorMessage = 'Произошла ошибка при анализе'
+
+      if (error instanceof Error) {
+        // Специфичные сообщения для разных типов ошибок
+        if (error.message.includes('Too many requests')) {
+          errorMessage = 'Слишком много запросов. Пожалуйста, подождите минуту.'
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Анализ занял слишком много времени. Попробуйте упростить запрос.'
+        } else if (error.message.includes('Unauthorized')) {
+          errorMessage = 'Сессия истекла. Пожалуйста, обновите страницу.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+
       setState({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Произошла ошибка при анализе',
+        error: errorMessage,
         result: null
       })
     }
