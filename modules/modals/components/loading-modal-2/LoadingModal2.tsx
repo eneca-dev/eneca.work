@@ -56,7 +56,7 @@ export function LoadingModal2({
     projectMode,
     setProjectMode,
     selectedSectionId,
-    selectedSectionName,
+    selectedBreadcrumbs,
     selectSection,
 
     // Состояние формы
@@ -159,8 +159,7 @@ export function LoadingModal2({
               onFieldChange={setFormField}
               errors={errors}
               disabled={isSaving}
-              selectedSectionId={selectedSectionId}
-              selectedSectionName={selectedSectionName}
+              selectedBreadcrumbs={selectedBreadcrumbs}
             />
           </div>
         </div>

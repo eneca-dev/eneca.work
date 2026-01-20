@@ -22,12 +22,21 @@ import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
 import type { ProjectListItem } from '../../hooks'
 
 /**
+ * Breadcrumb item для отображения пути
+ */
+export interface BreadcrumbItem {
+  id: string
+  name: string
+  type: 'project' | 'object' | 'section' | 'decomposition_stage'
+}
+
+/**
  * Компонент для отображения одного проекта и его дерева
  */
 interface ProjectItemProps {
   project: ProjectListItem
   selectedSectionId: string | null
-  onSectionSelect: (sectionId: string, sectionName?: string) => void
+  onSectionSelect: (sectionId: string, sectionName?: string, breadcrumbs?: BreadcrumbItem[]) => void
 }
 
 function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectItemProps) {
@@ -102,10 +111,50 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect }: ProjectIte
     })
   }
 
+  // Функция для сбора пути от корня до узла
+  const buildBreadcrumbs = (targetNode: ProjectTreeNodeWithChildren): BreadcrumbItem[] => {
+    const breadcrumbs: BreadcrumbItem[] = []
+
+    // Добавляем проект
+    breadcrumbs.push({
+      id: project.id,
+      name: project.name,
+      type: 'project',
+    })
+
+    // Рекурсивный поиск пути к целевому узлу
+    const findPath = (nodes: ProjectTreeNodeWithChildren[], path: BreadcrumbItem[]): boolean => {
+      for (const node of nodes) {
+        const currentPath = [...path, { id: node.id, name: node.name, type: node.type }]
+
+        if (node.id === targetNode.id) {
+          breadcrumbs.push(...currentPath)
+          return true
+        }
+
+        if (node.children && node.children.length > 0) {
+          if (findPath(node.children, currentPath)) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+
+    // Ищем путь в дереве (начинаем с детей проекта)
+    const projectNodes = tree.find(n => n.type === 'project')
+    if (projectNodes?.children) {
+      findPath(projectNodes.children, [])
+    }
+
+    return breadcrumbs
+  }
+
   // Выбор раздела или этапа декомпозиции
   const handleSectionClick = (node: ProjectTreeNodeWithChildren) => {
     if (node.type === 'section' || node.type === 'decomposition_stage') {
-      onSectionSelect(node.id, node.name)
+      const breadcrumbs = buildBreadcrumbs(node)
+      onSectionSelect(node.id, node.name, breadcrumbs)
     }
   }
 
@@ -287,7 +336,7 @@ export interface ProjectTreeProps {
   /** ID текущего выбранного раздела/этапа */
   selectedSectionId: string | null
   /** Callback при выборе раздела/этапа */
-  onSectionSelect: (sectionId: string, sectionName?: string) => void
+  onSectionSelect: (sectionId: string, sectionName?: string, breadcrumbs?: BreadcrumbItem[]) => void
   /** ID пользователя для фильтра "Мои проекты" */
   userId: string
   /** Класс для кастомизации */

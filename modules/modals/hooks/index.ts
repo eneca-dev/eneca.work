@@ -111,6 +111,7 @@ export {
   type UseLoadingModalOptions,
   type UseLoadingModalResult,
   type LoadingFormData,
+  type BreadcrumbItem,
 } from './useLoadingModal'
 
 export {

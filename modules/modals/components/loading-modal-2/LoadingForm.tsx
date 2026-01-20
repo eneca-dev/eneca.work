@@ -12,13 +12,13 @@
  * - Комментарий (Textarea)
  */
 
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ChevronRight } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { EmployeeSelector } from './EmployeeSelector'
 import { RateInput } from './RateInput'
 import { DateRangePicker } from './DateRangePicker'
-import type { LoadingFormData } from '../../hooks/useLoadingModal'
+import type { LoadingFormData, BreadcrumbItem } from '../../hooks/useLoadingModal'
 
 export interface LoadingFormProps {
   /** Данные формы */
@@ -29,10 +29,8 @@ export interface LoadingFormProps {
   errors: Partial<Record<keyof LoadingFormData, string>>
   /** Disabled состояние */
   disabled?: boolean
-  /** ID выбранного раздела */
-  selectedSectionId?: string | null
-  /** Название выбранного раздела */
-  selectedSectionName?: string
+  /** Breadcrumbs выбранного раздела */
+  selectedBreadcrumbs?: BreadcrumbItem[] | null
   /** Класс для кастомизации */
   className?: string
 }
@@ -42,22 +40,30 @@ export function LoadingForm({
   onFieldChange,
   errors,
   disabled = false,
-  selectedSectionId,
-  selectedSectionName,
+  selectedBreadcrumbs,
   className,
 }: LoadingFormProps) {
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* Информация о выбранном разделе/этапе */}
-      {selectedSectionName && (
+      {/* Breadcrumbs с полным путем */}
+      {selectedBreadcrumbs && selectedBreadcrumbs.length > 0 && (
         <div className="p-4 border-b bg-muted/30">
           <div className="text-xs text-muted-foreground mb-1">Выбрано для загрузки:</div>
-          <div className="text-sm font-medium">{selectedSectionName}</div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {selectedBreadcrumbs.map((item, index) => (
+              <div key={item.id} className="flex items-center gap-1">
+                <span className="text-xs font-medium text-foreground/80">{item.name}</span>
+                {index < selectedBreadcrumbs.length - 1 && (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Предупреждение если раздел не выбран */}
-      {!selectedSectionName && (
+      {(!selectedBreadcrumbs || selectedBreadcrumbs.length === 0) && (
         <div className="p-4 border-b bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />

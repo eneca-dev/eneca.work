@@ -12,6 +12,15 @@
 
 import { useState, useCallback } from 'react'
 
+/**
+ * Breadcrumb item для отображения пути
+ */
+export interface BreadcrumbItem {
+  id: string
+  name: string
+  type: 'project' | 'object' | 'section' | 'decomposition_stage'
+}
+
 export interface LoadingFormData {
   /** ID сотрудника */
   employeeId: string
@@ -55,8 +64,10 @@ export interface UseLoadingModalResult {
   selectedSectionId: string | null
   /** Название выбранного раздела или этапа декомпозиции */
   selectedSectionName: string | null
+  /** Breadcrumbs выбранного раздела или этапа */
+  selectedBreadcrumbs: BreadcrumbItem[] | null
   /** Выбор раздела или этапа декомпозиции */
-  selectSection: (id: string | null, name?: string) => void
+  selectSection: (id: string | null, name?: string, breadcrumbs?: BreadcrumbItem[]) => void
 
   // Состояние формы
   formData: LoadingFormData
@@ -85,6 +96,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     initialSectionId ?? null
   )
   const [selectedSectionName, setSelectedSectionName] = useState<string | null>(null)
+  const [selectedBreadcrumbs, setSelectedBreadcrumbs] = useState<BreadcrumbItem[] | null>(null)
 
   // Состояние формы - предзаполняем из initialLoading если режим edit
   const [formData, setFormData] = useState<LoadingFormData>(() => {
@@ -103,9 +115,10 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   const [errors, setErrors] = useState<Partial<Record<keyof LoadingFormData, string>>>({})
 
   // Выбор раздела
-  const selectSection = useCallback((id: string | null, name?: string) => {
+  const selectSection = useCallback((id: string | null, name?: string, breadcrumbs?: BreadcrumbItem[]) => {
     setSelectedSectionId(id)
     setSelectedSectionName(name ?? null)
+    setSelectedBreadcrumbs(breadcrumbs ?? null)
   }, [])
 
   // Обновление одного поля формы
@@ -163,6 +176,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setErrors({})
     setSelectedSectionId(null)
     setSelectedSectionName(null)
+    setSelectedBreadcrumbs(null)
   }, [])
 
   return {
@@ -170,6 +184,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setProjectMode,
     selectedSectionId,
     selectedSectionName,
+    selectedBreadcrumbs,
     selectSection,
     formData,
     setFormField,
