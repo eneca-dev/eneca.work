@@ -153,12 +153,13 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
   return (
     <div className="flex flex-col h-full">
       {/* Swimlanes */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        {sectionsToShow.map((section) => (
-          <KanbanSwimlane
-            key={section.id}
-            section={section}
-            isCollapsed={collapsedSections.includes(section.id)}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="min-w-fit">
+          {sectionsToShow.map((section) => (
+            <KanbanSwimlane
+              key={section.id}
+              section={section}
+              isCollapsed={collapsedSections.includes(section.id)}
             onToggleCollapse={() => toggleSectionCollapse(section.id)}
             draggedCard={draggedCard}
             onDragStart={handleDragStart}
@@ -190,6 +191,7 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
             </button>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
@@ -465,43 +467,45 @@ export function KanbanBoard() {
       />
 
       {/* Swimlanes */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        {sectionsToShow.map((section) => (
-          <KanbanSwimlane
-            key={section.id}
-            section={section}
-            isCollapsed={viewSettings.collapsedSections.includes(section.id)}
-            onToggleCollapse={() => toggleSectionCollapse(section.id)}
-            draggedCard={draggedCard}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-          />
-        ))}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="min-w-fit">
+          {sectionsToShow.map((section) => (
+            <KanbanSwimlane
+              key={section.id}
+              section={section}
+              isCollapsed={viewSettings.collapsedSections.includes(section.id)}
+              onToggleCollapse={() => toggleSectionCollapse(section.id)}
+              draggedCard={draggedCard}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+            />
+          ))}
 
-        {/* Load More Button */}
-        {hasNextPage && (
-          <div className="flex justify-center py-4 border-t bg-card/50">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Загрузка...
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Загрузить ещё
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          {/* Load More Button */}
+          {hasNextPage && (
+            <div className="flex justify-center py-4 border-t bg-card/50">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Загрузить ещё
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

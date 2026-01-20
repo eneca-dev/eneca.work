@@ -13,10 +13,11 @@ import {
 } from '@/components/ui/tooltip'
 import type { KanbanStage, KanbanSection, KanbanTask } from '../types'
 import { getColumnById } from '../constants'
-import { WorkLogCreateModal, TaskSidebar } from '@/modules/modals'
+import { WorkLogCreateModal, TaskSidebar, StageModal } from '@/modules/modals'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
 import { useKanbanFiltersStore } from '../stores'
 import { Input } from '@/components/ui/input'
+import type { DecompositionStage } from '@/modules/resource-graph/types'
 
 interface TaskItemProps {
   task: KanbanTask
@@ -374,6 +375,56 @@ interface KanbanCardProps {
   isDragging: boolean
 }
 
+// Адаптер для конвертации KanbanStage в DecompositionStage (для StageModal)
+function convertToDecompositionStage(stage: KanbanStage): DecompositionStage {
+  return {
+    id: stage.id,
+    name: stage.name,
+    startDate: stage.startDate || null,
+    finishDate: stage.endDate || null,
+    status: {
+      id: stage.statusId || null,
+      name: stage.status,
+      color: null,
+    },
+    items: stage.tasks.map((task, index) => ({
+      id: task.id,
+      stageId: stage.id,
+      description: task.description,
+      plannedHours: task.plannedHours,
+      plannedDueDate: task.dueDate || null,
+      progress: task.progress,
+      progressDelta: null,
+      progressHistory: [],
+      order: task.order ?? index,
+      responsible: {
+        id: task.responsible?.userId || null,
+        firstName: task.responsible?.firstName || null,
+        lastName: task.responsible?.lastName || null,
+        name: null,
+      },
+      status: {
+        id: null,
+        name: null,
+        color: null,
+      },
+      difficulty: {
+        id: null,
+        abbr: null,
+        name: null,
+      },
+      workCategoryId: null,
+      workCategoryName: task.workCategory || null,
+      budget: {
+        id: null,
+        total: 0,
+        spent: 0,
+        remaining: 0,
+      },
+    })),
+  }
+}
+
 export function KanbanCard({
   stage,
   section,
@@ -382,6 +433,11 @@ export function KanbanCard({
   isDragging
 }: KanbanCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isStageModalOpen, setIsStageModalOpen] = useState(false)
+
+  // Для инвалидации кеша после сохранения в модалке
+  const queryClient = useQueryClient()
+  const { getQueryParams } = useKanbanFiltersStore()
 
   const column = getColumnById(stage.status)
 
@@ -400,9 +456,17 @@ export function KanbanCard({
     }
   }
 
-  // Get unique work categories for avatars
-  const uniqueCategories = Array.from(
-    new Set(stage.tasks.map((t) => t.workCategory).filter(Boolean))
+  // Get unique responsibles for avatars
+  const uniqueResponsibles = Array.from(
+    stage.tasks
+      .filter((t) => t.responsible)
+      .reduce((map, task) => {
+        if (task.responsible) {
+          map.set(task.responsible.userId, task.responsible)
+        }
+        return map
+      }, new Map<string, { userId: string; firstName: string; lastName: string }>())
+      .values()
   ).slice(0, 3)
 
   return (
@@ -426,9 +490,15 @@ export function KanbanCard({
       <div className="p-3 pl-4">
         {/* Title row */}
         <div className="flex items-start gap-2 mb-2">
-          <h4 className="flex-1 text-sm font-medium leading-tight line-clamp-2 text-foreground">
+          <button
+            className="flex-1 text-sm font-medium leading-tight line-clamp-2 text-foreground text-left hover:text-primary transition-colors cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsStageModalOpen(true)
+            }}
+          >
             {stage.name}
-          </h4>
+          </button>
 
           {/* Expand/Collapse button */}
           {tasksCount > 0 && (
@@ -453,21 +523,21 @@ export function KanbanCard({
 
         {/* Info row - avatars, hours, progress */}
         <div className="flex items-center justify-between gap-3">
-          {/* Avatars */}
+          {/* Avatars - ответственные за задачи */}
           <div className="flex -space-x-2">
-            {uniqueCategories.length > 0 ? (
-              uniqueCategories.map((category, idx) => (
-                <TooltipProvider key={idx}>
+            {uniqueResponsibles.length > 0 ? (
+              uniqueResponsibles.map((responsible) => (
+                <TooltipProvider key={responsible.userId}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Avatar className="h-8 w-8 border-2 border-background cursor-default">
                         <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-medium">
-                          {category?.substring(0, 2).toUpperCase()}
+                          {responsible.firstName[0]}{responsible.lastName[0]}
                         </AvatarFallback>
                       </Avatar>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <span className="text-xs">{category}</span>
+                      <span className="text-xs">{responsible.firstName} {responsible.lastName}</span>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -483,7 +553,7 @@ export function KanbanCard({
                     </Avatar>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <span className="text-xs">{stage.name}</span>
+                    <span className="text-xs">Нет ответственных</span>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -569,6 +639,22 @@ export function KanbanCard({
           column?.id === 'planned' && 'bg-violet-500',
           column?.id === 'backlog' && 'bg-gray-400'
         )}
+      />
+
+      {/* Stage Modal */}
+      <StageModal
+        isOpen={isStageModalOpen}
+        onClose={() => setIsStageModalOpen(false)}
+        stage={convertToDecompositionStage(stage)}
+        stageId={stage.id}
+        sectionId={section.id}
+        onSuccess={() => {
+          setIsStageModalOpen(false)
+          // Инвалидируем кеш канбана после сохранения
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
       />
     </div>
   )

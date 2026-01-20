@@ -207,7 +207,9 @@ export function SectionModal({
           sectionId,
           data: { [field]: value },
         })
-        onSuccess?.()
+        // НЕ вызываем onSuccess здесь - это inline-сохранение поля,
+        // модалка должна оставаться открытой.
+        // Кеш инвалидируется автоматически через useUpdateSection.invalidateKeys
         return true
       } catch (err) {
         console.error('Save error:', err)
@@ -217,7 +219,7 @@ export function SectionModal({
         setSavingField(null)
       }
     },
-    [sectionId, onSuccess, updateMutation]
+    [sectionId, updateMutation]
   )
 
   const handleStatusChange = useCallback(

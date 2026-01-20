@@ -99,6 +99,11 @@ export const useDeleteTemplate = createDeleteMutation<
 /**
  * Хук для применения шаблона к разделу
  *
+ * Инвалидирует:
+ * - sections.decomposition - для обновления данных раздела
+ * - decomposition.stages - для обновления списка этапов
+ * - kanban.all - для обновления канбан-доски
+ *
  * @example
  * const { mutateAsync: applyTemplateFn, isPending } = useApplyTemplate()
  * const newStages = await applyTemplateFn({ templateId, sectionId, statusId })
@@ -111,5 +116,6 @@ export const useApplyTemplate = createSimpleMutation<
   invalidateKeys: (input) => [
     queryKeys.sections.decomposition(input.sectionId),
     queryKeys.decomposition.stages(input.sectionId),
+    [...queryKeys.kanban.all],
   ],
 })

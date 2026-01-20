@@ -96,6 +96,9 @@ export function transformRowsToKanbanSections(
         name: row.section_name || '',
         description: row.section_description || null,
         status: mapSectionStatus(row.section_status_name),
+        statusId: row.section_status_id || null,
+        startDate: row.section_start_date || null,
+        endDate: row.section_end_date || null,
         responsible: row.section_responsible_id
           ? {
               userId: row.section_responsible_id,
@@ -129,6 +132,7 @@ export function transformRowsToKanbanSections(
         name: row.decomposition_stage_name || '',
         description: null,
         status: mapStageStatus(row.decomposition_stage_status_name),
+        statusId: row.decomposition_stage_status_id || null,
         sectionId: row.section_id,
         startDate: row.decomposition_stage_start || null,
         endDate: row.decomposition_stage_finish || null,

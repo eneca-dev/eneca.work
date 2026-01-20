@@ -222,7 +222,8 @@ export function StageModal({
         else if (field === 'endDate') updateData.endDate = value as string | null
 
         await updateMutation.mutateAsync({ stageId, sectionId, ...updateData })
-        onSuccess?.()
+        // НЕ вызываем onSuccess() здесь - модалка не должна закрываться при изменении полей
+        // Кэш инвалидируется через useUpdateDecompositionStage
         return true
       } catch (err) {
         console.error('Save error:', err)
@@ -232,7 +233,7 @@ export function StageModal({
         setSavingField(null)
       }
     },
-    [stageId, sectionId, onSuccess, updateMutation]
+    [stageId, sectionId, updateMutation]
   )
 
   const handleStatusChange = useCallback(
