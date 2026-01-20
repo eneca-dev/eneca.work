@@ -108,6 +108,12 @@ export const useKanbanSection = createDetailCacheQuery<KanbanSection | null>({
 export { useStageStatuses } from './useStageStatuses'
 
 // ============================================================================
+// Drag and Drop Hook
+// ============================================================================
+
+export { useDragHandlers } from './useDragHandlers'
+
+// ============================================================================
 // Mutation Hooks
 // ============================================================================
 //

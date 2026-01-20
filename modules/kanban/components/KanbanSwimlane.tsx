@@ -18,6 +18,7 @@ import type { KanbanSection, StageStatus } from '../types'
 import { KANBAN_COLUMNS } from '../constants'
 import { KanbanDropZone } from './KanbanDropZone'
 import { useKanbanFiltersStore } from '../stores'
+import { CircularProgress } from './kanban'
 
 interface DraggedCard {
   stageId: string
@@ -34,47 +35,6 @@ interface KanbanSwimlaneProps {
   onDragOver: (targetSectionId: string, e: React.DragEvent) => void
   onDrop: (targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => void
   onDragEnd: () => void
-}
-
-// Circular progress component - упрощённый нейтральный стиль
-function CircularProgress({ progress }: { progress: number }) {
-  const radius = 16
-  const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference - (progress / 100) * circumference
-
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg className="w-10 h-10 -rotate-90">
-        {/* Background circle */}
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          className="text-border"
-        />
-        {/* Progress circle */}
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          className="text-foreground/60 transition-all duration-500"
-          strokeLinecap="round"
-        />
-      </svg>
-      {/* Percentage text */}
-      <span className="absolute text-[10px] font-medium text-muted-foreground">
-        {progress}%
-      </span>
-    </div>
-  )
 }
 
 export function KanbanSwimlane({
@@ -256,7 +216,7 @@ export function KanbanSwimlane({
           </div>
 
           {/* Circular Progress */}
-          <CircularProgress progress={section.overallProgress} />
+          <CircularProgress progress={section.overallProgress} variant="swimlane" />
         </div>
       </div>
 
@@ -267,7 +227,7 @@ export function KanbanSwimlane({
           isCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
         )}
       >
-        <div className="overflow-y-clip">
+        <div className="overflow-hidden">
           <div
             className="relative"
             onDragEnter={handleDragEnter}

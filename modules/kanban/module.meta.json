@@ -26,7 +26,6 @@
     "entryPoint": "index.ts",
     "publicApi": [
       "KanbanBoard",
-      "useKanbanStore",
       "useKanbanFiltersStore",
       "useKanbanSections",
       "KANBAN_FILTER_CONFIG",
@@ -331,6 +330,180 @@
       ]
     },
     {
+      "id": "KB-013",
+      "title": "Удалить мёртвый код модуля (5 файлов, ~1337 строк)",
+      "description": "После миграции на TanStack Query + Server Actions осталось ~1337 строк мёртвого кода (~40% модуля).\n\nФайлы для удаления:\n1. stores/kanban-store.ts (~245 строк) - заменён TanStack Query\n2. kronospan-mock-data.ts (~430 строк) - mock данные\n3. utils/transform-data.ts (~178 строк) - mock transformer\n4. components/AddReportModal.tsx (~218 строк) - заменён WorkLogCreateModal\n5. components/StageDetailModal.tsx (~266 строк) - заменён StageModal\n\nТакже удалить:\n- Неиспользуемые типы: DragResult, filterByResponsible из KanbanViewSettings\n- Экспорты useKanbanStore из index.ts\n- Обновить publicApi в module.meta.json",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": ["KB-014", "KB-015"],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "stores/kanban-store.ts",
+        "kronospan-mock-data.ts",
+        "utils/transform-data.ts",
+        "components/AddReportModal.tsx",
+        "components/StageDetailModal.tsx",
+        "types/index.ts",
+        "index.ts"
+      ]
+    },
+    {
+      "id": "KB-014",
+      "title": "Создать hook useDragHandlers для устранения дублирования",
+      "description": "KanbanBoardInternal и KanbanBoard дублируют ~70% кода (drag handlers).\n\nТребуется:\n1. Создать hooks/useDragHandlers.ts\n2. Вынести логику: handleDragStart, handleDragOver, handleDrop, handleDragEnd\n3. Вынести состояние: draggedStageId, targetColumn\n4. Использовать хук в обоих компонентах\n\nЭто уменьшит KanbanBoard.tsx с 554 до ~400 строк.",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013"],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanBoard.tsx",
+        "hooks/useDragHandlers.ts"
+      ]
+    },
+    {
+      "id": "KB-015",
+      "title": "Разбить KanbanCard.tsx на подкомпоненты",
+      "description": "KanbanCard.tsx содержит 663 строки - слишком много для одного файла.\n\nРазбить на:\n1. components/kanban/TaskItem.tsx (~100 строк)\n   - Маленькие карточки задач внутри этапа\n   - Включает аватары ответственных, CPI badge\n2. components/kanban/CompactCircularProgress.tsx (~90 строк)\n   - Компактный индикатор прогресса для карточки этапа\n\nПосле рефакторинга KanbanCard.tsx будет ~450 строк.",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013"],
+      "blocks": ["KB-016"],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanCard.tsx",
+        "components/kanban/TaskItem.tsx",
+        "components/kanban/CompactCircularProgress.tsx"
+      ]
+    },
+    {
+      "id": "KB-016",
+      "title": "Унифицировать CircularProgress в единый компонент",
+      "description": "В модуле 3 разные реализации circular progress:\n1. CompactCircularProgress в KanbanCard.tsx\n2. CircularProgress в KanbanSwimlane.tsx\n3. Inline SVG для TaskItem в KanbanCard.tsx\n\nТребуется:\n1. Создать components/ui/CircularProgress.tsx с вариантами:\n   - variant='compact' - для карточек этапа\n   - variant='swimlane' - для заголовка swimlane\n   - variant='task' - для маленьких карточек задач\n2. Заменить все 3 использования на новый компонент\n3. Убедиться что стили и размеры совпадают",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-015"],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/ui/CircularProgress.tsx",
+        "components/KanbanCard.tsx",
+        "components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-017",
+      "title": "Перенести convertToDecompositionStage в utils/",
+      "description": "Функция convertToDecompositionStage (47 строк) находится в UI компоненте KanbanCard.tsx.\n\nТребуется:\n1. Создать utils/adapters.ts\n2. Переместить convertToDecompositionStage туда\n3. Экспортировать из utils/index.ts\n4. Обновить импорты в KanbanCard.tsx\n\nЭто правильная архитектура - type adapters должны быть в utils, не в компонентах.",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "utils/adapters.ts",
+        "components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-018",
+      "title": "Создать константы для magic values",
+      "description": "Найдены magic numbers в коде:\n\nВ KanbanCard.tsx:470:\n```tsx\n{task.responsibleUsers.slice(0, 3).map(...)}  // 3 - магическое число\n```\n\nВ transform-rows-to-kanban.ts:213:\n```tsx\nNumber(stage.cpi).toFixed(2)  // 2 - магическое число\n```\n\nТребуется:\n1. Добавить в constants/index.ts:\n   - MAX_VISIBLE_AVATARS = 3\n   - CPI_DECIMAL_PLACES = 2\n2. Заменить магические числа на константы\n3. Экспортировать константы из модуля",
+      "category": "refactor",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "constants/index.ts",
+        "components/KanbanCard.tsx",
+        "utils/transform-rows-to-kanban.ts"
+      ]
+    },
+    {
+      "id": "KB-019",
+      "title": "Переименовать loadAll → isLoadAll для ясности",
+      "description": "В KanbanBoard.tsx:215 переменная называется loadAll, но это boolean флаг, а не функция.\n\nТребуется:\n- Переименовать loadAll → isLoadAll во всех местах использования\n- Это соответствует конвенции именования boolean переменных (is/has/should префиксы)",
+      "category": "refactor",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.25,
+      "relatedFiles": [
+        "components/KanbanBoard.tsx"
+      ]
+    },
+    {
+      "id": "KB-020",
+      "title": "Добавить явный auth check в Server Actions",
+      "description": "Сейчас auth check в Server Actions происходит неявно через filter context (getKanbanFilter).\n\nТребуется:\n1. Добавить явный getUser() в начало каждого action\n2. Проверять user.id перед выполнением операций\n3. Возвращать ActionResult с ошибкой если нет авторизации\n\nЭто улучшит читаемость и безопасность кода.",
+      "category": "security",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "actions/index.ts"
+      ]
+    },
+    {
+      "id": "KB-021",
+      "title": "Свимлейны не сворачиваются/разворачиваются",
+      "description": "После рефакторинга (KB-013) свимлейны перестали сворачиваться визуально.\n\nПричина: В KanbanSwimlane.tsx использовался CSS класс `overflow-y-clip` вместо `overflow-hidden`. При анимации через `grid-rows-[0fr]` контент не скрывался корректно.\n\nИсправлено: Заменён `overflow-y-clip` на `overflow-hidden` в строке 230 KanbanSwimlane.tsx.\n\nМеханизм работает через:\n1. Zustand store useKanbanUIStore хранит collapsedSections[]\n2. Компонент получает isCollapsed через props\n3. CSS анимация через grid-rows-[0fr]/[1fr] с overflow-hidden",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "components/KanbanSwimlane.tsx",
+        "stores/index.ts"
+      ]
+    },
+    {
       "id": "KB-AUDIT",
       "title": "Full Module Audit: Kanban Board",
       "description": "Полный аудит модуля канбан-доски для подтверждения качества.\n\nОсобое внимание на drag-and-drop логику, обновление статусов и производительность при большом количестве карточек.",
@@ -339,8 +512,8 @@
       "status": "todo",
       "assignee": null,
       "createdAt": "2026-01-05",
-      "updatedAt": "2026-01-05",
-      "blockedBy": [],
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013", "KB-014", "KB-015", "KB-016", "KB-017"],
       "blocks": [],
       "estimatedHours": 4,
       "checklist": {

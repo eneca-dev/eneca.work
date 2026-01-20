@@ -97,17 +97,8 @@ export interface KanbanColumn {
   borderColor: string
 }
 
-// Событие перетаскивания
-export interface DragResult {
-  stageId: string
-  sectionId: string
-  fromStatus: StageStatus
-  toStatus: StageStatus
-}
-
 // Настройки отображения
 export interface KanbanViewSettings {
   showEmptySwimlanes: boolean
   collapsedSections: string[]
-  filterByResponsible?: string
 }
