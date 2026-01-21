@@ -1,0 +1,1 @@
+export { convertToDecompositionStage } from './adapters'

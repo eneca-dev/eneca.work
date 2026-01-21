@@ -5,6 +5,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, AlertTriangle, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { SectionModal } from '@/modules/modals'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
 import type { Section } from '@/modules/resource-graph/types'
@@ -12,6 +18,7 @@ import type { KanbanSection, StageStatus } from '../types'
 import { KANBAN_COLUMNS } from '../constants'
 import { KanbanDropZone } from './KanbanDropZone'
 import { useKanbanFiltersStore } from '../stores'
+import { CircularProgress } from './kanban'
 
 interface DraggedCard {
   stageId: string
@@ -28,47 +35,6 @@ interface KanbanSwimlaneProps {
   onDragOver: (targetSectionId: string, e: React.DragEvent) => void
   onDrop: (targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => void
   onDragEnd: () => void
-}
-
-// Circular progress component - упрощённый нейтральный стиль
-function CircularProgress({ progress }: { progress: number }) {
-  const radius = 16
-  const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference - (progress / 100) * circumference
-
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg className="w-10 h-10 -rotate-90">
-        {/* Background circle */}
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          className="text-border"
-        />
-        {/* Progress circle */}
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          className="text-foreground/60 transition-all duration-500"
-          strokeLinecap="round"
-        />
-      </svg>
-      {/* Percentage text */}
-      <span className="absolute text-[10px] font-medium text-muted-foreground">
-        {progress}%
-      </span>
-    </div>
-  )
 }
 
 export function KanbanSwimlane({
@@ -98,8 +64,8 @@ export function KanbanSwimlane({
     id: section.id,
     name: section.name,
     description: section.description || null,
-    startDate: null, // Нет в KanbanSection
-    endDate: null, // Нет в KanbanSection
+    startDate: section.startDate || null,
+    endDate: section.endDate || null,
     responsible: {
       id: section.responsible?.userId || null,
       firstName: section.responsible?.firstName || null,
@@ -108,13 +74,14 @@ export function KanbanSwimlane({
       avatarUrl: null,
     },
     status: {
-      id: null, // Нет в KanbanSection (есть только строка)
+      id: section.statusId || null,
       name: section.status,
       color: null,
     },
     readinessCheckpoints: [],
     actualReadiness: [],
     budgetSpending: [],
+    hourlyRate: null,
     decompositionStages: [], // SectionModal загрузит их через свои хуки
   })
 
@@ -178,11 +145,24 @@ export function KanbanSwimlane({
         </button>
 
         {/* Avatar - нейтральный стиль */}
-        <Avatar className="h-8 w-8 flex-shrink-0">
-          <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
-            {getInitials()}
-          </AvatarFallback>
-        </Avatar>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Avatar className="h-8 w-8 flex-shrink-0 cursor-default">
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
+                  {getInitials()}
+                </AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent>
+              <span className="text-xs">
+                {section.responsible
+                  ? `${section.responsible.firstName} ${section.responsible.lastName}`
+                  : 'Нет ответственного'}
+              </span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Section Info */}
         <div className="flex-1 min-w-0">
@@ -236,50 +216,52 @@ export function KanbanSwimlane({
           </div>
 
           {/* Circular Progress */}
-          <CircularProgress progress={section.overallProgress} />
+          <CircularProgress progress={section.overallProgress} variant="swimlane" />
         </div>
       </div>
 
       {/* Swimlane Content */}
       <div
         className={cn(
-          'overflow-hidden transition-all duration-300 ease-out',
-          isCollapsed ? 'max-h-0' : 'max-h-[800px]'
+          'grid transition-[grid-template-rows] duration-300 ease-out',
+          isCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
         )}
       >
-        <div
-          className="relative"
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-        >
-          <div className="flex items-stretch gap-0 min-h-[100px] p-2">
-            {KANBAN_COLUMNS.map((column) => (
-              <KanbanDropZone
-                key={column.id}
-                column={column}
-                sectionId={section.id}
-                stages={section.stages}
-                section={section}
-                draggedCard={draggedCard}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                onDragEnd={onDragEnd}
-              />
-            ))}
-          </div>
-
-          {/* Полоска-предупреждение при попытке переноса в другой раздел */}
-          {isDragFromOtherSection && isOver && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-destructive/5 backdrop-blur-[2px]">
-              <div className="bg-destructive/90 text-destructive-foreground px-6 py-3 rounded-lg shadow-lg border-2 border-destructive flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium text-sm">
-                  Нельзя переносить карточки этапов между разными разделами
-                </span>
-              </div>
+        <div className="overflow-hidden">
+          <div
+            className="relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+          >
+            <div className="flex items-stretch gap-0 min-h-[100px] p-2 min-w-fit">
+              {KANBAN_COLUMNS.map((column) => (
+                <KanbanDropZone
+                  key={column.id}
+                  column={column}
+                  sectionId={section.id}
+                  stages={section.stages}
+                  section={section}
+                  draggedCard={draggedCard}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDrop={onDrop}
+                  onDragEnd={onDragEnd}
+                />
+              ))}
             </div>
-          )}
+
+            {/* Полоска-предупреждение при попытке переноса в другой раздел */}
+            {isDragFromOtherSection && isOver && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-destructive/5 backdrop-blur-[2px]">
+                <div className="bg-destructive/90 text-destructive-foreground px-6 py-3 rounded-lg shadow-lg border-2 border-destructive flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <span className="font-medium text-sm">
+                    Нельзя переносить карточки этапов между разными разделами
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

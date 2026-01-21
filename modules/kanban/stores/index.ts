@@ -14,9 +14,6 @@ import {
   hasActiveFilters,
 } from '@/modules/inline-filter'
 
-// Re-export kanban store
-export * from './kanban-store'
-
 // ============================================================================
 // Filter Config (конфигурация ключей фильтра)
 // ============================================================================

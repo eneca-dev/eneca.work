@@ -26,7 +26,6 @@
     "entryPoint": "index.ts",
     "publicApi": [
       "KanbanBoard",
-      "useKanbanStore",
       "useKanbanFiltersStore",
       "useKanbanSections",
       "KANBAN_FILTER_CONFIG",
@@ -127,6 +126,403 @@
       "estimatedHours": 1
     },
     {
+      "id": "KB-002",
+      "title": "Добавить открытие модалки этапа при клике на название в канбане",
+      "description": "При клике на название этапа на карточке канбана должна открываться полноценная модалка редактирования этапа StageModal.\n\nТекущее состояние: Клик на название ничего не делает.\n\nТребуется:\n1. Импортировать StageModal из @/modules/modals\n2. Создать адаптер convertKanbanStageToDecompositionStage для преобразования типов\n3. Добавить состояние isStageModalOpen\n4. Сделать заголовок этапа кликабельным (добавить onClick)\n5. Рендерить StageModal с корректными props\n6. Инвалидировать кеш канбана после успешного сохранения",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-003",
+      "title": "Улучшить анимации открытия swimlane (свимлейна)",
+      "description": "Анимация открытия swimlane (раздела) работает некорректно - слишком резкая или прерывистая.\n\nТекущее состояние:\n- Анимация закрытия работает нормально\n- Анимация открытия плохая\n\nТребуется:\n- Пересмотреть transition для открытия swimlane\n- Сделать плавную анимацию с подходящим easing\n- Проверить, что нет скачков высоты контента",
+      "category": "ui",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-004",
+      "title": "Добавить модалку подтверждения при удалении этапа",
+      "description": "При удалении этапа через контекстное меню нет модалки подтверждения - этап удаляется сразу.\n\nТекущее состояние: Удаление без подтверждения (опасно).\n\nТребуется:\n- Добавить DeleteConfirmDialog перед удалением этапа\n- Показать название этапа и количество задач в нём\n- Предупредить, что удаление необратимо",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "modules/modals/components/section/decomposition/StagesManager.tsx"
+      ]
+    },
+    {
+      "id": "KB-005",
+      "title": "Исправить некорректный tooltip на аватаре ответственного этапа",
+      "description": "При наведении на иконку ответственного за этап показывается некорректный текст:\n- Если нет заданий - показывается название этапа\n- Если есть задания - показывается категория задания\n\nОжидается: Показывать имя ответственного (firstName lastName).\n\nПричина: Скорее всего, неправильно настроен TooltipContent или неверный data binding в компоненте аватаров.",
+      "category": "bug",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-006",
+      "title": "Добавить tooltip при наведении на аватар ответственного за раздел",
+      "description": "При наведении на аватар ответственного за раздел (в swimlane header) не показывается tooltip с именем.\n\nТекущее состояние: Нет tooltip.\n\nТребуется:\n- Обернуть аватар ответственного раздела в Tooltip\n- Показывать полное имя (firstName lastName) и должность",
+      "category": "feature",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-007",
+      "title": "Пересмотреть коэффициенты CPI на задаче и этапе (опционально)",
+      "description": "Проверить корректность расчёта и отображения CPI (Cost Performance Index) на задачах и этапах в канбане.\n\nТребуется:\n- Проверить формулу расчёта CPI\n- Убедиться, что цветовые индикаторы соответствуют значениям\n- Проверить граничные случаи (CPI = 0, CPI очень большой)\n- Возможно, изменить пороговые значения для статусов (эффективно/приемлемо/критично)",
+      "category": "enhancement",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-008",
+      "title": "Исправить обновление канбана после применения шаблона декомпозиции в модалке раздела",
+      "description": "Если в модалке раздела (SectionModal, вкладка Задачи) применить шаблон декомпозиции, новые этапы и задачи не отображаются на канбан-доске до перезагрузки страницы.\n\nПричина: Отсутствует инвалидация кеша канбана после применения шаблона.\n\nТребуется:\n- Найти место в модуле modals, где применяется шаблон\n- Добавить инвалидацию queryKeys.kanban.list() после успешного применения\n- Убедиться, что новые этапы сразу появляются на канбане",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-18",
+      "completedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "modules/dec-templates/hooks/use-templates.ts"
+      ]
+    },
+    {
+      "id": "KB-009",
+      "title": "Исправить автозакрытие и баги модалки раздела при изменении полей",
+      "description": "При изменении любого поля в модалке раздела (SectionModal) происходит автоматическое закрытие модалки (из-за обновления данных).\n\nТакже:\n- Нельзя обновить статус раздела через dropdown\n- Нельзя изменить даты раздела (startDate, endDate)\n\nПричины:\n1. saveField вызывал onSuccess() после каждого сохранения поля\n2. KanbanSection не содержал statusId, startDate, endDate - модалка инициализировалась с null\n\nИсправлено:\n- Убран вызов onSuccess из saveField (модалка не закрывается)\n- Добавлена инвалидация kanban в useUpdateSection\n- Добавлены поля statusId, startDate, endDate в тип KanbanSection\n- Добавлен маппинг этих полей из v_resource_graph\n- Обновлён getSectionForModal() для передачи реальных значений в модалку",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-18",
+      "updatedAt": "2026-01-20",
+      "completedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "modules/modals/components/section/SectionModal.tsx",
+        "modules/modals/hooks/useUpdateSection.ts",
+        "modules/kanban/types/index.ts",
+        "modules/kanban/utils/transform-rows-to-kanban.ts",
+        "modules/kanban/components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-010",
+      "title": "Не подтягивается статус этапа в StageModal из канбана",
+      "description": "При нажатии на название этапа в канбане открывается StageModal, но в ней не отображается актуальный статус этапа.\n\nПричина: KanbanStage не содержит statusId - функция convertToDecompositionStage() передаёт null вместо реального ID статуса.\n\nИсправлено:\n- Добавлено поле statusId в тип KanbanStage\n- Добавлен маппинг statusId из v_resource_graph в transformRowsToKanbanSections\n- Обновлён convertToDecompositionStage() для передачи реального ID статуса",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "completedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "modules/kanban/types/index.ts",
+        "modules/kanban/utils/transform-rows-to-kanban.ts",
+        "modules/kanban/components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-011",
+      "title": "StageModal закрывается при изменении полей в канбане",
+      "description": "При изменении любого поля в модалке этапа (StageModal) из канбана происходит автоматическое закрытие модалки.\n\nПричина: saveField() вызывал onSuccess() после каждого сохранения поля.\n\nИсправлено: Убран вызов onSuccess из saveField (модалка не закрывается). Кэш инвалидируется через useUpdateDecompositionStage.",
+      "category": "bug",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "completedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "modules/modals/components/stage/StageModal.tsx"
+      ]
+    },
+    {
+      "id": "KB-012",
+      "title": "Канбан обрезается по ширине - нужен горизонтальный скролл",
+      "description": "Канбан-доска не помещается по ширине экрана в следующих случаях:\n- На ноутбуке при открытом боковом меню (колонка 'Готово' обрезается)\n- На планшетах и мобильных устройствах\n\nПредыдущие попытки:\n- Заменено overflow-x-hidden на overflow-auto в KanbanBoard\n- Добавлено min-w-fit для контейнера колонок в KanbanSwimlane\n- Попытки добавить видимые scrollbars были откачены\n\nТекущее состояние: Горизонтальный скролл работает, но scrollbar не видно. Нужно решить как сделать его видимым без конфликта с вертикальным скроллом.",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-21",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "modules/kanban/components/KanbanBoard.tsx",
+        "modules/kanban/components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-013",
+      "title": "Удалить мёртвый код модуля (5 файлов, ~1337 строк)",
+      "description": "После миграции на TanStack Query + Server Actions осталось ~1337 строк мёртвого кода (~40% модуля).\n\nФайлы для удаления:\n1. stores/kanban-store.ts (~245 строк) - заменён TanStack Query\n2. kronospan-mock-data.ts (~430 строк) - mock данные\n3. utils/transform-data.ts (~178 строк) - mock transformer\n4. components/AddReportModal.tsx (~218 строк) - заменён WorkLogCreateModal\n5. components/StageDetailModal.tsx (~266 строк) - заменён StageModal\n\nТакже удалить:\n- Неиспользуемые типы: DragResult, filterByResponsible из KanbanViewSettings\n- Экспорты useKanbanStore из index.ts\n- Обновить publicApi в module.meta.json",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": ["KB-014", "KB-015"],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "stores/kanban-store.ts",
+        "kronospan-mock-data.ts",
+        "utils/transform-data.ts",
+        "components/AddReportModal.tsx",
+        "components/StageDetailModal.tsx",
+        "types/index.ts",
+        "index.ts"
+      ]
+    },
+    {
+      "id": "KB-014",
+      "title": "Создать hook useDragHandlers для устранения дублирования",
+      "description": "KanbanBoardInternal и KanbanBoard дублируют ~70% кода (drag handlers).\n\nТребуется:\n1. Создать hooks/useDragHandlers.ts\n2. Вынести логику: handleDragStart, handleDragOver, handleDrop, handleDragEnd\n3. Вынести состояние: draggedStageId, targetColumn\n4. Использовать хук в обоих компонентах\n\nЭто уменьшит KanbanBoard.tsx с 554 до ~400 строк.",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013"],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanBoard.tsx",
+        "hooks/useDragHandlers.ts"
+      ]
+    },
+    {
+      "id": "KB-015",
+      "title": "Разбить KanbanCard.tsx на подкомпоненты",
+      "description": "KanbanCard.tsx содержит 663 строки - слишком много для одного файла.\n\nРазбить на:\n1. components/kanban/TaskItem.tsx (~100 строк)\n   - Маленькие карточки задач внутри этапа\n   - Включает аватары ответственных, CPI badge\n2. components/kanban/CompactCircularProgress.tsx (~90 строк)\n   - Компактный индикатор прогресса для карточки этапа\n\nПосле рефакторинга KanbanCard.tsx будет ~450 строк.",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013"],
+      "blocks": ["KB-016"],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/KanbanCard.tsx",
+        "components/kanban/TaskItem.tsx",
+        "components/kanban/CompactCircularProgress.tsx"
+      ]
+    },
+    {
+      "id": "KB-016",
+      "title": "Унифицировать CircularProgress в единый компонент",
+      "description": "В модуле 3 разные реализации circular progress:\n1. CompactCircularProgress в KanbanCard.tsx\n2. CircularProgress в KanbanSwimlane.tsx\n3. Inline SVG для TaskItem в KanbanCard.tsx\n\nТребуется:\n1. Создать components/ui/CircularProgress.tsx с вариантами:\n   - variant='compact' - для карточек этапа\n   - variant='swimlane' - для заголовка swimlane\n   - variant='task' - для маленьких карточек задач\n2. Заменить все 3 использования на новый компонент\n3. Убедиться что стили и размеры совпадают",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-015"],
+      "blocks": [],
+      "estimatedHours": 2,
+      "relatedFiles": [
+        "components/ui/CircularProgress.tsx",
+        "components/KanbanCard.tsx",
+        "components/KanbanSwimlane.tsx"
+      ]
+    },
+    {
+      "id": "KB-017",
+      "title": "Перенести convertToDecompositionStage в utils/",
+      "description": "Функция convertToDecompositionStage (47 строк) находится в UI компоненте KanbanCard.tsx.\n\nТребуется:\n1. Создать utils/adapters.ts\n2. Переместить convertToDecompositionStage туда\n3. Экспортировать из utils/index.ts\n4. Обновить импорты в KanbanCard.tsx\n\nЭто правильная архитектура - type adapters должны быть в utils, не в компонентах.",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "utils/adapters.ts",
+        "components/KanbanCard.tsx"
+      ]
+    },
+    {
+      "id": "KB-018",
+      "title": "Создать константы для magic values",
+      "description": "Найдены magic numbers в коде:\n\nВ KanbanCard.tsx:470:\n```tsx\n{task.responsibleUsers.slice(0, 3).map(...)}  // 3 - магическое число\n```\n\nВ transform-rows-to-kanban.ts:213:\n```tsx\nNumber(stage.cpi).toFixed(2)  // 2 - магическое число\n```\n\nТребуется:\n1. Добавить в constants/index.ts:\n   - MAX_VISIBLE_AVATARS = 3\n   - CPI_DECIMAL_PLACES = 2\n2. Заменить магические числа на константы\n3. Экспортировать константы из модуля",
+      "category": "refactor",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "constants/index.ts",
+        "components/KanbanCard.tsx",
+        "utils/transform-rows-to-kanban.ts"
+      ]
+    },
+    {
+      "id": "KB-019",
+      "title": "Переименовать loadAll → isLoadAll для ясности",
+      "description": "В KanbanBoard.tsx:215 переменная называется loadAll, но это boolean флаг, а не функция.\n\nТребуется:\n- Переименовать loadAll → isLoadAll во всех местах использования\n- Это соответствует конвенции именования boolean переменных (is/has/should префиксы)",
+      "category": "refactor",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.25,
+      "relatedFiles": [
+        "components/KanbanBoard.tsx"
+      ]
+    },
+    {
+      "id": "KB-020",
+      "title": "Добавить явный auth check в Server Actions",
+      "description": "Сейчас auth check в Server Actions происходит неявно через filter context (getKanbanFilter).\n\nТребуется:\n1. Добавить явный getUser() в начало каждого action\n2. Проверять user.id перед выполнением операций\n3. Возвращать ActionResult с ошибкой если нет авторизации\n\nЭто улучшит читаемость и безопасность кода.",
+      "category": "security",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "actions/index.ts"
+      ]
+    },
+    {
+      "id": "KB-021",
+      "title": "Свимлейны не сворачиваются/разворачиваются",
+      "description": "После рефакторинга (KB-013) свимлейны перестали сворачиваться визуально.\n\nПричина: В KanbanSwimlane.tsx использовался CSS класс `overflow-y-clip` вместо `overflow-hidden`. При анимации через `grid-rows-[0fr]` контент не скрывался корректно.\n\nИсправлено: Заменён `overflow-y-clip` на `overflow-hidden` в строке 230 KanbanSwimlane.tsx.\n\nМеханизм работает через:\n1. Zustand store useKanbanUIStore хранит collapsedSections[]\n2. Компонент получает isCollapsed через props\n3. CSS анимация через grid-rows-[0fr]/[1fr] с overflow-hidden",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-20",
+      "assignee": null,
+      "createdAt": "2026-01-20",
+      "updatedAt": "2026-01-20",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 0.5,
+      "relatedFiles": [
+        "components/KanbanSwimlane.tsx",
+        "stores/index.ts"
+      ]
+    },
+    {
+      "id": "KB-022",
+      "title": "После drag & drop статус этапа не обновляется в модалке",
+      "description": "При перемещении карточки этапа drag & drop из одного статуса в другой (например, из 'Пауза' в 'План'), статус обновляется в БД и визуально на канбане, но при открытии модалки этапа (StageModal) показывается старый статус.\n\nПричина: В оптимистичном обновлении useUpdateStageStatusOptimistic обновлялся только status (строка), но не statusId (UUID), который используется в модалке.\n\nРешение: Добавлен маппинг STAGE_STATUS_TO_DB_NAME для преобразования StageStatus кода в русское название из БД, и теперь в оптимистичном обновлении обновляются оба поля: status и statusId.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-21",
+      "updatedAt": "2026-01-21",
+      "completedAt": "2026-01-21",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 1,
+      "relatedFiles": [
+        "hooks/index.ts",
+        "actions/index.ts",
+        "components/KanbanDropZone.tsx"
+      ]
+    },
+    {
       "id": "KB-AUDIT",
       "title": "Full Module Audit: Kanban Board",
       "description": "Полный аудит модуля канбан-доски для подтверждения качества.\n\nОсобое внимание на drag-and-drop логику, обновление статусов и производительность при большом количестве карточек.",
@@ -135,8 +531,8 @@
       "status": "todo",
       "assignee": null,
       "createdAt": "2026-01-05",
-      "updatedAt": "2026-01-05",
-      "blockedBy": [],
+      "updatedAt": "2026-01-20",
+      "blockedBy": ["KB-013", "KB-014", "KB-015", "KB-016", "KB-017"],
       "blocks": [],
       "estimatedHours": 4,
       "checklist": {
@@ -190,6 +586,22 @@
   ],
 
   "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-01-20",
+      "changes": [
+        "KB-002: Добавлено открытие StageModal при клике на название этапа в канбане",
+        "KB-003: Улучшена анимация открытия/закрытия swimlane (CSS Grid вместо max-height)",
+        "KB-004: Добавлена модалка подтверждения при удалении этапа (DeleteConfirmDialog)",
+        "KB-005: Исправлены аватары на карточках этапа - теперь показываются ответственные за задачи вместо категорий работ",
+        "KB-006: Добавлен tooltip с именем ответственного при наведении на аватар раздела",
+        "KB-008: Добавлена инвалидация kanban в useApplyTemplate для обновления канбана после применения шаблона",
+        "KB-009: Исправлено автозакрытие SectionModal и сброс полей при изменении статуса/дат (убран onSuccess из saveField, добавлены statusId/startDate/endDate в KanbanSection, обновлён маппинг из v_resource_graph)",
+        "KB-010: Исправлено отображение статуса этапа в StageModal (добавлен statusId в KanbanStage, обновлён маппинг и convertToDecompositionStage)",
+        "KB-011: Исправлено автозакрытие StageModal при изменении полей (убран onSuccess из saveField)",
+        "KB-022: Исправлено обновление статуса этапа в модалке после drag & drop (добавлен маппинг StageStatus → русское название БД и обновление statusId в оптимистичном обновлении)"
+      ]
+    },
     {
       "version": "1.0.0",
       "date": "2025-01-01",
