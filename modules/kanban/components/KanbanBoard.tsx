@@ -84,48 +84,6 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
     }
   }, [sections])
 
-  // HTML5 Drag and Drop Handlers
-  const handleDragStart = useCallback((stageId: string, sectionId: string, e: React.DragEvent) => {
-    setDraggedCard({ stageId, sectionId })
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', JSON.stringify({ stageId, sectionId }))
-    if (e.currentTarget instanceof HTMLElement) {
-      e.dataTransfer.setDragImage(e.currentTarget, 0, 0)
-    }
-  }, [])
-
-  const handleDragOver = useCallback((targetSectionId: string, e: React.DragEvent) => {
-    e.preventDefault()
-    if (!draggedCard) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-    if (draggedCard.sectionId !== targetSectionId) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-    e.dataTransfer.dropEffect = 'move'
-  }, [draggedCard])
-
-  const handleDrop = useCallback((targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => {
-    e.preventDefault()
-    if (!draggedCard) return
-    if (draggedCard.sectionId !== targetSectionId) {
-      setDraggedCard(null)
-      return
-    }
-    updateStatus({
-      stageId: draggedCard.stageId,
-      sectionId: draggedCard.sectionId,
-      newStatus: targetStatus,
-    })
-    setDraggedCard(null)
-  }, [draggedCard, updateStatus])
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedCard(null)
-  }, [])
-
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
     return (
