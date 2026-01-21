@@ -134,8 +134,8 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                 {user && (
                   <div className="flex items-center gap-2 mt-2">
                     <span className="font-medium">{user.name}</span>
-                    <span className="text-gray-500">•</span>
-                    <span className="text-gray-500">{user.position}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">{user.position}</span>
                   </div>
                 )}
                 {canEditSalaryFields ? (
@@ -227,12 +227,12 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                     step={formData.isHourly ? 0.01 : 10}
                     disabled={!canEditSalaryFields}
                   />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">Br</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Br</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-4 items-center gap-4">
-                <div className="text-right text-sm text-gray-500">Текущая ставка:</div>
+                <div className="text-right text-sm text-muted-foreground">Текущая ставка:</div>
                 <div className="col-span-3 text-sm font-medium">
                   {formData.salary === undefined || formData.salary === null ? '—' : formatSalary(formData.salary, !!formData.isHourly)}
                 </div>
@@ -240,10 +240,10 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
 
               {formData.isHourly && formData.salary !== undefined && formData.salary !== null && (
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <div className="text-right text-sm text-gray-500">Примерно в месяц:</div>
+                  <div className="text-right text-sm text-muted-foreground">Примерно в месяц:</div>
                   <div className="col-span-3 text-sm">
                     {formatSalary((formData.salary) * 168 * (formData.employmentRate ?? 1), false)}
-                    <span className="text-xs text-gray-500 ml-1">(при 168 часах)</span>
+                    <span className="text-xs text-muted-foreground ml-1">(при 168 часах)</span>
                   </div>
                 </div>
               )}

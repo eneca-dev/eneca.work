@@ -32,7 +32,7 @@ export function CalendarHeader() {
           variant="outline" 
           size="icon" 
           onClick={handlePrevMonth}
-          className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="hover:bg-accent transition-colors"
         >
           <span className="sr-only">Previous month</span>
           <ChevronLeft className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function CalendarHeader() {
           variant="outline" 
           size="icon"
           onClick={handleToday}
-          className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="hover:bg-accent transition-colors"
         >
           <span className="sr-only">Сегодня</span>
           <Calendar className="h-4 w-4" />
@@ -50,7 +50,7 @@ export function CalendarHeader() {
           variant="outline" 
           size="icon" 
           onClick={handleNextMonth}
-          className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="hover:bg-accent transition-colors"
         >
           <span className="sr-only">Next month</span>
           <ChevronRight className="h-4 w-4" />

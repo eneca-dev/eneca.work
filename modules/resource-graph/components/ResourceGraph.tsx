@@ -7,8 +7,8 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useEffect } from 'react'
-import { ChevronsUpDown, ChevronsDownUp, ChevronDown } from 'lucide-react'
+import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
+import { ChevronsUpDown, ChevronsDownUp, ChevronDown, Database } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
 import { useResourceGraphData, useCompanyCalendarEvents, usePrefetchSectionsBatch } from '../hooks'
@@ -24,6 +24,7 @@ import { ResourceGraphTimeline, TimelineHeader, generateDayCells } from './timel
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
 import type { TimelineRange } from '../types'
 import { InlineFilter, parseFilterString, tokensToQueryParams, type FilterConfig, type FilterQueryParams } from '@/modules/inline-filter'
+import { LockedFiltersBadge } from '@/modules/permissions'
 import { UserSync } from '@/components/UserSync'
 import {
   CheckpointEditModal,
@@ -64,6 +65,22 @@ interface ResourceGraphInternalProps {
  * Используется в TasksView для встраивания в общую страницу с табами
  */
 export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProps) {
+  // State: загрузить все данные без фильтров
+  const [loadAll, setLoadAll] = useState(false)
+
+  // Проверяем, применены ли фильтры
+  const filtersApplied = useMemo(() => {
+    return Object.keys(queryParams).length > 0
+  }, [queryParams])
+
+  // Определяем, нужно ли загружать данные
+  const shouldFetchData = filtersApplied || loadAll
+
+  // Handle "Load All" button click
+  const handleLoadAll = useCallback(() => {
+    setLoadAll(true)
+  }, [])
+
   // Refs for scroll synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const contentScrollRef = useRef<HTMLDivElement>(null)
@@ -128,7 +145,10 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
   const { collapseAll, expandAll, expandToSections } = useUIStateStore()
 
   // Data fetching with external query params
-  const { data, isLoading, error } = useResourceGraphData(queryParams)
+  const { data, isLoading, error } = useResourceGraphData(
+    filtersApplied ? queryParams : undefined,
+    { enabled: shouldFetchData }
+  )
 
   // Background prefetch of sections batch data after initial load
   usePrefetchSectionsBatch(data, { enabled: !isLoading && !!data })
@@ -181,6 +201,33 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
   const handleCollapseAll = useCallback(() => {
     collapseAll()
   }, [collapseAll])
+
+  // Empty state - before data fetch (no filters, no loadAll)
+  if (!shouldFetchData) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center max-w-md">
+          <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+          <h2 className="text-lg font-medium mb-2">
+            Выберите данные для отображения
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Используйте фильтр выше для поиска проектов и разделов.
+          </p>
+          <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
+            подразделение:"ОВ" проект:"Название"
+          </p>
+          <button
+            onClick={handleLoadAll}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Database size={16} />
+            Загрузить всё
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -442,13 +489,17 @@ export function ResourceGraph() {
           </div>
 
           {/* InlineFilter - takes remaining space */}
-          <div className="flex-1 min-w-0 pr-4">
-            <InlineFilter
-              config={RESOURCE_GRAPH_FILTER_CONFIG}
-              value={filterString}
-              onChange={setFilterString}
-              options={filterOptions}
-            />
+          <div className="flex-1 min-w-0 flex items-center gap-2 pr-4">
+            <div className="flex-1 min-w-0">
+              <InlineFilter
+                config={RESOURCE_GRAPH_FILTER_CONFIG}
+                value={filterString}
+                onChange={setFilterString}
+                options={filterOptions}
+              />
+            </div>
+            {/* Badge showing locked filters for non-admin users */}
+            <LockedFiltersBadge />
           </div>
         </div>
 

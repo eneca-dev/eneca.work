@@ -263,7 +263,7 @@ function ResetPasswordForm() {
     return (
       <div className="space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Проверка ссылки...</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Проверка ссылки...</h1>
           <p className="text-sm text-muted-foreground">Пожалуйста, подождите</p>
         </div>
         <div className="flex justify-center">
@@ -277,7 +277,7 @@ function ResetPasswordForm() {
     return (
       <div className="space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Ошибка сброса пароля</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Ошибка сброса пароля</h1>
           {error && (
             <div className="p-3 bg-red-100 border border-red-200 text-red-600 text-sm rounded-md dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
               {error}
@@ -300,7 +300,7 @@ function ResetPasswordForm() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Создание нового пароля</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Создание нового пароля</h1>
         <p className="text-sm text-muted-foreground">Введите новый пароль для вашего аккаунта</p>
       </div>
 
@@ -339,8 +339,8 @@ function ResetPasswordForm() {
             : 'max-h-0 opacity-0 transform -translate-y-2'
           }
         `}>
-          <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-md dark:bg-gray-800/30 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Требования к паролю:</p>
+          <div className="space-y-2 p-3 bg-muted border border-border rounded-md">
+            <p className="text-sm font-medium text-foreground">Требования к паролю:</p>
             <div className="space-y-2">
               {passwordRequirements && (
                 <>
@@ -406,7 +406,7 @@ function LoadingFallback() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Загрузка...</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Загрузка...</h1>
         <p className="text-sm text-muted-foreground">Пожалуйста, подождите</p>
       </div>
       <div className="flex justify-center">

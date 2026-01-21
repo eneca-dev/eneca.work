@@ -2,6 +2,11 @@ import { createClient } from "@/utils/supabase/client"
 import * as Sentry from "@sentry/nextjs"
 import type { Permission, Role } from '../types'
 
+/** Тип для результата join-запроса role_permissions → permissions */
+interface RolePermissionWithJoin {
+  permissions: { name: string } | null
+}
+
 /**
  * Система загрузки разрешений пользователя из множественных ролей
  */
@@ -105,7 +110,8 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
       return []
     }
 
-    return rolePermissions ? rolePermissions.map(rp => (rp.permissions as any)?.name).filter(Boolean) : []
+    const results = rolePermissions as RolePermissionWithJoin[] | null
+    return results ? results.map(rp => rp.permissions?.name).filter((name): name is string => Boolean(name)) : []
   } catch (error) {
     console.error('Ошибка получения разрешений роли:', error)
     Sentry.captureException(error)

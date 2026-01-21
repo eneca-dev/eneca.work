@@ -268,21 +268,21 @@ export function DeleteSectionModal({
         className={cn(
           'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
           'w-full max-w-md',
-          'bg-slate-900/95 backdrop-blur-md',
-          'border border-slate-700/50',
+          'bg-card/95 backdrop-blur-md',
+          'border border-border/50',
           'rounded-lg shadow-2xl shadow-black/50',
           'transform transition-all duration-200'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            <span id="delete-section-title" className="text-xs font-medium text-slate-300">
+            <span id="delete-section-title" className="text-xs font-medium text-foreground">
               Удаление раздела
             </span>
-            <span className="text-[10px] text-slate-500">·</span>
-            <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+            <span className="text-[10px] text-muted-foreground">·</span>
+            <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
               {sectionName}
             </span>
           </div>
@@ -290,7 +290,7 @@ export function DeleteSectionModal({
             ref={closeButtonRef}
             onClick={onClose}
             disabled={isDeleting}
-            className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors focus:outline-none focus:ring-1 focus:ring-slate-600/50"
+            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors focus:outline-none focus:ring-1 focus:ring-border/50"
             aria-label="Закрыть"
           >
             <X className="w-4 h-4" />
@@ -301,8 +301,8 @@ export function DeleteSectionModal({
         <div className="px-4 py-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-6 gap-2">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              <span className="text-xs text-slate-400">Загрузка информации...</span>
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Загрузка информации...</span>
             </div>
           ) : deleteStats ? (
             <div className="space-y-3">
@@ -318,63 +318,63 @@ export function DeleteSectionModal({
 
               {/* Stats */}
               {totalRelatedItems > 0 && (
-                <div className="bg-slate-800/50 rounded border border-slate-700/50 p-3">
-                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-2">
+                <div className="bg-muted/50 rounded border border-border/50 p-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     Также будет удалено
                   </p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                     {deleteStats.loadings_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Загрузки</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.loadings_count}</span>
+                        <span className="text-muted-foreground">Загрузки</span>
+                        <span className="text-foreground font-mono">{deleteStats.loadings_count}</span>
                       </div>
                     )}
                     {deleteStats.assignments_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Задания</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.assignments_count}</span>
+                        <span className="text-muted-foreground">Задания</span>
+                        <span className="text-foreground font-mono">{deleteStats.assignments_count}</span>
                       </div>
                     )}
                     {deleteStats.decomposition_stages_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Этапы</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.decomposition_stages_count}</span>
+                        <span className="text-muted-foreground">Этапы</span>
+                        <span className="text-foreground font-mono">{deleteStats.decomposition_stages_count}</span>
                       </div>
                     )}
                     {deleteStats.decomposition_items_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Декомпозиция</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.decomposition_items_count}</span>
+                        <span className="text-muted-foreground">Декомпозиция</span>
+                        <span className="text-foreground font-mono">{deleteStats.decomposition_items_count}</span>
                       </div>
                     )}
                     {deleteStats.tasks_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Задачи</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.tasks_count}</span>
+                        <span className="text-muted-foreground">Задачи</span>
+                        <span className="text-foreground font-mono">{deleteStats.tasks_count}</span>
                       </div>
                     )}
                     {deleteStats.budgets_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Бюджеты</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.budgets_count}</span>
+                        <span className="text-muted-foreground">Бюджеты</span>
+                        <span className="text-foreground font-mono">{deleteStats.budgets_count}</span>
                       </div>
                     )}
                     {deleteStats.section_comments_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Комментарии</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.section_comments_count}</span>
+                        <span className="text-muted-foreground">Комментарии</span>
+                        <span className="text-foreground font-mono">{deleteStats.section_comments_count}</span>
                       </div>
                     )}
                     {deleteStats.checkpoints_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Контр. точки</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.checkpoints_count}</span>
+                        <span className="text-muted-foreground">Контр. точки</span>
+                        <span className="text-foreground font-mono">{deleteStats.checkpoints_count}</span>
                       </div>
                     )}
                     {deleteStats.plan_loadings_count > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-slate-500">План загрузки</span>
-                        <span className="text-slate-300 font-mono">{deleteStats.plan_loadings_count}</span>
+                        <span className="text-muted-foreground">План загрузки</span>
+                        <span className="text-foreground font-mono">{deleteStats.plan_loadings_count}</span>
                       </div>
                     )}
                   </div>
@@ -391,24 +391,24 @@ export function DeleteSectionModal({
               )}
             </div>
           ) : (
-            <div className="text-center text-xs text-slate-500 py-6">
+            <div className="text-center text-xs text-muted-foreground py-6">
               Ошибка загрузки данных
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-700/50">
+        <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border/50">
           <button
             onClick={onClose}
             disabled={isDeleting}
             className={cn(
               'px-3 py-1.5 text-[11px] font-medium rounded',
-              'text-slate-400 hover:text-slate-300',
-              'border border-slate-700 hover:border-slate-600',
-              'bg-slate-800/50 hover:bg-slate-800',
+              'text-muted-foreground hover:text-foreground',
+              'border border-border hover:border-border',
+              'bg-muted/50 hover:bg-muted',
               'transition-colors',
-              'focus:outline-none focus:ring-1 focus:ring-slate-600/50',
+              'focus:outline-none focus:ring-1 focus:ring-border/50',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >

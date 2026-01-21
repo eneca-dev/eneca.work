@@ -26,19 +26,19 @@ function ModalComponent({
       onClose={onClose} 
       closeOnClick={closeOnOverlayClick}
     >
-      <div 
+      <div
         role="dialog"
         aria-modal="true"
         className={`
-          ${modalClasses} 
-          bg-white dark:bg-slate-800 
-          rounded-xl 
-          shadow-2xl 
-          border border-gray-200 dark:border-slate-700
+          ${modalClasses}
+          bg-card
+          rounded-xl
+          shadow-2xl
+          border border-border
           backdrop-blur-sm
           transform transition-all duration-300 ease-out
           ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
-          max-h-[90vh] 
+          max-h-[90vh]
           flex flex-col
           ${className}
         `}

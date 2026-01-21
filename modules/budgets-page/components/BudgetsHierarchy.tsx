@@ -73,41 +73,41 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className={cn('flex flex-col h-full bg-slate-950', className)}>
+      <div className={cn('flex flex-col h-full bg-background', className)}>
         {/* Column headers - sticky with horizontal scroll sync */}
         <div
           ref={headerRef}
-          className="overflow-x-hidden border-b border-slate-700 bg-slate-900 sticky top-0 z-10"
+          className="overflow-x-hidden border-b bg-card sticky top-0 z-10"
         >
           {/* Group headers row */}
-          <div className="flex items-center min-w-max border-b border-slate-800">
+          <div className="flex items-center min-w-max border-b">
             {/* Наименование + Категория */}
             <div className="min-w-[400px] w-[400px] shrink-0" />
             <div className="w-10 shrink-0" />
 
             {/* ТРУДОЗАТРАТЫ */}
-            <div className="flex items-center shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center shrink-0 border-l border-border/30">
               <div className="w-[196px] py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Трудозатраты
                 </span>
               </div>
             </div>
 
             {/* СТАВКА */}
-            <div className="flex items-center shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center shrink-0 border-l border-border/30">
               <div className="w-[72px] py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Ставка
                 </span>
               </div>
             </div>
 
             {/* БЮДЖЕТЫ */}
-            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
               <div className="w-full py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Расчётный / Распределено / Выделенный
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Расчётный / Распред. / Израсх. / Выделенный
                 </span>
               </div>
             </div>
@@ -117,20 +117,20 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
           <div className="flex items-center min-w-max">
             {/* Наименование + кнопки */}
             <div className="min-w-[400px] w-[400px] px-2 py-1 shrink-0 flex items-center justify-between">
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-muted-foreground">
                 Наименование
               </span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={expandAll}
-                  className="h-5 px-1.5 text-[10px] text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded flex items-center gap-0.5"
+                  className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded flex items-center gap-0.5"
                 >
                   <ChevronDown className="h-3 w-3" />
                   Все
                 </button>
                 <button
                   onClick={collapseAll}
-                  className="h-5 px-1.5 text-[10px] text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded flex items-center gap-0.5"
+                  className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded flex items-center gap-0.5"
                 >
                   <ChevronRight className="h-3 w-3" />
                   Скрыть
@@ -140,51 +140,55 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
 
             {/* Категория */}
             <div className="w-10 py-1.5 text-center shrink-0">
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-muted-foreground">
                 Кат.
               </span>
             </div>
 
             {/* ТРУДОЗАТРАТЫ subheaders */}
-            <div className="flex items-center shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center shrink-0 border-l border-border/30">
               <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-muted-foreground">
                   План, ч
                 </span>
               </div>
               <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-muted-foreground">
                   С К, ч
                 </span>
               </div>
               <div className="w-[52px] py-1.5 px-1 text-right">
-                <span className="text-[10px] text-slate-500" title="% от родителя">
+                <span className="text-[10px] text-muted-foreground" title="% от родителя">
                   % род.
                 </span>
               </div>
             </div>
 
             {/* СТАВКА subheaders */}
-            <div className="flex items-center shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center shrink-0 border-l border-border/30">
               <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-muted-foreground">
                   BYN/ч
                 </span>
               </div>
             </div>
 
             {/* БЮДЖЕТЫ subheaders */}
-            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-slate-700/30">
+            <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
               <div className="w-[80px] py-1.5 px-1 text-right">
-                <span className="text-[10px] text-cyan-500/70">Расчётн.</span>
+                <span className="text-[10px] text-primary">Расчётн.</span>
               </div>
               <div className="w-[10px]" />
               <div className="w-[80px] py-1.5 px-1 text-center">
-                <span className="text-[10px] text-slate-500">Распред.</span>
+                <span className="text-[10px] text-muted-foreground">Распред.</span>
+              </div>
+              <div className="w-[10px]" />
+              <div className="w-[80px] py-1.5 px-1 text-center">
+                <span className="text-[10px] text-muted-foreground">Израсх.</span>
               </div>
               <div className="w-[10px]" />
               <div className="flex-1 py-1.5 px-1 text-left">
-                <span className="text-[10px] text-emerald-500/70">Выделенный (сумма / %)</span>
+                <span className="text-[10px] text-primary">Выделенный (сумма / %)</span>
               </div>
             </div>
           </div>

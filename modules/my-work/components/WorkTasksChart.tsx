@@ -225,7 +225,7 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
       </div>
 
       {/* График */}
-      <div ref={containerRef} className="relative bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 px-12 py-3 overflow-visible">
+      <div ref={containerRef} className="relative bg-gray-50 dark:bg-slate-600/20 rounded-lg px-12 py-3 overflow-visible">
         {/* Сообщение для пустого состояния */}
         {!hasAnyData && (
           <div className={`absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 flex items-center text-gray-900 dark:text-white animate-in fade-in-0 duration-300 max-w-sm ${

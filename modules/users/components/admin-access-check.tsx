@@ -40,7 +40,7 @@ export function AdminAccessCheck({
           Sentry.captureException(permissionsError, { tags: { module: 'users', component: 'AdminAccessCheck', action: 'permissions_load', error_type: 'unexpected' } })
           setHasAccess(false)
           if (redirectOnFailure) {
-            router.push("/dashboard/users")
+            router.push("/users")
           }
           setIsLoading(false)
           return
@@ -52,7 +52,7 @@ export function AdminAccessCheck({
         
         // Редиректим если нет доступа
         if (!canViewAdminPanel && redirectOnFailure) {
-          router.push("/dashboard/users")
+          router.push("/users")
         }
         
         setIsLoading(false)
@@ -61,7 +61,7 @@ export function AdminAccessCheck({
         Sentry.captureException(error, { tags: { module: 'users', component: 'AdminAccessCheck', action: 'check_access', error_type: 'unexpected' } })
         setHasAccess(false)
         if (redirectOnFailure) {
-          router.push("/dashboard/users")
+          router.push("/users")
         }
         setIsLoading(false)
       }

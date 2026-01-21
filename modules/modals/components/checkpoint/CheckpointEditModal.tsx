@@ -245,10 +245,10 @@ export function CheckpointEditModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-xl',
-            'bg-white border border-slate-300',
-            'dark:bg-slate-900/95 dark:backdrop-blur-md dark:border-slate-700/50',
+            'bg-white border border-border',
+            'dark:bg-card/95 dark:backdrop-blur-md dark:border-border/50',
             'rounded-lg shadow-2xl',
-            'shadow-slate-500/20 dark:shadow-black/50',
+            'shadow-border/20 dark:shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
           )}
@@ -257,23 +257,23 @@ export function CheckpointEditModal({
           {/* Header */}
           <div className={cn(
             'flex items-center justify-between px-4 py-2.5 border-b',
-            'border-slate-200 dark:border-slate-700/50'
+            'border-border dark:border-border/50'
           )}>
             <div className="flex items-center gap-2">
               <Flag className="w-4 h-4 text-amber-500" />
               <span className={cn(
                 'text-xs font-medium',
-                'text-slate-700 dark:text-slate-300'
+                'text-foreground dark:text-foreground'
               )}>
                 Редактировать чекпоинт
               </span>
               {checkpoint && (
                 <>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-500">·</span>
+                  <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">·</span>
                   <span
                     className={cn(
                       'text-[10px] truncate max-w-[200px]',
-                      'text-slate-500 dark:text-slate-400'
+                      'text-muted-foreground dark:text-muted-foreground'
                     )}
                     title={checkpoint.title}
                   >
@@ -289,8 +289,8 @@ export function CheckpointEditModal({
                 onClick={onClose}
                 className={cn(
                   'p-1 rounded transition-colors',
-                  'text-slate-400 hover:text-slate-600 hover:bg-slate-100',
-                  'dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800'
+                  'text-muted-foreground hover:text-muted-foreground hover:bg-muted',
+                  'dark:text-muted-foreground dark:hover:text-foreground dark:hover:bg-muted'
                 )}
               >
                 <X className="w-4 h-4" />
@@ -304,7 +304,7 @@ export function CheckpointEditModal({
               <div className="flex items-center justify-center py-8">
                 <Loader2 className={cn(
                   'h-5 w-5 animate-spin',
-                  'text-slate-500 dark:text-slate-400'
+                  'text-muted-foreground dark:text-muted-foreground'
                 )} />
               </div>
             ) : (
@@ -313,7 +313,7 @@ export function CheckpointEditModal({
                 <div>
                   <label className={cn(
                     'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                    'text-slate-500 dark:text-slate-400'
+                    'text-muted-foreground dark:text-muted-foreground'
                   )}>
                     Шаблон чекпоинта
                   </label>
@@ -333,10 +333,10 @@ export function CheckpointEditModal({
                             isSelected
                               ? 'shadow-sm'
                               : cn(
-                                  'border-slate-200 bg-white text-slate-600',
-                                  'hover:border-slate-300 hover:bg-slate-50',
-                                  'dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400',
-                                  'dark:hover:border-slate-600 dark:hover:bg-slate-800/60'
+                                  'border-border bg-white text-muted-foreground',
+                                  'hover:border-border hover:bg-muted',
+                                  'dark:border-border dark:bg-muted/40 dark:text-muted-foreground',
+                                  'dark:hover:border-border dark:hover:bg-muted/60'
                                 )
                           )}
                           style={
@@ -377,7 +377,7 @@ export function CheckpointEditModal({
                     <div>
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                        'text-slate-500 dark:text-slate-400'
+                        'text-muted-foreground dark:text-muted-foreground'
                       )}>
                         Название <span className="text-red-500">*</span>
                       </label>
@@ -410,10 +410,10 @@ export function CheckpointEditModal({
                           placeholder="Введите название"
                           className={cn(
                             'flex-1 px-2.5 py-1.5 text-xs rounded transition-colors',
-                            'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
-                            'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                            'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
-                            'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                            'bg-white border border-border text-foreground placeholder:text-muted-foreground',
+                            'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
+                            'dark:bg-muted/50 dark:border-border dark:text-foreground dark:placeholder:text-muted-foreground',
+                            'dark:focus:border-border dark:focus:ring-border/50'
                           )}
                           disabled={isPending}
                         />
@@ -424,7 +424,7 @@ export function CheckpointEditModal({
                     <div>
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                        'text-slate-500 dark:text-slate-400'
+                        'text-muted-foreground dark:text-muted-foreground'
                       )}>
                         Дата дедлайна <span className="text-red-500">*</span>
                       </label>
@@ -437,10 +437,10 @@ export function CheckpointEditModal({
                         offsetX={0}
                         inputClassName={cn(
                           'w-full px-2.5 py-1.5 text-xs rounded transition-colors cursor-pointer',
-                          'bg-white border border-slate-300 text-slate-700',
-                          'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                          'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200',
-                          'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                          'bg-white border border-border text-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
+                          'dark:bg-muted/50 dark:border-border dark:text-foreground',
+                          'dark:focus:border-border dark:focus:ring-border/50'
                         )}
                       />
                     </div>
@@ -449,7 +449,7 @@ export function CheckpointEditModal({
                     <div>
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                        'text-slate-500 dark:text-slate-400'
+                        'text-muted-foreground dark:text-muted-foreground'
                       )}>
                         Связанные разделы
                       </label>
@@ -462,7 +462,7 @@ export function CheckpointEditModal({
                               key={id}
                               className={cn(
                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px]',
-                                'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground'
                               )}
                             >
                               {section.name}
@@ -482,10 +482,10 @@ export function CheckpointEditModal({
                             type="button"
                             className={cn(
                               'w-6 h-6 rounded flex items-center justify-center transition-colors',
-                              'border border-dashed border-slate-300 text-slate-400',
-                              'hover:border-slate-400 hover:text-slate-500 hover:bg-slate-50',
-                              'dark:border-slate-700 dark:text-slate-500',
-                              'dark:hover:border-slate-600 dark:hover:text-slate-400 dark:hover:bg-slate-800/50'
+                              'border border-dashed border-border text-muted-foreground',
+                              'hover:border-border hover:text-muted-foreground hover:bg-muted',
+                              'dark:border-border dark:text-muted-foreground',
+                              'dark:hover:border-border dark:hover:text-muted-foreground dark:hover:bg-muted/50'
                             )}
                           >
                             <Plus size={12} />
@@ -493,15 +493,15 @@ export function CheckpointEditModal({
                           {/* Dropdown */}
                           <div className={cn(
                             'absolute left-0 top-full mt-1 z-20 min-w-[180px] max-h-[150px] overflow-y-auto',
-                            'bg-white border border-slate-200 rounded-md shadow-lg',
-                            'dark:bg-slate-900 dark:border-slate-700',
+                            'bg-white border border-border rounded-md shadow-lg',
+                            'dark:bg-card dark:border-border',
                             'opacity-0 invisible group-hover:opacity-100 group-hover:visible',
                             'transition-all duration-150'
                           )}>
                             {sectionsLoading ? (
-                              <div className="p-2 text-[10px] text-slate-400">Загрузка...</div>
+                              <div className="p-2 text-[10px] text-muted-foreground">Загрузка...</div>
                             ) : projectSections.filter(s => s.id !== checkpoint?.section_id && !linkedSectionIds.includes(s.id)).length === 0 ? (
-                              <div className="p-2 text-[10px] text-slate-400">Нет доступных разделов</div>
+                              <div className="p-2 text-[10px] text-muted-foreground">Нет доступных разделов</div>
                             ) : (
                               projectSections
                                 .filter(s => s.id !== checkpoint?.section_id && !linkedSectionIds.includes(s.id))
@@ -512,8 +512,8 @@ export function CheckpointEditModal({
                                     onClick={() => setLinkedSectionIds(prev => [...prev, section.id])}
                                     className={cn(
                                       'w-full text-left px-2.5 py-1.5 text-[11px] transition-colors',
-                                      'hover:bg-slate-50 dark:hover:bg-slate-800',
-                                      'text-slate-600 dark:text-slate-400'
+                                      'hover:bg-muted dark:hover:bg-muted',
+                                      'text-muted-foreground dark:text-muted-foreground'
                                     )}
                                   >
                                     {section.name}
@@ -532,7 +532,7 @@ export function CheckpointEditModal({
                     <div className="flex flex-col h-full">
                       <label className={cn(
                         'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
-                        'text-slate-500 dark:text-slate-400'
+                        'text-muted-foreground dark:text-muted-foreground'
                       )}>
                         Описание <span className="text-red-500">*</span>
                       </label>
@@ -543,10 +543,10 @@ export function CheckpointEditModal({
                         rows={6}
                         className={cn(
                           'w-full px-2.5 py-1.5 text-xs flex-1 resize-none rounded transition-colors',
-                          'bg-white border border-slate-300 text-slate-700 placeholder:text-slate-400',
-                          'focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400/50',
-                          'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-600',
-                          'dark:focus:border-slate-600 dark:focus:ring-slate-600/50'
+                          'bg-white border border-border text-foreground placeholder:text-muted-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-border/50',
+                          'dark:bg-muted/50 dark:border-border dark:text-foreground dark:placeholder:text-muted-foreground',
+                          'dark:focus:border-border dark:focus:ring-border/50'
                         )}
                         disabled={isPending}
                       />
@@ -561,7 +561,7 @@ export function CheckpointEditModal({
                       <AlertCircle className="w-3.5 h-3.5" />
                       <span className="font-medium">Удалить чекпоинт?</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+                    <p className="text-[11px] text-muted-foreground dark:text-muted-foreground mb-3">
                       Это действие нельзя будет отменить.
                     </p>
                     <div className="flex gap-2">
@@ -569,8 +569,8 @@ export function CheckpointEditModal({
                         onClick={() => setShowDeleteConfirm(false)}
                         className={cn(
                           'flex-1 px-2 py-1 text-[11px] font-medium rounded',
-                          'text-slate-600 bg-slate-100 hover:bg-slate-200',
-                          'dark:text-slate-400 dark:bg-slate-800 dark:hover:bg-slate-700',
+                          'text-muted-foreground bg-muted hover:bg-muted',
+                          'dark:text-muted-foreground dark:bg-muted dark:hover:bg-muted',
                           'transition-colors'
                         )}
                       >
@@ -596,7 +596,7 @@ export function CheckpointEditModal({
           {/* Footer */}
           <div className={cn(
             'flex items-center justify-between gap-2 px-4 py-2.5 border-t',
-            'border-slate-200 dark:border-slate-700/50'
+            'border-border dark:border-border/50'
           )}>
             {/* Left side - Delete button */}
             <div className="flex items-center gap-2">
@@ -641,11 +641,11 @@ export function CheckpointEditModal({
                 disabled={isPending}
                 className={cn(
                   'px-3 py-1.5 text-[11px] font-medium rounded border transition-colors',
-                  'text-slate-600 border-slate-300 bg-white',
-                  'hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50',
+                  'text-muted-foreground border-border bg-white',
+                  'hover:text-foreground hover:border-border hover:bg-muted',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50',
-                  'dark:hover:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+                  'dark:text-muted-foreground dark:border-border dark:bg-muted/50',
+                  'dark:hover:text-foreground dark:hover:border-border dark:hover:bg-muted'
                 )}
               >
                 Отмена
@@ -657,8 +657,8 @@ export function CheckpointEditModal({
                   'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded transition-colors',
                   'text-slate-900 bg-amber-500 hover:bg-amber-400',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'disabled:bg-slate-200 disabled:text-slate-400',
-                  'dark:disabled:bg-slate-700 dark:disabled:text-slate-500'
+                  'disabled:bg-muted disabled:text-muted-foreground',
+                  'dark:disabled:bg-muted dark:disabled:text-muted-foreground'
                 )}
               >
                 {updateCheckpoint.isPending ? (

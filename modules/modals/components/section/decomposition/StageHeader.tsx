@@ -126,16 +126,16 @@ export function StageHeader({
   )
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/30 group">
+    <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/30 group">
       {/* Drag Handle - fixed width */}
       <div className="w-5 flex-shrink-0">
         {dragHandleProps && (
           <button
             {...dragHandleProps.attributes}
             {...(dragHandleProps.listeners as React.HTMLAttributes<HTMLButtonElement>)}
-            className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-slate-700/50 rounded opacity-40 hover:opacity-100 transition-opacity"
+            className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted rounded opacity-40 hover:opacity-100 transition-opacity"
           >
-            <GripVertical className="h-3.5 w-3.5 text-slate-500" />
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         )}
       </div>
@@ -143,12 +143,12 @@ export function StageHeader({
       {/* Expand/Collapse - fixed width */}
       <button
         onClick={onToggleExpand}
-        className="w-5 flex-shrink-0 p-0.5 hover:bg-slate-700/50 rounded transition-colors flex items-center justify-center"
+        className="w-5 flex-shrink-0 p-0.5 hover:bg-muted rounded transition-colors flex items-center justify-center"
       >
         {isExpanded ? (
-          <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
 
@@ -169,10 +169,10 @@ export function StageHeader({
                     <img
                       src={emp.avatar_url}
                       alt={emp.full_name}
-                      className="h-5 w-5 rounded-full object-cover border border-slate-700 hover:border-red-500/50 transition-colors"
+                      className="h-5 w-5 rounded-full object-cover border border-border hover:border-red-500/50 transition-colors"
                     />
                   ) : (
-                    <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-medium text-slate-300 border border-slate-600 hover:border-red-500/50 transition-colors">
+                    <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium text-foreground border border-border hover:border-red-500/50 transition-colors">
                       {emp.first_name?.[0]}{emp.last_name?.[0]}
                     </div>
                   )}
@@ -180,14 +180,14 @@ export function StageHeader({
               </TooltipTrigger>
               <TooltipContent side="top" className="text-[10px]">
                 <p>{emp.full_name}</p>
-                <p className="text-slate-400">Клик для удаления</p>
+                <p className="text-muted-foreground">Клик для удаления</p>
               </TooltipContent>
             </Tooltip>
           ))}
           {responsibleEmployees.length > 3 && (
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
-                <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-medium text-slate-400 border border-slate-600">
+                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium text-muted-foreground border border-border">
                   +{responsibleEmployees.length - 3}
                 </div>
               </TooltipTrigger>
@@ -200,9 +200,9 @@ export function StageHeader({
             <TooltipTrigger asChild>
               <button
                 onClick={onOpenResponsiblesDialog}
-                className="h-5 w-5 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center border border-dashed border-slate-600 hover:border-amber-500/50 transition-colors"
+                className="h-5 w-5 rounded-full bg-muted hover:bg-muted flex items-center justify-center border border-dashed border-border hover:border-amber-500/50 transition-colors"
               >
-                <Plus className="h-3 w-3 text-slate-500" />
+                <Plus className="h-3 w-3 text-muted-foreground" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-[10px]">
@@ -226,13 +226,13 @@ export function StageHeader({
                 setIsEditingName(false)
               }
             }}
-            className="h-6 text-xs px-1.5 bg-slate-800/80"
+            className="h-6 text-xs px-1.5 bg-muted/80"
             autoFocus
           />
         ) : (
           <button
             onClick={() => setIsEditingName(true)}
-            className="text-xs font-medium text-left hover:bg-slate-700/40 px-1.5 py-0.5 rounded truncate block w-full"
+            className="text-xs font-medium text-left hover:bg-muted/40 px-1.5 py-0.5 rounded truncate block w-full"
             title={stage.name}
           >
             {stage.name}
@@ -249,21 +249,21 @@ export function StageHeader({
               value={formatDateForInput(stage.startDate)}
               onChange={handleStartDateChange}
               onBlur={() => setIsEditingDates(false)}
-              className="h-5 px-1 text-[10px] bg-slate-800 border border-slate-700 rounded w-[65px]"
+              className="h-5 px-1 text-[10px] bg-muted border border-border rounded w-[65px]"
             />
-            <span className="text-slate-600">—</span>
+            <span className="text-muted-foreground">—</span>
             <input
               type="date"
               value={formatDateForInput(stage.endDate)}
               onChange={handleEndDateChange}
               onBlur={() => setIsEditingDates(false)}
-              className="h-5 px-1 text-[10px] bg-slate-800 border border-slate-700 rounded w-[65px]"
+              className="h-5 px-1 text-[10px] bg-muted border border-border rounded w-[65px]"
             />
           </>
         ) : (
           <button
             onClick={() => setIsEditingDates(true)}
-            className="text-slate-500 hover:text-slate-300 hover:bg-slate-700/40 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/40 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
           >
             {formatDisplayDate(stage.startDate)} — {formatDisplayDate(stage.endDate)}
           </button>
@@ -288,7 +288,7 @@ export function StageHeader({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none" className="text-xs">
-              <span className="text-slate-500">—</span>
+              <span className="text-muted-foreground">—</span>
             </SelectItem>
             {stageStatuses.map((status) => (
               <SelectItem key={status.id} value={status.id} className="text-xs">
@@ -307,7 +307,7 @@ export function StageHeader({
 
       {/* Metrics - fixed width for alignment */}
       <TooltipProvider>
-        <div className="w-[130px] flex-shrink-0 flex items-center justify-end gap-2 text-[10px] text-slate-500">
+        <div className="w-[130px] flex-shrink-0 flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
           {/* Tasks */}
           <span className="w-4 text-center">{tasksCount}</span>
 
@@ -330,7 +330,7 @@ export function StageHeader({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-1 w-[50px]">
-                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={cn('h-full transition-all', getProgressBarColor(progress))}
                     style={{ width: `${progress}%` }}

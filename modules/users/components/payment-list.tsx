@@ -160,7 +160,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
 
   // Функция для отображения занятости
   const getEmploymentRateBadge = (rate: number) => {
-    let color = "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+    let color = "bg-muted text-muted-foreground"
 
     if (rate < 0.5) {
       color = "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
@@ -219,7 +219,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
           <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
               <div className="relative w-full sm:w-64 lg:w-96">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
                   placeholder="Поиск сотрудников..."
@@ -240,15 +240,15 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 ml-auto">
+              <div className="flex items-center text-sm text-muted-foreground ml-auto">
                 <Users className="h-4 w-4 mr-1" />
                 <span>{getCounterText()}</span>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-800">
-            <div className="p-4 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+          <div className="border-t border-border">
+            <div className="p-4 flex justify-between items-center bg-muted/50">
               <div className="text-sm font-medium">
                 Общий фонд оплаты труда:
                 <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-bold">
@@ -278,8 +278,8 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                   {Object.entries(groupedUsers).map(([groupName, groupUsers]) => (
                     <React.Fragment key={groupName || "ungrouped"}>
                       {groupName && (
-                        <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
-                          <TableCell colSpan={7} className="py-1 border-l-4 border-gray-200 dark:border-gray-700">
+                        <TableRow className="bg-muted/50 hover:bg-muted/70 transition-colors">
+                          <TableCell colSpan={7} className="py-1 border-l-4 border-border">
                             <div className="flex items-center cursor-pointer" onClick={() => toggleGroup(groupName)}>
                               {expandedGroups[groupName] ? (
                                 <svg
@@ -316,7 +316,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                                 {groupBy === "department" ? "Отдел: " : groupBy === "team" ? "Команда: " : ""}
                                 {groupName}
                               </span>
-                              <span className="ml-2 text-gray-500 dark:text-gray-400 text-sm">
+                              <span className="ml-2 text-muted-foreground text-sm">
                                 ({groupUsers.length})
                               </span>
                             </div>
@@ -340,13 +340,13 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                                 </Avatar>
                                 <div>
                                   <div className="font-medium text-sm">{user.name}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                                  <div className="text-xs text-muted-foreground">{user.email}</div>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell className="py-1">
                               <div className="text-sm">{user.department}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{user.team}</div>
+                              <div className="text-xs text-muted-foreground">{user.team}</div>
                             </TableCell>
                             <TableCell className="py-1">
                               <div className="text-sm">{user.position}</div>

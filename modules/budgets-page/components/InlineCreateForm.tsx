@@ -103,16 +103,16 @@ export function InlineCreateForm({
 
   // Стили в зависимости от варианта
   const containerStyles = variant === 'stage'
-    ? 'bg-slate-800/60'
-    : 'bg-slate-900/40'
+    ? 'bg-muted/60'
+    : 'bg-card/40'
 
   const inputStyles = variant === 'stage'
-    ? 'text-slate-200 placeholder:text-slate-500'
-    : 'text-slate-300 placeholder:text-slate-600'
+    ? 'text-foreground placeholder:text-muted-foreground'
+    : 'text-foreground/80 placeholder:text-muted-foreground/50'
 
   const checkButtonStyles = variant === 'stage'
     ? 'hover:bg-teal-500/20 text-teal-400'
-    : 'hover:bg-slate-600/50 text-slate-400'
+    : 'hover:bg-muted text-muted-foreground'
 
   return (
     <div className={cn('flex items-center gap-1 px-2 py-1 rounded', containerStyles, className)}>
@@ -141,13 +141,13 @@ export function InlineCreateForm({
       />
 
       {error && (
-        <span className="text-[10px] text-red-400 truncate max-w-[100px]" title={error}>
+        <span className="text-[10px] text-destructive truncate max-w-[100px]" title={error}>
           {error}
         </span>
       )}
 
       {isSubmitting ? (
-        <Loader2 className="h-3.5 w-3.5 text-slate-400 animate-spin" />
+        <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
       ) : (
         <>
           <button
@@ -157,7 +157,7 @@ export function InlineCreateForm({
               'p-0.5 rounded transition-colors',
               value.trim()
                 ? checkButtonStyles
-                : 'text-slate-600 cursor-not-allowed'
+                : 'text-muted-foreground/50 cursor-not-allowed'
             )}
             title="Создать (Enter)"
           >
@@ -165,7 +165,7 @@ export function InlineCreateForm({
           </button>
           <button
             onClick={onCancel}
-            className="p-0.5 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+            className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
             title="Отмена (Esc)"
           >
             <X className="h-3.5 w-3.5" />

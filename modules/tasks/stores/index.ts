@@ -1,27 +1,30 @@
 /**
- * Tasks Module - Unified Stores
+ * Tasks Module - Stores
  *
- * Общие stores для страницы Задачи (объединяет resource-graph и kanban)
+ * Экспорт stores и конфигурации для страницы Задачи
  */
 
-import { create } from 'zustand'
-import { devtools, persist } from 'zustand/middleware'
 import { Building2, Users, FolderKanban, Tag, UsersRound, UserCircle } from 'lucide-react'
-import type { FilterConfig, FilterQueryParams } from '@/modules/inline-filter'
-import {
-  parseFilterString,
-  tokensToQueryParams,
-  hasActiveFilters,
-} from '@/modules/inline-filter'
+import type { FilterConfig } from '@/modules/inline-filter'
 
 // ============================================================================
-// View Mode Types
+// Re-export Tabs Store
 // ============================================================================
 
-export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments'
+export {
+  useTasksTabsStore,
+  VIEW_MODE_ICONS,
+  getTabIcon,
+  MAX_USER_TABS,
+  type TaskTab,
+  type TasksViewMode,
+  type TabIconName,
+  type CreateTabInput,
+  type UpdateTabInput,
+} from './tabs-store'
 
 // ============================================================================
-// Unified Filter Config (объединение resource-graph + kanban)
+// Unified Filter Config (используется в InlineFilter и компонентах)
 // ============================================================================
 
 export const TASKS_FILTER_CONFIG: FilterConfig = {
@@ -66,122 +69,3 @@ export const TASKS_FILTER_CONFIG: FilterConfig = {
   },
   placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название"',
 }
-
-// ============================================================================
-// Unified Filters Store
-// ============================================================================
-
-interface TasksFiltersState {
-  /** Строка инлайн-фильтра */
-  filterString: string
-  /** Установить строку фильтра */
-  setFilterString: (value: string) => void
-  /** Очистить фильтры */
-  clearFilters: () => void
-  /** Получить распарсенные параметры для запроса */
-  getQueryParams: () => FilterQueryParams
-  /** Проверить есть ли активные фильтры */
-  hasFilters: () => boolean
-  /** Обновить имя проекта в фильтре (при переименовании) */
-  updateProjectName: (oldName: string, newName: string) => void
-  /** Удалить проект из фильтра (при удалении) */
-  removeProjectFilter: (projectName: string) => void
-}
-
-export const useTasksFiltersStore = create<TasksFiltersState>()(
-  devtools(
-    persist(
-      (set, get) => ({
-        filterString: '',
-
-        setFilterString: (value) => set({ filterString: value }),
-
-        clearFilters: () => set({ filterString: '' }),
-
-        getQueryParams: () => {
-          const { filterString } = get()
-          const parsed = parseFilterString(filterString, TASKS_FILTER_CONFIG)
-          return tokensToQueryParams(parsed.tokens, TASKS_FILTER_CONFIG)
-        },
-
-        hasFilters: () => {
-          const { filterString } = get()
-          return hasActiveFilters(filterString, TASKS_FILTER_CONFIG)
-        },
-
-        updateProjectName: (oldName, newName) => {
-          const { filterString } = get()
-          if (!filterString.includes('проект:')) return
-
-          // Replace project name in filter string
-          // Handles both quoted and unquoted values
-          const patterns = [
-            new RegExp(`проект:"${oldName}"`, 'g'),
-            new RegExp(`проект:${oldName}(?=\\s|$)`, 'g'),
-          ]
-
-          let updated = filterString
-          for (const pattern of patterns) {
-            updated = updated.replace(pattern, `проект:"${newName}"`)
-          }
-
-          if (updated !== filterString) {
-            set({ filterString: updated })
-          }
-        },
-
-        removeProjectFilter: (projectName) => {
-          const { filterString } = get()
-          if (!filterString.includes('проект:')) return
-
-          // Remove project filter token
-          const patterns = [
-            new RegExp(`проект:"${projectName}"\\s*`, 'g'),
-            new RegExp(`проект:${projectName}\\s*`, 'g'),
-          ]
-
-          let updated = filterString
-          for (const pattern of patterns) {
-            updated = updated.replace(pattern, '')
-          }
-
-          // Trim extra spaces
-          updated = updated.trim().replace(/\s+/g, ' ')
-
-          if (updated !== filterString) {
-            set({ filterString: updated })
-          }
-        },
-      }),
-      {
-        name: 'tasks-filters',
-      }
-    )
-  )
-)
-
-// ============================================================================
-// View Mode Store
-// ============================================================================
-
-interface TasksViewState {
-  /** Текущий режим отображения */
-  viewMode: TasksViewMode
-  /** Установить режим отображения */
-  setViewMode: (mode: TasksViewMode) => void
-}
-
-export const useTasksViewStore = create<TasksViewState>()(
-  devtools(
-    persist(
-      (set) => ({
-        viewMode: 'kanban',
-
-        setViewMode: (mode) => set({ viewMode: mode }),
-      }),
-      {
-        name: 'tasks-view-mode',
-      }
-    )
-  )
-)

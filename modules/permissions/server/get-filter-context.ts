@@ -27,14 +27,38 @@ const FILTER_SCOPE_PERMISSIONS: FilterScopePermission[] = [
  * Загружает permissions из БД и вычисляет scope на их основе.
  */
 export async function getFilterContext(): Promise<ActionResult<UserFilterContext | null>> {
+  return Sentry.startSpan(
+    { name: 'getFilterContext', op: 'server.action' },
+    async () => {
   try {
     const supabase = await createClient()
+
+    // Валидация сессии
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser()
 
+    if (authError) {
+      Sentry.captureMessage('getFilterContext: Auth error', {
+        level: 'warning',
+        extra: { error: authError.message },
+      })
+      return { success: false, error: 'Ошибка аутентификации' }
+    }
+
     if (!user) {
-      return { success: true, data: null }
+      return { success: false, error: 'Пользователь не авторизован' }
+    }
+
+    // Проверка формата user.id (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(user.id)) {
+      Sentry.captureMessage('getFilterContext: Invalid user ID format', {
+        level: 'error',
+        extra: { userId: user.id },
+      })
+      return { success: false, error: 'Некорректный формат идентификатора пользователя' }
     }
 
     // 1. Получаем данные пользователя из view_users
@@ -262,4 +286,6 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
     })
     return { success: false, error: 'Ошибка загрузки контекста фильтрации' }
   }
+    }
+  )
 }

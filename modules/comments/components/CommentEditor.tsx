@@ -266,19 +266,19 @@ export function CommentEditor({
 
   return (
     <div 
-      className="border rounded-lg dark:border-slate-600 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-colors max-w-full overflow-hidden"
+      className="border rounded-lg border-border focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-colors max-w-full overflow-hidden"
     >
       {/* Панель инструментов - упрощенная версия */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 p-2 flex flex-wrap gap-1 rounded-t-lg">
+      <div className="border-b border-border bg-muted p-2 flex flex-wrap gap-1 rounded-t-lg">
         {/* Заголовки */}
         <div className="flex gap-1 mr-2">
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('heading', { level: 1 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Заголовок 1"
           >
@@ -287,10 +287,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('heading', { level: 2 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Заголовок 2"
           >
@@ -299,10 +299,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('heading', { level: 3 }) 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Заголовок 3"
           >
@@ -311,17 +311,17 @@ export function CommentEditor({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Форматирование текста */}
         <div className="flex gap-1 mr-2">
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('bold') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Жирный (Ctrl+B)"
           >
@@ -330,10 +330,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleItalic().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('italic') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Курсив (Ctrl+I)"
           >
@@ -342,10 +342,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('underline') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Подчеркнутый (Ctrl+U)"
           >
@@ -354,10 +354,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleStrike().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('strike') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Зачеркнутый"
           >
@@ -366,10 +366,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleHighlight().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('highlight') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Выделение"
           >
@@ -378,17 +378,17 @@ export function CommentEditor({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Списки */}
         <div className="flex gap-1 mr-2">
           <button
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('bulletList') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Маркированный список"
           >
@@ -397,10 +397,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('orderedList') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Нумерованный список"
           >
@@ -409,10 +409,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleTaskList().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('taskList') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Список задач"
           >
@@ -421,17 +421,17 @@ export function CommentEditor({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Цитата и код */}
         <div className="flex gap-1 mr-2">
           <button
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('blockquote') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Цитата"
           >
@@ -440,10 +440,10 @@ export function CommentEditor({
           <button
             onClick={() => editor.chain().focus().toggleCode().run()}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
               editor.isActive('code') 
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'text-gray-700 dark:text-gray-300'
+                : 'text-foreground'
             )}
             title="Инлайн код"
           >
@@ -452,7 +452,7 @@ export function CommentEditor({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Упоминания */}
         <div className="flex gap-1 mr-2">
@@ -461,8 +461,8 @@ export function CommentEditor({
               editor.chain().focus().insertContent('@').run()
             }}
             className={cn(
-              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 border-0 bg-transparent',
-              'text-gray-700 dark:text-gray-300'
+              'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors hover:bg-accent border-0 bg-transparent',
+              'text-foreground'
             )}
             title="Добавить упоминание"
           >
@@ -471,7 +471,7 @@ export function CommentEditor({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
+        <div className="w-px h-8 bg-border mx-1 self-center" />
 
         {/* Отмена/Повтор */}
         <div className="flex gap-1 mr-2">
@@ -481,8 +481,8 @@ export function CommentEditor({
             className={cn(
               'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors border-0 bg-transparent',
               !editor.can().undo() 
-                ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' 
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'text-muted-foreground cursor-not-allowed' 
+                : 'text-foreground hover:bg-accent'
             )}
             title="Отменить"
           >
@@ -494,8 +494,8 @@ export function CommentEditor({
             className={cn(
               'h-8 w-8 p-0 rounded inline-flex items-center justify-center transition-colors border-0 bg-transparent',
               !editor.can().redo() 
-                ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' 
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'text-muted-foreground cursor-not-allowed' 
+                : 'text-foreground hover:bg-accent'
             )}
             title="Повторить"
           >
@@ -505,7 +505,7 @@ export function CommentEditor({
       </div>
 
       {/* Редактор */}
-      <div className="bg-white dark:bg-gray-800 max-h-[200px] overflow-y-auto scrollbar-hide">
+      <div className="bg-card max-h-[200px] overflow-y-auto scrollbar-hide">
         <style dangerouslySetInnerHTML={{
           __html: `
             /*Скрываем scrollbar для чистого UI */
@@ -580,25 +580,25 @@ export function CommentEditor({
         <EditorContent 
           editor={editor}
           className="editor-comment prose prose-sm max-w-none dark:prose-invert min-h-[120px]
-                     [&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-gray-900 dark:[&_.ProseMirror]:text-gray-100
-                     [&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-2 [&_.ProseMirror_h1]:mt-3 [&_.ProseMirror_h1]:text-gray-900 dark:[&_.ProseMirror_h1]:text-gray-100
-                     [&_.ProseMirror_h2]:text-lg [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-2 [&_.ProseMirror_h2]:mt-3 [&_.ProseMirror_h2]:text-gray-900 dark:[&_.ProseMirror_h2]:text-gray-100
-                     [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-1 [&_.ProseMirror_h3]:mt-2 [&_.ProseMirror_h3]:text-gray-900 dark:[&_.ProseMirror_h3]:text-gray-100
-                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-gray-500 dark:[&_.ProseMirror_s]:text-gray-400
+                     [&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-foreground
+                     [&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-2 [&_.ProseMirror_h1]:mt-3 [&_.ProseMirror_h1]:text-foreground
+                     [&_.ProseMirror_h2]:text-lg [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-2 [&_.ProseMirror_h2]:mt-3 [&_.ProseMirror_h2]:text-foreground
+                     [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-1 [&_.ProseMirror_h3]:mt-2 [&_.ProseMirror_h3]:text-foreground
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-muted-foreground
                      [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2
                      [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2
                      [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
                      [&_.ProseMirror_ul_ul]:list-[circle] [&_.ProseMirror_ul_ul]:ml-4
                      [&_.ProseMirror_ul_ul_ul]:list-[square] [&_.ProseMirror_ul_ul_ul]:ml-4
                      [&_.ProseMirror_ol_ol]:list-[lower-alpha] [&_.ProseMirror_ol_ol_ol]:list-[lower-roman] [&_.ProseMirror_ol_ol_ol]:ml-4
-                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 dark:[&_.ProseMirror_blockquote]:border-gray-600 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-gray-700 dark:[&_.ProseMirror_blockquote]:text-gray-300
-                     [&_.ProseMirror_code]:bg-gray-100 dark:[&_.ProseMirror_code]:bg-gray-700 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-gray-800 dark:[&_.ProseMirror_code]:text-gray-200
-                     [&_.ProseMirror_mark]:bg-yellow-200 dark:[&_.ProseMirror_mark]:bg-yellow-700/75 dark:[&_.ProseMirror_mark]:text-gray-100"
+                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-border [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-muted-foreground
+                     [&_.ProseMirror_code]:bg-muted [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-foreground
+                     [&_.ProseMirror_mark]:bg-yellow-200 dark:[&_.ProseMirror_mark]:bg-yellow-700/75 dark:[&_.ProseMirror_mark]:text-foreground"
         />
       </div>
       
       {/* Панель снизу с кнопкой отправки */}
-      <div className="flex justify-between items-center px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-b-lg gap-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-b-lg gap-4 border-t border-border">
         {/* Левая часть с сообщениями и подсказками */}
         {isOverLimit && (
           <span className="text-xs text-orange-500 font-medium">
@@ -608,10 +608,10 @@ export function CommentEditor({
         
         {!isOverLimit && (
           <div className="flex items-center space-x-4">
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Ctrl+Enter для отправки
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">
+            <span className="text-xs text-muted-foreground hidden sm:inline">
               @ для упоминаний
             </span>
           </div>

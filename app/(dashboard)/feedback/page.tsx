@@ -8,9 +8,11 @@ export const metadata: Metadata = {
 
 export default function ReportPage() {
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-center">
-        <UserReportForm />
+    <div className="min-h-screen bg-card">
+      <div className="container mx-auto py-8">
+        <div className="flex justify-center">
+          <UserReportForm />
+        </div>
       </div>
     </div>
   )

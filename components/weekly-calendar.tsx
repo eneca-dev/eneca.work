@@ -121,7 +121,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
 
   const handleCalendarClick = () => {
     setSelectedDate(calendarDate)
-    router.push('/dashboard/calendar')
+    router.push('/calendar')
   }
 
   // Проверяем, является ли день рабочим с учетом событий пользователя

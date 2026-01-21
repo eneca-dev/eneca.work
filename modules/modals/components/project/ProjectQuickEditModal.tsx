@@ -5,7 +5,7 @@ import { X, Loader2, Check, FolderKanban, Tag, ChevronDown, Trash2, AlertTriangl
 import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
-import { useTasksFiltersStore } from '@/modules/tasks/stores'
+import { useTasksTabsStore } from '@/modules/tasks/stores'
 import type { BaseModalProps } from '../../types'
 
 // ============================================================================
@@ -133,7 +133,7 @@ export function ProjectQuickEditModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const queryClient = useQueryClient()
-  const { updateProjectName, removeProjectFilter } = useTasksFiltersStore()
+  const { updateProjectName, removeProjectFilter } = useTasksTabsStore()
 
   // Fetch available tags
   const { data: allTags = [] } = useProjectTags()
