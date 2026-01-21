@@ -8,7 +8,7 @@
 
 interface TableWidgetProps {
   columns: string[]
-  rows: Record<string, any>[]
+  rows: any[][]  // Массив массивов: [[val1, val2], [val3, val4], ...]
 }
 
 /**
@@ -38,12 +38,12 @@ export function TableWidget({ columns, rows }: TableWidgetProps) {
               key={idx}
               className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
             >
-              {columns.map((col) => (
+              {row.map((cell, cellIdx) => (
                 <td
-                  key={col}
+                  key={cellIdx}
                   className="px-4 py-3 text-slate-900 dark:text-slate-100"
                 >
-                  {row[col]}
+                  {cell}
                 </td>
               ))}
             </tr>

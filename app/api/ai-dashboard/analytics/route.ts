@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const timeoutId = setTimeout(() => controller.abort(), AI_AGENT_TIMEOUT)
 
     try {
-      const response = await fetch(`${AI_AGENT_URL}/analytics`, {
+      const response = await fetch(`${AI_AGENT_URL}/api/analytics`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,12 +71,8 @@ export async function POST(request: NextRequest) {
       // 5. Парсинг ответа от AI агента
       const aiResponse = await response.json()
 
-      // 6. Возврат результата клиенту
-      return NextResponse.json({
-        success: true,
-        data: aiResponse,
-        executionTime: response.headers.get('X-Execution-Time')
-      })
+      // 6. Возврат результата клиенту (возвращаем данные напрямую, без обертки)
+      return NextResponse.json(aiResponse)
 
     } catch (fetchError: any) {
       clearTimeout(timeoutId)

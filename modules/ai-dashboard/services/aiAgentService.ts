@@ -100,15 +100,10 @@ export async function fetchAIAnalysis(query: string): Promise<AIResponse> {
     throw new Error(errorData.error || `Server error: ${response.statusText}`)
   }
 
-  const { data, executionTime } = await response.json()
+  const data = await response.json()
 
   // Парсинг ответа от AI агента
   const parsedResponse = parseAIResponse(data)
-
-  // Добавляем метаданные если есть
-  if (executionTime) {
-    ;(parsedResponse as any).executionTime = executionTime
-  }
 
   return parsedResponse
 }
