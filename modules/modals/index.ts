@@ -155,7 +155,7 @@ export { TaskSidebar, type TaskSidebarProps } from './components/task'
 export { TaskCreateModal, type TaskCreateModalProps } from './components/task'
 
 // Loading
-export { LoadingModal, type LoadingModalProps } from './components/loading'
+export { LoadingModal, type LoadingModalProps, LoadingModalContainer } from './components/loading'
 
 // Loading Modal 2
 export { LoadingModal2Container, LoadingModal2, type LoadingModal2Props } from './components/loading-modal-2'

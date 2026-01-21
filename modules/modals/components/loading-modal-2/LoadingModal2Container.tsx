@@ -8,9 +8,11 @@
  * - 'loading2-edit'
  */
 
+import { useEffect, useState } from 'react'
 import { useUserStore } from '@/stores/useUserStore'
 import { useIsModalOpen, useModalStore, closeModal } from '../../stores/modal-store'
 import { LoadingModal2 } from './LoadingModal2'
+import { getLoadingById } from '../../actions/loadings'
 import type { LoadingModal2CreateData, LoadingModal2EditData } from '../../types'
 
 export function LoadingModal2Container() {
@@ -23,12 +25,88 @@ export function LoadingModal2Container() {
   // Получаем данные из store (без типизации, чтобы избежать constraint ошибок)
   const modalData = useModalStore((s) => s.modalData)
 
+  // Состояние для загрузки данных в режиме редактирования
+  const [editData, setEditData] = useState<LoadingModal2EditData | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(false)
+
+  // Загружаем данные загрузки при открытии в режиме редактирования
+  useEffect(() => {
+    if (isEditOpen && modalData) {
+      const data = modalData as { loadingId?: string; sectionId?: string; loading?: any }
+
+      console.log('🔍 LoadingModal2Container: получены данные модалки', {
+        hasLoading: !!data.loading,
+        hasLoadingId: !!data.loadingId,
+        hasSectionId: !!data.sectionId,
+        data,
+      })
+
+      // Если loading уже передан, используем его
+      if (data.loading) {
+        console.log('✅ LoadingModal2Container: используем переданный loading объект')
+        setEditData({
+          loadingId: data.loadingId || data.loading.id,
+          sectionId: data.sectionId || data.loading.section_id,
+          loading: data.loading,
+        })
+        return
+      }
+
+      // Если есть только loadingId, загружаем данные
+      if (data.loadingId && data.sectionId) {
+        console.log('🔄 LoadingModal2Container: загружаем данные по loadingId:', data.loadingId)
+        setIsLoadingData(true)
+        getLoadingById(data.loadingId)
+          .then((result) => {
+            console.log('📥 LoadingModal2Container: результат getLoadingById:', result)
+            if (result.success && result.data) {
+              console.log('✅ LoadingModal2Container: данные загружены успешно')
+              setEditData({
+                loadingId: result.data.id,
+                sectionId: data.sectionId!,
+                loading: {
+                  id: result.data.id,
+                  employee_id: result.data.employeeId,
+                  start_date: result.data.startDate,
+                  end_date: result.data.endDate,
+                  rate: result.data.rate,
+                  comment: result.data.comment,
+                  section_id: result.data.stageId, // loading_stage в БД
+                },
+              })
+            } else {
+              console.error('⚠️ LoadingModal2Container: не удалось загрузить данные загрузки', result.error)
+              closeModal()
+            }
+          })
+          .catch((error) => {
+            console.error('⚠️ LoadingModal2Container: ошибка при загрузке данных', error)
+            closeModal()
+          })
+          .finally(() => {
+            setIsLoadingData(false)
+          })
+      } else {
+        console.warn('⚠️ LoadingModal2Container: недостаточно данных для загрузки', {
+          hasLoadingId: !!data.loadingId,
+          hasSectionId: !!data.sectionId,
+        })
+      }
+    } else {
+      // Сбрасываем состояние при закрытии модалки
+      setEditData(null)
+      setIsLoadingData(false)
+    }
+  }, [isEditOpen, modalData])
+
   // Отладочные логи
   console.log('🔍 LoadingModal2Container debug:', {
     userId,
     isCreateOpen,
     isEditOpen,
     hasModalData: !!modalData,
+    hasEditData: !!editData,
+    isLoadingData,
   })
 
   // Если нет userId, не рендерим
@@ -53,7 +131,10 @@ export function LoadingModal2Container() {
 
   // Режим редактирования
   if (isEditOpen) {
-    const editData = modalData as LoadingModal2EditData | null
+    // Показываем загрузку или модалку с данными
+    if (isLoadingData) {
+      return null // Можно показать loader если нужно
+    }
 
     // Если нет данных, не рендерим
     if (!editData || !editData.loading) {

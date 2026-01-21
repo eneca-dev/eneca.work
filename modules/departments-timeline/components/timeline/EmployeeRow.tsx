@@ -6,9 +6,9 @@
 
 'use client'
 
-import { useMemo, useState, Fragment } from 'react'
+import { useMemo, useState, Fragment, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { FolderKanban, Building2, MessageSquare } from 'lucide-react'
+import { FolderKanban, Building2, MessageSquare, UserPlus } from 'lucide-react'
 import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
+import { openLoadingModal2Edit, openLoadingModal2Create } from '@/modules/modals'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -93,6 +94,44 @@ export function EmployeeRow({
 }: EmployeeRowProps) {
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
 
+  // Обработчик клика на loading bar для открытия модалки редактирования
+  const handleLoadingClick = useCallback((loading: Loading) => {
+    console.log('🔍 EmployeeRow: клик на loading', {
+      loadingId: loading.id,
+      sectionId: loading.sectionId,
+      stageId: loading.stageId,
+      projectName: loading.projectName,
+    })
+
+    // Проверяем что есть sectionId (это главное для открытия модалки)
+    if (!loading.sectionId) {
+      console.warn('⚠️ Не могу открыть модалку: отсутствует sectionId', {
+        loadingId: loading.id,
+        sectionId: loading.sectionId,
+        stageId: loading.stageId,
+      })
+      return
+    }
+
+    console.log('✅ Открываем LoadingModal2Edit:', {
+      loadingId: loading.id,
+      sectionId: loading.sectionId,
+    })
+
+    // Открываем LoadingModal2 через global modal store
+    openLoadingModal2Edit(loading.id, loading.sectionId)
+  }, [])
+
+  // Обработчик создания новой загрузки для сотрудника
+  const handleCreateLoading = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    // Открываем LoadingModal2 с предзаполненным employeeId
+    openLoadingModal2Create({
+      employeeId: employee.id,
+    })
+  }, [employee.id])
+
   // Convert dayCells to TimelineUnits for loading bar utils
   const timeUnits = useMemo(() => dayCellsToTimelineUnits(dayCells), [dayCells])
 
@@ -146,6 +185,15 @@ export function EmployeeRow({
           className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 group-hover/employee:bg-accent"
           style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
         >
+          {/* Create loading button - positioned at right edge of sidebar */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+            onClick={handleCreateLoading}
+          >
+            <UserPlus className="w-3 h-3" />
+            <span>Загрузка</span>
+          </button>
+
           {/* Left: avatar + name (indented more) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
             <TooltipProvider>
@@ -230,6 +278,7 @@ export function EmployeeRow({
                       borderBottomRightRadius: bar.period.comment ? 0 : 4,
                     }}
                     title={formatBarTooltip(bar.period)}
+                    onClick={() => bar.period.type === 'loading' && handleLoadingClick(bar.period)}
                   >
                     {/* Bar content */}
                     <div className="relative w-full h-full flex items-center" style={{ zIndex: 2 }}>

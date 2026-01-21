@@ -140,10 +140,31 @@ export interface LoadingCreateData {
   stageId: string
   /** ID сотрудника (если известен) */
   employeeId?: string
+  /** ID раздела (для мутаций) */
+  sectionId: string
+  /** Дата начала по умолчанию */
+  defaultStartDate?: string
+  /** Дата окончания по умолчанию */
+  defaultEndDate?: string
 }
 
 export interface LoadingEditData {
   loadingId: string
+  /** ID раздела (для мутаций) */
+  sectionId: string
+  /** Объект загрузки */
+  loading: {
+    id: string
+    employee: {
+      id: string
+      name: string
+      avatarUrl?: string
+    }
+    startDate: string
+    finishDate: string
+    rate: number
+    comment?: string
+  }
 }
 
 // ============================================================================

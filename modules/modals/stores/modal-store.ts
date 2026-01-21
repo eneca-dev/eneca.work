@@ -124,14 +124,33 @@ export const openItemEdit = (itemId: string) =>
 /**
  * Открыть модалку создания загрузки
  */
-export const openLoadingCreate = (stageId: string, employeeId?: string) =>
-  useModalStore.getState().openModal('loading-create', { stageId, employeeId })
+export const openLoadingCreate = (
+  stageId: string,
+  sectionId: string,
+  defaultStartDate?: string,
+  defaultEndDate?: string,
+  employeeId?: string
+) =>
+  useModalStore.getState().openModal('loading-create', {
+    stageId,
+    sectionId,
+    defaultStartDate,
+    defaultEndDate,
+    employeeId,
+  })
 
 /**
  * Открыть модалку редактирования загрузки
  */
-export const openLoadingEdit = (loadingId: string) =>
-  useModalStore.getState().openModal('loading-edit', { loadingId })
+export const openLoadingEdit = (loadingId: string, sectionId: string, loading: {
+  id: string
+  employee: { id: string; name: string; avatarUrl?: string }
+  startDate: string
+  finishDate: string
+  rate: number
+  comment?: string
+}) =>
+  useModalStore.getState().openModal('loading-edit', { loadingId, sectionId, loading })
 
 /**
  * Открыть модалку просмотра сотрудника

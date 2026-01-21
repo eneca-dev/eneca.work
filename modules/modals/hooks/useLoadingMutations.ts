@@ -57,6 +57,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       // Инвалидация кешей (Next.js revalidatePath уже выполнен в action)
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
 
       options.onCreateSuccess?.(data)
     },
@@ -79,6 +80,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
 
       options.onUpdateSuccess?.(data)
     },
@@ -101,6 +103,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
 
       options.onArchiveSuccess?.(data)
     },
@@ -123,6 +126,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
 
       options.onDeleteSuccess?.(data.id)
     },

@@ -354,6 +354,170 @@ export async function archiveLoading(
 }
 
 /**
+ * Получение загрузки по ID
+ */
+export async function getLoadingById(
+  loadingId: string
+): Promise<ActionResult<LoadingResult>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация ID загрузки
+    if (!loadingId?.trim()) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    // Получение загрузки из БД
+    const { data, error } = await supabase
+      .from('loadings')
+      .select('*')
+      .eq('loading_id', loadingId)
+      .single()
+
+    if (error) {
+      console.error('[getLoadingById] Supabase error:', error)
+      return {
+        success: false,
+        error: `Не удалось получить загрузку: ${error.message}`,
+      }
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: 'Загрузка не найдена',
+      }
+    }
+
+    return { success: true, data: mapLoadingToResult(data) }
+  } catch (error) {
+    console.error('[getLoadingById] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при получении загрузки',
+    }
+  }
+}
+
+export interface DepartmentLoadingItem {
+  loadingId: string
+  employeeId: string
+  employeeName: string
+  employeeEmail: string
+  sectionId: string
+  sectionName: string
+  projectId: string
+  projectName: string
+  startDate: string
+  endDate: string
+  rate: number
+  comment: string | null
+  status: LoadingStatusType
+}
+
+/**
+ * Получение всех загрузок сотрудников отдела
+ */
+export async function getDepartmentLoadings(
+  departmentId: string
+): Promise<ActionResult<DepartmentLoadingItem[]>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация ID отдела
+    if (!departmentId?.trim()) {
+      return { success: false, error: 'ID отдела обязателен' }
+    }
+
+    // Получаем загрузки через JOIN с profiles и sections
+    const { data, error } = await supabase
+      .from('loadings')
+      .select(`
+        loading_id,
+        loading_responsible,
+        loading_start,
+        loading_finish,
+        loading_rate,
+        loading_comment,
+        loading_status,
+        loading_stage,
+        profiles!loadings_loading_responsible_fkey (
+          user_id,
+          first_name,
+          last_name,
+          email,
+          department_id
+        ),
+        decomposition_stages!loadings_loading_stage_fkey (
+          stage_id,
+          stage_section_id,
+          sections!decomposition_stages_stage_section_id_fkey (
+            section_id,
+            section_name,
+            section_project_id,
+            projects!sections_section_project_id_fkey (
+              project_id,
+              project_name
+            )
+          )
+        )
+      `)
+      .eq('profiles.department_id', departmentId)
+      .eq('loading_status', 'active')
+      .order('loading_start', { ascending: false })
+
+    if (error) {
+      console.error('[getDepartmentLoadings] Supabase error:', error)
+      return {
+        success: false,
+        error: `Не удалось получить загрузки отдела: ${error.message}`,
+      }
+    }
+
+    // Маппинг данных
+    const loadings: DepartmentLoadingItem[] = (data || [])
+      .filter((item: any) => {
+        // Фильтруем записи с корректными связями
+        return (
+          item.profiles &&
+          item.decomposition_stages &&
+          item.decomposition_stages.sections &&
+          item.decomposition_stages.sections.projects
+        )
+      })
+      .map((item: any) => ({
+        loadingId: item.loading_id,
+        employeeId: item.profiles.user_id,
+        employeeName: `${item.profiles.first_name} ${item.profiles.last_name}`,
+        employeeEmail: item.profiles.email,
+        sectionId: item.decomposition_stages.sections.section_id,
+        sectionName: item.decomposition_stages.sections.section_name,
+        projectId: item.decomposition_stages.sections.projects.project_id,
+        projectName: item.decomposition_stages.sections.projects.project_name,
+        startDate: item.loading_start,
+        endDate: item.loading_finish,
+        rate: item.loading_rate || 0,
+        comment: item.loading_comment,
+        status: item.loading_status,
+      }))
+
+    return { success: true, data: loadings }
+  } catch (error) {
+    console.error('[getDepartmentLoadings] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при получении загрузок отдела',
+    }
+  }
+}
+
+/**
  * Удаление загрузки (hard delete)
  */
 export async function deleteLoading(
