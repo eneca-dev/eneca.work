@@ -20,8 +20,10 @@ export interface AITextResponse {
  */
 export interface AITableResponse {
   type: 'table'
-  columns: string[]
-  rows: Record<string, any>[]
+  content: {
+    columns: string[]
+    rows: any[][]  // Массив массивов (не объектов!)
+  }
 }
 
 /**

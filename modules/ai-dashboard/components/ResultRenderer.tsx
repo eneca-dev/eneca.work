@@ -54,14 +54,14 @@ export function ResultRenderer({ result, error }: ResultRendererProps) {
       {response.type === 'text' && <TextWidget content={response.content} />}
 
       {response.type === 'table' && (
-        <TableWidget columns={response.columns} rows={response.rows} />
+        <TableWidget columns={response.content.columns} rows={response.content.rows} />
       )}
 
       {response.type === 'mixed' && (
         <>
           <TextWidget content={response.summary} />
           {response.data.type === 'table' && (
-            <TableWidget columns={response.data.columns} rows={response.data.rows} />
+            <TableWidget columns={response.data.content.columns} rows={response.data.content.rows} />
           )}
           {response.data.type === 'chart' && (
             <div className="bg-white dark:bg-slate-900/95
