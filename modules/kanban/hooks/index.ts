@@ -135,6 +135,16 @@ import { flushSync } from 'react-dom'
 import { updateStageStatus, updateTaskProgress } from '../actions'
 import type { StageStatus } from '../types'
 
+// KB-022: Маппинг StageStatus (код) → название в БД (русское)
+const STAGE_STATUS_TO_DB_NAME: Record<StageStatus, string> = {
+  backlog: 'Бэклог',
+  planned: 'План',
+  in_progress: 'В работе',
+  paused: 'Пауза',
+  review: 'Проверка',
+  done: 'Готово',
+}
+
 /**
  * Input для обновления статуса этапа
  */
@@ -188,6 +198,14 @@ export function useUpdateStageStatusOptimistic(
         InfiniteData<KanbanSection[]>
       >(infiniteQueryKey)
 
+      // KB-022: Получаем statusId из кэша статусов для обновления в модалке
+      const stageStatuses = queryClient.getQueryData<Array<{ id: string; name: string }>>(
+        queryKeys.stageStatuses.list()
+      )
+      // Используем маппинг: StageStatus код → русское название в БД
+      const dbStatusName = STAGE_STATUS_TO_DB_NAME[input.newStatus]
+      const newStatusId = stageStatuses?.find((s) => s.name === dbStatusName)?.id ?? null
+
       // КРИТИЧНО: Используем flushSync для СИНХРОННОГО обновления кеша и ререндера
       // Это гарантирует, что карточка переместится в новую колонку ДО того,
       // как handleDragEnd вызовет setActiveCard(null)
@@ -209,10 +227,11 @@ export function useUpdateStageStatusOptimistic(
                     ...section,
                     stages: section.stages.map((stage) => {
                       if (stage.id !== input.stageId) return stage
-                      // Обновляем статус этапа
+                      // KB-022: Обновляем и status (строка), и statusId (UUID)
                       return {
                         ...stage,
                         status: input.newStatus,
+                        statusId: newStatusId,
                       }
                     }),
                   }
