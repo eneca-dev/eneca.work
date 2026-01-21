@@ -50,6 +50,7 @@ export function LoadingModal2({
   editData,
   userId,
 }: LoadingModal2Props) {
+  console.log('🔵 [LoadingModal2] Render, mode:', mode, 'open:', open, 'editData:', editData)
   // Функция получения иконки по типу элемента
   const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
     switch (type) {
@@ -97,8 +98,9 @@ export function LoadingModal2({
   })
 
   // Загрузка breadcrumbs для режима редактирования или создания с sectionId
+  // Пропускаем загрузку, если breadcrumbs уже переданы (для режима edit)
   const shouldLoadBreadcrumbs =
-    (mode === 'edit' && editData?.loading) ||
+    (mode === 'edit' && editData?.loading && !editData.breadcrumbs) ||
     (mode === 'create' && createData?.sectionId)
 
   const breadcrumbsNodeId = mode === 'edit' && editData?.loading
@@ -109,6 +111,15 @@ export function LoadingModal2({
     nodeId: breadcrumbsNodeId,
     enabled: !!(shouldLoadBreadcrumbs && open),
   })
+
+  // Используем переданные breadcrumbs если они есть, иначе загруженные из API
+  const effectiveBreadcrumbs = (mode === 'edit' && editData?.breadcrumbs)
+    ? editData.breadcrumbs
+    : loadedBreadcrumbs
+
+  const effectiveProjectId = (mode === 'edit' && editData?.projectId)
+    ? editData.projectId
+    : loadedProjectId
 
   // Хук для мутаций
   const { create: createLoading, update: updateLoading } = useLoadingMutations({
@@ -137,29 +148,42 @@ export function LoadingModal2({
 
   // Автоматический выбор раздела и установка breadcrumbs в режиме редактирования или создания с sectionId
   useEffect(() => {
+    console.log('🔵 [LoadingModal2] useEffect автовыбор раздела, effectiveBreadcrumbs:', effectiveBreadcrumbs)
+
     if (
       open &&
       !hasAutoSelected &&
-      loadedBreadcrumbs &&
-      loadedBreadcrumbs.length > 0
+      effectiveBreadcrumbs &&
+      effectiveBreadcrumbs.length > 0
     ) {
+      console.log('✅ [LoadingModal2] Условия для автовыбора выполнены')
       if (mode === 'edit' && editData?.loading) {
         // Режим редактирования
+        console.time('⏱️ [LoadingModal2] Автовыбор раздела (edit)')
         const sectionId = editData.loading.section_id
-        const lastBreadcrumb = loadedBreadcrumbs[loadedBreadcrumbs.length - 1]
-        selectSection(sectionId, lastBreadcrumb.name, loadedBreadcrumbs)
+        const lastBreadcrumb = effectiveBreadcrumbs[effectiveBreadcrumbs.length - 1]
+        selectSection(sectionId, lastBreadcrumb.name, effectiveBreadcrumbs)
         setHasAutoSelected(true)
+        console.timeEnd('⏱️ [LoadingModal2] Автовыбор раздела (edit)')
+        console.log('✅ [LoadingModal2] Раздел автоматически выбран (edit)')
       } else if (mode === 'create' && createData?.sectionId) {
         // Режим создания с предзаполненным sectionId
         const sectionId = createData.sectionId
-        const lastBreadcrumb = loadedBreadcrumbs[loadedBreadcrumbs.length - 1]
-        selectSection(sectionId, lastBreadcrumb.name, loadedBreadcrumbs)
+        const lastBreadcrumb = effectiveBreadcrumbs[effectiveBreadcrumbs.length - 1]
+        selectSection(sectionId, lastBreadcrumb.name, effectiveBreadcrumbs)
         setHasAutoSelected(true)
         // В режиме создания сразу показываем форму
         setIsFormVisible(true)
+        console.log('✅ [LoadingModal2] Раздел автоматически выбран (create)')
       }
+    } else {
+      console.log('⏸️ [LoadingModal2] Условия для автовыбора НЕ выполнены:', {
+        open,
+        hasAutoSelected,
+        hasBreadcrumbs: !!(effectiveBreadcrumbs && effectiveBreadcrumbs.length > 0),
+      })
     }
-  }, [mode, open, hasAutoSelected, loadedBreadcrumbs, editData, createData, selectSection])
+  }, [mode, open, hasAutoSelected, effectiveBreadcrumbs, editData, createData, selectSection])
 
   // Сброс состояния формы при изменении выбранного раздела (только в режиме создания без предзаполнения)
   useEffect(() => {
@@ -170,18 +194,18 @@ export function LoadingModal2({
 
   // Данные для автопереключения режима и фильтрации
   const projectAutoSwitchData = useMemo(() => {
-    if (!loadedProjectId || !loadedBreadcrumbs || loadedBreadcrumbs.length === 0) {
+    if (!effectiveProjectId || !effectiveBreadcrumbs || effectiveBreadcrumbs.length === 0) {
       return null
     }
 
     // Находим имя проекта из breadcrumbs
-    const projectBreadcrumb = loadedBreadcrumbs.find(b => b.type === 'project')
+    const projectBreadcrumb = effectiveBreadcrumbs.find(b => b.type === 'project')
 
     return {
-      projectId: loadedProjectId,
+      projectId: effectiveProjectId,
       projectName: projectBreadcrumb?.name ?? '',
     }
-  }, [loadedProjectId, loadedBreadcrumbs])
+  }, [effectiveProjectId, effectiveBreadcrumbs])
 
   // Обработчик сохранения
   const handleSave = async () => {
@@ -267,8 +291,8 @@ export function LoadingModal2({
               selectedSectionId={selectedSectionId}
               onSectionSelect={selectSection}
               userId={userId}
-              initialProjectId={loadedProjectId}
-              initialBreadcrumbs={loadedBreadcrumbs}
+              initialProjectId={effectiveProjectId}
+              initialBreadcrumbs={effectiveBreadcrumbs}
               autoSwitchProject={projectAutoSwitchData}
               disabled={mode === 'edit' && !isChangingStage}
               modalMode={mode}

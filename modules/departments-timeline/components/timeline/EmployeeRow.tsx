@@ -96,6 +96,9 @@ export function EmployeeRow({
 
   // Обработчик клика на loading bar для открытия модалки редактирования
   const handleLoadingClick = useCallback((loading: Loading) => {
+    console.time('⏱️ [EmployeeRow] handleLoadingClick')
+    console.log('🔵 [EmployeeRow] handleLoadingClick вызван для loading:', loading.id)
+
     // Проверяем что есть sectionId (это главное для открытия модалки)
     if (!loading.sectionId) {
       console.warn('⚠️ Не могу открыть модалку: отсутствует sectionId', {
@@ -105,8 +108,64 @@ export function EmployeeRow({
       return
     }
 
-    // Открываем LoadingModal2 через global modal store
-    openLoadingModal2Edit(loading.id, loading.sectionId)
+    // Строим breadcrumbs из данных loading
+    const breadcrumbs: Array<{
+      id: string
+      name: string
+      type: 'project' | 'object' | 'section' | 'decomposition_stage'
+    }> = []
+
+    if (loading.projectId && loading.projectName) {
+      breadcrumbs.push({
+        id: loading.projectId,
+        name: loading.projectName,
+        type: 'project',
+      })
+    }
+
+    if (loading.objectId && loading.objectName) {
+      breadcrumbs.push({
+        id: loading.objectId,
+        name: loading.objectName,
+        type: 'object',
+      })
+    }
+
+    if (loading.sectionId && loading.sectionName) {
+      breadcrumbs.push({
+        id: loading.sectionId,
+        name: loading.sectionName,
+        type: 'section',
+      })
+    }
+
+    if (loading.stageId && loading.stageName) {
+      breadcrumbs.push({
+        id: loading.stageId,
+        name: loading.stageName,
+        type: 'decomposition_stage',
+      })
+    }
+
+    console.log('📋 [EmployeeRow] Breadcrumbs построены:', breadcrumbs)
+
+    // Открываем LoadingModal2 через global modal store с breadcrumbs и loading объектом
+    openLoadingModal2Edit(loading.id, loading.sectionId, {
+      loading: {
+        id: loading.id,
+        employee_id: loading.employeeId || '',
+        start_date: loading.startDate,
+        end_date: loading.endDate,
+        rate: loading.rate,
+        comment: loading.comment || null,
+        section_id: loading.stageId, // stageId - это loading_stage в БД
+      },
+      breadcrumbs: breadcrumbs.length > 0 ? breadcrumbs : undefined,
+      projectId: loading.projectId,
+    })
+
+    console.timeEnd('⏱️ [EmployeeRow] handleLoadingClick')
+    console.log('🟢 [EmployeeRow] openLoadingModal2Edit вызван с полным loading объектом')
   }, [])
 
   // Обработчик создания новой загрузки для сотрудника

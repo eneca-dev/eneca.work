@@ -187,5 +187,30 @@ export const openLoadingModal2Create = (data?: {
 /**
  * Открыть модалку редактирования загрузки (Loading Modal 2)
  */
-export const openLoadingModal2Edit = (loadingId: string, sectionId: string) =>
-  useModalStore.getState().openModal('loading2-edit', { loadingId, sectionId })
+export const openLoadingModal2Edit = (
+  loadingId: string,
+  sectionId: string,
+  options?: {
+    /** Объект загрузки (если передан, не будет выполнен запрос к API) */
+    loading?: {
+      id: string
+      employee_id: string
+      start_date: string
+      end_date: string
+      rate: number
+      comment: string | null
+      section_id: string
+    }
+    breadcrumbs?: Array<{
+      id: string
+      name: string
+      type: 'project' | 'object' | 'section' | 'decomposition_stage'
+    }>
+    projectId?: string
+  }
+) =>
+  useModalStore.getState().openModal('loading2-edit', {
+    loadingId,
+    sectionId,
+    ...options,
+  })

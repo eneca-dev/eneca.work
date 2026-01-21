@@ -32,24 +32,43 @@ export function LoadingModal2Container() {
   // Загружаем данные загрузки при открытии в режиме редактирования
   useEffect(() => {
     if (isEditOpen && modalData) {
-      const data = modalData as { loadingId?: string; sectionId?: string; loading?: any }
+      console.time('⏱️ [LoadingModal2Container] useEffect обработка')
+      console.log('🔵 [LoadingModal2Container] useEffect triggered, modalData:', modalData)
+
+      const data = modalData as {
+        loadingId?: string
+        sectionId?: string
+        loading?: any
+        breadcrumbs?: Array<{
+          id: string
+          name: string
+          type: 'project' | 'object' | 'section' | 'decomposition_stage'
+        }>
+        projectId?: string
+      }
 
       // Если loading уже передан, используем его
       if (data.loading) {
+        console.log('✅ [LoadingModal2Container] loading уже передан, используем его')
         setEditData({
           loadingId: data.loadingId || data.loading.id,
           sectionId: data.sectionId || data.loading.section_id,
           loading: data.loading,
+          breadcrumbs: data.breadcrumbs,
+          projectId: data.projectId,
         })
+        console.timeEnd('⏱️ [LoadingModal2Container] useEffect обработка')
         return
       }
 
       // Если есть только loadingId, загружаем данные
       if (data.loadingId && data.sectionId) {
+        console.log('🔄 [LoadingModal2Container] Загружаем loading по ID:', data.loadingId)
         setIsLoadingData(true)
         getLoadingById(data.loadingId)
           .then((result) => {
             if (result.success && result.data) {
+              console.log('✅ [LoadingModal2Container] Loading загружен из API')
               setEditData({
                 loadingId: result.data.id,
                 sectionId: data.sectionId!,
@@ -62,6 +81,8 @@ export function LoadingModal2Container() {
                   comment: result.data.comment,
                   section_id: result.data.stageId, // loading_stage в БД
                 },
+                breadcrumbs: data.breadcrumbs,
+                projectId: data.projectId,
               })
             } else {
               console.error('⚠️ LoadingModal2Container: не удалось загрузить данные загрузки', result.error)
@@ -74,6 +95,7 @@ export function LoadingModal2Container() {
           })
           .finally(() => {
             setIsLoadingData(false)
+            console.timeEnd('⏱️ [LoadingModal2Container] useEffect обработка')
           })
       }
     } else {

@@ -195,6 +195,14 @@ export interface LoadingModal2EditData {
     comment: string | null
     section_id: string
   }
+  /** Breadcrumbs для отображения пути (опционально - если не передано, будет загружено из API) */
+  breadcrumbs?: Array<{
+    id: string
+    name: string
+    type: 'project' | 'object' | 'section' | 'decomposition_stage'
+  }>
+  /** ID проекта (для автоматического выбора проекта в дереве, опционально) */
+  projectId?: string
 }
 
 // ============================================================================

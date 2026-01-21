@@ -55,6 +55,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
   const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
+  const [hasAutoExpandedAll, setHasAutoExpandedAll] = useState(false) // Флаг для автораскрытия всех узлов
   const { toast } = useToast()
 
   // Загружаем дерево только когда проект раскрыт
@@ -122,9 +123,10 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
     setIsProjectExpanded((prev) => {
       const newState = !prev
-      // Если сворачиваем - очищаем все раскрытые узлы
+      // Если сворачиваем - очищаем все раскрытые узлы и сбрасываем флаги
       if (!newState) {
         setExpandedNodes(new Set())
+        setHasAutoExpandedAll(false)
       }
       // Если разворачиваем - автораскрытие будет выполнено в useEffect
       return newState
@@ -383,9 +385,9 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     )
   }
 
-  // При раскрытии проекта - автоматически разворачиваем всех детей
+  // При раскрытии проекта - автоматически разворачиваем всех детей (только один раз)
   useEffect(() => {
-    if (!isLoading && tree.length > 0 && isProjectExpanded) {
+    if (!isLoading && tree.length > 0 && isProjectExpanded && !hasAutoExpandedAll) {
       // Собираем все ID детей для автораскрытия
       const allIds = new Set<string>()
       tree.forEach((node) => {
@@ -397,9 +399,10 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
       // Обновляем expandedNodes для полного раскрытия дерева
       if (allIds.size > 0) {
         setExpandedNodes(allIds)
+        setHasAutoExpandedAll(true) // Помечаем что автораскрытие выполнено
       }
     }
-  }, [tree, isLoading, isProjectExpanded])
+  }, [tree, isLoading, isProjectExpanded, hasAutoExpandedAll])
 
   // Переопределяем toggleNode для узла проекта - используем toggleProject
   const handleNodeClick = (node: ProjectTreeNodeWithChildren) => {
