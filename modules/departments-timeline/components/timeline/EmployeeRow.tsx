@@ -96,27 +96,14 @@ export function EmployeeRow({
 
   // Обработчик клика на loading bar для открытия модалки редактирования
   const handleLoadingClick = useCallback((loading: Loading) => {
-    console.log('🔍 EmployeeRow: клик на loading', {
-      loadingId: loading.id,
-      sectionId: loading.sectionId,
-      stageId: loading.stageId,
-      projectName: loading.projectName,
-    })
-
     // Проверяем что есть sectionId (это главное для открытия модалки)
     if (!loading.sectionId) {
       console.warn('⚠️ Не могу открыть модалку: отсутствует sectionId', {
         loadingId: loading.id,
-        sectionId: loading.sectionId,
         stageId: loading.stageId,
       })
       return
     }
-
-    console.log('✅ Открываем LoadingModal2Edit:', {
-      loadingId: loading.id,
-      sectionId: loading.sectionId,
-    })
 
     // Открываем LoadingModal2 через global modal store
     openLoadingModal2Edit(loading.id, loading.sectionId)

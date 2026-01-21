@@ -202,6 +202,14 @@ export function LoadingModal2({
       })
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
+      console.log('🔄 [LoadingModal2] Вызываем updateLoading.mutateAsync:', {
+        loadingId: editData.loading.id,
+        employeeId: formData.employeeId,
+        rate: formData.rate,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        comment: formData.comment,
+      })
       await updateLoading.mutateAsync({
         loadingId: editData.loading.id,
         employeeId: formData.employeeId,

@@ -34,16 +34,8 @@ export function LoadingModal2Container() {
     if (isEditOpen && modalData) {
       const data = modalData as { loadingId?: string; sectionId?: string; loading?: any }
 
-      console.log('🔍 LoadingModal2Container: получены данные модалки', {
-        hasLoading: !!data.loading,
-        hasLoadingId: !!data.loadingId,
-        hasSectionId: !!data.sectionId,
-        data,
-      })
-
       // Если loading уже передан, используем его
       if (data.loading) {
-        console.log('✅ LoadingModal2Container: используем переданный loading объект')
         setEditData({
           loadingId: data.loadingId || data.loading.id,
           sectionId: data.sectionId || data.loading.section_id,
@@ -54,13 +46,10 @@ export function LoadingModal2Container() {
 
       // Если есть только loadingId, загружаем данные
       if (data.loadingId && data.sectionId) {
-        console.log('🔄 LoadingModal2Container: загружаем данные по loadingId:', data.loadingId)
         setIsLoadingData(true)
         getLoadingById(data.loadingId)
           .then((result) => {
-            console.log('📥 LoadingModal2Container: результат getLoadingById:', result)
             if (result.success && result.data) {
-              console.log('✅ LoadingModal2Container: данные загружены успешно')
               setEditData({
                 loadingId: result.data.id,
                 sectionId: data.sectionId!,
@@ -86,11 +75,6 @@ export function LoadingModal2Container() {
           .finally(() => {
             setIsLoadingData(false)
           })
-      } else {
-        console.warn('⚠️ LoadingModal2Container: недостаточно данных для загрузки', {
-          hasLoadingId: !!data.loadingId,
-          hasSectionId: !!data.sectionId,
-        })
       }
     } else {
       // Сбрасываем состояние при закрытии модалки
@@ -98,16 +82,6 @@ export function LoadingModal2Container() {
       setIsLoadingData(false)
     }
   }, [isEditOpen, modalData])
-
-  // Отладочные логи
-  console.log('🔍 LoadingModal2Container debug:', {
-    userId,
-    isCreateOpen,
-    isEditOpen,
-    hasModalData: !!modalData,
-    hasEditData: !!editData,
-    isLoadingData,
-  })
 
   // Если нет userId, не рендерим
   if (!userId) {
