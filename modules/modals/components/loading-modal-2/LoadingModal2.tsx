@@ -296,6 +296,7 @@ export function LoadingModal2({
               autoSwitchProject={projectAutoSwitchData}
               disabled={mode === 'edit' && !isChangingStage}
               modalMode={mode}
+              onClose={onClose}
             />
           </div>
 

@@ -11,18 +11,18 @@
  */
 
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw, Plus, X, ExternalLink } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useProjectsList, useProjectTree } from '../../hooks'
 import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
 import type { ProjectListItem } from '../../hooks'
 import { createDecompositionStage } from '../../actions/projects-tree'
 import { useToast } from '@/hooks/use-toast'
+import { useTasksViewStore } from '@/modules/tasks/stores'
 
 /**
  * Breadcrumb item для отображения пути
@@ -48,9 +48,12 @@ interface ProjectItemProps {
   disabled?: boolean
   /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
   modalMode?: 'create' | 'edit'
+  /** Callback для закрытия модалки */
+  onClose?: () => void
 }
 
-function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create' }: ProjectItemProps) {
+function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create', onClose }: ProjectItemProps) {
+  const router = useRouter()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
   const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
@@ -157,7 +160,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
   const handleCreateBaseStage = async (section: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
     e.stopPropagation() // Предотвращаем выбор раздела
 
-    if (disabled) return // Блокируем в режиме disabled
+    // Кнопка всегда работает, даже при disabled дереве
 
     if (!section.sectionId) {
       toast({
@@ -267,6 +270,36 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     }
   }
 
+  // Переход к странице задач с фокусом на раздел
+  const handleGoToTasks = (node: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем выбор раздела
+
+    // Кнопка всегда работает, даже при disabled дереве
+
+    if (node.type === 'section' && node.sectionId) {
+      console.log('[ProjectTree] Switching to budgets view and navigating')
+
+      // 1. Сначала переключаемся на вкладку "Бюджеты" через store
+      useTasksViewStore.getState().setViewMode('budgets')
+
+      // 2. Закрываем модалку
+      if (onClose) {
+        onClose()
+      }
+
+      // 3. Переходим на страницу задач с параметрами
+      const params = new URLSearchParams({
+        projectId: project.id,
+        sectionId: node.sectionId,
+        highlight: 'true',
+      })
+      const url = `/tasks?${params.toString()}`
+      console.log('[ProjectTree] Navigating to:', url)
+
+      router.push(url)
+    }
+  }
+
   // Цвет иконки и текста в зависимости от типа узла
   const getNodeColor = (nodeType: string) => {
     switch (nodeType) {
@@ -327,7 +360,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
             'flex items-center gap-1.5 w-full py-1 text-sm transition-colors',
             isSelected
               ? 'bg-primary text-primary-foreground font-medium'
-              : 'hover:bg-accent hover:text-accent-foreground',
+              : !disabled && 'hover:bg-accent hover:text-accent-foreground',
             isClickable && !disabled && 'cursor-pointer',
             (!isClickable && !hasChildren) || disabled ? 'cursor-default' : '',
             disabled && 'opacity-60'
@@ -349,29 +382,44 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
         </button>
 
-        {/* Кнопка создания базового этапа для разделов без этапов (только в режиме edit) */}
-        {isSectionWithoutStages && isNodeExpanded && !disabled && modalMode === 'edit' && (
-          <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }} className="py-1">
-            <Button
+        {/* Кнопки для раздела */}
+        {node.type === 'section' && isNodeExpanded && (
+          <div className="space-y-0.5">
+            {/* Кнопка "Перейти к задачам" - всегда показываем для разделов */}
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
-              onClick={(e) => handleCreateBaseStage(node, e)}
-              disabled={isCreatingStage}
-              className="h-6 text-xs gap-1.5 text-muted-foreground hover:text-foreground w-full justify-start"
+              onClick={(e) => handleGoToTasks(node, e)}
+              className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+              style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}
             >
-              {isCreatingStage ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Создание...</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="h-3 w-3" />
-                  <span>Создать базовый этап</span>
-                </>
-              )}
-            </Button>
+              <span className="w-3.5" />
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-xs">Перейти к задачам</span>
+            </button>
+
+            {/* Кнопка создания базового этапа - только для разделов без этапов */}
+            {isSectionWithoutStages && (
+              <button
+                type="button"
+                onClick={(e) => handleCreateBaseStage(node, e)}
+                disabled={isCreatingStage}
+                className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}
+              >
+                <span className="w-3.5" />
+                {isCreatingStage ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                    <span className="text-xs">Создание...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-xs">Создать базовый этап</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 
@@ -379,6 +427,13 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         {isNodeExpanded && hasChildren && (
           <div>
             {node.children!.map((child) => renderTreeNode(child, depth + 1))}
+          </div>
+        )}
+
+        {/* Пустое состояние для объекта без разделов */}
+        {isNodeExpanded && !hasChildren && !isSectionWithoutStages && node.type === 'object' && (
+          <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
+            Объект не содержит разделов
           </div>
         )}
       </div>
@@ -421,7 +476,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         onClick={toggleProject}
         disabled={disabled}
         className={cn(
-          'flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
+          'flex items-center gap-1.5 w-full py-1 text-sm transition-colors',
+          !disabled && 'hover:bg-accent hover:text-accent-foreground',
           disabled && 'opacity-60 cursor-default'
         )}
         style={{ paddingLeft: '4px' }}
@@ -504,6 +560,8 @@ export interface ProjectTreeProps {
   disabled?: boolean
   /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
   modalMode?: 'create' | 'edit'
+  /** Callback для закрытия модалки */
+  onClose?: () => void
 }
 
 export function ProjectTree({
@@ -518,6 +576,7 @@ export function ProjectTree({
   className,
   disabled = false,
   modalMode = 'create',
+  onClose,
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
@@ -624,15 +683,25 @@ export function ProjectTree({
       {/* Поиск */}
       <div className="p-4 border-b">
         <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Поиск проекта..."
             value={search}
             onChange={(e) => !disabled && setSearch(e.target.value)}
-            className="pl-8"
+            className="pl-8 pr-8"
             disabled={disabled}
           />
+          {search && !disabled && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+              title="Очистить"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -676,6 +745,7 @@ export function ProjectTree({
                 autoExpandBreadcrumbs={initialProjectId === project.id ? initialBreadcrumbs : null}
                 disabled={disabled}
                 modalMode={modalMode}
+                onClose={onClose}
               />
             ))}
         </div>
