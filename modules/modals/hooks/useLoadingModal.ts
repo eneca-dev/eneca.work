@@ -79,6 +79,8 @@ export interface UseLoadingModalResult {
   // Валидация и сброс
   validateForm: () => boolean
   resetForm: () => void
+  /** Проверка изменений в режиме редактирования */
+  hasChanges: boolean
 }
 
 /**
@@ -210,6 +212,26 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setSelectedBreadcrumbs(null)
   }, [])
 
+  // Проверка изменений в режиме редактирования
+  const hasChanges = useCallback((): boolean => {
+    if (mode === 'create') {
+      return true // В режиме создания кнопка всегда доступна (если валидация проходит)
+    }
+
+    if (!initialLoading) {
+      return true // Если нет исходной загрузки, считаем что есть изменения
+    }
+
+    // Сравниваем текущие значения с исходными
+    return (
+      formData.employeeId !== initialLoading.employee_id ||
+      formData.startDate !== initialLoading.start_date ||
+      formData.endDate !== initialLoading.end_date ||
+      formData.rate !== initialLoading.rate ||
+      formData.comment !== (initialLoading.comment ?? '')
+    )
+  }, [mode, formData, initialLoading])
+
   return {
     projectMode,
     setProjectMode,
@@ -222,5 +244,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     errors,
     validateForm,
     resetForm,
+    hasChanges: hasChanges(),
   }
 }

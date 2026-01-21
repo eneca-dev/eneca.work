@@ -44,9 +44,11 @@ interface ProjectItemProps {
   shouldAutoExpand?: boolean
   /** Breadcrumbs для автоматического разворачивания пути */
   autoExpandBreadcrumbs?: BreadcrumbItem[] | null
+  /** Режим "только просмотр" - блокирует взаимодействие */
+  disabled?: boolean
 }
 
-function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs }: ProjectItemProps) {
+function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false }: ProjectItemProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
   const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
@@ -114,6 +116,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
   // Переключение раскрытия проекта (корневой уровень)
   const toggleProject = () => {
+    if (disabled) return // Блокируем в режиме disabled
+
     setIsProjectExpanded((prev) => {
       const newState = !prev
       // Если сворачиваем - очищаем все раскрытые узлы
@@ -127,6 +131,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
   // Переключение раскрытия узла внутри дерева
   const toggleNode = (node: ProjectTreeNodeWithChildren) => {
+    if (disabled) return // Блокируем в режиме disabled
+
     setExpandedNodes((prev) => {
       const next = new Set(prev)
       const isCurrentlyExpanded = next.has(node.id)
@@ -146,6 +152,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
   // Создание базового этапа для раздела
   const handleCreateBaseStage = async (section: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
     e.stopPropagation() // Предотвращаем выбор раздела
+
+    if (disabled) return // Блокируем в режиме disabled
 
     if (!section.sectionId) {
       toast({
@@ -242,6 +250,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
   // Выбор раздела или этапа декомпозиции
   const handleSectionClick = (node: ProjectTreeNodeWithChildren) => {
+    if (disabled) return // Блокируем в режиме disabled
+
     if (node.type === 'section' || node.type === 'decomposition_stage') {
       const breadcrumbs = buildBreadcrumbs(node)
       onSectionSelect(node.id, node.name, breadcrumbs)
@@ -304,8 +314,9 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
             isSelected
               ? 'bg-primary text-primary-foreground font-medium'
               : 'hover:bg-accent hover:text-accent-foreground',
-            isClickable && 'cursor-pointer',
-            !isClickable && !hasChildren && 'cursor-default'
+            isClickable && !disabled && 'cursor-pointer',
+            (!isClickable && !hasChildren) || disabled ? 'cursor-default' : '',
+            disabled && 'opacity-60'
           )}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
@@ -325,7 +336,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         </button>
 
         {/* Кнопка создания базового этапа для разделов без этапов */}
-        {isSectionWithoutStages && isNodeExpanded && (
+        {isSectionWithoutStages && isNodeExpanded && !disabled && (
           <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }} className="py-1">
             <Button
               type="button"
@@ -393,7 +404,11 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
       <button
         type="button"
         onClick={toggleProject}
-        className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+        disabled={disabled}
+        className={cn(
+          'flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
+          disabled && 'opacity-60 cursor-default'
+        )}
         style={{ paddingLeft: '4px' }}
       >
         <span className="shrink-0">
@@ -470,6 +485,8 @@ export interface ProjectTreeProps {
   autoSwitchProject?: { projectId: string; projectName: string } | null
   /** Класс для кастомизации */
   className?: string
+  /** Режим "только просмотр" - блокирует взаимодействие */
+  disabled?: boolean
 }
 
 export function ProjectTree({
@@ -482,6 +499,7 @@ export function ProjectTree({
   initialBreadcrumbs,
   autoSwitchProject,
   className,
+  disabled = false,
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
@@ -540,6 +558,13 @@ export function ProjectTree({
     }
   }, [hasAutoSwitched, isLoadingProjects, autoSwitchProject, mode, projects, onModeChange])
 
+  // Автоматическое заполнение поиска в режиме disabled (редактирование)
+  useEffect(() => {
+    if (disabled && autoSwitchProject && !search) {
+      setSearch(autoSwitchProject.projectName)
+    }
+  }, [disabled, autoSwitchProject, search])
+
   // Фильтрация проектов по поиску
   const filteredProjects = useMemo(() => {
     if (!search.trim()) return projects
@@ -553,10 +578,10 @@ export function ProjectTree({
       {/* Переключатель "Мои проекты" / "Все проекты" */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
-          <Tabs value={mode} onValueChange={(value) => onModeChange(value as 'my' | 'all')} className="flex-1">
+          <Tabs value={mode} onValueChange={(value) => !disabled && onModeChange(value as 'my' | 'all')} className="flex-1">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="my">Мои проекты</TabsTrigger>
-              <TabsTrigger value="all">Все проекты</TabsTrigger>
+              <TabsTrigger value="my" disabled={disabled}>Мои проекты</TabsTrigger>
+              <TabsTrigger value="all" disabled={disabled}>Все проекты</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -564,7 +589,7 @@ export function ProjectTree({
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={isRefreshing || isLoadingProjects}
+            disabled={isRefreshing || isLoadingProjects || disabled}
             title="Обновить список"
             className={cn(
               'flex items-center justify-center h-9 w-9 shrink-0',
@@ -586,8 +611,9 @@ export function ProjectTree({
             type="text"
             placeholder="Поиск проекта..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => !disabled && setSearch(e.target.value)}
             className="pl-8"
+            disabled={disabled}
           />
         </div>
       </div>
@@ -630,6 +656,7 @@ export function ProjectTree({
                 onSectionSelect={onSectionSelect}
                 shouldAutoExpand={initialProjectId === project.id}
                 autoExpandBreadcrumbs={initialProjectId === project.id ? initialBreadcrumbs : null}
+                disabled={disabled}
               />
             ))}
         </div>

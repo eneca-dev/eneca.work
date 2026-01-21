@@ -83,6 +83,7 @@ export function LoadingModal2({
     // Валидация и сброс
     validateForm,
     resetForm,
+    hasChanges,
   } = useLoadingModal({
     mode,
     initialSectionId: mode === 'create' ? createData?.sectionId : editData?.sectionId,
@@ -231,7 +232,8 @@ export function LoadingModal2({
     formData.rate <= 2.0 &&
     !!formData.startDate.trim() &&
     !!formData.endDate.trim() &&
-    !isSaving
+    !isSaving &&
+    hasChanges // Кнопка неактивна если нет изменений
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -256,6 +258,7 @@ export function LoadingModal2({
               initialProjectId={loadedProjectId}
               initialBreadcrumbs={loadedBreadcrumbs}
               autoSwitchProject={projectAutoSwitchData}
+              disabled={mode === 'edit'}
             />
           </div>
 
