@@ -5,15 +5,16 @@
  *
  * Правая панель модального окна с формой для создания/редактирования загрузки
  * Включает:
- * - Информация о выбранном разделе/этапе декомпозиции
+ * - Информация о выбранном этапе декомпозиции (в режиме create) или разделе/этапе (в режиме edit)
  * - Селектор сотрудника (EmployeeSelector)
  * - Ввод ставки (RateInput)
  * - Выбор диапазона дат (DateRangePicker)
  * - Комментарий (Textarea)
  */
 
-import { AlertCircle, ChevronRight, Folder, Box, CircleDashed, ListChecks } from 'lucide-react'
+import { AlertCircle, ChevronRight, Folder, Box, CircleDashed, ListChecks, RefreshCw } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { differenceInBusinessDays } from 'date-fns'
 import { EmployeeSelector } from './EmployeeSelector'
@@ -34,6 +35,12 @@ export interface LoadingFormProps {
   selectedBreadcrumbs?: BreadcrumbItem[] | null
   /** Класс для кастомизации */
   className?: string
+  /** Режим модалки (для отображения кнопки смены этапа в режиме edit) */
+  mode?: 'create' | 'edit'
+  /** Callback для смены этапа (только в режиме edit) */
+  onChangeStage?: () => void
+  /** Флаг optimistic update (показывает индикатор загрузки в селекторе сотрудника) */
+  isUpdating?: boolean
 }
 
 export function LoadingForm({
@@ -43,6 +50,9 @@ export function LoadingForm({
   disabled = false,
   selectedBreadcrumbs,
   className,
+  mode = 'create',
+  onChangeStage,
+  isUpdating = false,
 }: LoadingFormProps) {
   // Функция получения иконки по типу элемента
   const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
@@ -65,7 +75,22 @@ export function LoadingForm({
       {/* Breadcrumbs с полным путем */}
       {selectedBreadcrumbs && selectedBreadcrumbs.length > 0 && (
         <div className="p-4 border-b bg-muted/30">
-          <div className="text-xs text-muted-foreground mb-1">Выбрано для загрузки:</div>
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <div className="text-xs text-muted-foreground">Выбрано для загрузки:</div>
+            {mode === 'edit' && onChangeStage && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onChangeStage}
+                disabled={disabled}
+                className="h-6 text-xs gap-1.5 shrink-0"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Сменить этап
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-1 flex-wrap">
             {selectedBreadcrumbs.map((item, index) => {
               const Icon = getIcon(item.type)
@@ -83,13 +108,13 @@ export function LoadingForm({
         </div>
       )}
 
-      {/* Предупреждение если раздел не выбран */}
+      {/* Предупреждение если этап не выбран */}
       {(!selectedBreadcrumbs || selectedBreadcrumbs.length === 0) && (
         <div className="p-4 border-b bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1 text-xs text-amber-700 dark:text-amber-400">
-              Выберите раздел или этап декомпозиции в дереве проектов слева
+              Выберите этап декомпозиции в дереве проектов слева
             </div>
           </div>
         </div>

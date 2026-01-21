@@ -153,6 +153,36 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         }
       )
 
+      console.log('✨ [CREATE onMutate] Optimistic update для departmentsTimeline применён')
+
+      // Оптимистично обновляем resourceGraph.loadings для раздела/этапа
+      // Если stageId указывает на раздел или этап, добавляем загрузку в соответствующий кеш
+      const allResourceGraphLoadings = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+
+      console.log('🔍 [CREATE onMutate] Найдено resourceGraph кешей:', allResourceGraphLoadings.length)
+
+      allResourceGraphLoadings.forEach(([queryKey, data]) => {
+        // Проверяем что это loadings кеш для нужного раздела
+        const isLoadingsCache = Array.isArray(queryKey) && queryKey.includes('loadings')
+        const sectionId = queryKey[queryKey.length - 1]
+
+        // Проверяем что stageId совпадает с sectionId (т.к. stageId может быть как section, так и decomposition_stage)
+        if (!isLoadingsCache || !data || sectionId !== input.stageId) return
+
+        if (Array.isArray(data)) {
+          console.log('✅ [CREATE onMutate] Добавляем загрузку в resourceGraph.loadings:', {
+            sectionId,
+            employeeId: input.employeeId,
+          })
+
+          const updatedLoadings = [...data, tempLoading]
+          queryClient.setQueryData(queryKey, updatedLoadings)
+        }
+      })
+
+      console.log('✨ [CREATE onMutate] Optimistic update для resourceGraph.loadings применён')
       console.log('✨ Optimistic create: временная загрузка добавлена в UI')
 
       return {
@@ -214,6 +244,12 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
     // Optimistic update - применяем изменения сразу
     onMutate: async (input: UpdateLoadingInput): Promise<OptimisticContext> => {
+      console.log('🔄 [UPDATE onMutate] Начинаем optimistic update:', {
+        loadingId: input.loadingId,
+        newEmployeeId: input.employeeId,
+        newStageId: input.stageId,
+      })
+
       // Отменяем все текущие запросы к затронутым кешам
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
@@ -261,35 +297,147 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
           // Обновляем загрузку в departments
           let loadingFound = false
+          let originalLoading: any = null
+          let originalEmployeeId: string | null = null
+
+          // Если меняется employeeId, нужно переместить загрузку между сотрудниками
+          const isMovingBetweenEmployees = input.employeeId !== undefined
+
+          // ПЕРВЫЙ ПРОХОД: Находим загрузку и сохраняем её данные
+          if (isMovingBetweenEmployees) {
+            console.log('🔄 [UPDATE onMutate] Ищем загрузку для перемещения между сотрудниками...')
+            for (const dept of departments) {
+              for (const team of dept.teams || []) {
+                for (const emp of team.employees || []) {
+                  const foundLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
+                  if (foundLoading) {
+                    originalLoading = foundLoading
+                    originalEmployeeId = emp.id
+                    loadingFound = true
+                    console.log('🔍 [UPDATE onMutate] Найдена загрузка у сотрудника:', {
+                      loadingId: foundLoading.id,
+                      oldEmployeeId: emp.id,
+                      oldEmployeeName: emp.name || emp.fullName,
+                      newEmployeeId: input.employeeId,
+                      loadingData: {
+                        employeeId: foundLoading.employeeId,
+                        responsibleId: foundLoading.responsibleId,
+                        stageId: foundLoading.stageId,
+                      }
+                    })
+                    break
+                  }
+                }
+                if (loadingFound) break
+              }
+              if (loadingFound) break
+            }
+
+            if (!loadingFound) {
+              console.error('❌ [UPDATE onMutate] Загрузка НЕ найдена при первом проходе!', {
+                loadingId: input.loadingId,
+                targetEmployeeId: input.employeeId,
+                totalDepartments: departments.length,
+              })
+            }
+          }
+
+          // ВТОРОЙ ПРОХОД: Обновляем departments с учетом найденной информации
           const updatedDepartments = departments.map((dept: any) => ({
             ...dept,
             teams: dept.teams.map((team: any) => ({
               ...team,
-              employees: team.employees.map((emp: any) => ({
-                ...emp,
-                loadings: (emp.loadings || []).map((loading: any) => {
+              employees: team.employees.map((emp: any) => {
+                // Собираем обновленные загрузки
+                let updatedLoadings: any[] = []
+
+                // Обрабатываем каждую загрузку текущего сотрудника
+                for (const loading of emp.loadings || []) {
                   if (loading.id === input.loadingId) {
-                    loadingFound = true
-                    console.log('✅ [UPDATE onMutate] Найдена загрузка для обновления:', {
+                    // Нашли целевую загрузку
+                    if (!loadingFound) {
+                      // Если не было первого прохода (не меняется сотрудник)
+                      loadingFound = true
+                      originalLoading = loading
+                      originalEmployeeId = emp.id
+                    }
+
+                    console.log('✅ [UPDATE onMutate] Обрабатываем загрузку:', {
                       loadingId: loading.id,
-                      oldData: { startDate: loading.startDate, endDate: loading.endDate, rate: loading.rate },
-                      newData: { startDate: input.startDate, endDate: input.endDate, rate: input.rate },
+                      currentEmployeeId: emp.id,
+                      newEmployeeId: input.employeeId,
+                      isMoving: isMovingBetweenEmployees,
+                      willRemove: isMovingBetweenEmployees && emp.id !== input.employeeId,
+                      willUpdate: !isMovingBetweenEmployees || emp.id === input.employeeId,
                     })
-                    return {
+
+                    // Если меняется сотрудник и это НЕ целевой сотрудник - удаляем загрузку
+                    if (isMovingBetweenEmployees && emp.id !== input.employeeId) {
+                      console.log('🗑️ [UPDATE onMutate] Удаляем загрузку у старого сотрудника')
+                      continue // Не добавляем в updatedLoadings
+                    }
+
+                    // Если НЕ меняется сотрудник ИЛИ это целевой сотрудник - обновляем
+                    console.log('✏️ [UPDATE onMutate] Обновляем загрузку')
+                    updatedLoadings.push({
                       ...loading,
-                      // Обновляем только переданные поля
-                      ...(input.employeeId !== undefined && { employeeId: input.employeeId }),
+                      ...(input.employeeId !== undefined && { employeeId: input.employeeId, responsibleId: input.employeeId }),
+                      ...(input.stageId !== undefined && { stageId: input.stageId, sectionId: input.stageId }),
                       ...(input.startDate !== undefined && { startDate: input.startDate }),
                       ...(input.endDate !== undefined && { endDate: input.endDate }),
                       ...(input.rate !== undefined && { rate: input.rate }),
                       ...(input.comment !== undefined && { comment: input.comment }),
                       updatedAt: new Date().toISOString(),
-                      _optimistic: true, // Метка для отладки
-                    }
+                      _optimistic: true,
+                    })
+                  } else {
+                    // Обычная загрузка - оставляем как есть
+                    updatedLoadings.push(loading)
                   }
-                  return loading
-                }),
-              })),
+                }
+
+                // Если меняется сотрудник и это целевой сотрудник И это не тот же сотрудник
+                // Добавляем загрузку к новому сотруднику
+                if (originalLoading && isMovingBetweenEmployees && emp.id === input.employeeId && originalEmployeeId !== emp.id) {
+                  console.log('➕ [UPDATE onMutate] Добавляем загрузку новому сотруднику:', {
+                    newEmployeeId: emp.id,
+                    newEmployeeName: emp.name || emp.fullName,
+                    oldEmployeeId: originalEmployeeId,
+                    loadingId: originalLoading.id,
+                    updatedFields: {
+                      stageId: input.stageId,
+                      startDate: input.startDate,
+                      endDate: input.endDate,
+                      rate: input.rate,
+                    }
+                  })
+                  updatedLoadings.push({
+                    ...originalLoading,
+                    id: originalLoading.id, // Важно сохранить ID!
+                    employeeId: input.employeeId,
+                    responsibleId: input.employeeId,
+                    ...(input.stageId !== undefined && { stageId: input.stageId, sectionId: input.stageId }),
+                    ...(input.startDate !== undefined && { startDate: input.startDate }),
+                    ...(input.endDate !== undefined && { endDate: input.endDate }),
+                    ...(input.rate !== undefined && { rate: input.rate }),
+                    ...(input.comment !== undefined && { comment: input.comment }),
+                    updatedAt: new Date().toISOString(),
+                    _optimistic: true,
+                  })
+                } else if (isMovingBetweenEmployees && emp.id === input.employeeId && !originalLoading) {
+                  console.error('❌ [UPDATE onMutate] НЕ МОГУ добавить загрузку - originalLoading отсутствует!', {
+                    targetEmployeeId: emp.id,
+                    targetEmployeeName: emp.name || emp.fullName,
+                  })
+                }
+
+                return {
+                  ...emp,
+                  loadings: updatedLoadings,
+                  hasLoadings: updatedLoadings.length > 0,
+                  loadingsCount: updatedLoadings.length,
+                }
+              }),
             })),
           }))
 
@@ -304,6 +452,54 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         }
       )
 
+      console.log('✨ [UPDATE onMutate] Optimistic update для departmentsTimeline применён')
+
+      // Оптимистично обновляем resourceGraph.loadings для всех затронутых разделов
+      // Находим все кеши resourceGraph.loadings и обновляем загрузку
+      const allResourceGraphLoadings = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+
+      console.log('🔍 [UPDATE onMutate] Найдено resourceGraph кешей:', allResourceGraphLoadings.length)
+
+      allResourceGraphLoadings.forEach(([queryKey, data]) => {
+        // Проверяем что это именно loadings кеш (queryKey содержит 'loadings')
+        const isLoadingsCache = Array.isArray(queryKey) && queryKey.includes('loadings')
+        if (!isLoadingsCache || !data) return
+
+        // data может быть массивом загрузок: Loading[]
+        if (Array.isArray(data)) {
+          const updatedLoadings = data.map((loading: any) => {
+            if (loading.id === input.loadingId) {
+              console.log('✅ [UPDATE onMutate] Обновляем загрузку в resourceGraph.loadings:', {
+                sectionId: queryKey[queryKey.length - 1],
+                loadingId: loading.id,
+                oldEmployeeId: loading.employeeId,
+                newEmployeeId: input.employeeId,
+              })
+
+              return {
+                ...loading,
+                ...(input.employeeId !== undefined && { employeeId: input.employeeId, responsibleId: input.employeeId }),
+                ...(input.stageId !== undefined && { stageId: input.stageId, sectionId: input.stageId }),
+                ...(input.startDate !== undefined && { startDate: input.startDate }),
+                ...(input.endDate !== undefined && { endDate: input.endDate }),
+                ...(input.rate !== undefined && { rate: input.rate }),
+                ...(input.comment !== undefined && { comment: input.comment }),
+                updatedAt: new Date().toISOString(),
+                _optimistic: true,
+              }
+            }
+            return loading
+          })
+
+          // Если меняется стадия (stageId), может потребоваться удалить загрузку из старого кеша
+          // и добавить в новый. Но для простоты пока просто обновляем все кеши.
+          queryClient.setQueryData(queryKey, updatedLoadings)
+        }
+      })
+
+      console.log('✨ [UPDATE onMutate] Optimistic update для resourceGraph.loadings применён')
       console.log('✨ Optimistic update: загрузка обновлена в UI:', input.loadingId)
 
       return {

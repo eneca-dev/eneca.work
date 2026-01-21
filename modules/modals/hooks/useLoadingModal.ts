@@ -81,6 +81,14 @@ export interface UseLoadingModalResult {
   resetForm: () => void
   /** Проверка изменений в режиме редактирования */
   hasChanges: boolean
+
+  // Режим смены этапа (только для edit)
+  /** Включен ли режим смены этапа */
+  isChangingStage: boolean
+  /** Начать смену этапа */
+  startChangingStage: () => void
+  /** Отменить смену этапа */
+  cancelChangingStage: () => void
 }
 
 /**
@@ -126,6 +134,12 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   const [selectedSectionName, setSelectedSectionName] = useState<string | null>(null)
   const [selectedBreadcrumbs, setSelectedBreadcrumbs] = useState<BreadcrumbItem[] | null>(null)
 
+  // Состояние для режима смены этапа
+  const [isChangingStage, setIsChangingStage] = useState(false)
+  const [originalSectionId, setOriginalSectionId] = useState<string | null>(initialSectionId ?? null)
+  const [originalSectionName, setOriginalSectionName] = useState<string | null>(null)
+  const [originalBreadcrumbs, setOriginalBreadcrumbs] = useState<BreadcrumbItem[] | null>(null)
+
   // Состояние формы - предзаполняем из initialLoading если режим edit, иначе дефолтные значения
   const [formData, setFormData] = useState<LoadingFormData>(() => {
     if (mode === 'edit' && initialLoading) {
@@ -152,7 +166,16 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setSelectedSectionId(id)
     setSelectedSectionName(name ?? null)
     setSelectedBreadcrumbs(breadcrumbs ?? null)
-  }, [])
+
+    // Если идет смена этапа и выбран новый этап - выключаем режим смены
+    if (isChangingStage && id) {
+      setIsChangingStage(false)
+      // Обновляем оригинальные значения
+      setOriginalSectionId(id)
+      setOriginalSectionName(name ?? null)
+      setOriginalBreadcrumbs(breadcrumbs ?? null)
+    }
+  }, [isChangingStage])
 
   // Обновление одного поля формы
   const setFormField = useCallback(
@@ -222,15 +245,39 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       return true // Если нет исходной загрузки, считаем что есть изменения
     }
 
+    // Проверяем изменение раздела/этапа
+    const sectionChanged = selectedSectionId !== initialLoading.section_id
+
     // Сравниваем текущие значения с исходными
     return (
+      sectionChanged ||
       formData.employeeId !== initialLoading.employee_id ||
       formData.startDate !== initialLoading.start_date ||
       formData.endDate !== initialLoading.end_date ||
       formData.rate !== initialLoading.rate ||
       formData.comment !== (initialLoading.comment ?? '')
     )
-  }, [mode, formData, initialLoading])
+  }, [mode, formData, initialLoading, selectedSectionId])
+
+  // Начать смену этапа
+  const startChangingStage = useCallback(() => {
+    if (mode !== 'edit') return
+
+    setIsChangingStage(true)
+    // Сохраняем текущие значения на случай отмены
+    setOriginalSectionId(selectedSectionId)
+    setOriginalSectionName(selectedSectionName)
+    setOriginalBreadcrumbs(selectedBreadcrumbs)
+  }, [mode, selectedSectionId, selectedSectionName, selectedBreadcrumbs])
+
+  // Отменить смену этапа
+  const cancelChangingStage = useCallback(() => {
+    setIsChangingStage(false)
+    // Восстанавливаем оригинальные значения
+    setSelectedSectionId(originalSectionId)
+    setSelectedSectionName(originalSectionName)
+    setSelectedBreadcrumbs(originalBreadcrumbs)
+  }, [originalSectionId, originalSectionName, originalBreadcrumbs])
 
   return {
     projectMode,
@@ -245,5 +292,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     validateForm,
     resetForm,
     hasChanges: hasChanges(),
+    isChangingStage,
+    startChangingStage,
+    cancelChangingStage,
   }
 }

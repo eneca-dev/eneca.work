@@ -46,9 +46,11 @@ interface ProjectItemProps {
   autoExpandBreadcrumbs?: BreadcrumbItem[] | null
   /** Режим "только просмотр" - блокирует взаимодействие */
   disabled?: boolean
+  /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
+  modalMode?: 'create' | 'edit'
 }
 
-function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false }: ProjectItemProps) {
+function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create' }: ProjectItemProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
   const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
@@ -252,6 +254,11 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
   const handleSectionClick = (node: ProjectTreeNodeWithChildren) => {
     if (disabled) return // Блокируем в режиме disabled
 
+    // В режиме создания можно выбрать только этап декомпозиции
+    if (modalMode === 'create' && node.type === 'section') {
+      return // Блокируем выбор раздела в режиме создания
+    }
+
     if (node.type === 'section' || node.type === 'decomposition_stage') {
       const breadcrumbs = buildBreadcrumbs(node)
       onSectionSelect(node.id, node.name, breadcrumbs)
@@ -276,7 +283,12 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
   const renderTreeNode = (node: ProjectTreeNodeWithChildren, depth: number = 1): React.ReactNode => {
     const isNodeExpanded = expandedNodes.has(node.id)
     const hasChildren = node.children && node.children.length > 0
-    const isClickable = node.type === 'section' || node.type === 'decomposition_stage'
+
+    // В режиме создания раздел не кликабельный, только этап декомпозиции
+    const isClickable = modalMode === 'create'
+      ? node.type === 'decomposition_stage'
+      : (node.type === 'section' || node.type === 'decomposition_stage')
+
     const isSelected = isClickable && node.id === selectedSectionId
     const isCreatingStage = creatingStageForSection === node.id
 
@@ -335,8 +347,8 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
         </button>
 
-        {/* Кнопка создания базового этапа для разделов без этапов */}
-        {isSectionWithoutStages && isNodeExpanded && !disabled && (
+        {/* Кнопка создания базового этапа для разделов без этапов (только в режиме edit) */}
+        {isSectionWithoutStages && isNodeExpanded && !disabled && modalMode === 'edit' && (
           <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }} className="py-1">
             <Button
               type="button"
@@ -487,6 +499,8 @@ export interface ProjectTreeProps {
   className?: string
   /** Режим "только просмотр" - блокирует взаимодействие */
   disabled?: boolean
+  /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
+  modalMode?: 'create' | 'edit'
 }
 
 export function ProjectTree({
@@ -500,6 +514,7 @@ export function ProjectTree({
   autoSwitchProject,
   className,
   disabled = false,
+  modalMode = 'create',
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
@@ -657,6 +672,7 @@ export function ProjectTree({
                 shouldAutoExpand={initialProjectId === project.id}
                 autoExpandBreadcrumbs={initialProjectId === project.id ? initialBreadcrumbs : null}
                 disabled={disabled}
+                modalMode={modalMode}
               />
             ))}
         </div>

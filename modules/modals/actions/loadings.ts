@@ -42,6 +42,8 @@ export interface CreateLoadingInput {
 export interface UpdateLoadingInput {
   /** ID загрузки */
   loadingId: string
+  /** ID этапа декомпозиции (опционально, для смены этапа) */
+  stageId?: string
   /** ID сотрудника */
   employeeId?: string
   /** Дата начала */
@@ -223,6 +225,13 @@ export async function updateLoading(
     // Подготовка данных для обновления
     const updateData: LoadingUpdate = {
       loading_updated: new Date().toISOString(),
+    }
+
+    if (input.stageId !== undefined) {
+      if (!input.stageId.trim()) {
+        return { success: false, error: 'ID этапа не может быть пустым' }
+      }
+      updateData.loading_stage = input.stageId
     }
 
     if (input.employeeId !== undefined) {

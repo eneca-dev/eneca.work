@@ -84,6 +84,11 @@ export function LoadingModal2({
     validateForm,
     resetForm,
     hasChanges,
+
+    // Режим смены этапа
+    isChangingStage,
+    startChangingStage,
+    cancelChangingStage,
   } = useLoadingModal({
     mode,
     initialSectionId: mode === 'create' ? createData?.sectionId : editData?.sectionId,
@@ -205,6 +210,7 @@ export function LoadingModal2({
       // Редактирование существующей загрузки
       console.log('🔄 [LoadingModal2] Вызываем updateLoading.mutateAsync:', {
         loadingId: editData.loading.id,
+        stageId: selectedSectionId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
@@ -213,6 +219,7 @@ export function LoadingModal2({
       })
       await updateLoading.mutateAsync({
         loadingId: editData.loading.id,
+        stageId: selectedSectionId ?? undefined,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
@@ -223,6 +230,11 @@ export function LoadingModal2({
   }
 
   const isSaving = createLoading.isPending || updateLoading.isPending
+
+  // Состояние для отслеживания optimistic update
+  // Показываем индикатор загрузки только для update (для create используем обычный isSaving)
+  const isUpdating = mode === 'edit' && updateLoading.isPending
+
   const canSave =
     !!selectedSectionId &&
     !!selectedBreadcrumbs &&
@@ -258,7 +270,8 @@ export function LoadingModal2({
               initialProjectId={loadedProjectId}
               initialBreadcrumbs={loadedBreadcrumbs}
               autoSwitchProject={projectAutoSwitchData}
-              disabled={mode === 'edit'}
+              disabled={mode === 'edit' && !isChangingStage}
+              modalMode={mode}
             />
           </div>
 
@@ -275,6 +288,7 @@ export function LoadingModal2({
                     errors={errors}
                     disabled={true}
                     selectedBreadcrumbs={selectedBreadcrumbs}
+                    mode={mode}
                   />
                 </div>
 
@@ -284,7 +298,7 @@ export function LoadingModal2({
                     /* Этап не выбран */
                     <div className="flex flex-col items-center gap-4">
                       <div className="text-lg font-medium text-muted-foreground">
-                        Выберите этап в дереве слева,
+                        Выберите этап декомпозиции в дереве слева,
                         <br />
                         чтобы создать загрузку
                       </div>
@@ -330,6 +344,9 @@ export function LoadingModal2({
                 errors={errors}
                 disabled={isSaving}
                 selectedBreadcrumbs={selectedBreadcrumbs}
+                mode={mode}
+                onChangeStage={startChangingStage}
+                isUpdating={isUpdating}
               />
             )}
           </div>
