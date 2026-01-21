@@ -231,7 +231,7 @@ export async function getDepartmentsData(
         employee.loadings!.push({
           id: item.loading_id,
           employeeId: item.user_id,
-          responsibleId: item.user_id,
+          responsibleId: item.loading_responsible || item.user_id,
           responsibleName: item.full_name,
           responsibleAvatarUrl: item.avatar_url,
           responsibleTeamName: item.final_team_name,

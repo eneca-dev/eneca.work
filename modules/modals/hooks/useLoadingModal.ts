@@ -126,6 +126,19 @@ function getDefaultFormData(): LoadingFormData {
 export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModalResult {
   const { mode, initialSectionId, initialEmployeeId, initialLoading } = options
 
+  console.log('🔍 [useLoadingModal] Hook called:', {
+    mode,
+    initialSectionId,
+    initialEmployeeId,
+    initialLoading: initialLoading ? {
+      id: initialLoading.id,
+      employee_id: initialLoading.employee_id,
+      start_date: initialLoading.start_date,
+      end_date: initialLoading.end_date,
+      rate: initialLoading.rate,
+    } : null,
+  })
+
   // Состояние навигации
   const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
@@ -143,19 +156,30 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   // Состояние формы - предзаполняем из initialLoading если режим edit, иначе дефолтные значения
   const [formData, setFormData] = useState<LoadingFormData>(() => {
     if (mode === 'edit' && initialLoading) {
-      return {
+      // Конвертируем даты в строки формата YYYY-MM-DD
+      const startDate = typeof initialLoading.start_date === 'string'
+        ? initialLoading.start_date
+        : formatDate(new Date(initialLoading.start_date))
+      const endDate = typeof initialLoading.end_date === 'string'
+        ? initialLoading.end_date
+        : formatDate(new Date(initialLoading.end_date))
+
+      const initialFormData = {
         employeeId: initialLoading.employee_id,
-        startDate: initialLoading.start_date,
-        endDate: initialLoading.end_date,
+        startDate,
+        endDate,
         rate: initialLoading.rate,
         comment: initialLoading.comment ?? '',
       }
+      console.log('✅ [useLoadingModal] Initializing form with edit data:', initialFormData)
+      return initialFormData
     }
     // Режим создания - предзаполняем даты, ставку и employeeId если есть
     const defaultForm = getDefaultFormData()
     if (initialEmployeeId) {
       defaultForm.employeeId = initialEmployeeId
     }
+    console.log('✅ [useLoadingModal] Initializing form with default data:', defaultForm)
     return defaultForm
   })
 

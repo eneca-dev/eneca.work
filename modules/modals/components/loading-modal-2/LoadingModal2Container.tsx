@@ -50,6 +50,15 @@ export function LoadingModal2Container() {
       // Если loading уже передан, используем его
       if (data.loading) {
         console.log('✅ [LoadingModal2Container] loading уже передан, используем его')
+        console.log('🔍 [LoadingModal2Container] data.loading:', {
+          id: data.loading.id,
+          employee_id: data.loading.employee_id,
+          start_date: data.loading.start_date,
+          end_date: data.loading.end_date,
+          rate: data.loading.rate,
+          comment: data.loading.comment,
+          section_id: data.loading.section_id,
+        })
         setEditData({
           loadingId: data.loadingId || data.loading.id,
           sectionId: data.sectionId || data.loading.section_id,
@@ -67,7 +76,7 @@ export function LoadingModal2Container() {
         setIsLoadingData(true)
         getLoadingById(data.loadingId)
           .then((result) => {
-            if (result.success && result.data) {
+            if (result.success) {
               console.log('✅ [LoadingModal2Container] Loading загружен из API')
               setEditData({
                 loadingId: result.data.id,

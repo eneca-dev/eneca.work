@@ -81,7 +81,7 @@ function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
     rootLevel: minLevel,
     rootTypes: roots.map(r => r.type),
     rootChildren: roots.map(r => ({ name: r.name, childrenCount: r.children?.length || 0 })),
-    rootDetails: roots.map(r => ({ id: r.id, type: r.type, name: r.name, hasChildren: !!r.children?.length }))
+    rootDetails: roots.map(r => ({ id: r.id, type: r.type, name: r.name, hasChildren: !!r.children?.length, children: r.children?.map(c => ({ id: c.id, name: c.name, type: c.type })) }))
   })
 
   // Возвращаем корневые узлы

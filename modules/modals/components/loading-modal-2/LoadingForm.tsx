@@ -12,7 +12,7 @@
  * - Комментарий (Textarea)
  */
 
-import { AlertCircle, ChevronRight, Folder, Box, CircleDashed, ListChecks, RefreshCw } from 'lucide-react'
+import { AlertCircle, ChevronRight, Folder, Box, CircleDashed, ListChecks } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -75,8 +75,24 @@ export function LoadingForm({
       {/* Breadcrumbs с полным путем */}
       {selectedBreadcrumbs && selectedBreadcrumbs.length > 0 && (
         <div className="p-4 border-b bg-muted/30">
-          <div className="flex items-start justify-between gap-4 mb-1">
-            <div className="text-xs text-muted-foreground">Выбрано для загрузки:</div>
+          <div className="flex items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground mb-2">Выбрано для загрузки:</div>
+              <div className="flex items-center gap-1 flex-wrap">
+                {selectedBreadcrumbs.map((item, index) => {
+                  const Icon = getIcon(item.type)
+                  return (
+                    <div key={item.id} className="flex items-center gap-1">
+                      <Icon className="h-3 w-3 shrink-0 text-foreground/60" />
+                      <span className="text-xs font-medium text-foreground/80">{item.name}</span>
+                      {index < selectedBreadcrumbs.length - 1 && (
+                        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
             {mode === 'edit' && onChangeStage && (
               <Button
                 type="button"
@@ -84,26 +100,13 @@ export function LoadingForm({
                 size="sm"
                 onClick={onChangeStage}
                 disabled={disabled}
-                className="h-6 text-xs gap-1.5 shrink-0"
+                className="h-auto text-xs px-3 py-1.5 leading-tight w-20 shrink-0"
               >
-                <RefreshCw className="h-3 w-3" />
-                Сменить этап
+                <span className="text-center">
+                  Сменить<br />этап
+                </span>
               </Button>
             )}
-          </div>
-          <div className="flex items-center gap-1 flex-wrap">
-            {selectedBreadcrumbs.map((item, index) => {
-              const Icon = getIcon(item.type)
-              return (
-                <div key={item.id} className="flex items-center gap-1">
-                  <Icon className="h-3 w-3 shrink-0 text-foreground/60" />
-                  <span className="text-xs font-medium text-foreground/80">{item.name}</span>
-                  {index < selectedBreadcrumbs.length - 1 && (
-                    <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                  )}
-                </div>
-              )
-            })}
           </div>
         </div>
       )}

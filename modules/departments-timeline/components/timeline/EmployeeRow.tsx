@@ -148,12 +148,13 @@ export function EmployeeRow({
     }
 
     console.log('📋 [EmployeeRow] Breadcrumbs построены:', breadcrumbs)
+    console.log('🔍 [EmployeeRow] loading.employeeId:', loading.employeeId, 'employee.id:', employee.id)
 
     // Открываем LoadingModal2 через global modal store с breadcrumbs и loading объектом
     openLoadingModal2Edit(loading.id, loading.sectionId, {
       loading: {
         id: loading.id,
-        employee_id: loading.employeeId || '',
+        employee_id: loading.employeeId || employee.id,
         start_date: loading.startDate,
         end_date: loading.endDate,
         rate: loading.rate,
