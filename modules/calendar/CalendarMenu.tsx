@@ -9,8 +9,8 @@ interface CalendarMenuProps {
 
 export function CalendarMenu({ className, isActive }: CalendarMenuProps) {
   return (
-    <Link 
-      href="/dashboard/calendar" 
+    <Link
+      href="/calendar"
       className={cn(
         "flex items-center p-2 hover:bg-accent rounded-md transition-colors",
         isActive && "bg-accent text-accent-foreground",

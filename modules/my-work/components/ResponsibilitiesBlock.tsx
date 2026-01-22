@@ -87,7 +87,7 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
         <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Вы ответственны за</h3>
       </div>
       
-      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 p-4">
+      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
         <ScrollableContainer maxHeight={isCompact ? "6rem" : "10rem"}>
           <div className={`grid grid-cols-2 ${isCompact ? 'gap-2' : 'gap-3'}`}>
             {groups.map((group, groupIndex) => (

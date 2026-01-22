@@ -273,8 +273,8 @@ export function TaskSidebar({
           aria-labelledby="task-sidebar-title"
           className={cn(
             'fixed inset-y-0 right-0 z-50',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border-l border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border-l border-border/50',
             'shadow-2xl shadow-black/50',
             'flex flex-col',
             'transition-transform',
@@ -284,11 +284,11 @@ export function TaskSidebar({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <header className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2 min-w-0">
-              <Target className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-xs font-medium text-slate-300">Задача</span>
-              <span className="text-[10px] text-slate-500">·</span>
+              <Target className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-medium text-foreground">Задача</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
               {editingDescription ? (
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <input
@@ -296,9 +296,9 @@ export function TaskSidebar({
                     {...form.register('description')}
                     className={cn(
                       'flex-1 min-w-0 px-2 py-1 text-xs font-medium',
-                      'bg-slate-800 border border-slate-600 rounded',
-                      'text-slate-100',
-                      'focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
+                      'bg-muted border border-border rounded',
+                      'text-foreground',
+                      'focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20'
                     )}
                     disabled={savingField === 'description'}
                     onKeyDown={(e) => {
@@ -311,7 +311,7 @@ export function TaskSidebar({
                     onBlur={handleDescriptionSave}
                   />
                   {savingField === 'description' && (
-                    <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
                   )}
                 </div>
               ) : (
@@ -321,18 +321,18 @@ export function TaskSidebar({
                 >
                   <span
                     id="task-sidebar-title"
-                    className="text-xs text-slate-200 truncate max-w-[200px]"
+                    className="text-xs text-foreground truncate max-w-[200px]"
                     title={task.description}
                   >
                     {form.watch('description') || task.description || 'Без описания'}
                   </span>
-                  <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 shrink-0" />
+                  <Edit3 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               )}
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -340,7 +340,7 @@ export function TaskSidebar({
 
           {/* Error */}
           {saveError && (
-            <div className="mx-4 mt-3 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-[11px] text-red-400">
+            <div className="mx-4 mt-3 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded text-[11px] text-destructive">
               {saveError}
             </div>
           )}
@@ -355,7 +355,7 @@ export function TaskSidebar({
                     'px-2 py-1 rounded text-[10px] font-medium',
                     isCompleted
                       ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'bg-amber-500/20 text-amber-400'
+                      : 'bg-primary/20 text-primary'
                   )}
                 >
                   {isCompleted ? 'Завершено' : 'В работе'}
@@ -378,11 +378,11 @@ export function TaskSidebar({
               {/* Progress Slider */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Готовность</span>
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Готовность</span>
                   <span
                     className={cn(
                       'text-xs font-medium',
-                      isCompleted ? 'text-emerald-400' : 'text-slate-200'
+                      isCompleted ? 'text-emerald-400' : 'text-foreground'
                     )}
                   >
                     {watchedProgress}%
@@ -397,11 +397,11 @@ export function TaskSidebar({
                   className="relative flex items-center select-none touch-none w-full h-4"
                   aria-label="Готовность задачи"
                 >
-                  <Slider.Track className="bg-slate-700 relative grow rounded-full h-1.5">
+                  <Slider.Track className="bg-muted relative grow rounded-full h-1.5">
                     <Slider.Range
                       className={cn(
                         'absolute rounded-full h-full transition-colors',
-                        isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
+                        isCompleted ? 'bg-emerald-500' : 'bg-primary'
                       )}
                     />
                   </Slider.Track>
@@ -411,7 +411,7 @@ export function TaskSidebar({
                       'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900',
                       isCompleted
                         ? 'bg-emerald-500 focus:ring-emerald-500'
-                        : 'bg-amber-500 focus:ring-amber-500',
+                        : 'bg-primary focus:ring-primary',
                       savingField === 'progress' && 'opacity-50'
                     )}
                   />
@@ -419,9 +419,9 @@ export function TaskSidebar({
               </div>
 
               {/* Planned Hours */}
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+              <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-slate-500 text-[10px]">
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
                     <Clock className="w-3 h-3" />
                     Плановые часы
                   </div>
@@ -436,9 +436,9 @@ export function TaskSidebar({
                         {...form.register('plannedHours', { valueAsNumber: true })}
                         className={cn(
                           'w-16 px-2 py-0.5 text-xs text-right',
-                          'bg-slate-800 border border-slate-600 rounded',
-                          'text-slate-100',
-                          'focus:outline-none focus:border-amber-500/50'
+                          'bg-muted border border-border rounded',
+                          'text-foreground',
+                          'focus:outline-none focus:border-primary/50'
                         )}
                         disabled={savingField === 'plannedHours'}
                         onKeyDown={(e) => {
@@ -451,18 +451,18 @@ export function TaskSidebar({
                         onBlur={handleHoursSave}
                       />
                       {savingField === 'plannedHours' && (
-                        <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                        <Loader2 className="w-3 h-3 animate-spin text-primary" />
                       )}
                     </div>
                   ) : (
                     <button
-                      className="group flex items-center gap-1 text-slate-200 hover:text-white transition-colors"
+                      className="group flex items-center gap-1 text-foreground hover:text-foreground transition-colors"
                       onClick={() => setEditingHours(true)}
                     >
                       <span className="text-sm font-medium">
                         {form.watch('plannedHours')}ч
                       </span>
-                      <Edit3 className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100" />
+                      <Edit3 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
                     </button>
                   )}
                 </div>
@@ -470,19 +470,19 @@ export function TaskSidebar({
 
               {/* Responsible */}
               {task.responsible.id && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
+                <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-slate-500 text-[10px] shrink-0">
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] shrink-0">
                       <User className="w-3 h-3" />
                       Ответственный
                     </div>
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Avatar className="h-5 w-5">
-                        <AvatarFallback className="text-[9px] bg-slate-700">
+                        <AvatarFallback className="text-[9px] bg-muted">
                           {getInitials(task.responsible.firstName, task.responsible.lastName)}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-xs text-slate-200 truncate">
+                      <span className="text-xs text-foreground truncate">
                         {task.responsible.name || 'Не назначен'}
                       </span>
                     </div>
@@ -493,13 +493,13 @@ export function TaskSidebar({
               {/* Difficulty & Category */}
               <div className="grid grid-cols-2 gap-2">
                 {task.difficulty.name && (
-                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
-                    <div className="text-[10px] text-slate-500 mb-1">Сложность</div>
+                  <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
+                    <div className="text-[10px] text-muted-foreground mb-1">Сложность</div>
                     <div className="flex items-center gap-1.5">
-                      <span className="px-1 py-0.5 bg-slate-700/50 rounded text-[10px] font-medium text-slate-300">
+                      <span className="px-1 py-0.5 bg-muted/50 rounded text-[10px] font-medium text-foreground">
                         {task.difficulty.abbr}
                       </span>
-                      <span className="text-xs text-slate-300 truncate">
+                      <span className="text-xs text-foreground truncate">
                         {task.difficulty.name}
                       </span>
                     </div>
@@ -507,12 +507,12 @@ export function TaskSidebar({
                 )}
 
                 {task.workCategoryName && (
-                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1">
                       <Tag className="w-3 h-3" />
                       Категория
                     </div>
-                    <div className="text-xs text-slate-300 truncate">
+                    <div className="text-xs text-foreground truncate">
                       {task.workCategoryName}
                     </div>
                   </div>
@@ -521,21 +521,21 @@ export function TaskSidebar({
 
               {/* Budget */}
               {task.budget && task.budget.total > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-2">
+                <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2">
                     <Wallet className="w-3 h-3" />
                     Бюджет задачи
                   </div>
                   <div className="space-y-1.5">
                     {/* Progress bar */}
-                    <div className="relative h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
                         className={cn(
                           'absolute left-0 top-0 h-full rounded-full transition-all',
                           task.budget.percentage >= 100
-                            ? 'bg-red-500'
+                            ? 'bg-destructive'
                             : task.budget.percentage >= 80
-                              ? 'bg-amber-500'
+                              ? 'bg-primary'
                               : 'bg-emerald-500'
                         )}
                         style={{ width: `${Math.min(task.budget.percentage, 100)}%` }}
@@ -544,15 +544,15 @@ export function TaskSidebar({
                     {/* Stats row */}
                     <div className="flex items-center justify-between text-[10px]">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-400">
+                        <span className="text-muted-foreground">
                           Израсходовано:{' '}
                           <span
                             className={cn(
                               'font-medium',
                               task.budget.percentage >= 100
-                                ? 'text-red-400'
+                                ? 'text-destructive'
                                 : task.budget.percentage >= 80
-                                  ? 'text-amber-400'
+                                  ? 'text-primary'
                                   : 'text-emerald-400'
                             )}
                           >
@@ -564,17 +564,17 @@ export function TaskSidebar({
                         className={cn(
                           'font-medium tabular-nums',
                           task.budget.percentage >= 100
-                            ? 'text-red-400'
+                            ? 'text-destructive'
                             : task.budget.percentage >= 80
-                              ? 'text-amber-400'
-                              : 'text-slate-400'
+                              ? 'text-primary'
+                              : 'text-muted-foreground'
                         )}
                       >
                         {Math.round(task.budget.percentage)}%
                       </span>
                     </div>
                     {/* Total and remaining */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                       <span>Всего: {formatBudgetAmount(task.budget.total)}</span>
                       <span>Остаток: {formatBudgetAmount(task.budget.remaining)}</span>
                     </div>

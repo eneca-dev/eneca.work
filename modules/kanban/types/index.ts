@@ -41,6 +41,7 @@ export interface KanbanStage {
   name: string
   description?: string | null
   status: StageStatus
+  statusId?: string | null // ID статуса для модалки
   sectionId: string
   startDate?: string | null
   endDate?: string | null
@@ -59,6 +60,9 @@ export interface KanbanSection {
   name: string
   description?: string | null
   status: SectionStatus
+  statusId?: string | null // ID статуса для модалки
+  startDate?: string | null // Дата начала раздела
+  endDate?: string | null // Дата окончания раздела
   responsible?: {
     userId: string
     firstName: string
@@ -93,17 +97,8 @@ export interface KanbanColumn {
   borderColor: string
 }
 
-// Событие перетаскивания
-export interface DragResult {
-  stageId: string
-  sectionId: string
-  fromStatus: StageStatus
-  toStatus: StageStatus
-}
-
 // Настройки отображения
 export interface KanbanViewSettings {
   showEmptySwimlanes: boolean
   collapsedSections: string[]
-  filterByResponsible?: string
 }

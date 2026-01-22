@@ -58,7 +58,7 @@ export function InlineDeleteButton({
   if (isDeleting) {
     return (
       <div className="p-1">
-        <Loader2 className="h-3.5 w-3.5 text-slate-400 animate-spin" />
+        <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
       </div>
     )
   }
@@ -67,13 +67,13 @@ export function InlineDeleteButton({
     return (
       <div className="flex items-center gap-1">
         {error && (
-          <span className="text-[10px] text-red-400 mr-1" title={error}>
+          <span className="text-[10px] text-destructive mr-1" title={error}>
             Ошибка
           </span>
         )}
         <button
           onClick={handleDelete}
-          className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+          className="px-1.5 py-0.5 rounded text-[10px] bg-destructive/20 text-destructive hover:bg-destructive/30 transition-colors"
         >
           Да
         </button>
@@ -82,7 +82,7 @@ export function InlineDeleteButton({
             setShowConfirm(false)
             setError(null)
           }}
-          className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700/50 text-slate-400 hover:bg-slate-700 transition-colors"
+          className="px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
         >
           Нет
         </button>
@@ -100,7 +100,7 @@ export function InlineDeleteButton({
       }}
       className={cn(
         'p-1 rounded transition-all',
-        'hover:bg-red-500/20 text-slate-500 hover:text-red-400'
+        'hover:bg-destructive/20 text-muted-foreground hover:text-destructive'
       )}
       title={`Удалить "${entityName}"`}
     >

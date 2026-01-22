@@ -62,7 +62,7 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
 
   if (loadings.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 px-6 pb-6 pt-3 mx-6 mt-3">
+      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg px-6 pb-6 pt-3 mx-6 mt-3">
         <div className="flex items-center justify-center gap-4 py-6 text-center">
           <CheckSquare className="w-6 h-6 text-emerald-400 flex-shrink-0" />
           <div>
@@ -83,8 +83,8 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
           {/* Карточка загрузки */}
           <div
             className={`p-3 cursor-pointer transition-all duration-200 rounded-lg border ${
-              selectedLoadingId === loading.loading_id 
-                ? 'bg-emerald-500/10 border-emerald-500/20 shadow-lg' 
+              selectedLoadingId === loading.loading_id
+                ? 'bg-emerald-500/10 border-emerald-500/20 shadow-lg'
                 : highlightedLoadingId === loading.loading_id
                   ? 'bg-blue-500/10 border-blue-500/20 shadow-md'
                   : 'bg-gray-50 dark:bg-slate-600/20 border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 hover:border-gray-200 dark:hover:border-slate-500/30'

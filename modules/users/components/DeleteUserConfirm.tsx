@@ -54,7 +54,7 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm }: Delet
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+      <DialogContent className="max-w-md bg-popover border border-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
             <AlertTriangle className="h-5 w-5 text-red-500 dark:text-red-400" />
@@ -98,7 +98,7 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm }: Delet
             variant="outline"
             onClick={handleClose}
             disabled={isDeleting}
-            className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="border-border text-foreground hover:bg-accent"
           >
             Отмена
           </Button>

@@ -97,10 +97,17 @@ export interface DataScope {
   users: 'all' | 'department' | 'team' | 'self'
 }
 
+/** Опция для фильтра (используется в autocomplete) */
+export interface FilterOptionItem {
+  id: string
+  name: string
+  [key: string]: unknown
+}
+
 export interface FilterConstraint {
   filterType: string
   isLocked: boolean
-  availableOptions: any[]
+  availableOptions: FilterOptionItem[]
   defaultValue?: string
 }
 
@@ -115,12 +122,18 @@ export interface UsePermissionsReturn {
   getPermissionLevel: (module: string) => 'none' | 'view' | 'edit' | 'admin'
 }
 
+/** Базовая сущность с id и названием */
+export interface NamedEntity {
+  id: string
+  name: string
+}
+
 export interface UseDataConstraintsReturn {
   constraints: DataConstraint[]
   dataScope: DataScope
-  getAvailableProjects: () => Promise<any[]>
-  getAvailableDepartments: () => Promise<any[]>
-  getAvailableTeams: () => Promise<any[]>
+  getAvailableProjects: () => Promise<NamedEntity[]>
+  getAvailableDepartments: () => Promise<NamedEntity[]>
+  getAvailableTeams: () => Promise<NamedEntity[]>
   isDataLocked: (dataType: keyof DataScope) => boolean
 }
 

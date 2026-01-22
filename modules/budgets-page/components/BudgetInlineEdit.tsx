@@ -199,8 +199,8 @@ export function BudgetInlineEdit({
         disabled={isCreating}
         className={cn(
           'flex items-center gap-1 px-1.5 py-0.5 rounded',
-          'text-[10px] text-slate-500 hover:text-slate-300',
-          'hover:bg-slate-800 transition-colors',
+          'text-[10px] text-muted-foreground hover:text-foreground',
+          'hover:bg-muted transition-colors',
           'opacity-0 group-hover:opacity-100'
         )}
         title={`Создать бюджет для: ${entityName}`}
@@ -237,15 +237,15 @@ export function BudgetInlineEdit({
           className={cn(
             'w-[70px] h-5 px-1 text-[11px] tabular-nums text-right',
             'bg-transparent border-0 outline-none',
-            'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
+            'hover:bg-muted/50 focus:bg-muted/70 rounded',
             'transition-colors',
             isPending && 'opacity-50',
-            isOverBudget ? 'text-red-400 font-medium' : 'text-emerald-400 font-medium'
+            isOverBudget ? 'text-destructive font-medium' : 'text-primary font-medium'
           )}
           placeholder="0"
         />
         {isPending && (
-          <Loader2 className="absolute right-1 top-1/2 -translate-y-1/2 h-2.5 w-2.5 animate-spin text-slate-500" />
+          <Loader2 className="absolute right-1 top-1/2 -translate-y-1/2 h-2.5 w-2.5 animate-spin text-muted-foreground" />
         )}
       </div>
 
@@ -266,13 +266,13 @@ export function BudgetInlineEdit({
             className={cn(
               'w-[40px] h-5 px-1 pr-3 text-[10px] tabular-nums text-right',
               'bg-transparent border-0 outline-none',
-              'hover:bg-slate-800/50 focus:bg-slate-800/70 rounded',
-              'transition-colors text-slate-400',
+              'hover:bg-muted/50 focus:bg-muted/70 rounded',
+              'transition-colors text-muted-foreground',
               isPending && 'opacity-50'
             )}
             placeholder="0"
           />
-          <span className="absolute right-1 text-[9px] text-slate-500 pointer-events-none">%</span>
+          <span className="absolute right-1 text-[9px] text-muted-foreground pointer-events-none">%</span>
         </div>
       )}
 
@@ -283,8 +283,8 @@ export function BudgetInlineEdit({
         trigger={
           <button
             className={cn(
-              'p-0.5 rounded text-slate-600 hover:text-slate-400',
-              'hover:bg-slate-800 transition-colors',
+              'p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground',
+              'hover:bg-muted transition-colors',
               'opacity-0 group-hover:opacity-100'
             )}
             title="Части бюджета"

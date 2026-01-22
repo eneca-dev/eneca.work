@@ -377,18 +377,18 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
 
   return (
     <div 
-      className="font-sans bg-background border border-border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-500"
+      className="font-sans bg-card border border-border rounded-lg p-2"
       style={{ width }}
     >
       <div className="flex justify-between mb-2">
         <button 
-          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-accent transition-colors"
           onClick={handlePrev}
         >
           ←
         </button>
         <button 
-          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-accent transition-colors"
           onClick={handleNext}
         >
           →
@@ -496,11 +496,11 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
         value={inputValue}
         placeholder={placeholder}
         onClick={handleInputClick}
-        className="w-full p-2 border border-border rounded bg-gray-50 dark:bg-slate-700 dark:border-slate-500 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm"
+        className="w-full p-2 border border-border rounded bg-muted text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm"
       />
       {open && (
         <div 
-          className="absolute left-0 z-50 shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+          className="absolute left-0 z-50 shadow-lg rounded-lg bg-popover border border-border"
           style={openUpward ? {
             bottom: '100%',
             marginBottom: '4px',

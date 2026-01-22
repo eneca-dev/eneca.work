@@ -19,7 +19,6 @@ import { BudgetRowBadges } from './BudgetRowBadges'
 import { BudgetRowHours } from './BudgetRowHours'
 import { BudgetRowActions } from './BudgetRowActions'
 import { SectionRateEdit } from './SectionRateEdit'
-import { ProgressCircle } from '@/modules/resource-graph'
 import { MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR } from '../config/constants'
 import { formatNumber } from '../utils'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
@@ -80,6 +79,20 @@ function collectChildIds(node: HierarchyNode): string[] {
     ids.push(...collectChildIds(child))
   }
   return ids
+}
+
+/**
+ * Собирает сумму spent_amount со всех потомков рекурсивно
+ */
+function collectSpentFromAllDescendants(node: HierarchyNode): number {
+  let total = 0
+  for (const child of node.children) {
+    // Добавляем spent_amount бюджетов этого ребёнка
+    total += child.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
+    // Рекурсивно добавляем от потомков ребёнка
+    total += collectSpentFromAllDescendants(child)
+  }
+  return total
 }
 
 // ============================================================================
@@ -155,10 +168,17 @@ export const BudgetRow = React.memo(function BudgetRow({
     ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
     : allocatedBudget
 
+  // Израсходовано (сумма spent_amount всех потомков рекурсивно)
+  const spentBudgetChildren = node.children.length > 0
+    ? collectSpentFromAllDescendants(node)
+    : node.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
+
   // Сравнение: перебор если выделено меньше чем расчётный
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
   // Распределено больше чем выделено
   const isOverDistributed = distributedBudget > allocatedBudget
+  // Израсходовано больше чем распределено
+  const isOverSpent = spentBudgetChildren > distributedBudget
 
   // Полная иерархия отступов (без stage — объекты напрямую под проектом)
   const INDENT_MAP: Record<HierarchyNodeType, number> = {
@@ -177,18 +197,16 @@ export const BudgetRow = React.memo(function BudgetRow({
 
   const rowStyles = cn(
     'group flex items-center border-b transition-colors',
-    // Проект - самый верхний уровень (светлее)
-    isProject && 'bg-slate-700/40 border-slate-700 hover:bg-slate-700/60',
-    // Объект (светлее)
-    isObject && 'bg-slate-700/40 border-slate-700 hover:bg-slate-700/60',
-    // Разделы (светлее)
-    isSection && !isHighlighted && 'bg-slate-700/35 border-slate-700 hover:bg-slate-700/55',
-    // Подсвеченный раздел
-    isHighlighted && 'bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30',
-    // Этапы декомпозиции внутри раздела (темнее)
-    isDecompStage && insideSection && 'bg-slate-950/95 border-slate-700/60 hover:bg-slate-900/90',
-    // Задачи внутри раздела (темнее)
-    isItem && insideSection && 'bg-slate-950/95 border-slate-700/60 hover:bg-slate-900/90',
+    // Проект - самый верхний уровень
+    isProject && 'bg-muted/40 hover:bg-muted/60',
+    // Объект
+    isObject && 'bg-muted/40 hover:bg-muted/60',
+    // Разделы
+    isSection && 'bg-muted/35 hover:bg-muted/55',
+    // Этапы декомпозиции внутри раздела
+    isDecompStage && insideSection && 'bg-background hover:bg-muted/30',
+    // Задачи внутри раздела
+    isItem && insideSection && 'bg-background hover:bg-muted/30',
     // Высота строки
     'min-h-[32px]'
   )
@@ -236,10 +254,10 @@ export const BudgetRow = React.memo(function BudgetRow({
           <span
             className={cn(
               'truncate text-[12px]',
-              isSection && 'font-medium text-slate-200',
-              isDecompStage && 'text-slate-300',
-              isItem && 'text-slate-400',
-              isTopLevel && 'font-medium text-slate-200'
+              isSection && 'font-medium text-foreground',
+              isDecompStage && 'text-foreground/80',
+              isItem && 'text-muted-foreground',
+              isTopLevel && 'font-medium text-foreground'
             )}
             title={node.stageName ? `${node.stageName}: ${node.name}` : node.name}
           >
@@ -289,7 +307,7 @@ export const BudgetRow = React.memo(function BudgetRow({
         />
 
         {/* ===== СТАВКА ===== */}
-        <div className="flex items-center shrink-0 border-l border-slate-700/30">
+        <div className="flex items-center shrink-0 border-l border-border/30">
           <div className="w-[72px] px-2 text-right">
             {isSection && (
               <SectionRateEdit
@@ -301,53 +319,61 @@ export const BudgetRow = React.memo(function BudgetRow({
           </div>
         </div>
 
-        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный ===== */}
-        <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-slate-700/30">
+        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Израсходовано / Выделенный ===== */}
+        <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
           <div className="w-full flex items-center">
             {/* Расчётный */}
             <div className="w-[80px] px-1 text-right">
               {calcBudget !== null && calcBudget > 0 ? (
                 <span className={cn(
-                  'text-[12px] tabular-nums',
-                  isSection || isTopLevel ? 'text-cyan-400 font-medium' : 'text-cyan-400/70'
+                  'text-[12px] tabular-nums text-primary',
+                  (isSection || isTopLevel) && 'font-medium'
                 )}>
                   {formatNumber(Math.round(calcBudget))}
                 </span>
               ) : (
-                <span className="text-[12px] text-slate-600 tabular-nums">—</span>
+                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
               )}
             </div>
             {/* Слеш */}
             <div className="w-[10px] text-center">
-              <span className="text-[11px] text-slate-700">/</span>
+              <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
-            {/* Распределено + ProgressCircle */}
-            <div className="w-[100px] px-1 flex items-center justify-start gap-1">
+            {/* Распределено */}
+            <div className="w-[80px] px-1 text-center">
               {distributedBudget > 0 ? (
-                <>
-                  <span className={cn(
-                    'text-[12px] tabular-nums font-medium',
-                    isOverDistributed ? 'text-red-400' : 'text-slate-300'
-                  )}>
-                    {formatNumber(distributedBudget)}
-                  </span>
-                  {/* ProgressCircle только для не-задач (проект/объект/раздел/этап) */}
-                  {allocatedBudget > 0 && !isItem && (
-                    <ProgressCircle
-                      progress={Math.round((distributedBudget / allocatedBudget) * 100)}
-                      size={16}
-                      strokeWidth={2}
-                      showCheckmarkAt100={true}
-                    />
-                  )}
-                </>
+                <span className={cn(
+                  'text-[12px] tabular-nums',
+                  isOverDistributed ? 'text-destructive' : 'text-foreground/80',
+                  (isSection || isTopLevel) && 'font-medium'
+                )}>
+                  {formatNumber(distributedBudget)}
+                </span>
               ) : (
-                <span className="text-[12px] text-slate-600 tabular-nums">—</span>
+                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
               )}
             </div>
             {/* Слеш */}
             <div className="w-[10px] text-center">
-              <span className="text-[11px] text-slate-700">/</span>
+              <span className="text-[11px] text-muted-foreground/30">/</span>
+            </div>
+            {/* Израсходовано */}
+            <div className="w-[80px] px-1 text-center">
+              {spentBudgetChildren > 0 ? (
+                <span className={cn(
+                  'text-[12px] tabular-nums',
+                  isOverSpent ? 'text-destructive' : 'text-foreground/80',
+                  (isSection || isTopLevel) && 'font-medium'
+                )}>
+                  {formatNumber(spentBudgetChildren)}
+                </span>
+              ) : (
+                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
+              )}
+            </div>
+            {/* Слеш */}
+            <div className="w-[10px] text-center">
+              <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
             {/* Выделенный - inline редактирование */}
             <div className="flex-1 px-1">
@@ -391,7 +417,7 @@ export const BudgetRow = React.memo(function BudgetRow({
       {/* Inline stage creation (for sections) */}
       {isSection && stageCreateOpen && (
         <div
-          className="flex items-center border-b border-slate-800/50 bg-slate-800/30 min-h-[32px]"
+          className="flex items-center border-b bg-muted/30 min-h-[32px]"
           style={{ paddingLeft: `${8 + 48}px` }}
         >
           <StageInlineCreate
@@ -406,7 +432,7 @@ export const BudgetRow = React.memo(function BudgetRow({
       {/* Inline item creation (for stages) */}
       {isDecompStage && itemCreateOpen && currentSectionId && (
         <div
-          className="flex items-center border-b border-slate-800/30 bg-slate-900/50 min-h-[32px]"
+          className="flex items-center border-b bg-card/50 min-h-[32px]"
           style={{ paddingLeft: `${8 + 64}px` }}
         >
           <ItemInlineCreate

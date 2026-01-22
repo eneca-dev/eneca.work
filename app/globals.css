@@ -47,7 +47,7 @@
 
   .dark {
     /* Новая нейтральная dark схема */
-    --background: 0 0% 4%;           /* #0a0a0a */
+    --background: 0 0% 7%;           /* #121212 */
     --foreground: 0 0% 98%;          /* #fafafa */
 
     --card: 0 0% 10%;                /* #191919 */

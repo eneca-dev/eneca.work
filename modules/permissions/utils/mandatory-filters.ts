@@ -7,14 +7,42 @@
  * SECURITY: При отсутствии контекста или scope — блокируем доступ полностью.
  */
 
+import * as Sentry from '@sentry/nextjs'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import type { UserFilterContext } from '../types'
 
 /**
  * UUID который гарантированно не существует в БД.
  * Используется для блокировки запросов при отсутствии контекста.
+ * NOTE: DB constraints должны предотвращать существование этого UUID в таблицах.
  */
 const BLOCKING_UUID = '00000000-0000-0000-0000-000000000000'
+
+/**
+ * Regex для валидации UUID v4
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Валидирует массив UUID
+ * @returns true если все ID валидны или массив пуст/undefined
+ */
+function validateUUIDs(ids: string[] | undefined): boolean {
+  if (!ids || ids.length === 0) return true
+  return ids.every((id) => UUID_REGEX.test(id))
+}
+
+/**
+ * Логирует security event в Sentry и console
+ */
+function logSecurityEvent(message: string, extra?: Record<string, unknown>): void {
+  console.error(`[SECURITY] ${message}`)
+  Sentry.captureMessage(`[SECURITY] ${message}`, {
+    level: 'error',
+    tags: { security: 'filter_bypass_attempt' },
+    extra,
+  })
+}
 
 /**
  * Применяет обязательные фильтры на основе scope пользователя.
@@ -33,7 +61,7 @@ export function applyMandatoryFilters(
 ): FilterQueryParams {
   // SECURITY: Блокируем доступ при отсутствии контекста
   if (!filterContext) {
-    console.error('[SECURITY] applyMandatoryFilters: filterContext is null — BLOCKING')
+    logSecurityEvent('applyMandatoryFilters: filterContext is null — BLOCKING', { userFilters })
     return {
       ...userFilters,
       team_id: BLOCKING_UUID,
@@ -44,7 +72,27 @@ export function applyMandatoryFilters(
 
   // SECURITY: Блокируем доступ при отсутствии scope
   if (!scope) {
-    console.error('[SECURITY] applyMandatoryFilters: scope is undefined — BLOCKING')
+    logSecurityEvent('applyMandatoryFilters: scope is undefined — BLOCKING', {
+      userId: filterContext.userId,
+      userFilters,
+    })
+    return {
+      ...userFilters,
+      team_id: BLOCKING_UUID,
+    }
+  }
+
+  // SECURITY: Валидация UUID массивов в scope
+  if (
+    !validateUUIDs(scope.teamIds) ||
+    !validateUUIDs(scope.departmentIds) ||
+    !validateUUIDs(scope.subdivisionIds) ||
+    !validateUUIDs(scope.projectIds)
+  ) {
+    logSecurityEvent('applyMandatoryFilters: Invalid UUIDs in scope — BLOCKING', {
+      userId: filterContext.userId,
+      scopeLevel: scope.level,
+    })
     return {
       ...userFilters,
       team_id: BLOCKING_UUID,
@@ -55,7 +103,10 @@ export function applyMandatoryFilters(
   if (scope.level === 'all') {
     // SECURITY: Дополнительная проверка что у пользователя есть admin permission
     if (!filterContext.filterPermissions?.includes('filters.scope.all')) {
-      console.error('[SECURITY] applyMandatoryFilters: Admin scope claimed without permission — BLOCKING')
+      logSecurityEvent('applyMandatoryFilters: Admin scope claimed without permission — BLOCKING', {
+        userId: filterContext.userId,
+        filterPermissions: filterContext.filterPermissions,
+      })
       return {
         ...userFilters,
         team_id: BLOCKING_UUID,
@@ -69,6 +120,14 @@ export function applyMandatoryFilters(
   // Применяем ограничения в зависимости от scope
   switch (scope.level) {
     case 'subdivision':
+      // SECURITY: Проверяем permission для subdivision scope
+      if (!filterContext.filterPermissions?.includes('filters.scope.subdivision')) {
+        logSecurityEvent('applyMandatoryFilters: Subdivision scope without permission — BLOCKING', {
+          userId: filterContext.userId,
+          filterPermissions: filterContext.filterPermissions,
+        })
+        return { ...userFilters, team_id: BLOCKING_UUID }
+      }
       // Принудительно фильтруем по подразделению
       if (scope.subdivisionIds?.length === 1) {
         mandatoryFilters.subdivision_id = scope.subdivisionIds[0]
@@ -78,6 +137,14 @@ export function applyMandatoryFilters(
       break
 
     case 'department':
+      // SECURITY: Проверяем permission для department scope
+      if (!filterContext.filterPermissions?.includes('filters.scope.department')) {
+        logSecurityEvent('applyMandatoryFilters: Department scope without permission — BLOCKING', {
+          userId: filterContext.userId,
+          filterPermissions: filterContext.filterPermissions,
+        })
+        return { ...userFilters, team_id: BLOCKING_UUID }
+      }
       // Принудительно фильтруем по отделу
       if (scope.departmentIds?.length === 1) {
         mandatoryFilters.department_id = scope.departmentIds[0]
@@ -89,6 +156,14 @@ export function applyMandatoryFilters(
       break
 
     case 'team':
+      // SECURITY: Проверяем permission для team scope
+      if (!filterContext.filterPermissions?.includes('filters.scope.team')) {
+        logSecurityEvent('applyMandatoryFilters: Team scope without permission — BLOCKING', {
+          userId: filterContext.userId,
+          filterPermissions: filterContext.filterPermissions,
+        })
+        return { ...userFilters, team_id: BLOCKING_UUID }
+      }
       // Принудительно фильтруем по команде
       if (scope.teamIds?.length === 1) {
         mandatoryFilters.team_id = scope.teamIds[0]
@@ -101,6 +176,14 @@ export function applyMandatoryFilters(
       break
 
     case 'projects':
+      // SECURITY: Проверяем permission для projects scope
+      if (!filterContext.filterPermissions?.includes('filters.scope.managed_projects')) {
+        logSecurityEvent('applyMandatoryFilters: Projects scope without permission — BLOCKING', {
+          userId: filterContext.userId,
+          filterPermissions: filterContext.filterPermissions,
+        })
+        return { ...userFilters, team_id: BLOCKING_UUID }
+      }
       // Ограничиваем проекты только управляемыми
       if (userFilters.project_id) {
         // Проверяем что запрошенный проект в списке управляемых

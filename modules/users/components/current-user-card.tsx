@@ -210,7 +210,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-center h-16">
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               {isLoading ? "Загрузка профиля..." : "Профиль недоступен"}
             </p>
           </div>
@@ -234,7 +234,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-medium">{currentUser.name}</h3>
                 {/* Первая строка: Должность • Подразделение • Отдел */}
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   {currentUser.position && <span>{currentUser.position}</span>}
                   {currentUser.position && (currentUser.subdivision || currentUser.department) && <span>•</span>}
                   {currentUser.subdivision && <span className="truncate max-w-[200px]">{currentUser.subdivision}</span>}
@@ -242,7 +242,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                   {currentUser.department && <span className="truncate max-w-[150px]">{currentUser.department}</span>}
                 </div>
                 {/* Вторая строка: Команда • Расположение • Роль */}
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   {currentUser.team && <span className="truncate max-w-[120px]">{currentUser.team}</span>}
                   {currentUser.team && currentUser.workLocation && <span>•</span>}
                   {currentUser.workLocation && (
@@ -271,7 +271,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                   )}
                   {currentUser.role && (currentUser.team || currentUser.workLocation) && <span>•</span>}
                   {currentUser.role && (
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                    <span className="text-muted-foreground font-medium">
                       {currentUser.role}
                     </span>
                   )}

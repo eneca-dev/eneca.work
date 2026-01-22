@@ -32,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { StageCard } from './StageCard'
-import { AssignResponsiblesDialog } from './dialogs'
+import { AssignResponsiblesDialog, DeleteConfirmDialog } from './dialogs'
 import type { Stage, Decomposition, StagesManagerProps } from './types'
 import { calculateTotalStats, generateTempId } from './utils'
 import { DEFAULT_STAGE, DEFAULT_DECOMPOSITION } from './constants'
@@ -144,6 +144,14 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
     isOpen: boolean
     stageId: string | null
   }>({ isOpen: false, stageId: null })
+
+  // Delete confirm dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean
+    stageId: string | null
+    stageName: string
+    tasksCount: number
+  }>({ isOpen: false, stageId: null, stageName: '', tasksCount: 0 })
 
   // Templates state
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
@@ -266,9 +274,31 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   )
 
   const handleDeleteStage = useCallback(
-    async (stageId: string) => {
+    (stageId: string) => {
       const stageToDelete = stages.find((s) => s.id === stageId)
       if (!stageToDelete) return
+
+      // Открываем диалог подтверждения
+      setDeleteDialog({
+        isOpen: true,
+        stageId,
+        stageName: stageToDelete.name,
+        tasksCount: stageToDelete.decompositions.length,
+      })
+    },
+    [stages]
+  )
+
+  const confirmDeleteStage = useCallback(
+    async () => {
+      const { stageId, stageName } = deleteDialog
+      if (!stageId) return
+
+      const stageToDelete = stages.find((s) => s.id === stageId)
+      if (!stageToDelete) return
+
+      // Закрываем диалог
+      setDeleteDialog({ isOpen: false, stageId: null, stageName: '', tasksCount: 0 })
 
       // Optimistic update
       setStages((prev) => prev.filter((s) => s.id !== stageId))
@@ -277,7 +307,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         await deleteStageMutation.mutateAsync({ stageId, sectionId })
         toast({
           title: 'Этап удалён',
-          description: `Этап "${stageToDelete.name}" был удалён`,
+          description: `Этап "${stageName}" был удалён`,
         })
       } catch (error) {
         // Rollback
@@ -294,7 +324,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         })
       }
     },
-    [stages, sectionId, deleteStageMutation, toast]
+    [deleteDialog, stages, sectionId, deleteStageMutation, toast]
   )
 
   const handleReorderStages = useCallback(
@@ -636,7 +666,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Compact Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/50 bg-slate-900/30">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 bg-muted/30">
         <div className="flex items-center gap-1.5">
           <Button
             variant="ghost"
@@ -651,7 +681,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
 
         <div className="flex items-center gap-3">
           {/* Stats - compact */}
-          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <span>{totalStats.totalStages} эт.</span>
             <span>{totalStats.totalTasks} зад.</span>
             <span>{totalStats.totalActualHours.toFixed(0)}/{totalStats.totalPlannedHours} ч</span>
@@ -787,6 +817,16 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         onSuccess={handleTemplateSaved}
         stages={templateStagesForSave}
         defaultDepartmentId={userDepartmentId || undefined}
+      />
+
+      {/* Delete Confirm Dialog */}
+      <DeleteConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, stageId: null, stageName: '', tasksCount: 0 })}
+        onConfirm={confirmDeleteStage}
+        title="Удаление этапа"
+        description={`Вы уверены, что хотите удалить этап "${deleteDialog.stageName}"? Это действие необратимо.`}
+        itemsCount={deleteDialog.tasksCount}
       />
     </div>
   )

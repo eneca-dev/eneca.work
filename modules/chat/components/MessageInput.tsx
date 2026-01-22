@@ -44,13 +44,13 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
   }
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 rounded-b-xl">
+    <div className="border-t border-border bg-card p-3 rounded-b-xl">
       <div className="flex items-center space-x-2">
         {/* Меню быстрых операций */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="p-2 rounded-lg border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 rounded-lg border border-primary/50 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={isLoading ? "Ожидание ответа..." : "Быстрые операции"}
               aria-label="Быстрые операции"
               disabled={isLoading}
@@ -88,7 +88,7 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={isLoading ? "Ожидание ответа..." : "Напишите сообщение..."}
-          className="flex-1 resize-none bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-24 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-system"
+          className="flex-1 resize-none bg-muted border-0 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary max-h-24 disabled:opacity-50 disabled:cursor-not-allowed text-foreground placeholder:text-muted-foreground font-system"
           rows={1}
           disabled={isLoading}
           maxLength={500}
@@ -97,7 +97,7 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
         <button
           onClick={handleSubmit}
           disabled={isLoading || !input.trim()}
-          className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white p-2 rounded-lg transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md disabled:shadow-none disabled:cursor-not-allowed"
+          className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground p-2 rounded-lg transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md disabled:shadow-none disabled:cursor-not-allowed"
           title={isLoading ? "Ожидание ответа..." : "Отправить сообщение"}
         >
           {isLoading ? (

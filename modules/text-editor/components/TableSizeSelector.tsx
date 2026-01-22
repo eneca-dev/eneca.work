@@ -51,10 +51,10 @@ export function TableSizeSelector({
           <TableIcon className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700" align="start">
+      <PopoverContent className="w-auto p-4 bg-popover border-border" align="start">
         <div className="space-y-3">
           {/* Заголовок с размером */}
-          <div className="text-sm font-medium text-center text-gray-900 dark:text-gray-100">
+          <div className="text-sm font-medium text-center text-foreground">
             {getSizeText()}
           </div>
           
@@ -72,10 +72,10 @@ export function TableSizeSelector({
                 <div
                   key={`${row}-${col}`}
                   className={cn(
-                    'w-4 h-4 border border-gray-300 dark:border-gray-600 cursor-pointer transition-colors',
+                    'w-4 h-4 border border-border cursor-pointer transition-colors',
                     hoveredCell && row <= hoveredCell.row && col <= hoveredCell.col
-                      ? 'bg-blue-500 dark:bg-blue-600 border-blue-600 dark:border-blue-700'
-                      : 'bg-white dark:bg-gray-600 hover:bg-gray-100 dark:hover:bg-gray-500'
+                      ? 'bg-primary border-primary'
+                      : 'bg-card hover:bg-accent'
                   )}
                   onMouseEnter={() => handleCellHover(row, col)}
                   onClick={() => handleCellClick(row, col)}
@@ -85,7 +85,7 @@ export function TableSizeSelector({
           </div>
           
           {/* Дополнительная информация */}
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+          <div className="text-xs text-muted-foreground text-center">
             Нажмите на ячейку, чтобы создать таблицу
           </div>
         </div>

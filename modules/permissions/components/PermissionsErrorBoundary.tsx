@@ -1,3 +1,5 @@
+'use client'
+
 import React from 'react'
 import { AlertTriangle, RefreshCw, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
