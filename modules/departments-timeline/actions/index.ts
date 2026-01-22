@@ -478,3 +478,72 @@ export async function confirmMultipleTeamsActivity(
     return { success: false, error: String(error) }
   }
 }
+
+// ============================================================================
+// Mutation Actions - Loadings
+// ============================================================================
+
+/**
+ * Обновить даты загрузки сотрудника
+ *
+ * Используется для drag-to-resize функциональности в timeline
+ *
+ * @param loadingId - ID загрузки
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Результат операции с обновленными данными
+ */
+export async function updateLoadingDates(
+  loadingId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация входных данных
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    // Проверяем что startDate <= finishDate
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
+    const { error } = await supabase
+      .from('loadings')
+      .update({
+        loading_start: startDate,
+        loading_finish: finishDate,
+      })
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[updateLoadingDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { loadingId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateLoadingDates] Unexpected error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
+    }
+  }
+}
