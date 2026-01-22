@@ -67,6 +67,15 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     enabled: isProjectExpanded,
   })
 
+  // Сброс флагов автораскрытия при изменении shouldAutoExpand
+  useEffect(() => {
+    if (shouldAutoExpand) {
+      setHasAutoExpanded(false)
+      setHasAutoExpandedAll(false)
+      setIsProjectExpanded(true) // Раскрываем проект
+    }
+  }, [shouldAutoExpand])
+
   // Автоматическое разворачивание пути по breadcrumbs
   useEffect(() => {
     if (
@@ -604,6 +613,13 @@ export function ProjectTree({
     isLoadingProjects,
   })
 
+  // Сброс флага автопереключения при изменении autoSwitchProject
+  useEffect(() => {
+    if (autoSwitchProject) {
+      setHasAutoSwitched(false)
+    }
+  }, [autoSwitchProject?.projectId])
+
   // Автопереключение на "Все проекты" и установка фильтра, если проект не найден в "Мои проекты"
   useEffect(() => {
     if (
@@ -629,7 +645,14 @@ export function ProjectTree({
 
         setHasAutoSwitched(true)
       } else {
+        console.log('✅ Проект найден в "Мои проекты"', {
+          projectId: autoSwitchProject.projectId,
+          projectName: autoSwitchProject.projectName,
+        })
+
         // Проект найден в "Мои проекты", просто помечаем что проверка выполнена
+        // и устанавливаем название проекта в поиск
+        setSearch(autoSwitchProject.projectName)
         setHasAutoSwitched(true)
       }
     }

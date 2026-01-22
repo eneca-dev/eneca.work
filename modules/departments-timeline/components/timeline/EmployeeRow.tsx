@@ -57,6 +57,7 @@ function dayCellsToTimelineUnits(dayCells: DayCell[]): TimelineUnit[] {
 
     return {
       date: cell.date,
+      label: cell.dayOfMonth.toString(),
       dateKey: formatMinskDate(cell.date),
       dayOfMonth: cell.dayOfMonth,
       dayOfWeek: cell.dayOfWeek,
@@ -160,7 +161,8 @@ function LoadingBarWithResize({
     // Не открываем модалку если только что закончили drag
     if (wasRecentlyDragging()) return
 
-    onLoadingClick(bar.period)
+    // Приводим bar.period к типу Loading (BarPeriod имеет sectionId?: string | null | undefined)
+    onLoadingClick(bar.period as any)
   }, [bar.period, onLoadingClick, wasRecentlyDragging])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
@@ -401,12 +403,24 @@ export function EmployeeRow({
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
     (loadingId: string, startDate: string, finishDate: string) => {
-      updateLoadingDates.mutate({
-        loadingId,
-        employeeId: employee.id,
-        startDate,
-        finishDate,
-      })
+      console.log('🔵 [EmployeeRow] handleLoadingResize called:', { loadingId, employeeId: employee.id, startDate, finishDate })
+
+      updateLoadingDates.mutate(
+        {
+          loadingId,
+          employeeId: employee.id,
+          startDate,
+          finishDate,
+        },
+        {
+          onSuccess: (data) => {
+            console.log('✅ [EmployeeRow] Loading dates updated successfully:', data)
+          },
+          onError: (error) => {
+            console.error('❌ [EmployeeRow] Failed to update loading dates:', error)
+          },
+        }
+      )
     },
     [employee.id, updateLoadingDates]
   )
@@ -501,7 +515,9 @@ export function EmployeeRow({
 
   // Convert loadings to periods
   const allPeriods = useMemo(() => {
-    return loadingsToPeriods(employee.loadings)
+    // Преобразуем loadings из departments-timeline типа (string dates) в planning тип (Date)
+    // loadingsToPeriods сам конвертирует через new Date(), поэтому просто приводим тип
+    return loadingsToPeriods(employee.loadings as any)
   }, [employee.loadings])
 
   // Calculate bar renders

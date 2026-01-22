@@ -499,17 +499,22 @@ export async function updateLoadingDates(
   finishDate: string
 ): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
   try {
+    console.log('🔵 [updateLoadingDates] Called with:', { loadingId, startDate, finishDate })
+
     // Валидация входных данных
     if (!loadingId) {
+      console.error('❌ [updateLoadingDates] Missing loadingId')
       return { success: false, error: 'ID загрузки обязателен' }
     }
 
     if (!startDate || !finishDate) {
+      console.error('❌ [updateLoadingDates] Missing dates')
       return { success: false, error: 'Даты начала и окончания обязательны' }
     }
 
     // Проверяем что startDate <= finishDate
     if (startDate > finishDate) {
+      console.error('❌ [updateLoadingDates] Start date > finish date')
       return { success: false, error: 'Дата начала не может быть позже даты окончания' }
     }
 
@@ -518,8 +523,11 @@ export async function updateLoadingDates(
     // Проверка авторизации
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
+      console.error('❌ [updateLoadingDates] Auth error:', authError)
       return { success: false, error: 'Необходима авторизация' }
     }
+
+    console.log('🔵 [updateLoadingDates] Updating loading in DB:', { loadingId, startDate, finishDate })
 
     // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
     const { error } = await supabase
@@ -534,6 +542,8 @@ export async function updateLoadingDates(
       console.error('[updateLoadingDates] Supabase error:', error)
       return { success: false, error: error.message }
     }
+
+    console.log('✅ [updateLoadingDates] Successfully updated loading dates in DB')
 
     return {
       success: true,

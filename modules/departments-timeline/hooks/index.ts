@@ -129,8 +129,12 @@ function updateLoadingDatesInEmployeeCache(
   employeeId: string,
   startDate: string,
   finishDate: string
-): Department[] {
-  if (!departments) return []
+): Department[] | undefined {
+  // Если данных нет или это не массив - возвращаем как есть
+  if (!departments || !Array.isArray(departments)) {
+    console.warn('[updateLoadingDatesInEmployeeCache] Invalid data type:', typeof departments)
+    return departments
+  }
 
   return departments.map((department) => ({
     ...department,
@@ -177,9 +181,15 @@ export const useUpdateLoadingDates = createCacheMutation<
   optimisticUpdate: {
     queryKey: queryKeys.departmentsTimeline.all,
     updater: (oldData, input) => {
-      // oldData это Department[] из кеша useDepartmentsData
+      // oldData может быть Department[] из кеша useDepartmentsData,
+      // или другим типом данных (например, Record<string, TeamFreshness>)
+      // Обрабатываем только массивы отделов, остальное возвращаем как есть
+      if (!Array.isArray(oldData)) {
+        return oldData
+      }
+
       return updateLoadingDatesInEmployeeCache(
-        oldData as Department[] | undefined,
+        oldData as Department[],
         input.loadingId,
         input.employeeId,
         input.startDate,
@@ -187,4 +197,8 @@ export const useUpdateLoadingDates = createCacheMutation<
       )
     },
   },
+
+  // Инвалидируем все departments timeline запросы после успешного обновления
+  // Это важно т.к. staleTime: Infinity и данные обновляются только через Realtime или invalidation
+  invalidateKeys: [queryKeys.departmentsTimeline.all],
 })

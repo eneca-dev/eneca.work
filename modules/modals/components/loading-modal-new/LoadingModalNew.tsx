@@ -214,18 +214,37 @@ export function LoadingModalNew({
 
   // Данные для автопереключения режима и фильтрации
   const projectAutoSwitchData = useMemo(() => {
-    if (!effectiveProjectId || !effectiveBreadcrumbs || effectiveBreadcrumbs.length === 0) {
+    // Используем selectedBreadcrumbs из хука (они обновляются при смене этапа)
+    // Если их нет - используем effectiveBreadcrumbs (начальная загрузка)
+    const breadcrumbsToUse = selectedBreadcrumbs || effectiveBreadcrumbs
+
+    if (!breadcrumbsToUse || breadcrumbsToUse.length === 0) {
       return null
     }
 
-    // Находим имя проекта из breadcrumbs
-    const projectBreadcrumb = effectiveBreadcrumbs.find(b => b.type === 'project')
+    // Находим имя и ID проекта из breadcrumbs
+    const projectBreadcrumb = breadcrumbsToUse.find(b => b.type === 'project')
+    if (!projectBreadcrumb) {
+      return null
+    }
 
     return {
-      projectId: effectiveProjectId,
-      projectName: projectBreadcrumb?.name ?? '',
+      projectId: projectBreadcrumb.id,
+      projectName: projectBreadcrumb.name,
     }
-  }, [effectiveProjectId, effectiveBreadcrumbs])
+  }, [selectedBreadcrumbs, effectiveBreadcrumbs])
+
+  // Текущий ID проекта для автораскрытия (берем из selectedBreadcrumbs если есть, иначе из effectiveProjectId)
+  const currentProjectId = useMemo(() => {
+    if (selectedBreadcrumbs && selectedBreadcrumbs.length > 0) {
+      const projectBreadcrumb = selectedBreadcrumbs.find(b => b.type === 'project')
+      return projectBreadcrumb?.id ?? effectiveProjectId
+    }
+    return effectiveProjectId
+  }, [selectedBreadcrumbs, effectiveProjectId])
+
+  // Текущие breadcrumbs для автораскрытия
+  const currentBreadcrumbs = selectedBreadcrumbs || effectiveBreadcrumbs
 
   // Обработчик сохранения
   const handleSave = async () => {
@@ -371,8 +390,8 @@ export function LoadingModalNew({
               selectedSectionId={selectedSectionId}
               onSectionSelect={selectSection}
               userId={userId}
-              initialProjectId={effectiveProjectId}
-              initialBreadcrumbs={effectiveBreadcrumbs}
+              initialProjectId={currentProjectId}
+              initialBreadcrumbs={currentBreadcrumbs}
               autoSwitchProject={projectAutoSwitchData}
               disabled={mode === 'edit' && !isChangingStage}
               modalMode={mode}
