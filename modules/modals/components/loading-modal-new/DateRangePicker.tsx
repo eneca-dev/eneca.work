@@ -215,11 +215,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const startAutoScroll = (direction: 'prev' | 'next') => {
     // Запускаем автопрокрутку только если идет drag операция
     if (!draggedBoundary) {
-      console.log('startAutoScroll: нет draggedBoundary')
       return
     }
-
-    console.log(`startAutoScroll: запуск автопрокрутки ${direction}`)
 
     // Останавливаем предыдущий интервал если есть
     if (autoScrollIntervalRef.current) {
@@ -228,7 +225,6 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
     // Запускаем новый интервал (1 секунда = 1000ms)
     autoScrollIntervalRef.current = setInterval(() => {
-      console.log(`Автопрокрутка: ${direction}`)
       if (direction === 'prev') {
         setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
       } else {
@@ -238,7 +234,6 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   }
 
   const stopAutoScroll = () => {
-    console.log('stopAutoScroll: остановка автопрокрутки')
     if (autoScrollIntervalRef.current) {
       clearInterval(autoScrollIntervalRef.current)
       autoScrollIntervalRef.current = null
@@ -278,14 +273,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
               onClick={handlePrev}
               onDragEnter={(e) => {
-                console.log('DragEnter на левую стрелочку, draggedBoundary:', draggedBoundary)
                 if (draggedBoundary) {
                   e.preventDefault()
                   startAutoScroll('prev')
                 }
               }}
               onDragLeave={(e) => {
-                console.log('DragLeave с левой стрелочки')
                 if (draggedBoundary) {
                   e.preventDefault()
                   stopAutoScroll()
@@ -310,14 +303,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
               onClick={handleNext}
               onDragEnter={(e) => {
-                console.log('DragEnter на правую стрелочку, draggedBoundary:', draggedBoundary)
                 if (draggedBoundary) {
                   e.preventDefault()
                   startAutoScroll('next')
                 }
               }}
               onDragLeave={(e) => {
-                console.log('DragLeave с правой стрелочки')
                 if (draggedBoundary) {
                   e.preventDefault()
                   stopAutoScroll()

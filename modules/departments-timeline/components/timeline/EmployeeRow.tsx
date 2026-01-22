@@ -403,39 +403,20 @@ export function EmployeeRow({
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
     (loadingId: string, startDate: string, finishDate: string) => {
-      console.log('🔵 [EmployeeRow] handleLoadingResize called:', { loadingId, employeeId: employee.id, startDate, finishDate })
-
-      updateLoadingDates.mutate(
-        {
-          loadingId,
-          employeeId: employee.id,
-          startDate,
-          finishDate,
-        },
-        {
-          onSuccess: (data) => {
-            console.log('✅ [EmployeeRow] Loading dates updated successfully:', data)
-          },
-          onError: (error) => {
-            console.error('❌ [EmployeeRow] Failed to update loading dates:', error)
-          },
-        }
-      )
+      updateLoadingDates.mutate({
+        loadingId,
+        employeeId: employee.id,
+        startDate,
+        finishDate,
+      })
     },
     [employee.id, updateLoadingDates]
   )
 
   // Обработчик клика на loading bar для открытия модалки редактирования
   const handleLoadingClick = useCallback((loading: Loading) => {
-    console.time('⏱️ [EmployeeRow] handleLoadingClick')
-    console.log('🔵 [EmployeeRow] handleLoadingClick вызван для loading:', loading.id)
-
     // Проверяем что есть sectionId (это главное для открытия модалки)
     if (!loading.sectionId) {
-      console.warn('⚠️ Не могу открыть модалку: отсутствует sectionId', {
-        loadingId: loading.id,
-        stageId: loading.stageId,
-      })
       return
     }
 
@@ -478,9 +459,6 @@ export function EmployeeRow({
       })
     }
 
-    console.log('📋 [EmployeeRow] Breadcrumbs построены:', breadcrumbs)
-    console.log('🔍 [EmployeeRow] loading.employeeId:', loading.employeeId, 'employee.id:', employee.id)
-
     // Открываем LoadingModalNew через global modal store с breadcrumbs и loading объектом
     openLoadingModalNewEdit(loading.id, loading.sectionId, {
       loading: {
@@ -495,9 +473,6 @@ export function EmployeeRow({
       breadcrumbs: breadcrumbs.length > 0 ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
-
-    console.timeEnd('⏱️ [EmployeeRow] handleLoadingClick')
-    console.log('🟢 [EmployeeRow] openLoadingModalNewEdit вызван с полным loading объектом')
   }, [])
 
   // Обработчик создания новой загрузки для сотрудника

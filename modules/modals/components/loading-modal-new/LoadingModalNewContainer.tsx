@@ -32,9 +32,6 @@ export function LoadingModalNewContainer() {
   // Загружаем данные загрузки при открытии в режиме редактирования
   useEffect(() => {
     if (isEditOpen && modalData) {
-      console.time('⏱️ [LoadingModalNewContainer] useEffect обработка')
-      console.log('🔵 [LoadingModalNewContainer] useEffect triggered, modalData:', modalData)
-
       const data = modalData as {
         loadingId?: string
         sectionId?: string
@@ -49,16 +46,6 @@ export function LoadingModalNewContainer() {
 
       // Если loading уже передан, используем его
       if (data.loading) {
-        console.log('✅ [LoadingModalNewContainer] loading уже передан, используем его')
-        console.log('🔍 [LoadingModalNewContainer] data.loading:', {
-          id: data.loading.id,
-          employee_id: data.loading.employee_id,
-          start_date: data.loading.start_date,
-          end_date: data.loading.end_date,
-          rate: data.loading.rate,
-          comment: data.loading.comment,
-          section_id: data.loading.section_id,
-        })
         setEditData({
           loadingId: data.loadingId || data.loading.id,
           sectionId: data.sectionId || data.loading.section_id,
@@ -66,18 +53,15 @@ export function LoadingModalNewContainer() {
           breadcrumbs: data.breadcrumbs,
           projectId: data.projectId,
         })
-        console.timeEnd('⏱️ [LoadingModalNewContainer] useEffect обработка')
         return
       }
 
       // Если есть только loadingId, загружаем данные
       if (data.loadingId && data.sectionId) {
-        console.log('🔄 [LoadingModalNewContainer] Загружаем loading по ID:', data.loadingId)
         setIsLoadingData(true)
         getLoadingById(data.loadingId)
           .then((result) => {
             if (result.success) {
-              console.log('✅ [LoadingModalNewContainer] Loading загружен из API')
               setEditData({
                 loadingId: result.data.id,
                 sectionId: data.sectionId!,
@@ -104,7 +88,6 @@ export function LoadingModalNewContainer() {
           })
           .finally(() => {
             setIsLoadingData(false)
-            console.timeEnd('⏱️ [LoadingModalNewContainer] useEffect обработка')
           })
       }
     } else {
@@ -116,7 +99,6 @@ export function LoadingModalNewContainer() {
 
   // Если нет userId, не рендерим
   if (!userId) {
-    console.warn('⚠️ LoadingModalNewContainer: нет userId, модалка не отображается')
     return null
   }
 

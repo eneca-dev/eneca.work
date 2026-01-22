@@ -214,7 +214,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         onSectionSelect(result.data.id, stageName, breadcrumbs)
       }
     } catch (error) {
-      console.error('Ошибка создания базового этапа:', error)
       toast({
         title: 'Ошибка',
         description: error instanceof Error ? error.message : 'Не удалось создать этап',
@@ -286,8 +285,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     // Кнопка всегда работает, даже при disabled дереве
 
     if (node.type === 'section' && node.sectionId) {
-      console.log('[ProjectTree] Switching to budgets view and navigating')
-
       // 1. Сначала переключаемся на вкладку "Бюджеты" через store
       useTasksViewStore.getState().setViewMode('budgets')
 
@@ -303,7 +300,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         highlight: 'true',
       })
       const url = `/tasks?${params.toString()}`
-      console.log('[ProjectTree] Navigating to:', url)
 
       router.push(url)
     }
@@ -606,13 +602,6 @@ export function ProjectTree({
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
-  console.log('🌳 ProjectTree render:', {
-    mode,
-    userId,
-    projectsCount: projects.length,
-    isLoadingProjects,
-  })
-
   // Сброс флага автопереключения при изменении autoSwitchProject
   useEffect(() => {
     if (autoSwitchProject) {
@@ -632,11 +621,6 @@ export function ProjectTree({
       const projectExists = projects.some(p => p.id === autoSwitchProject.projectId)
 
       if (!projectExists) {
-        console.log('🔄 Проект не найден в "Мои проекты", переключаемся на "Все проекты"', {
-          projectId: autoSwitchProject.projectId,
-          projectName: autoSwitchProject.projectName,
-        })
-
         // Переключаемся на "Все проекты"
         onModeChange('all')
 
@@ -645,11 +629,6 @@ export function ProjectTree({
 
         setHasAutoSwitched(true)
       } else {
-        console.log('✅ Проект найден в "Мои проекты"', {
-          projectId: autoSwitchProject.projectId,
-          projectName: autoSwitchProject.projectName,
-        })
-
         // Проект найден в "Мои проекты", просто помечаем что проверка выполнена
         // и устанавливаем название проекта в поиск
         setSearch(autoSwitchProject.projectName)

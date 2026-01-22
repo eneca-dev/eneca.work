@@ -54,7 +54,6 @@ export function LoadingModalNew({
   editData,
   userId,
 }: LoadingModalNewProps) {
-  console.log('🔵 [LoadingModalNew] Render, mode:', mode, 'open:', open, 'editData:', editData)
   // Функция получения иконки по типу элемента
   const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
     switch (type) {
@@ -168,24 +167,18 @@ export function LoadingModalNew({
 
   // Автоматический выбор раздела и установка breadcrumbs в режиме редактирования или создания с sectionId
   useEffect(() => {
-    console.log('🔵 [LoadingModalNew] useEffect автовыбор раздела, effectiveBreadcrumbs:', effectiveBreadcrumbs)
-
     if (
       open &&
       !hasAutoSelected &&
       effectiveBreadcrumbs &&
       effectiveBreadcrumbs.length > 0
     ) {
-      console.log('✅ [LoadingModalNew] Условия для автовыбора выполнены')
       if (mode === 'edit' && editData?.loading) {
         // Режим редактирования
-        console.time('⏱️ [LoadingModalNew] Автовыбор раздела (edit)')
         const sectionId = editData.loading.section_id
         const lastBreadcrumb = effectiveBreadcrumbs[effectiveBreadcrumbs.length - 1]
         selectSection(sectionId, lastBreadcrumb.name, effectiveBreadcrumbs)
         setHasAutoSelected(true)
-        console.timeEnd('⏱️ [LoadingModalNew] Автовыбор раздела (edit)')
-        console.log('✅ [LoadingModalNew] Раздел автоматически выбран (edit)')
       } else if (mode === 'create' && createData?.sectionId) {
         // Режим создания с предзаполненным sectionId
         const sectionId = createData.sectionId
@@ -194,14 +187,7 @@ export function LoadingModalNew({
         setHasAutoSelected(true)
         // В режиме создания сразу показываем форму
         setIsFormVisible(true)
-        console.log('✅ [LoadingModalNew] Раздел автоматически выбран (create)')
       }
-    } else {
-      console.log('⏸️ [LoadingModalNew] Условия для автовыбора НЕ выполнены:', {
-        open,
-        hasAutoSelected,
-        hasBreadcrumbs: !!(effectiveBreadcrumbs && effectiveBreadcrumbs.length > 0),
-      })
     }
   }, [mode, open, hasAutoSelected, effectiveBreadcrumbs, editData, createData, selectSection])
 
@@ -271,15 +257,6 @@ export function LoadingModalNew({
       })
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
-      console.log('🔄 [LoadingModalNew] Вызываем updateLoading.mutateAsync:', {
-        loadingId: editData.loading.id,
-        stageId: selectedSectionId,
-        employeeId: formData.employeeId,
-        rate: formData.rate,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        comment: formData.comment,
-      })
       await updateLoading.mutateAsync({
         loadingId: editData.loading.id,
         stageId: selectedSectionId ?? undefined,
