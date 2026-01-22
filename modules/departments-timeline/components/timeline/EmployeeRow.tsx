@@ -279,16 +279,20 @@ export function EmployeeRow({
             </div>
           </div>
 
-          {/* Right: team + rate */}
+          {/* Right: rate */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {employee.teamName && (
-              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground truncate max-w-[100px]">
-                {employee.teamName}
-              </span>
-            )}
-            <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-              {employee.employmentRate || 1} ставка
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary cursor-default">
+                    {employee.employmentRate || 1}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  Ставка
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
