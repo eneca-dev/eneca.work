@@ -229,7 +229,7 @@ export function EmployeeRow({
       >
         {/* Sidebar - sticky left */}
         <div
-          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 group-hover/employee:bg-accent"
+          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
           style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
@@ -505,7 +505,6 @@ export function EmployeeRow({
                   cell.isToday && 'bg-primary/10',
                   !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
                   !cell.isToday && isWeekend && 'bg-muted/50',
-                  'group-hover/employee:bg-muted/20',
                 )}
                 style={{
                   width: DAY_CELL_WIDTH,
