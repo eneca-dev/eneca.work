@@ -102,9 +102,9 @@ export const queryKeys = {
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
     // structure moved to filterStructure.project() for unified caching
-    /** Дерево проекта для loading-modal-2 (иерархия: project -> stage -> object -> section) */
+    /** Дерево проекта для loading-modal-new (иерархия: project -> stage -> object -> section) */
     tree: (projectId: string) => [...queryKeys.projects.detail(projectId), 'tree'] as const,
-    /** Список проектов для loading-modal-2 (с фильтрацией my/all) */
+    /** Список проектов для loading-modal-new (с фильтрацией my/all) */
     listForModal: (mode: 'my' | 'all', userId?: string) =>
       [...queryKeys.projects.lists(), 'modal', mode, userId] as const,
     /** Breadcrumbs для узла дерева проекта (section или decomposition_stage) */

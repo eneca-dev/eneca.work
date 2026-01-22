@@ -6,7 +6,7 @@
 
 ## Цель
 
-Создать новую модалку `loading-modal-2` для управления загрузками сотрудников с использованием современного стека (server actions, TanStack Query, optimistic updates), сохранив всю бизнес-логику из существующей реализации. Модалка будет размещена в `modules/modals/components/loading-modal-2/` по аналогии с другими модалками модуля.
+Создать новую модалку `loading-modal-new` для управления загрузками сотрудников с использованием современного стека (server actions, TanStack Query, optimistic updates), сохранив всю бизнес-логику из существующей реализации. Модалка будет размещена в `modules/modals/components/loading-modal-new/` по аналогии с другими модалками модуля.
 
 ## Проблемы текущей реализации
 
@@ -28,8 +28,8 @@ modules/modals/
 │   ├── projects-tree.ts                # Загрузка дерева проектов + создание этапа
 │   └── index.ts                        # Экспорт actions
 ├── components/
-│   └── loading-modal-2/
-│       ├── LoadingModal2.tsx           # Главный контейнер (< 100 строк)
+│   └── loading-modal-new/
+│       ├── LoadingModalNew.tsx           # Главный контейнер (< 100 строк)
 │       ├── ProjectTreePanel.tsx        # Левая панель (дерево + toolbar + search + navigation)
 │       ├── ProjectTreeNode.tsx         # Узел дерева (рекурсивный компонент)
 │       ├── LoadingForm.tsx             # Форма (header + fields + actions)
@@ -50,7 +50,7 @@ modules/modals/
 │   ├── useDecompositionStageMutations.ts # Mutations: создание этапа
 │   └── index.ts                        # Экспорт hooks
 └── types/
-    └── index.ts                        # Добавить типы для loading-modal-2
+    └── index.ts                        # Добавить типы для loading-modal-new
 ```
 
 **Изменения после проверки Pragmatic Architect:**
@@ -59,7 +59,7 @@ modules/modals/
   - `ProjectTreeToolbar`, `ProjectTreeSearch`, `ProjectTreeNavigation` → встроены в `ProjectTreePanel`
   - `LoadingFormHeader`, `LoadingFormActions` → встроены в `LoadingForm`
   - `LoadingFormPanel` удалён (избыточная обёртка)
-- ✅ Объединены хуки: `useLoadingForm` + `useLoadingModal2` → `useLoadingModal`
+- ✅ Объединены хуки: `useLoadingForm` + `useLoadingModalNew` → `useLoadingModal`
 - ✅ Упрощены диалоги: `DeleteConfirmDialog` теперь двухшаговый (Warning → Confirm)
 - ✅ Объединены файлы: `types.ts` + `constants.ts` → один файл `types.ts`
 - ✅ Два файла actions: логическое разделение по доменам (~300-400 строк каждый)
@@ -81,8 +81,8 @@ modules/modals/
 - `useDecompositionStageMutations` - мутация создания этапа
 - **Используем из `modules/cache`:** `useUsers` - поиск сотрудников с debounce
 
-### Компоненты (в `modules/modals/components/loading-modal-2/`)
-- `LoadingModal2.tsx` - главный контейнер (< 100 строк)
+### Компоненты (в `modules/modals/components/loading-modal-new/`)
+- `LoadingModalNew.tsx` - главный контейнер (< 100 строк)
 - `ProjectTreePanel.tsx` - левая панель (дерево + toolbar + search + navigation)
 - `ProjectTreeNode.tsx` - узел дерева (рекурсивный)
 - `LoadingForm.tsx` - форма (header + fields + actions)
@@ -103,7 +103,7 @@ modules/modals/
 - `modules/modals/actions/loadings.ts` (новый)
 - `modules/modals/actions/projects-tree.ts` (новый)
 - `modules/modals/actions/index.ts` (обновление - добавить экспорт)
-- `modules/modals/types/index.ts` (обновление - добавить типы для loading-modal-2)
+- `modules/modals/types/index.ts` (обновление - добавить типы для loading-modal-new)
 - `modules/cache/queryKeys.ts` (обновление - добавить ключи для загрузок и проектов)
 
 **Зависимости:** нет
@@ -169,10 +169,10 @@ modules/modals/
 Создать переиспользуемые UI компоненты для селекторов формы.
 
 **Затрагиваемые файлы:**
-- `modules/modals/components/loading-modal-2/EmployeeSelector.tsx` (новый)
-- `modules/modals/components/loading-modal-2/DateRangeSelector.tsx` (новый)
-- `modules/modals/components/loading-modal-2/RateSelector.tsx` (новый)
-- `modules/modals/components/loading-modal-2/types.ts` (новый - типы + константы RATES)
+- `modules/modals/components/loading-modal-new/EmployeeSelector.tsx` (новый)
+- `modules/modals/components/loading-modal-new/DateRangeSelector.tsx` (новый)
+- `modules/modals/components/loading-modal-new/RateSelector.tsx` (новый)
+- `modules/modals/components/loading-modal-new/types.ts` (новый - типы + константы RATES)
 
 **Зависимости:** Этап 2
 
@@ -200,8 +200,8 @@ modules/modals/
 Создать компонент навигации по иерархии проектов с lazy loading и кешированием. Все элементы (toolbar, search, navigation) встроены в один компонент ProjectTreePanel.
 
 **Затрагиваемые файлы:**
-- `modules/modals/components/loading-modal-2/ProjectTreePanel.tsx` (новый - включает toolbar, search, navigation)
-- `modules/modals/components/loading-modal-2/ProjectTreeNode.tsx` (новый - рекурсивный узел)
+- `modules/modals/components/loading-modal-new/ProjectTreePanel.tsx` (новый - включает toolbar, search, navigation)
+- `modules/modals/components/loading-modal-new/ProjectTreeNode.tsx` (новый - рекурсивный узел)
 
 **Зависимости:** Этап 2, Этап 3
 
@@ -244,7 +244,7 @@ modules/modals/
 Создать компонент формы для создания/редактирования загрузки с валидацией и оптимистичными обновлениями. Header и actions встроены в LoadingForm.
 
 **Затрагиваемые файлы:**
-- `modules/modals/components/loading-modal-2/LoadingForm.tsx` (новый - включает header, fields, actions)
+- `modules/modals/components/loading-modal-new/LoadingForm.tsx` (новый - включает header, fields, actions)
 
 **Зависимости:** Этап 3, Этап 4
 
@@ -270,20 +270,20 @@ modules/modals/
 
 ---
 
-### Этап 6: Главный контейнер LoadingModal2
+### Этап 6: Главный контейнер LoadingModalNew
 
 **Описание:**
 Создать главный компонент модалки, объединяющий все части с двухпанельной структурой.
 
 **Затрагиваемые файлы:**
-- `modules/modals/components/loading-modal-2/LoadingModal2.tsx` (новый)
-- `modules/modals/components/loading-modal-2/index.ts` (новый)
-- `modules/modals/index.ts` (обновление - экспорт LoadingModal2)
+- `modules/modals/components/loading-modal-new/LoadingModalNew.tsx` (новый)
+- `modules/modals/components/loading-modal-new/index.ts` (новый)
+- `modules/modals/index.ts` (обновление - экспорт LoadingModalNew)
 
 **Зависимости:** Этап 4, Этап 5
 
 **Задачи:**
-1. Создать LoadingModal2 с двухпанельной структурой (40% / 60%)
+1. Создать LoadingModalNew с двухпанельной структурой (40% / 60%)
 2. Реализовать два режима: create и edit
 3. Использовать хук `useLoadingModal` для управления состоянием (уже создан в Этапе 2)
 4. Реализовать открытие/закрытие с анимацией
@@ -295,7 +295,7 @@ modules/modals/
 10. Следовать DESIGN_GUIDE.md (overlay, panel, focus states)
 
 **Критерии готовности:**
-- [ ] LoadingModal2 < 100 строк (только композиция)
+- [ ] LoadingModalNew < 100 строк (только композиция)
 - [ ] Два режима (create/edit) работают корректно
 - [ ] Используется хук useLoadingModal из Этапа 2
 - [ ] Keyboard shortcuts работают (ESC)
@@ -313,9 +313,9 @@ modules/modals/
 Реализовать диалоги подтверждения архивации и удаления загрузок с optimistic updates.
 
 **Затрагиваемые файлы:**
-- `modules/modals/components/loading-modal-2/dialogs/ArchiveConfirmDialog.tsx` (новый)
-- `modules/modals/components/loading-modal-2/dialogs/DeleteConfirmDialog.tsx` (новый - двухшаговый)
-- `modules/modals/components/loading-modal-2/dialogs/index.ts` (новый)
+- `modules/modals/components/loading-modal-new/dialogs/ArchiveConfirmDialog.tsx` (новый)
+- `modules/modals/components/loading-modal-new/dialogs/DeleteConfirmDialog.tsx` (новый - двухшаговый)
+- `modules/modals/components/loading-modal-new/dialogs/index.ts` (новый)
 - Обновление `LoadingForm.tsx` для интеграции диалогов (actions уже встроены)
 
 **Зависимости:** Этап 6
@@ -344,7 +344,7 @@ modules/modals/
 ### Этап 8: Интеграция и тестирование
 
 **Описание:**
-Интегрировать новую модалку LoadingModal2 в существующий код, провести тестирование. Старая LoadingModal остается до полной миграции.
+Интегрировать новую модалку LoadingModalNew в существующий код, провести тестирование. Старая LoadingModal остается до полной миграции.
 
 **Затрагиваемые файлы:**
 - Места использования: найти все импорты старой `LoadingModal`
@@ -355,15 +355,15 @@ modules/modals/
 
 **Задачи:**
 1. Найти все места использования старой LoadingModal (Grep)
-2. Создать тестовые интеграции LoadingModal2 в 1-2 местах
+2. Создать тестовые интеграции LoadingModalNew в 1-2 местах
 3. Протестировать все сценарии использования (create/edit/archive/delete)
 4. Проверить работу с деревом проектов и lazy loading
 5. Убедиться что optimistic updates работают
-6. Обновить `modules/modals/README.md` с описанием LoadingModal2
-7. Создать план миграции остальных мест на LoadingModal2 (отдельная задача)
+6. Обновить `modules/modals/README.md` с описанием LoadingModalNew
+7. Создать план миграции остальных мест на LoadingModalNew (отдельная задача)
 
 **Критерии готовности:**
-- [ ] LoadingModal2 работает в тестовых местах
+- [ ] LoadingModalNew работает в тестовых местах
 - [ ] Все сценарии протестированы (create/edit/archive/delete)
 - [ ] Lazy loading дерева работает корректно
 - [ ] Optimistic updates работают без ошибок

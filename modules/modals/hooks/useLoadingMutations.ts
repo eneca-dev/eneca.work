@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Loading Modal 2 - Hook для мутаций загрузок
+ * Loading Modal New - Hook для мутаций загрузок
  *
  * Предоставляет операции CRUD для загрузок сотрудников с optimistic updates:
  * - create: создание новой загрузки

@@ -9,7 +9,7 @@ import { UserPermissionsSyncProvider } from "@/modules/permissions";
 import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
 import { QueryProvider, RealtimeSync, ReferencePrefetch } from "@/modules/cache";
 import { AuthProvider } from "@/modules/auth";
-import { LoadingModalContainer, LoadingModal2Container } from "@/modules/modals";
+import { LoadingModalContainer, LoadingModalNewContainer } from "@/modules/modals";
 
 /**
  * Клиентские провайдеры приложения
@@ -39,7 +39,7 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                 <Toaster />
                 <GlobalNotification />
                 <LoadingModalContainer />
-                <LoadingModal2Container />
+                <LoadingModalNewContainer />
               </FeedbackProvider>
             </UserPermissionsSyncProvider>
           </AuthProvider>

@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Loading Modal 2 - Hook для загрузки breadcrumbs по node_id
+ * Loading Modal New - Hook для загрузки breadcrumbs по node_id
  */
 
 import { useQuery } from '@tanstack/react-query'

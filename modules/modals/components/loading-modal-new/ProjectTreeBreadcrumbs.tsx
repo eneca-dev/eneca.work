@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Loading Modal 2 - Хлебные крошки для дерева проектов
+ * Loading Modal New - Хлебные крошки для дерева проектов
  *
  * Отображает путь: Проект > Стадия > Котельная > АР > Раздел
  * С иконками для каждого уровня
@@ -25,6 +25,7 @@ const TYPE_ICONS = {
   stage: Target,
   object: Box,
   section: FileText,
+  decomposition_stage: Target,
 } as const
 
 const TYPE_COLORS = {
@@ -32,6 +33,7 @@ const TYPE_COLORS = {
   stage: 'text-purple-600',
   object: 'text-orange-600',
   section: 'text-blue-600',
+  decomposition_stage: 'text-purple-600',
 } as const
 
 export function ProjectTreeBreadcrumbs({

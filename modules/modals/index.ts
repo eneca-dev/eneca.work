@@ -47,9 +47,9 @@ export type {
   // Loading
   LoadingCreateData,
   LoadingEditData,
-  // Loading Modal 2
-  LoadingModal2CreateData,
-  LoadingModal2EditData,
+  // Loading Modal New
+  LoadingModalNewCreateData,
+  LoadingModalNewEditData,
   // Employee
   EmployeeViewData,
   // Progress
@@ -116,8 +116,8 @@ export {
   openItemEdit,
   openLoadingCreate,
   openLoadingEdit,
-  openLoadingModal2Create,
-  openLoadingModal2Edit,
+  openLoadingModalNewCreate,
+  openLoadingModalNewEdit,
   openEmployeeView,
   closeModal,
   openCheckpointCreate,
@@ -157,8 +157,8 @@ export { TaskCreateModal, type TaskCreateModalProps } from './components/task'
 // Loading
 export { LoadingModal, type LoadingModalProps, LoadingModalContainer } from './components/loading'
 
-// Loading Modal 2
-export { LoadingModal2Container, LoadingModal2, type LoadingModal2Props } from './components/loading-modal-2'
+// Loading Modal New
+export { LoadingModalNewContainer, LoadingModalNew, type LoadingModalNewProps } from './components/loading-modal-new'
 
 // Employee
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'

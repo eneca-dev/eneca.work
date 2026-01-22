@@ -71,7 +71,7 @@ export {
   type WorkLogResult,
 } from './workLogs'
 
-// Loadings (loading-modal-2)
+// Loadings (loading-modal-new)
 export {
   createLoading,
   updateLoading,
@@ -84,7 +84,7 @@ export {
   type LoadingResult,
 } from './loadings'
 
-// Projects Tree (loading-modal-2)
+// Projects Tree (loading-modal-new)
 export {
   fetchProjectsList,
   fetchProjectTree,

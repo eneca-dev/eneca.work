@@ -176,18 +176,18 @@ export const openCheckpointEdit = (checkpointId: string) =>
   useModalStore.getState().openModal('checkpoint-edit', { checkpointId })
 
 /**
- * Открыть модалку создания загрузки (Loading Modal 2)
+ * Открыть модалку создания загрузки (Loading Modal New)
  */
-export const openLoadingModal2Create = (data?: {
+export const openLoadingModalNewCreate = (data?: {
   sectionId?: string // ID раздела или этапа декомпозиции
   employeeId?: string
   projectId?: string
-}) => useModalStore.getState().openModal('loading2-create', data)
+}) => useModalStore.getState().openModal('loading-new-create', data)
 
 /**
- * Открыть модалку редактирования загрузки (Loading Modal 2)
+ * Открыть модалку редактирования загрузки (Loading Modal New)
  */
-export const openLoadingModal2Edit = (
+export const openLoadingModalNewEdit = (
   loadingId: string,
   sectionId: string,
   options?: {
@@ -209,7 +209,7 @@ export const openLoadingModal2Edit = (
     projectId?: string
   }
 ) =>
-  useModalStore.getState().openModal('loading2-edit', {
+  useModalStore.getState().openModal('loading-new-edit', {
     loadingId,
     sectionId,
     ...options,

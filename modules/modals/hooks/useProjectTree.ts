@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Loading Modal 2 - Hook для загрузки дерева проекта
+ * Loading Modal New - Hook для загрузки дерева проекта
  *
  * Возвращает иерархию: project (со stage_type) -> object -> section -> decomposition_stage
  * Используется в левой панели для навигации по структуре проекта
@@ -155,4 +155,4 @@ export function useProjectTree(options: UseProjectTreeOptions) {
   })
 }
 
-export type { ProjectTreeNode, ProjectTreeNodeWithChildren }
+export type { ProjectTreeNode }

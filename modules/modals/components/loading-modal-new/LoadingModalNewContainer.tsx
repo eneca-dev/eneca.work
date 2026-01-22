@@ -1,39 +1,39 @@
 'use client'
 
 /**
- * Loading Modal 2 Container - Интеграция с modal store
+ * Loading Modal New Container - Интеграция с modal store
  *
- * Слушает modal store и рендерит LoadingModal2 когда открыты модалки:
- * - 'loading2-create'
- * - 'loading2-edit'
+ * Слушает modal store и рендерит LoadingModalNew когда открыты модалки:
+ * - 'loading-new-create'
+ * - 'loading-new-edit'
  */
 
 import { useEffect, useState } from 'react'
 import { useUserStore } from '@/stores/useUserStore'
 import { useIsModalOpen, useModalStore, closeModal } from '../../stores/modal-store'
-import { LoadingModal2 } from './LoadingModal2'
+import { LoadingModalNew } from './LoadingModalNew'
 import { getLoadingById } from '../../actions/loadings'
-import type { LoadingModal2CreateData, LoadingModal2EditData } from '../../types'
+import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 
-export function LoadingModal2Container() {
+export function LoadingModalNewContainer() {
   const userId = useUserStore((s) => s.id)
 
   // Проверяем какая модалка открыта
-  const isCreateOpen = useIsModalOpen('loading2-create')
-  const isEditOpen = useIsModalOpen('loading2-edit')
+  const isCreateOpen = useIsModalOpen('loading-new-create')
+  const isEditOpen = useIsModalOpen('loading-new-edit')
 
   // Получаем данные из store (без типизации, чтобы избежать constraint ошибок)
   const modalData = useModalStore((s) => s.modalData)
 
   // Состояние для загрузки данных в режиме редактирования
-  const [editData, setEditData] = useState<LoadingModal2EditData | null>(null)
+  const [editData, setEditData] = useState<LoadingModalNewEditData | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
 
   // Загружаем данные загрузки при открытии в режиме редактирования
   useEffect(() => {
     if (isEditOpen && modalData) {
-      console.time('⏱️ [LoadingModal2Container] useEffect обработка')
-      console.log('🔵 [LoadingModal2Container] useEffect triggered, modalData:', modalData)
+      console.time('⏱️ [LoadingModalNewContainer] useEffect обработка')
+      console.log('🔵 [LoadingModalNewContainer] useEffect triggered, modalData:', modalData)
 
       const data = modalData as {
         loadingId?: string
@@ -49,8 +49,8 @@ export function LoadingModal2Container() {
 
       // Если loading уже передан, используем его
       if (data.loading) {
-        console.log('✅ [LoadingModal2Container] loading уже передан, используем его')
-        console.log('🔍 [LoadingModal2Container] data.loading:', {
+        console.log('✅ [LoadingModalNewContainer] loading уже передан, используем его')
+        console.log('🔍 [LoadingModalNewContainer] data.loading:', {
           id: data.loading.id,
           employee_id: data.loading.employee_id,
           start_date: data.loading.start_date,
@@ -66,18 +66,18 @@ export function LoadingModal2Container() {
           breadcrumbs: data.breadcrumbs,
           projectId: data.projectId,
         })
-        console.timeEnd('⏱️ [LoadingModal2Container] useEffect обработка')
+        console.timeEnd('⏱️ [LoadingModalNewContainer] useEffect обработка')
         return
       }
 
       // Если есть только loadingId, загружаем данные
       if (data.loadingId && data.sectionId) {
-        console.log('🔄 [LoadingModal2Container] Загружаем loading по ID:', data.loadingId)
+        console.log('🔄 [LoadingModalNewContainer] Загружаем loading по ID:', data.loadingId)
         setIsLoadingData(true)
         getLoadingById(data.loadingId)
           .then((result) => {
             if (result.success) {
-              console.log('✅ [LoadingModal2Container] Loading загружен из API')
+              console.log('✅ [LoadingModalNewContainer] Loading загружен из API')
               setEditData({
                 loadingId: result.data.id,
                 sectionId: data.sectionId!,
@@ -94,17 +94,17 @@ export function LoadingModal2Container() {
                 projectId: data.projectId,
               })
             } else {
-              console.error('⚠️ LoadingModal2Container: не удалось загрузить данные загрузки', result.error)
+              console.error('⚠️ LoadingModalNewContainer: не удалось загрузить данные загрузки', result.error)
               closeModal()
             }
           })
           .catch((error) => {
-            console.error('⚠️ LoadingModal2Container: ошибка при загрузке данных', error)
+            console.error('⚠️ LoadingModalNewContainer: ошибка при загрузке данных', error)
             closeModal()
           })
           .finally(() => {
             setIsLoadingData(false)
-            console.timeEnd('⏱️ [LoadingModal2Container] useEffect обработка')
+            console.timeEnd('⏱️ [LoadingModalNewContainer] useEffect обработка')
           })
       }
     } else {
@@ -116,15 +116,15 @@ export function LoadingModal2Container() {
 
   // Если нет userId, не рендерим
   if (!userId) {
-    console.warn('⚠️ LoadingModal2Container: нет userId, модалка не отображается')
+    console.warn('⚠️ LoadingModalNewContainer: нет userId, модалка не отображается')
     return null
   }
 
   // Режим создания
   if (isCreateOpen) {
-    const createData = modalData as LoadingModal2CreateData | null
+    const createData = modalData as LoadingModalNewCreateData | null
     return (
-      <LoadingModal2
+      <LoadingModalNew
         open={true}
         onClose={closeModal}
         mode="create"
@@ -147,7 +147,7 @@ export function LoadingModal2Container() {
     }
 
     return (
-      <LoadingModal2
+      <LoadingModalNew
         open={true}
         onClose={closeModal}
         mode="edit"

@@ -1,7 +1,7 @@
 'use server'
 
 /**
- * Loading Modal 2 - Server Actions для работы с деревом проектов
+ * Loading Modal New - Server Actions для работы с деревом проектов
  *
  * Операции:
  * - fetchProjectsList: загрузка списка проектов с фильтрацией

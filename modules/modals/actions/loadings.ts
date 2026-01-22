@@ -1,7 +1,7 @@
 'use server'
 
 /**
- * Loading Modal 2 - Server Actions для CRUD операций с загрузками сотрудников
+ * Loading Modal New - Server Actions для CRUD операций с загрузками сотрудников
  *
  * Операции:
  * - createLoading: создание новой загрузки

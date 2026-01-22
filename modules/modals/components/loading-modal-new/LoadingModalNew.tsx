@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Loading Modal 2 - Главный контейнер модального окна
+ * Loading Modal New - Главный контейнер модального окна
  *
  * Двухпанельный layout:
  * - Левая панель: ProjectTree (навигация по проектам, выбор раздела или этапа)
@@ -25,9 +25,9 @@ import { Button } from '@/components/ui/button'
 import { useLoadingModal, useLoadingMutations, useBreadcrumbs } from '../../hooks'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
-import type { LoadingModal2CreateData, LoadingModal2EditData } from '../../types'
+import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 
-export interface LoadingModal2Props {
+export interface LoadingModalNewProps {
   /** Открыто ли модальное окно */
   open: boolean
   /** Callback при закрытии */
@@ -35,22 +35,22 @@ export interface LoadingModal2Props {
   /** Режим работы */
   mode: 'create' | 'edit'
   /** Данные для режима создания */
-  createData?: LoadingModal2CreateData
+  createData?: LoadingModalNewCreateData
   /** Данные для режима редактирования */
-  editData?: LoadingModal2EditData
+  editData?: LoadingModalNewEditData
   /** ID текущего пользователя */
   userId: string
 }
 
-export function LoadingModal2({
+export function LoadingModalNew({
   open,
   onClose,
   mode,
   createData,
   editData,
   userId,
-}: LoadingModal2Props) {
-  console.log('🔵 [LoadingModal2] Render, mode:', mode, 'open:', open, 'editData:', editData)
+}: LoadingModalNewProps) {
+  console.log('🔵 [LoadingModalNew] Render, mode:', mode, 'open:', open, 'editData:', editData)
   // Функция получения иконки по типу элемента
   const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
     switch (type) {
@@ -148,7 +148,7 @@ export function LoadingModal2({
 
   // Автоматический выбор раздела и установка breadcrumbs в режиме редактирования или создания с sectionId
   useEffect(() => {
-    console.log('🔵 [LoadingModal2] useEffect автовыбор раздела, effectiveBreadcrumbs:', effectiveBreadcrumbs)
+    console.log('🔵 [LoadingModalNew] useEffect автовыбор раздела, effectiveBreadcrumbs:', effectiveBreadcrumbs)
 
     if (
       open &&
@@ -156,16 +156,16 @@ export function LoadingModal2({
       effectiveBreadcrumbs &&
       effectiveBreadcrumbs.length > 0
     ) {
-      console.log('✅ [LoadingModal2] Условия для автовыбора выполнены')
+      console.log('✅ [LoadingModalNew] Условия для автовыбора выполнены')
       if (mode === 'edit' && editData?.loading) {
         // Режим редактирования
-        console.time('⏱️ [LoadingModal2] Автовыбор раздела (edit)')
+        console.time('⏱️ [LoadingModalNew] Автовыбор раздела (edit)')
         const sectionId = editData.loading.section_id
         const lastBreadcrumb = effectiveBreadcrumbs[effectiveBreadcrumbs.length - 1]
         selectSection(sectionId, lastBreadcrumb.name, effectiveBreadcrumbs)
         setHasAutoSelected(true)
-        console.timeEnd('⏱️ [LoadingModal2] Автовыбор раздела (edit)')
-        console.log('✅ [LoadingModal2] Раздел автоматически выбран (edit)')
+        console.timeEnd('⏱️ [LoadingModalNew] Автовыбор раздела (edit)')
+        console.log('✅ [LoadingModalNew] Раздел автоматически выбран (edit)')
       } else if (mode === 'create' && createData?.sectionId) {
         // Режим создания с предзаполненным sectionId
         const sectionId = createData.sectionId
@@ -174,10 +174,10 @@ export function LoadingModal2({
         setHasAutoSelected(true)
         // В режиме создания сразу показываем форму
         setIsFormVisible(true)
-        console.log('✅ [LoadingModal2] Раздел автоматически выбран (create)')
+        console.log('✅ [LoadingModalNew] Раздел автоматически выбран (create)')
       }
     } else {
-      console.log('⏸️ [LoadingModal2] Условия для автовыбора НЕ выполнены:', {
+      console.log('⏸️ [LoadingModalNew] Условия для автовыбора НЕ выполнены:', {
         open,
         hasAutoSelected,
         hasBreadcrumbs: !!(effectiveBreadcrumbs && effectiveBreadcrumbs.length > 0),
@@ -232,7 +232,7 @@ export function LoadingModal2({
       })
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
-      console.log('🔄 [LoadingModal2] Вызываем updateLoading.mutateAsync:', {
+      console.log('🔄 [LoadingModalNew] Вызываем updateLoading.mutateAsync:', {
         loadingId: editData.loading.id,
         stageId: selectedSectionId,
         employeeId: formData.employeeId,

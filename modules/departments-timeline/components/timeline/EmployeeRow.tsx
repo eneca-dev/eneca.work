@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { openLoadingModal2Edit, openLoadingModal2Create } from '@/modules/modals'
+import { openLoadingModalNewEdit, openLoadingModalNewCreate } from '@/modules/modals'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -150,8 +150,8 @@ export function EmployeeRow({
     console.log('📋 [EmployeeRow] Breadcrumbs построены:', breadcrumbs)
     console.log('🔍 [EmployeeRow] loading.employeeId:', loading.employeeId, 'employee.id:', employee.id)
 
-    // Открываем LoadingModal2 через global modal store с breadcrumbs и loading объектом
-    openLoadingModal2Edit(loading.id, loading.sectionId, {
+    // Открываем LoadingModalNew через global modal store с breadcrumbs и loading объектом
+    openLoadingModalNewEdit(loading.id, loading.sectionId, {
       loading: {
         id: loading.id,
         employee_id: loading.employeeId || employee.id,
@@ -166,15 +166,15 @@ export function EmployeeRow({
     })
 
     console.timeEnd('⏱️ [EmployeeRow] handleLoadingClick')
-    console.log('🟢 [EmployeeRow] openLoadingModal2Edit вызван с полным loading объектом')
+    console.log('🟢 [EmployeeRow] openLoadingModalNewEdit вызван с полным loading объектом')
   }, [])
 
   // Обработчик создания новой загрузки для сотрудника
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
 
-    // Открываем LoadingModal2 с предзаполненным employeeId
-    openLoadingModal2Create({
+    // Открываем LoadingModalNew с предзаполненным employeeId
+    openLoadingModalNewCreate({
       employeeId: employee.id,
     })
   }, [employee.id])
