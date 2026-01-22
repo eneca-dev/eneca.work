@@ -28,10 +28,8 @@ export function ResultRenderer({ result, error }: ResultRendererProps) {
   // Пустое состояние
   if (!result) {
     return (
-      <div className="bg-white dark:bg-slate-900/95
-                      border border-gray-200 dark:border-slate-700/50
-                      rounded-lg p-8 text-center shadow-sm">
-        <p className="text-slate-500 dark:text-slate-400">
+      <div className="rounded-lg border bg-card p-8 text-center">
+        <p className="text-sm text-muted-foreground">
           Введите запрос и нажмите "Запустить анализ"
         </p>
       </div>
@@ -43,7 +41,7 @@ export function ResultRenderer({ result, error }: ResultRendererProps) {
   return (
     <div className="space-y-4">
       {/* Мета-информация */}
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium">Запрос: {query}</span>
         {executionTime && (
           <span>Выполнено за {(executionTime / 1000).toFixed(2)}с</span>
@@ -64,10 +62,8 @@ export function ResultRenderer({ result, error }: ResultRendererProps) {
             <TableWidget columns={response.data.content.columns} rows={response.data.content.rows} />
           )}
           {response.data.type === 'chart' && (
-            <div className="bg-white dark:bg-slate-900/95
-                            border border-gray-200 dark:border-slate-700/50
-                            rounded-lg p-4 shadow-sm">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+            <div className="rounded-lg border bg-card p-4">
+              <p className="text-sm text-muted-foreground">
                 📊 Графики будут реализованы в следующей версии
               </p>
             </div>
@@ -76,10 +72,8 @@ export function ResultRenderer({ result, error }: ResultRendererProps) {
       )}
 
       {response.type === 'chart' && (
-        <div className="bg-white dark:bg-slate-900/95
-                        border border-gray-200 dark:border-slate-700/50
-                        rounded-lg p-4 shadow-sm">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">
             📊 Графики будут реализованы в следующей версии
           </p>
         </div>

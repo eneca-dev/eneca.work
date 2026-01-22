@@ -35,51 +35,41 @@ export function InputSection({ onSubmit, isLoading }: InputSectionProps) {
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900/95
-                    border border-gray-200 dark:border-slate-700/50
-                    rounded-lg p-4 shadow-md">
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          AI Аналитика
-        </h2>
-      </div>
-
+    <div className="rounded-lg border bg-card p-4">
       <textarea
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Введите ваш запрос... (например: Покажи топ 5 проектов по бюджету)"
+        placeholder="Введите запрос для анализа (например: Покажи топ 5 проектов по бюджету)"
         disabled={isLoading}
-        className="w-full min-h-[100px] p-3
-                   bg-slate-50 dark:bg-slate-800/50
-                   border border-slate-300 dark:border-slate-700
-                   rounded-md
-                   text-sm text-slate-900 dark:text-slate-100
-                   placeholder:text-slate-400 dark:placeholder:text-slate-500
+        className="w-full min-h-[100px] p-3 mb-3
+                   bg-background
+                   border rounded-md
+                   text-sm
+                   placeholder:text-muted-foreground
                    focus:outline-none focus:ring-2 focus:ring-primary/50
                    disabled:opacity-50 disabled:cursor-not-allowed
                    resize-none"
       />
 
-      <div className="flex items-center justify-between mt-3">
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
           Нажмите Enter для отправки
         </p>
 
         <Button
           onClick={handleSubmit}
           disabled={!query.trim() || isLoading}
-          className="bg-primary hover:bg-primary/90 text-white font-medium"
+          className="gap-2"
         >
           {isLoading ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Анализ...
             </>
           ) : (
             <>
-              <Sparkles className="w-4 h-4 mr-2" />
+              <Sparkles className="h-4 w-4" />
               Запустить анализ
             </>
           )}
