@@ -4,10 +4,13 @@
  * Loading Modal New - Hook для мутаций загрузок
  *
  * Предоставляет операции CRUD для загрузок сотрудников с optimistic updates:
- * - create: создание новой загрузки
- * - update: обновление существующей загрузки
- * - archive: архивация загрузки (soft delete)
- * - delete: удаление загрузки (hard delete)
+ * - create: создание новой загрузки с немедленным отображением в UI
+ * - update: обновление существующей загрузки с немедленным отражением изменений
+ * - archive: архивация загрузки (soft delete) с немедленным удалением из UI
+ * - delete: удаление загрузки (hard delete) с немедленным удалением из UI
+ *
+ * Все операции применяют изменения к UI сразу же (optimistic update), а при ошибке
+ * автоматически откатывают изменения к предыдущему состоянию.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -546,7 +549,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   })
 
   // ==========================================================================
-  // ARCHIVE - Архивация загрузки (без optimistic update, т.к. редко используется)
+  // ARCHIVE - Архивация загрузки с optimistic update
   // ==========================================================================
   const archive = useMutation({
     mutationFn: async (input: ArchiveLoadingInput) => {
@@ -558,7 +561,101 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
       return result.data
     },
+
+    // Optimistic update - удаляем загрузку из UI сразу
+    onMutate: async (input: ArchiveLoadingInput): Promise<OptimisticContext> => {
+      console.log('🗄️ [ARCHIVE onMutate] Начинаем optimistic update:', {
+        loadingId: input.loadingId,
+      })
+
+      // Отменяем все текущие запросы к затронутым кешам
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+      ])
+
+      // Сохраняем снапшот текущих данных для отката при ошибке
+      const previousDepartmentsData = queryClient.getQueriesData({
+        queryKey: queryKeys.departmentsTimeline.all,
+      })
+      const previousResourceGraphData = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+      const previousProjectsData = queryClient.getQueriesData({
+        queryKey: queryKeys.projects.all,
+      })
+
+      // Оптимистично удаляем загрузку из departments timeline
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.departmentsTimeline.lists() },
+        (old: any) => {
+          if (!old) {
+            console.warn('⚠️ [ARCHIVE onMutate] Нет данных в кеше')
+            return old
+          }
+
+          const isDirectArray = Array.isArray(old)
+          const departments = isDirectArray ? old : old?.data
+
+          if (!departments || !Array.isArray(departments) || departments.length === 0) {
+            console.warn('⚠️ [ARCHIVE onMutate] Нет departments в кеше')
+            return old
+          }
+
+          // Удаляем загрузку из соответствующего сотрудника
+          const updatedDepartments = departments.map((dept: any) => ({
+            ...dept,
+            teams: dept.teams.map((team: any) => ({
+              ...team,
+              employees: team.employees.map((emp: any) => {
+                const updatedLoadings = (emp.loadings || []).filter(
+                  (loading: any) => loading.id !== input.loadingId
+                )
+                return {
+                  ...emp,
+                  loadings: updatedLoadings,
+                  hasLoadings: updatedLoadings.length > 0,
+                  loadingsCount: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+
+          console.log('✨ [ARCHIVE onMutate] Загрузка удалена из departmentsTimeline')
+          return isDirectArray ? updatedDepartments : { ...old, data: updatedDepartments }
+        }
+      )
+
+      // Оптимистично удаляем из resourceGraph.loadings
+      const allResourceGraphLoadings = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+
+      allResourceGraphLoadings.forEach(([queryKey, data]) => {
+        const isLoadingsCache = Array.isArray(queryKey) && queryKey.includes('loadings')
+        if (!isLoadingsCache || !data) return
+
+        if (Array.isArray(data)) {
+          const updatedLoadings = data.filter((loading: any) => loading.id !== input.loadingId)
+          queryClient.setQueryData(queryKey, updatedLoadings)
+          console.log('✨ [ARCHIVE onMutate] Загрузка удалена из resourceGraph.loadings')
+        }
+      })
+
+      console.log('✨ Optimistic archive: загрузка удалена из UI')
+
+      return {
+        previousDepartmentsData,
+        previousResourceGraphData,
+        previousProjectsData,
+      }
+    },
+
     onSuccess: (data) => {
+      console.log('✅ Загрузка успешно архивирована на сервере:', data.id)
+
+      // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
@@ -566,13 +663,33 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
       options.onArchiveSuccess?.(data)
     },
-    onError: (error: Error) => {
+
+    onError: (error: Error, variables, context: OptimisticContext | undefined) => {
+      console.error('❌ Ошибка архивации загрузки, откатываем optimistic update')
+
+      // Откатываем optimistic updates
+      if (context?.previousDepartmentsData) {
+        context.previousDepartmentsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousResourceGraphData) {
+        context.previousResourceGraphData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousProjectsData) {
+        context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
       options.onError?.(error)
     },
   })
 
   // ==========================================================================
-  // DELETE - Удаление загрузки (без optimistic update, т.к. редко используется)
+  // DELETE - Удаление загрузки с optimistic update
   // ==========================================================================
   const remove = useMutation({
     mutationFn: async (input: DeleteLoadingInput) => {
@@ -584,7 +701,101 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
       return result.data
     },
+
+    // Optimistic update - удаляем загрузку из UI сразу
+    onMutate: async (input: DeleteLoadingInput): Promise<OptimisticContext> => {
+      console.log('🗑️ [DELETE onMutate] Начинаем optimistic update:', {
+        loadingId: input.loadingId,
+      })
+
+      // Отменяем все текущие запросы к затронутым кешам
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+      ])
+
+      // Сохраняем снапшот текущих данных для отката при ошибке
+      const previousDepartmentsData = queryClient.getQueriesData({
+        queryKey: queryKeys.departmentsTimeline.all,
+      })
+      const previousResourceGraphData = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+      const previousProjectsData = queryClient.getQueriesData({
+        queryKey: queryKeys.projects.all,
+      })
+
+      // Оптимистично удаляем загрузку из departments timeline
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.departmentsTimeline.lists() },
+        (old: any) => {
+          if (!old) {
+            console.warn('⚠️ [DELETE onMutate] Нет данных в кеше')
+            return old
+          }
+
+          const isDirectArray = Array.isArray(old)
+          const departments = isDirectArray ? old : old?.data
+
+          if (!departments || !Array.isArray(departments) || departments.length === 0) {
+            console.warn('⚠️ [DELETE onMutate] Нет departments в кеше')
+            return old
+          }
+
+          // Удаляем загрузку из соответствующего сотрудника
+          const updatedDepartments = departments.map((dept: any) => ({
+            ...dept,
+            teams: dept.teams.map((team: any) => ({
+              ...team,
+              employees: team.employees.map((emp: any) => {
+                const updatedLoadings = (emp.loadings || []).filter(
+                  (loading: any) => loading.id !== input.loadingId
+                )
+                return {
+                  ...emp,
+                  loadings: updatedLoadings,
+                  hasLoadings: updatedLoadings.length > 0,
+                  loadingsCount: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+
+          console.log('✨ [DELETE onMutate] Загрузка удалена из departmentsTimeline')
+          return isDirectArray ? updatedDepartments : { ...old, data: updatedDepartments }
+        }
+      )
+
+      // Оптимистично удаляем из resourceGraph.loadings
+      const allResourceGraphLoadings = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+
+      allResourceGraphLoadings.forEach(([queryKey, data]) => {
+        const isLoadingsCache = Array.isArray(queryKey) && queryKey.includes('loadings')
+        if (!isLoadingsCache || !data) return
+
+        if (Array.isArray(data)) {
+          const updatedLoadings = data.filter((loading: any) => loading.id !== input.loadingId)
+          queryClient.setQueryData(queryKey, updatedLoadings)
+          console.log('✨ [DELETE onMutate] Загрузка удалена из resourceGraph.loadings')
+        }
+      })
+
+      console.log('✨ Optimistic delete: загрузка удалена из UI')
+
+      return {
+        previousDepartmentsData,
+        previousResourceGraphData,
+        previousProjectsData,
+      }
+    },
+
     onSuccess: (data) => {
+      console.log('✅ Загрузка успешно удалена на сервере:', data.id)
+
+      // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
@@ -592,7 +803,27 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
       options.onDeleteSuccess?.(data.id)
     },
-    onError: (error: Error) => {
+
+    onError: (error: Error, variables, context: OptimisticContext | undefined) => {
+      console.error('❌ Ошибка удаления загрузки, откатываем optimistic update')
+
+      // Откатываем optimistic updates
+      if (context?.previousDepartmentsData) {
+        context.previousDepartmentsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousResourceGraphData) {
+        context.previousResourceGraphData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousProjectsData) {
+        context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
       options.onError?.(error)
     },
   })

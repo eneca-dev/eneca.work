@@ -8,15 +8,14 @@
 
 import { Archive, Loader2 } from 'lucide-react'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 export interface ArchiveConfirmationDialogProps {
   /** Открыт ли диалог */
@@ -29,8 +28,14 @@ export interface ArchiveConfirmationDialogProps {
   loading?: boolean
   /** Название сотрудника (для отображения) */
   employeeName?: string
-  /** Название раздела (для отображения) */
-  sectionName?: string
+  /** Название раздела/этапа (для отображения) */
+  stageName?: string
+  /** Дата начала */
+  startDate?: string
+  /** Дата окончания */
+  endDate?: string
+  /** Ставка */
+  rate?: number
 }
 
 export function ArchiveConfirmationDialog({
@@ -39,7 +44,10 @@ export function ArchiveConfirmationDialog({
   onConfirm,
   loading = false,
   employeeName,
-  sectionName,
+  stageName,
+  startDate,
+  endDate,
+  rate,
 }: ArchiveConfirmationDialogProps) {
   const handleConfirm = async () => {
     await onConfirm()
@@ -47,53 +55,71 @@ export function ArchiveConfirmationDialog({
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && !loading && onClose()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen && !loading) {
+        onClose()
+      }
+    }}>
+      <DialogContent>
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <Archive className="h-5 w-5 text-orange-600" />
-            <AlertDialogTitle>Архивировать загрузку?</AlertDialogTitle>
+            <DialogTitle>Архивировать загрузку?</DialogTitle>
           </div>
-          <AlertDialogDescription className="space-y-2">
-            <p>Вы уверены, что хотите архивировать эту загрузку?</p>
+          <DialogDescription asChild>
+            <div className="space-y-2">
+              <p>Вы уверены, что хотите архивировать эту загрузку?</p>
 
-            {(employeeName || sectionName) && (
-              <div className="mt-3 p-3 bg-muted rounded-md text-sm">
-                {employeeName && (
-                  <div>
-                    <span className="font-medium">Сотрудник:</span> {employeeName}
-                  </div>
-                )}
-                {sectionName && (
-                  <div>
-                    <span className="font-medium">Раздел:</span> {sectionName}
-                  </div>
-                )}
-              </div>
-            )}
+              {(employeeName || stageName || startDate || endDate || rate) && (
+                <div className="mt-3 p-3 bg-muted rounded-md text-sm space-y-1.5">
+                  {employeeName && (
+                    <div>
+                      <span className="font-medium">Сотрудник:</span> {employeeName}
+                    </div>
+                  )}
+                  {stageName && (
+                    <div>
+                      <span className="font-medium">Этап:</span> {stageName}
+                    </div>
+                  )}
+                  {(startDate || endDate) && (
+                    <div>
+                      <span className="font-medium">Период:</span>{' '}
+                      {startDate && new Date(startDate).toLocaleDateString('ru-RU')}
+                      {startDate && endDate && ' - '}
+                      {endDate && new Date(endDate).toLocaleDateString('ru-RU')}
+                    </div>
+                  )}
+                  {rate !== undefined && (
+                    <div>
+                      <span className="font-medium">Ставка:</span> {rate}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            <p className="text-muted-foreground mt-3">
-              Архивированная загрузка не будет отображаться в основном списке, но её можно будет
-              восстановить при необходимости.
-            </p>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+              {/* <p className="text-muted-foreground mt-3">
+                Архивированная загрузка не будет отображаться в основном списке, но её можно будет
+                восстановить при необходимости.
+              </p> */}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
 
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>Отмена</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault()
-              handleConfirm()
-            }}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Отмена
+          </Button>
+          <Button
+            onClick={handleConfirm}
             disabled={loading}
             className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-600"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Архивировать
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
