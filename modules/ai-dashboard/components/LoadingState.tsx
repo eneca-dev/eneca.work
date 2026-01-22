@@ -13,12 +13,9 @@ import { Loader2 } from 'lucide-react'
  */
 export function LoadingState() {
   return (
-    <div className="bg-white dark:bg-slate-900/95
-                    border border-gray-200 dark:border-slate-700/50
-                    rounded-lg p-8 shadow-sm
-                    flex flex-col items-center justify-center gap-4">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      <p className="text-sm text-slate-500 dark:text-slate-400">
+    <div className="rounded-lg border bg-card p-8 flex flex-col items-center justify-center gap-4">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <p className="text-sm text-muted-foreground">
         Анализ данных...
       </p>
     </div>

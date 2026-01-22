@@ -6,7 +6,8 @@
 
 'use client'
 
-import { Sparkles } from 'lucide-react'
+import { Sparkles, RefreshCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useAIAnalytics } from '../hooks/useAIAnalytics'
 import { InputSection } from './InputSection'
 import { ResultRenderer } from './ResultRenderer'
@@ -19,29 +20,26 @@ export function AIAnalyticsPage() {
   const { isLoading, error, result, runAnalysis, reset } = useAIAnalytics()
 
   return (
-    <div className="container mx-auto max-w-5xl p-6 space-y-6">
+    <div className="min-h-screen bg-background space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Sparkles className="w-6 h-6 text-primary" />
+          <div className="rounded-lg bg-primary/10 p-2">
+            <Sparkles className="h-6 w-6 text-primary" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              AI Dashboard
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <h1 className="text-2xl font-semibold">AI Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
               Аналитика данных с использованием искусственного интеллекта
             </p>
           </div>
         </div>
 
         {result && (
-          <button
-            onClick={reset}
-            className="text-sm text-primary hover:text-primary/80
-                       transition-colors"
-          >
+          <Button onClick={reset} variant="outline" size="sm" className="gap-2">
+            <RefreshCcw className="h-4 w-4" />
             Новый запрос
-          </button>
+          </Button>
         )}
       </div>
 
