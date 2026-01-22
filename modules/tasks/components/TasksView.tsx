@@ -26,6 +26,9 @@ import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 // ============================================================================
 
 export function TasksView() {
+  // URL search params
+  const searchParams = useSearchParams()
+
   // Get active tab data from tabs store (proper selectors for reactivity)
   const tabs = useTasksTabsStore((s) => s.tabs)
   const activeTabId = useTasksTabsStore((s) => s.activeTabId)

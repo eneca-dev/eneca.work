@@ -404,32 +404,32 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         className={cn(
           inputClassName
             ? "w-full cursor-pointer"
-            : "w-full p-2 border border-border rounded bg-gray-50 dark:bg-slate-700 dark:border-slate-500 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm",
+            : "w-full p-2 border border-input rounded-md bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 placeholder:text-muted-foreground text-sm",
           inputClassName
         )}
       />
       {open && (!renderToBody ? (
         <div
           ref={popupRef}
-          className="absolute left-0 z-50 shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+          className="absolute left-0 z-50 shadow-lg rounded-lg bg-background border border-input"
           style={openUpward ? { bottom: '100%', marginBottom: '4px' } : { top: '100%', marginTop: '4px' }}
         >
-          <div className="font-sans bg-background rounded-lg p-2 dark:bg-slate-700" style={{ width: calendarWidth }}>
+          <div className="font-sans bg-background rounded-lg p-2" style={{ width: calendarWidth }}>
             <div className="flex gap-4">
               {renderMonth(currentMonth, 'left')}
               {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
             </div>
             {selectedDate && !hideSingleDateActions && (
-              <div className="flex gap-2 mt-3 pt-2 border-t border-border dark:border-slate-600">
+              <div className="flex gap-2 mt-3 pt-2 border-t border-input">
                 <button
                   onClick={saveAsStartDate}
-                  className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                  className="flex-1 px-3 py-1.5 text-xs bg-muted text-foreground rounded hover:bg-muted/80 transition-colors"
                 >
                   Сохранить как дату начала
                 </button>
                 <button
                   onClick={saveAsEndDate}
-                  className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                  className="flex-1 px-3 py-1.5 text-xs bg-muted text-foreground rounded hover:bg-muted/80 transition-colors"
                 >
                   Сохранить как дату окончания
                 </button>
@@ -455,25 +455,25 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             <div
               key={recalcKey}
               ref={popupRef}
-              className="fixed z-[2000] shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+              className="fixed z-[2000] shadow-lg rounded-lg bg-background border border-input"
               style={{ left, top, width: calendarWidth as any, pointerEvents: 'auto' }}
             >
-              <div className="font-sans bg-background rounded-lg p-2 dark:bg-slate-700" style={{ width: calendarWidth }}>
+              <div className="font-sans bg-background rounded-lg p-2" style={{ width: calendarWidth }}>
                 <div className="flex gap-4">
                   {renderMonth(currentMonth, 'left')}
                   {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
                 </div>
                 {selectedDate && !hideSingleDateActions && (
-                  <div className="flex gap-2 mt-3 pt-2 border-t border-border dark:border-slate-600">
+                  <div className="flex gap-2 mt-3 pt-2 border-t border-input">
                     <button
                       onClick={saveAsStartDate}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                      className="flex-1 px-3 py-1.5 text-xs bg-muted text-foreground rounded hover:bg-muted/80 transition-colors"
                     >
                       Сохранить как дату начала
                     </button>
                     <button
                       onClick={saveAsEndDate}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                      className="flex-1 px-3 py-1.5 text-xs bg-muted text-foreground rounded hover:bg-muted/80 transition-colors"
                     >
                       Сохранить как дату окончания
                     </button>
