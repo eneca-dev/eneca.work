@@ -381,8 +381,8 @@ export async function fetchBreadcrumbs(
       })
     }
 
-    // Добавляем объект (если есть)
-    if (data.object_id && data.node_type !== 'object') {
+    // Добавляем объект (если есть и он не является целевым узлом)
+    if (data.object_id && data.object_id !== data.node_id && data.node_type !== 'object') {
       const { data: objectData } = await supabase
         .from('view_project_tree_optimized')
         .select('*')
@@ -399,8 +399,8 @@ export async function fetchBreadcrumbs(
       }
     }
 
-    // Добавляем раздел (если есть)
-    if (data.section_id && data.node_type !== 'section') {
+    // Добавляем раздел (если есть и он не является целевым узлом)
+    if (data.section_id && data.section_id !== data.node_id && data.node_type !== 'section') {
       const { data: sectionData } = await supabase
         .from('view_project_tree_optimized')
         .select('*')

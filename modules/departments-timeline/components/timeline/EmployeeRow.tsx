@@ -335,7 +335,7 @@ function LoadingBarWithResize({
       {/* Comment below bar */}
       {bar.period.type === 'loading' && bar.period.comment && (
         <div
-          className="absolute pointer-events-none"
+          className="absolute pointer-events-none transition-all duration-200"
           style={{
             top: top + BASE_BAR_HEIGHT,
             left: displayLeft,

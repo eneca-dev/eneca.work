@@ -242,8 +242,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       }
     }
 
-    if (formData.rate < 0.01 || formData.rate > 1.0) {
-      newErrors.rate = 'Ставка должна быть от 0.01 до 1.0'
+    if (formData.rate < 0.01 || formData.rate > 2.0) {
+      newErrors.rate = 'Ставка должна быть от 0.01 до 2.0'
     }
 
     setErrors(newErrors)
@@ -272,12 +272,20 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     // Проверяем изменение раздела/этапа
     const sectionChanged = selectedSectionId !== initialLoading.section_id
 
+    // Нормализуем даты из initialLoading к формату YYYY-MM-DD для корректного сравнения
+    const initialStartDate = typeof initialLoading.start_date === 'string'
+      ? initialLoading.start_date
+      : formatDate(new Date(initialLoading.start_date))
+    const initialEndDate = typeof initialLoading.end_date === 'string'
+      ? initialLoading.end_date
+      : formatDate(new Date(initialLoading.end_date))
+
     // Сравниваем текущие значения с исходными
     return (
       sectionChanged ||
       formData.employeeId !== initialLoading.employee_id ||
-      formData.startDate !== initialLoading.start_date ||
-      formData.endDate !== initialLoading.end_date ||
+      formData.startDate !== initialStartDate ||
+      formData.endDate !== initialEndDate ||
       formData.rate !== initialLoading.rate ||
       formData.comment !== (initialLoading.comment ?? '')
     )
