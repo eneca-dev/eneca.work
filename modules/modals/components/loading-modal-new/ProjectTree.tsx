@@ -22,7 +22,7 @@ import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
 import type { ProjectListItem } from '../../hooks'
 import { createDecompositionStage } from '../../actions/projects-tree'
 import { useToast } from '@/hooks/use-toast'
-import { useTasksViewStore } from '@/modules/tasks/stores'
+import { useTasksTabsStore } from '@/modules/tasks/stores'
 
 /**
  * Breadcrumb item для отображения пути
@@ -260,7 +260,18 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
       findPath(projectNodes.children, [])
     }
 
-    return breadcrumbs
+    // Дедупликация: удаляем элементы с одинаковыми ID
+    const seen = new Set<string>()
+    const uniqueBreadcrumbs = breadcrumbs.filter(item => {
+      if (seen.has(item.id)) {
+        console.warn('[buildBreadcrumbs] Дублирующийся ID в breadcrumbs:', item.id, item.name)
+        return false
+      }
+      seen.add(item.id)
+      return true
+    })
+
+    return uniqueBreadcrumbs
   }
 
   // Выбор раздела или этапа декомпозиции
@@ -286,7 +297,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
     if (node.type === 'section' && node.sectionId) {
       // 1. Сначала переключаемся на вкладку "Бюджеты" через store
-      useTasksViewStore.getState().setViewMode('budgets')
+      useTasksTabsStore.getState().setActiveTab('budgets')
 
       // 2. Закрываем модалку
       if (onClose) {
@@ -391,7 +402,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         {node.type === 'section' && isNodeExpanded && (
           <div className="space-y-0.5">
             {/* Кнопка "Перейти к задачам" - всегда показываем для разделов */}
-            <button
+            {/* <button
               type="button"
               onClick={(e) => handleGoToTasks(node, e)}
               className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
@@ -400,7 +411,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
               <span className="w-3.5" />
               <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               <span className="text-xs">Перейти к задачам</span>
-            </button>
+            </button> */}
 
             {/* Кнопка создания базового этапа - только для разделов без этапов */}
             {isSectionWithoutStages && (

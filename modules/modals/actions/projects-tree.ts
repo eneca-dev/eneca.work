@@ -426,10 +426,21 @@ export async function fetchBreadcrumbs(
       })
     }
 
+    // Дедупликация: удаляем элементы с одинаковыми ID
+    const seen = new Set<string>()
+    const uniqueBreadcrumbs = breadcrumbs.filter(item => {
+      if (seen.has(item.id)) {
+        console.warn('[fetchBreadcrumbs] Дублирующийся ID в breadcrumbs:', item.id, item.name, 'nodeId:', input.nodeId)
+        return false
+      }
+      seen.add(item.id)
+      return true
+    })
+
     return {
       success: true,
       data: {
-        breadcrumbs,
+        breadcrumbs: uniqueBreadcrumbs,
         projectId,
       },
     }

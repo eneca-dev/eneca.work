@@ -421,7 +421,7 @@ export function LoadingModalNew({
                             {selectedBreadcrumbs.map((item, index) => {
                               const Icon = getIcon(item.type)
                               return (
-                                <span key={item.id} className="flex items-center gap-1">
+                                <span key={`${item.id}-${index}`} className="flex items-center gap-1">
                                   <Icon className="h-3.5 w-3.5 shrink-0" />
                                   <span>{item.name}</span>
                                   {index < selectedBreadcrumbs.length - 1 && (
@@ -463,7 +463,7 @@ export function LoadingModalNew({
                   variant="outline"
                   onClick={handleArchiveButtonClick}
                   disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
-                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  className="text-orange-600 hover:text-orange-600"
                 >
                   <Archive className="mr-2 h-4 w-4" />
                   Архивировать
@@ -472,7 +472,7 @@ export function LoadingModalNew({
                   variant="outline"
                   onClick={handleDeleteButtonClick}
                   disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="text-red-600 hover:text-red-600"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Удалить

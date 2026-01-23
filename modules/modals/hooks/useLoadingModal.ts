@@ -284,12 +284,15 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       : formatDate(new Date(initialLoading.end_date))
 
     // Сравниваем текущие значения с исходными
+    // Для rate используем сравнение с допуском для чисел с плавающей точкой
+    const rateChanged = Math.abs(formData.rate - initialLoading.rate) >= 0.001
+
     return (
       sectionChanged ||
       formData.employeeId !== initialLoading.employee_id ||
       formData.startDate !== initialStartDate ||
       formData.endDate !== initialEndDate ||
-      formData.rate !== initialLoading.rate ||
+      rateChanged ||
       formData.comment !== (initialLoading.comment ?? '')
     )
   }, [mode, formData, initialLoading, selectedSectionId])

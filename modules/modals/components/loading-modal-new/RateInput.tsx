@@ -71,10 +71,10 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
   }
 
   // Проверка валидности значения для отображения ошибки
-  const isInvalidRange = customValue && value && (value < 0.01 || value > 2.0)
+  const isInvalidRange = Boolean(customValue && (value < 0.01 || value > 2.0))
 
   const isQuickRateSelected = (rate: number) => {
-    return !customValue && Math.abs(value - rate) < 0.001
+    return Math.abs(value - rate) < 0.001
   }
 
   return (
@@ -109,7 +109,10 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
           value={customValue}
           onChange={(e) => handleCustomInput(e.target.value)}
           disabled={disabled}
-          className={cn((error || isInvalidRange) && 'border-red-500')}
+          className={cn(
+            'placeholder:text-muted-foreground/70',
+            (error || isInvalidRange) && 'border-red-500'
+          )}
         />
         {error && <p className="text-sm text-red-500">{error}</p>}
         {!error && isInvalidRange && (

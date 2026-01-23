@@ -82,7 +82,7 @@ export function LoadingForm({
                 {selectedBreadcrumbs.map((item, index) => {
                   const Icon = getIcon(item.type)
                   return (
-                    <div key={item.id} className="flex items-center gap-1">
+                    <div key={`${item.id}-${index}`} className="flex items-center gap-1">
                       <Icon className="h-3 w-3 shrink-0 text-foreground/60" />
                       <span className="text-xs font-medium text-foreground/80">{item.name}</span>
                       {index < selectedBreadcrumbs.length - 1 && (
