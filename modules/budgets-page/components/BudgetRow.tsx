@@ -322,7 +322,7 @@ export const BudgetRow = React.memo(function BudgetRow({
                   'text-[12px] tabular-nums text-primary',
                   (isSection || isTopLevel) && 'font-medium'
                 )}>
-                  {formatNumber(Math.round(calcBudget))}
+                  {formatNumber(calcBudget)}
                 </span>
               ) : (
                 <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>

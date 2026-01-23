@@ -12,6 +12,7 @@ import {
 import type { WorkLog, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, ROW_HEIGHT } from '../../constants'
 import { getEmployeeColor } from '../../utils'
+import { pluralizeHours, pluralizeReports } from '@/lib/pluralize'
 
 interface WorkLogMarkersProps {
   /** Отчёты о работе для этого item */
@@ -182,7 +183,7 @@ function WorkLogPill({ day }: WorkLogPillProps) {
             </span>
             {hasMultiple && (
               <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded">
-                {day.logs.length} отчёта
+                {day.logs.length} {pluralizeReports(day.logs.length)}
               </span>
             )}
           </div>
@@ -193,7 +194,7 @@ function WorkLogPill({ day }: WorkLogPillProps) {
               <span className="text-lg font-semibold text-popover-foreground tabular-nums">
                 {formatHours(day.totalHours)}
               </span>
-              <span className="text-[11px] text-muted-foreground/70">часов</span>
+              <span className="text-[11px] text-muted-foreground/70">{pluralizeHours(day.totalHours)}</span>
             </div>
             <div className="text-right">
               <span className="text-sm font-medium text-emerald-500 dark:text-emerald-400/90 tabular-nums">
@@ -283,13 +284,10 @@ function formatHours(hours: number): string {
 }
 
 /**
- * Форматирует сумму (белорусские рубли)
+ * Форматирует сумму (белорусские рубли) с 2 знаками после запятой
  */
 function formatAmount(amount: number): string {
-  if (amount >= 1000) {
-    return `${(amount / 1000).toFixed(1)}k BYN`
-  }
-  return `${Math.round(amount)} BYN`
+  return `${amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN`
 }
 
 /**

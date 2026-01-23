@@ -494,9 +494,9 @@ export function WorkLogCreateModal({
                     )}>
                       {hasBudget ? (
                         <>
-                          Бюджет задачи: {itemBudget!.total_amount.toLocaleString('ru-RU')} BYN
+                          Бюджет задачи: {itemBudget!.total_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN
                           <span className="mx-1.5">·</span>
-                          Остаток: {budgetRemaining.toLocaleString('ru-RU')} BYN
+                          Остаток: {budgetRemaining.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN
                         </>
                       ) : (
                         'У задачи нет бюджета. Сначала установите бюджет для задачи.'
@@ -509,7 +509,7 @@ export function WorkLogCreateModal({
                 {exceedsBudget && (
                   <div className="flex items-center gap-2 px-2.5 py-2 rounded border border-red-300 dark:border-red-600/50 bg-red-50 dark:bg-red-900/20">
                     <span className="text-xs text-red-700 dark:text-red-400">
-                      ⚠️ Сумма отчёта ({workLogAmount.toLocaleString('ru-RU')} BYN) превышает остаток бюджета ({budgetRemaining.toLocaleString('ru-RU')} BYN)
+                      ⚠️ Сумма отчёта ({workLogAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN) превышает остаток бюджета ({budgetRemaining.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN)
                     </span>
                   </div>
                 )}

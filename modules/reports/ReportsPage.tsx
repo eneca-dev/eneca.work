@@ -1128,7 +1128,7 @@ export default function ReportsPage() {
                   </td>
                   <td className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{r.work_log_hours.toFixed(2)}</td>
                   <td className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{r.work_log_hourly_rate.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}</td>
-                  <td className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right tabular-nums whitespace-nowrap pr-4 sm:pr-6 md:pr-10 lg:pr-12">{r.work_log_amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}</td>
+                  <td className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right tabular-nums whitespace-nowrap pr-4 sm:pr-6 md:pr-10 lg:pr-12">{r.work_log_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               ))
             )}
@@ -1144,7 +1144,7 @@ export default function ReportsPage() {
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">{totalHours.toFixed(2)}</td>
                     <td className="px-2 py-1.5 text-right text-slate-400">—</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap pr-4 sm:pr-6 md:pr-10 lg:pr-12">{totalAmount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} BYN</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap pr-4 sm:pr-6 md:pr-10 lg:pr-12">{totalAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</td>
                   </tr>
                 )
               })()
@@ -1212,7 +1212,7 @@ export default function ReportsPage() {
                       </div>
                       <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-2">
                         <div className="text-[10px] text-slate-500 dark:text-slate-400">Сумма денег</div>
-                        <div className="text-sm font-semibold tabular-nums">{amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} BYN</div>
+                        <div className="text-sm font-semibold tabular-nums">{amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
                       </div>
                       <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-2">
                         <div className="text-[10px] text-slate-500 dark:text-slate-400">Средняя ставка</div>
@@ -1237,7 +1237,7 @@ export default function ReportsPage() {
                                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                   ))}
                                 </Pie>
-                                <Tooltip formatter={(v: any) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' BYN'} />
+                                <Tooltip formatter={(v: any) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BYN'} />
                               </PieChart>
                             </ResponsiveContainer>
                           </div>
@@ -1259,7 +1259,7 @@ export default function ReportsPage() {
                                         <span className="px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
                                           {pct}%
                                         </span>
-                                        <span>{c.value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}</span>
+                                        <span>{c.value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                       </div>
                                     </div>
                                     <div className="mt-1 h-1.5 rounded bg-slate-200 dark:bg-slate-800 overflow-hidden">
@@ -1284,7 +1284,7 @@ export default function ReportsPage() {
                                   <div className="truncate" title={s.name}>{i + 1}. {s.name}</div>
                                   <div className="flex items-center gap-2 tabular-nums whitespace-nowrap">
                                     <span className="text-slate-500 dark:text-slate-400">{Math.round(share * 100)}%</span>
-                                    <span>{s.value.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}</span>
+                                    <span>{s.value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                   </div>
                                 </div>
                                 <div className="mt-1 h-1.5 rounded bg-slate-200 dark:bg-slate-800 overflow-hidden">
