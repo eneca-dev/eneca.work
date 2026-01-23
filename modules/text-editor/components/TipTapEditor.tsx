@@ -26,33 +26,10 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import { TableWithFirstRowHeader } from '@/modules/text-editor/extensions/table-with-first-row-header'
 import { TableWithResizeButtons } from '@/modules/text-editor/extensions/table-with-resize-buttons'
+import { SlashCommand } from '@/modules/text-editor/extensions/slash-command'
+import { BubbleMenuToolbar } from '@/modules/text-editor/components/BubbleMenuToolbar'
 import '@/styles/editor-tables.css'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
-  Bold, 
-  Italic, 
-  Underline as UnderlineIcon, 
-  Strikethrough,
-  List,
-  ListOrdered,
-  Quote,
-  Code,
-  Code2,
-  Heading1,
-  Heading2,
-  Heading3,
-  Highlighter,
-  Link as LinkIcon,
-  Undo,
-  Redo,
-  X,
-  CheckSquare,
-  Type,
-  Table as TableIcon,
-  Indent,
-  Outdent
-} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { htmlToMarkdown, markdownToTipTapHTML } from '@/modules/notions'
@@ -419,12 +396,13 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         }
       }),
       TableWithFirstRowHeader,
-      TableWithResizeButtons
+      TableWithResizeButtons,
+      SlashCommand
     ],
     content: parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>',
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 border rounded-md prose-headings:font-bold prose-h1:text-2xl prose-h1:mb-2 prose-h1:mt-4 prose-h2:text-xl prose-h2:mb-2 prose-h2:mt-4 prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-6 prose-ol:list-decimal prose-ol:ml-6 prose-li:my-1',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 prose-headings:font-bold prose-h1:text-2xl prose-h1:mb-2 prose-h1:mt-4 prose-h2:text-xl prose-h2:mb-2 prose-h2:mt-4 prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-6 prose-ol:list-decimal prose-ol:ml-6 prose-li:my-1',
       },
       handleDOMEvents: {
         compositionstart: () => {
@@ -555,8 +533,8 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               break
             }
 
-            // Проверяем на буллет-лист
-            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
+            // Проверяем на буллет-лист (- или *)
+            if ((/^\s*- $/.test(line) || /^\s*\* $/.test(line)) && !/^\s*- \[/.test(line)) {
               const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
               const from = textBeforeLine.length
               const to = from + line.length
@@ -618,8 +596,8 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               break
             }
 
-            // Проверяем на буллет-лист в цитате
-            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
+            // Проверяем на буллет-лист в цитате (- или *)
+            if ((/^\s*- $/.test(line) || /^\s*\* $/.test(line)) && !/^\s*- \[/.test(line)) {
               const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
               const from = textBeforeLine.length
               const to = from + line.length
@@ -1001,6 +979,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 
   return (
     <div className={cn('w-full h-full flex flex-col relative', className)}>
+      {/* Всплывающий тулбар при выделении текста */}
+      <BubbleMenuToolbar editor={editor} />
+
       {/* Подсказка о таблицах */}
       {tooltipState.show && (
         <div
@@ -1036,314 +1017,8 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
       )}
 
-      {/* Панель инструментов */}
-      <div className="border border-border rounded-t-lg bg-muted p-2 flex flex-wrap gap-1 flex-shrink-0">
-        {/* Заголовки */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 1 }) 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Заголовок 1 (# )"
-          >
-            <Heading1 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 2 }) 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Заголовок 2 (## )"
-          >
-            <Heading2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 3 }) 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Заголовок 3 (### )"
-          >
-            <Heading3 className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Разделитель */}
-        <div className="w-px h-8 bg-border mx-1 self-center" />
-
-        {/* Форматирование текста */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('bold') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Жирный (Ctrl+B)"
-          >
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('italic') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Курсив (Ctrl+I)"
-          >
-            <Italic className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('underline') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Подчеркнутый (Ctrl+U)"
-          >
-            <UnderlineIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('strike') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Зачеркнутый (Ctrl+Shift+S)"
-          >
-            <Strikethrough className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('highlight') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Выделение (Ctrl+Shift+H)"
-          >
-            <Highlighter className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Разделитель */}
-        <div className="w-px h-8 bg-border mx-1 self-center" />
-
-        {/* Списки */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              // Проверяем, не находимся ли мы внутри цитаты
-              if (isInsideBlockquote(editor)) {
-                showBlockquoteListBlockedTooltip()
-                return
-              }
-              // Проверяем, не находимся ли мы внутри блока кода
-              if (isInsideCodeBlock(editor)) {
-                showCodeBlockListBlockedTooltip()
-                return
-              }
-              editor.chain().focus().toggleBulletList().run()
-            }}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('bulletList')
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-accent'
-            )}
-            title="Маркированный список (- )"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              // Проверяем, не находимся ли мы внутри цитаты
-              if (isInsideBlockquote(editor)) {
-                showBlockquoteListBlockedTooltip()
-                return
-              }
-              // Проверяем, не находимся ли мы внутри блока кода
-              if (isInsideCodeBlock(editor)) {
-                showCodeBlockListBlockedTooltip()
-                return
-              }
-              editor.chain().focus().toggleOrderedList().run()
-            }}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('orderedList')
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-accent'
-            )}
-            title="Нумерованный список"
-          >
-            <ListOrdered className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              // Проверяем, не находимся ли мы внутри цитаты
-              if (isInsideBlockquote(editor)) {
-                showBlockquoteTaskBlockedTooltip()
-                return
-              }
-              // Проверяем, не находимся ли мы внутри блока кода
-              if (isInsideCodeBlock(editor)) {
-                showCodeBlockListBlockedTooltip()
-                return
-              }
-              editor.chain().focus().toggleTaskList().run()
-            }}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('taskList')
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-accent'
-            )}
-            title="Список задач"
-          >
-            <CheckSquare className="h-4 w-4" />
-          </Button>
-        </div>
-
-
-        {/* Разделитель */}
-        <div className="w-px h-8 bg-border mx-1 self-center" />
-
-        {/* Цитата и код */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('blockquote') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Цитата"
-          >
-            <Quote className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('code') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
-                : 'hover:bg-accent'
-            )}
-            title="Инлайн код"
-          >
-            <Code className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleCodeBlockInsertion(editor)}
-            className={cn(
-              'h-8 w-8 p-0',
-              editor.isActive('codeBlock')
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
-                : 'hover:bg-accent'
-            )}
-            title="Блок кода"
-          >
-            <Code2 className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Разделитель */}
-        <div className="w-px h-8 bg-border mx-1 self-center" />
-
-        {/* Отмена/Повтор */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().undo()}
-            className="h-8 w-8 p-0"
-            title="Отменить"
-          >
-            <Undo className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().redo()}
-            className="h-8 w-8 p-0"
-            title="Повторить"
-          >
-            <Redo className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Разделитель */}
-        <div className="w-px h-8 bg-border mx-1 self-center" />
-
-        {/* Таблицы */}
-        <div className="flex gap-1 mr-2">
-          <TableSizeSelector 
-            onSelect={(rows, cols) => {
-              handleTableInsertion(rows, cols, editor)
-            }} 
-          />
-        </div>
-
-        {/* Управление таблицами - показывается только когда курсор в таблице */}
-        <TableControls editor={editor} />
-
-
-
-      </div>
-
       {/* Редактор */}
-      <div className="border border-t-0 border-border rounded-b-lg bg-card overflow-y-auto flex-1 min-h-0">
+      <div className="bg-card overflow-y-auto flex-1 min-h-0">
         <EditorContent 
           editor={editor} 
           className="prose prose-sm max-w-none h-full dark:prose-invert

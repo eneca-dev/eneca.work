@@ -196,17 +196,6 @@ export function NotesSidebar({ isOpen, onClose }: NotesSidebarProps) {
           )}
         </div>
 
-        {/* Кнопка закрытия */}
-        <div className="flex-shrink-0 border-t border-border p-2 bg-muted/10">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="w-full"
-          >
-            Закрыть
-          </Button>
-        </div>
       </div>
     </>
   )
