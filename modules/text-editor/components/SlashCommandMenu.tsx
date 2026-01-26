@@ -72,7 +72,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenu
         <div className="p-1 max-h-[300px] overflow-y-auto">
           {items.map((item, index) => (
             <button
-              key={index}
+              key={item.title}
               onClick={() => command(item)}
               className={`w-full flex items-start gap-3 px-3 py-2 rounded-md transition-colors ${
                 index === selectedIndex
