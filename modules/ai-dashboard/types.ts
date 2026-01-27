@@ -27,12 +27,17 @@ export interface AITableResponse {
 }
 
 /**
- * Графический ответ (будущее)
+ * Графический ответ
  */
 export interface AIChartResponse {
   type: 'chart'
-  chartType: 'line' | 'bar' | 'pie'
-  data: any[]  // Chart.js формат
+  content: {
+    chartType: 'line' | 'bar' | 'pie' | 'area' | 'radar' | 'radialBar'
+    data: Record<string, any>[]  // Массив объектов для Recharts
+    xKey: string  // Ключ для оси X
+    yKeys: string[]  // Ключи для оси Y (может быть несколько линий/баров)
+    title?: string  // Опциональный заголовок
+  }
 }
 
 /**
