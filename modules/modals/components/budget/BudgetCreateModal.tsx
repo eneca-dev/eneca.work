@@ -41,7 +41,7 @@ const ENTITY_TYPE_LABELS: Record<BudgetEntityType, string> = {
  */
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
 }

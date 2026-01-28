@@ -423,9 +423,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
                     <TooltipContent side="top" className="text-xs">
                       <div className="space-y-1">
                         <div className="font-medium">{sectionBudget.name}</div>
-                        <div>Бюджет: {sectionBudget.planned_amount.toLocaleString('ru-RU')} BYN</div>
-                        <div>Освоено: {sectionBudget.spent_amount.toLocaleString('ru-RU')} BYN ({Math.round(sectionBudget.spent_percentage)}%)</div>
-                        <div>Остаток: {sectionBudget.remaining_amount.toLocaleString('ru-RU')} BYN</div>
+                        <div>Бюджет: {sectionBudget.planned_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
+                        <div>Освоено: {sectionBudget.spent_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN ({Math.round(sectionBudget.spent_percentage)}%)</div>
+                        <div>Остаток: {sectionBudget.remaining_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
                       </div>
                     </TooltipContent>
                   </Tooltip>

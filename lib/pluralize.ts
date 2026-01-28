@@ -99,3 +99,71 @@ export function pluralizeTasks(count: number): string {
   // 5-20, 25-30, 35-40... → "задач"
   return 'задач'
 }
+
+/**
+ * Склонение слова "час" в зависимости от числа
+ * @param count - количество часов
+ * @returns правильная форма слова ("час", "часа" или "часов")
+ *
+ * Примеры:
+ * - 1, 21, 31, 41... → "час"
+ * - 2-4, 22-24, 32-34... → "часа"
+ * - 5-20, 25-30, 35-40... → "часов"
+ * - 11-14 → "часов" (исключение)
+ */
+export function pluralizeHours(count: number): string {
+  const lastDigit = Math.floor(Math.abs(count)) % 10
+  const lastTwoDigits = Math.floor(Math.abs(count)) % 100
+
+  // Исключения для 11-14 (всегда "часов")
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'часов'
+  }
+
+  // 1, 21, 31, 41... → "час"
+  if (lastDigit === 1) {
+    return 'час'
+  }
+
+  // 2-4, 22-24, 32-34... → "часа"
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'часа'
+  }
+
+  // 5-20, 25-30, 35-40... → "часов"
+  return 'часов'
+}
+
+/**
+ * Склонение слова "отчёт" в зависимости от числа
+ * @param count - количество отчётов
+ * @returns правильная форма слова ("отчёт", "отчёта" или "отчётов")
+ *
+ * Примеры:
+ * - 1, 21, 31, 41... → "отчёт"
+ * - 2-4, 22-24, 32-34... → "отчёта"
+ * - 5-20, 25-30, 35-40... → "отчётов"
+ * - 11-14 → "отчётов" (исключение)
+ */
+export function pluralizeReports(count: number): string {
+  const lastDigit = count % 10
+  const lastTwoDigits = count % 100
+
+  // Исключения для 11-14 (всегда "отчётов")
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'отчётов'
+  }
+
+  // 1, 21, 31, 41... → "отчёт"
+  if (lastDigit === 1) {
+    return 'отчёт'
+  }
+
+  // 2-4, 22-24, 32-34... → "отчёта"
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'отчёта'
+  }
+
+  // 5-20, 25-30, 35-40... → "отчётов"
+  return 'отчётов'
+}
