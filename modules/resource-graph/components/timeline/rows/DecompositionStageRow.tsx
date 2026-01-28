@@ -26,7 +26,7 @@ import type {
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid, ProgressCircle, PeriodBackground } from '../shared'
 import { LoadingBars, calculateLoadingsRowHeight, LOADING_DRAG_TYPE, type LoadingDragData } from '../LoadingBars'
-import { LoadingModal, TaskCreateModal } from '@/modules/modals'
+import { TaskCreateModal, openLoadingCreate } from '@/modules/modals'
 import { StageReadinessArea, calculateTodayDelta } from '../StageReadinessArea'
 import { StageExpandedFrame } from '../StageExpandedFrame'
 import { BudgetSpendingArea } from '../BudgetSpendingArea'
@@ -92,7 +92,6 @@ export function DecompositionStageRow({
 }: DecompositionStageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isStageModalOpen, setIsStageModalOpen] = useState(false)
-  const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const hasChildren = stage.items.length > 0
@@ -283,7 +282,12 @@ export function DecompositionStageRow({
             className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
             onClick={(e) => {
               e.stopPropagation()
-              setIsLoadingModalOpen(true)
+              openLoadingCreate(
+                stage.id, // stageId - ID этапа декомпозиции
+                sectionId, // sectionId - для мутаций
+                stage.startDate, // defaultStartDate
+                stage.finishDate // defaultEndDate
+              )
             }}
           >
             <UserPlus className="w-3 h-3" />
@@ -600,18 +604,6 @@ export function DecompositionStageRow({
         stage={stage}
         stageId={stage.id}
         sectionId={sectionId}
-        onSuccess={onWorkLogCreated}
-      />
-
-      {/* LoadingModal for creating new loading */}
-      <LoadingModal
-        mode="create"
-        isOpen={isLoadingModalOpen}
-        onClose={() => setIsLoadingModalOpen(false)}
-        sectionId={sectionId}
-        stageId={stage.id}
-        defaultStartDate={stage.startDate || formatMinskDate(getTodayMinsk())}
-        defaultEndDate={stage.finishDate || formatMinskDate(getTodayMinsk())}
         onSuccess={onWorkLogCreated}
       />
 

@@ -93,13 +93,13 @@ export function DepartmentRow({
       {/* Department header row */}
       <div className="group/row min-w-full relative border-b border-border">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/50"
+          className="flex transition-colors cursor-pointer"
           style={{ height: DEPARTMENT_ROW_HEIGHT }}
           onClick={toggle}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 group-hover/row:bg-accent"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
             style={{ width: SIDEBAR_WIDTH }}
           >
             {/* Left: expand icon + department name */}

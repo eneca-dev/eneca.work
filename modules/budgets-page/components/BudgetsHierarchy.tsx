@@ -8,7 +8,7 @@
 
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -28,15 +28,18 @@ interface BudgetsHierarchyProps {
   className?: string
   /** Callback для обновления данных после удаления */
   onRefresh?: () => void
+  /** ID раздела для подсветки (из URL параметров) */
+  highlightSectionId?: string | null
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarchyProps) {
+export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSectionId }: BudgetsHierarchyProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
 
   // Состояние раскрытости с persistence в localStorage
   const {
@@ -44,6 +47,7 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
     toggle: handleToggle,
     expandMultiple: handleExpandAll,
     expandMultiple: handleAutoExpand,
+    expandWithParents,
     expandAll,
     collapseAll,
   } = useExpandedState({ nodes })
@@ -62,6 +66,53 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
       headerRef.current.scrollLeft = scrollContainerRef.current.scrollLeft
     }
   }, [])
+
+  // Функция для поиска узла и его родителей в дереве
+  const findNodePath = useCallback((targetId: string, currentNodes: HierarchyNode[], path: string[] = []): string[] | null => {
+    for (const node of currentNodes) {
+      if (node.id === targetId) {
+        return path
+      }
+      if (node.children && node.children.length > 0) {
+        const result = findNodePath(targetId, node.children, [...path, node.id])
+        if (result) return result
+      }
+    }
+    return null
+  }, [])
+
+  // Автоматическое разворачивание и прокрутка при highlightSectionId
+  useEffect(() => {
+    console.log('[BudgetsHierarchy] Effect triggered:', {
+      highlightSectionId,
+      hasAutoExpanded,
+      nodesLength: nodes.length,
+    })
+
+    if (highlightSectionId && !hasAutoExpanded && nodes.length > 0) {
+      // Находим путь к разделу
+      const parentIds = findNodePath(highlightSectionId, nodes)
+
+      console.log('[BudgetsHierarchy] Found parent IDs:', parentIds)
+
+      if (parentIds) {
+        // Раскрываем все родительские узлы
+        expandWithParents(highlightSectionId, parentIds)
+        setHasAutoExpanded(true)
+
+        console.log('[BudgetsHierarchy] Expanded parents, waiting for scroll...')
+
+        // Прокручиваем к элементу через небольшую задержку
+        setTimeout(() => {
+          const element = document.getElementById(`section-${highlightSectionId}`)
+          console.log('[BudgetsHierarchy] Looking for element:', `section-${highlightSectionId}`, element)
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 300)
+      }
+    }
+  }, [highlightSectionId, hasAutoExpanded, nodes, findNodePath, expandWithParents])
 
   if (nodes.length === 0) {
     return (
@@ -214,6 +265,7 @@ export function BudgetsHierarchy({ nodes, className, onRefresh }: BudgetsHierarc
                 onProjectSync={sync}
                 syncStatus={syncStatus}
                 syncingProjectId={syncingProjectId}
+                highlightSectionId={highlightSectionId}
               />
             ))}
           </div>

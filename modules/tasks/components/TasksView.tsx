@@ -7,7 +7,8 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
@@ -25,6 +26,9 @@ import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 // ============================================================================
 
 export function TasksView() {
+  // URL search params
+  const searchParams = useSearchParams()
+
   // Get active tab data from tabs store (proper selectors for reactivity)
   const tabs = useTasksTabsStore((s) => s.tabs)
   const activeTabId = useTasksTabsStore((s) => s.activeTabId)
@@ -42,6 +46,16 @@ export function TasksView() {
 
   // Filter options for autocomplete + locked filters
   const { options: filterOptions, lockedFilters } = useTasksFilterOptions()
+
+  // Log URL params for debugging
+  useEffect(() => {
+    const projectId = searchParams.get('projectId')
+    const sectionId = searchParams.get('sectionId')
+    const highlight = searchParams.get('highlight')
+
+    console.log('[TasksView] URL params:', { projectId, sectionId, highlight })
+    console.log('[TasksView] Current viewMode:', viewMode)
+  }, [searchParams, viewMode])
 
   // Parse filter string to query params (shared between views)
   const queryParams = useMemo(() => {

@@ -50,7 +50,7 @@ export interface Employee {
   firstName?: string
   lastName?: string
   email?: string
-  teamId: string
+  teamId?: string
   teamCode?: string
   teamName?: string
   departmentId?: string

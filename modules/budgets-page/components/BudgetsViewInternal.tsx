@@ -7,6 +7,7 @@
 
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import { useState, useMemo, useCallback } from 'react'
 import { Loader2, Wallet, TrendingUp, FolderKanban, BarChart3, Database } from 'lucide-react'
 import { BudgetsHierarchy } from './BudgetsHierarchy'
@@ -128,6 +129,7 @@ function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount }: AnalyticsPa
 export function BudgetsViewInternal({
   queryParams,
 }: BudgetsViewInternalProps) {
+  const searchParams = useSearchParams()
   // State: загрузить все данные без фильтров
   const [loadAll, setLoadAll] = useState(false)
 
@@ -176,6 +178,13 @@ export function BudgetsViewInternal({
     )
   }
 
+  // Получаем параметры для автоматического разворачивания и подсветки
+  const sectionId = searchParams.get('sectionId')
+  const shouldHighlight = searchParams.get('highlight') === 'true'
+
+  // Передаём ID раздела только если нужна подсветка
+  const highlightSectionId = shouldHighlight && sectionId ? sectionId : null
+
   // Error state
   if (error) {
     return (
@@ -206,7 +215,12 @@ export function BudgetsViewInternal({
           />
 
           {/* Hierarchy content */}
-          <BudgetsHierarchy nodes={nodes} className="flex-1 min-h-0" onRefresh={refetch} />
+          <BudgetsHierarchy
+            nodes={nodes}
+            className="flex-1 min-h-0"
+            onRefresh={refetch}
+            highlightSectionId={highlightSectionId}
+          />
         </>
       )}
     </div>

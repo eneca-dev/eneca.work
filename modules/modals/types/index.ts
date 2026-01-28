@@ -140,10 +140,69 @@ export interface LoadingCreateData {
   stageId: string
   /** ID сотрудника (если известен) */
   employeeId?: string
+  /** ID раздела (для мутаций) */
+  sectionId: string
+  /** Дата начала по умолчанию */
+  defaultStartDate?: string
+  /** Дата окончания по умолчанию */
+  defaultEndDate?: string
 }
 
 export interface LoadingEditData {
   loadingId: string
+  /** ID раздела (для мутаций) */
+  sectionId: string
+  /** Объект загрузки */
+  loading: {
+    id: string
+    employee: {
+      id: string
+      name: string
+      avatarUrl?: string
+    }
+    startDate: string
+    finishDate: string
+    rate: number
+    comment?: string
+  }
+}
+
+// ============================================================================
+// Loading Modal New Types
+// ============================================================================
+
+export interface LoadingModalNewCreateData {
+  /** ID раздела или этапа декомпозиции (опционально - можно выбрать в модалке) */
+  sectionId?: string
+  /** ID сотрудника (опционально - можно выбрать в модалке) */
+  employeeId?: string
+  /** ID проекта (для автоматического выбора проекта в дереве) */
+  projectId?: string
+}
+
+export interface LoadingModalNewEditData {
+  /** ID загрузки */
+  loadingId: string
+  /** ID раздела (для мутаций и кеша) */
+  sectionId: string
+  /** Объект загрузки */
+  loading: {
+    id: string
+    employee_id: string
+    start_date: string
+    end_date: string
+    rate: number
+    comment: string | null
+    section_id: string
+  }
+  /** Breadcrumbs для отображения пути (опционально - если не передано, будет загружено из API) */
+  breadcrumbs?: Array<{
+    id: string
+    name: string
+    type: 'project' | 'object' | 'section' | 'decomposition_stage'
+  }>
+  /** ID проекта (для автоматического выбора проекта в дереве, опционально) */
+  projectId?: string
 }
 
 // ============================================================================
@@ -231,6 +290,8 @@ export type ModalType =
   | 'item-edit'
   | 'loading-create'
   | 'loading-edit'
+  | 'loading-new-create'
+  | 'loading-new-edit'
   | 'employee-view'
   | 'progress-update'
   | 'checkpoint-create'

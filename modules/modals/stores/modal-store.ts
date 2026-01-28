@@ -124,14 +124,33 @@ export const openItemEdit = (itemId: string) =>
 /**
  * Открыть модалку создания загрузки
  */
-export const openLoadingCreate = (stageId: string, employeeId?: string) =>
-  useModalStore.getState().openModal('loading-create', { stageId, employeeId })
+export const openLoadingCreate = (
+  stageId: string,
+  sectionId: string,
+  defaultStartDate?: string,
+  defaultEndDate?: string,
+  employeeId?: string
+) =>
+  useModalStore.getState().openModal('loading-create', {
+    stageId,
+    sectionId,
+    defaultStartDate,
+    defaultEndDate,
+    employeeId,
+  })
 
 /**
  * Открыть модалку редактирования загрузки
  */
-export const openLoadingEdit = (loadingId: string) =>
-  useModalStore.getState().openModal('loading-edit', { loadingId })
+export const openLoadingEdit = (loadingId: string, sectionId: string, loading: {
+  id: string
+  employee: { id: string; name: string; avatarUrl?: string }
+  startDate: string
+  finishDate: string
+  rate: number
+  comment?: string
+}) =>
+  useModalStore.getState().openModal('loading-edit', { loadingId, sectionId, loading })
 
 /**
  * Открыть модалку просмотра сотрудника
@@ -155,3 +174,43 @@ export const openCheckpointCreate = (sectionId: string, sectionName: string) =>
  */
 export const openCheckpointEdit = (checkpointId: string) =>
   useModalStore.getState().openModal('checkpoint-edit', { checkpointId })
+
+/**
+ * Открыть модалку создания загрузки (Loading Modal New)
+ */
+export const openLoadingModalNewCreate = (data?: {
+  sectionId?: string // ID раздела или этапа декомпозиции
+  employeeId?: string
+  projectId?: string
+}) => useModalStore.getState().openModal('loading-new-create', data)
+
+/**
+ * Открыть модалку редактирования загрузки (Loading Modal New)
+ */
+export const openLoadingModalNewEdit = (
+  loadingId: string,
+  sectionId: string,
+  options?: {
+    /** Объект загрузки (если передан, не будет выполнен запрос к API) */
+    loading?: {
+      id: string
+      employee_id: string
+      start_date: string
+      end_date: string
+      rate: number
+      comment: string | null
+      section_id: string
+    }
+    breadcrumbs?: Array<{
+      id: string
+      name: string
+      type: 'project' | 'object' | 'section' | 'decomposition_stage'
+    }>
+    projectId?: string
+  }
+) =>
+  useModalStore.getState().openModal('loading-new-edit', {
+    loadingId,
+    sectionId,
+    ...options,
+  })

@@ -93,12 +93,16 @@ export async function getDepartmentsData(
 
     // Применяем фильтр по подразделению
     if (secureFilters?.subdivision_id) {
-      if (isUuid(secureFilters.subdivision_id)) {
+      const subdivisionId = Array.isArray(secureFilters.subdivision_id)
+        ? secureFilters.subdivision_id[0]
+        : secureFilters.subdivision_id
+
+      if (isUuid(subdivisionId)) {
         // Получаем отделы подразделения
         const { data: depts } = await supabase
           .from('departments')
           .select('department_id')
-          .eq('subdivision_id', secureFilters.subdivision_id)
+          .eq('subdivision_id', subdivisionId)
 
         const deptIds = depts?.map(d => d.department_id) || []
         if (deptIds.length > 0) {
@@ -111,7 +115,7 @@ export async function getDepartmentsData(
         const { data: subdivisions } = await supabase
           .from('subdivisions')
           .select('subdivision_id')
-          .ilike('subdivision_name', secureFilters.subdivision_id)
+          .ilike('subdivision_name', subdivisionId)
 
         if (subdivisions && subdivisions.length > 0) {
           const { data: depts } = await supabase
@@ -131,19 +135,27 @@ export async function getDepartmentsData(
 
     // Применяем фильтр по отделу
     if (secureFilters?.department_id) {
-      if (isUuid(secureFilters.department_id)) {
-        orgQuery = orgQuery.eq('department_id', secureFilters.department_id)
+      const departmentId = Array.isArray(secureFilters.department_id)
+        ? secureFilters.department_id[0]
+        : secureFilters.department_id
+
+      if (isUuid(departmentId)) {
+        orgQuery = orgQuery.eq('department_id', departmentId)
       } else {
-        orgQuery = orgQuery.ilike('department_name', secureFilters.department_id)
+        orgQuery = orgQuery.ilike('department_name', departmentId)
       }
     }
 
     // Применяем фильтр по команде
     if (secureFilters?.team_id) {
-      if (isUuid(secureFilters.team_id)) {
-        orgQuery = orgQuery.eq('team_id', secureFilters.team_id)
+      const teamId = Array.isArray(secureFilters.team_id)
+        ? secureFilters.team_id[0]
+        : secureFilters.team_id
+
+      if (isUuid(teamId)) {
+        orgQuery = orgQuery.eq('team_id', teamId)
       } else {
-        orgQuery = orgQuery.ilike('team_name', secureFilters.team_id)
+        orgQuery = orgQuery.ilike('team_name', teamId)
       }
     }
 
@@ -166,23 +178,35 @@ export async function getDepartmentsData(
 
     // Применяем те же фильтры для сотрудников
     if (secureFilters?.department_id) {
-      if (isUuid(secureFilters.department_id)) {
-        employeeQuery = employeeQuery.eq('final_department_id', secureFilters.department_id)
+      const departmentId = Array.isArray(secureFilters.department_id)
+        ? secureFilters.department_id[0]
+        : secureFilters.department_id
+
+      if (isUuid(departmentId)) {
+        employeeQuery = employeeQuery.eq('final_department_id', departmentId)
       }
     }
 
     if (secureFilters?.team_id) {
-      if (isUuid(secureFilters.team_id)) {
-        employeeQuery = employeeQuery.eq('final_team_id', secureFilters.team_id)
+      const teamId = Array.isArray(secureFilters.team_id)
+        ? secureFilters.team_id[0]
+        : secureFilters.team_id
+
+      if (isUuid(teamId)) {
+        employeeQuery = employeeQuery.eq('final_team_id', teamId)
       }
     }
 
     // Применяем фильтр по ответственному (сотруднику)
     if (secureFilters?.responsible_id) {
-      if (isUuid(secureFilters.responsible_id)) {
-        employeeQuery = employeeQuery.eq('user_id', secureFilters.responsible_id)
+      const responsibleId = Array.isArray(secureFilters.responsible_id)
+        ? secureFilters.responsible_id[0]
+        : secureFilters.responsible_id
+
+      if (isUuid(responsibleId)) {
+        employeeQuery = employeeQuery.eq('user_id', responsibleId)
       } else {
-        employeeQuery = employeeQuery.ilike('full_name', `%${secureFilters.responsible_id}%`)
+        employeeQuery = employeeQuery.ilike('full_name', `%${responsibleId}%`)
       }
     }
 
@@ -200,25 +224,28 @@ export async function getDepartmentsData(
 
     // Сначала обрабатываем сотрудников и их загрузки
     employeeData?.forEach((item) => {
+      // Пропускаем записи без user_id
+      if (!item.user_id) return
+
       if (!employeesMap.has(item.user_id)) {
         employeesMap.set(item.user_id, {
           id: item.user_id,
           name: item.full_name || '',
-          fullName: item.full_name,
-          firstName: item.first_name,
-          lastName: item.last_name,
-          email: item.email,
-          position: item.position_name,
-          avatarUrl: item.avatar_url,
-          teamId: item.final_team_id,
-          teamName: item.final_team_name,
+          fullName: item.full_name ?? undefined,
+          firstName: item.first_name ?? undefined,
+          lastName: item.last_name ?? undefined,
+          email: item.email ?? undefined,
+          position: item.position_name ?? undefined,
+          avatarUrl: item.avatar_url ?? undefined,
+          teamId: item.final_team_id ?? undefined,
+          teamName: item.final_team_name ?? undefined,
           teamCode: '',
-          departmentId: item.final_department_id,
-          departmentName: item.final_department_name,
+          departmentId: item.final_department_id ?? undefined,
+          departmentName: item.final_department_name ?? undefined,
           loadings: [],
           dailyWorkloads: {},
-          hasLoadings: item.has_loadings,
-          loadingsCount: item.loadings_count,
+          hasLoadings: item.has_loadings ?? undefined,
+          loadingsCount: item.loadings_count ?? undefined,
           employmentRate: item.employment_rate || 1,
           workload: 0,
         })
@@ -226,28 +253,28 @@ export async function getDepartmentsData(
 
       const employee = employeesMap.get(item.user_id)!
 
-      // Добавляем загрузку, если она есть
-      if (item.loading_id) {
+      // Добавляем загрузку, если она есть и имеет все обязательные поля
+      if (item.loading_id && item.loading_start && item.loading_finish) {
         employee.loadings!.push({
           id: item.loading_id,
           employeeId: item.user_id,
-          responsibleId: item.user_id,
-          responsibleName: item.full_name,
-          responsibleAvatarUrl: item.avatar_url,
-          responsibleTeamName: item.final_team_name,
-          projectId: item.project_id || undefined,
-          projectName: item.project_name,
-          projectStatus: item.project_status,
-          objectId: item.object_id || undefined,
-          objectName: item.object_name || undefined,
-          sectionId: item.loading_section,
-          sectionName: item.section_name,
-          stageId: item.stage_id || '',
-          stageName: item.stage_name || undefined,
+          responsibleId: (item as any).loading_responsible ?? item.user_id,
+          responsibleName: item.full_name ?? undefined,
+          responsibleAvatarUrl: item.avatar_url ?? undefined,
+          responsibleTeamName: item.final_team_name ?? undefined,
+          projectId: item.project_id ?? undefined,
+          projectName: item.project_name ?? undefined,
+          projectStatus: item.project_status ?? undefined,
+          objectId: item.object_id ?? undefined,
+          objectName: item.object_name ?? undefined,
+          sectionId: item.loading_section || null,
+          sectionName: item.section_name ?? undefined,
+          stageId: item.stage_id ?? '',
+          stageName: item.stage_name ?? undefined,
           startDate: item.loading_start,
           endDate: item.loading_finish,
           rate: item.loading_rate || 1,
-          comment: item.loading_comment || undefined,
+          comment: item.loading_comment ?? undefined,
         })
       }
     })
@@ -261,21 +288,24 @@ export async function getDepartmentsData(
 
     // Теперь обрабатываем организационную структуру
     orgData?.forEach((item) => {
+      // Пропускаем записи без department_id
+      if (!item.department_id) return
+
       // Создаем или обновляем отдел
       if (!departmentsMap.has(item.department_id)) {
         departmentsMap.set(item.department_id, {
           id: item.department_id,
-          name: item.department_name,
-          subdivisionId: item.subdivision_id,
-          subdivisionName: item.subdivision_name,
+          name: item.department_name || 'Без названия',
+          subdivisionId: undefined, // view_organizational_structure не содержит subdivision данных
+          subdivisionName: undefined,
           totalEmployees: item.department_employee_count || 0,
           teams: [],
           dailyWorkloads: {},
-          departmentHeadId: item.department_head_id,
-          departmentHeadName: item.department_head_full_name,
-          departmentHeadEmail: item.department_head_email,
-          departmentHeadAvatarUrl: item.department_head_avatar_url,
-          managerName: item.department_head_full_name,
+          departmentHeadId: item.department_head_id ?? undefined,
+          departmentHeadName: item.department_head_full_name ?? undefined,
+          departmentHeadEmail: item.department_head_email ?? undefined,
+          departmentHeadAvatarUrl: item.department_head_avatar_url ?? undefined,
+          managerName: item.department_head_full_name ?? undefined,
         })
       }
 
@@ -285,17 +315,17 @@ export async function getDepartmentsData(
         if (!teamsMap.has(teamKey)) {
           teamsMap.set(teamKey, {
             id: item.team_id,
-            name: item.team_name,
+            name: item.team_name || 'Без названия',
             code: '',
             departmentId: item.department_id,
-            departmentName: item.department_name,
+            departmentName: item.department_name ?? undefined,
             totalEmployees: item.team_employee_count || 0,
             employees: [],
             dailyWorkloads: {},
-            teamLeadId: item.team_lead_id,
-            teamLeadName: item.team_lead_full_name,
-            teamLeadEmail: item.team_lead_email,
-            teamLeadAvatarUrl: item.team_lead_avatar_url,
+            teamLeadId: item.team_lead_id ?? undefined,
+            teamLeadName: item.team_lead_full_name ?? undefined,
+            teamLeadEmail: item.team_lead_email ?? undefined,
+            teamLeadAvatarUrl: item.team_lead_avatar_url ?? undefined,
           })
         }
       }
@@ -380,13 +410,16 @@ export async function getTeamsFreshness(): Promise<ActionResult<Record<string, T
     const freshnessMap: Record<string, TeamFreshness> = {}
 
     data?.forEach((item) => {
+      // Пропускаем записи без team_id
+      if (!item.team_id) return
+
       freshnessMap[item.team_id] = {
         teamId: item.team_id,
-        teamName: item.team_name,
-        departmentId: item.department_id,
-        departmentName: item.department_name,
+        teamName: item.team_name || 'Без названия',
+        departmentId: item.department_id || '',
+        departmentName: item.department_name || 'Без названия',
         lastUpdate: item.last_update,
-        daysSinceUpdate: item.days_since_update,
+        daysSinceUpdate: item.days_since_update ?? undefined,
       }
     })
 
@@ -476,5 +509,74 @@ export async function confirmMultipleTeamsActivity(
   } catch (error) {
     console.error('[confirmMultipleTeamsActivity] Unexpected error:', error)
     return { success: false, error: String(error) }
+  }
+}
+
+// ============================================================================
+// Mutation Actions - Loadings
+// ============================================================================
+
+/**
+ * Обновить даты загрузки сотрудника
+ *
+ * Используется для drag-to-resize функциональности в timeline
+ *
+ * @param loadingId - ID загрузки
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Результат операции с обновленными данными
+ */
+export async function updateLoadingDates(
+  loadingId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация входных данных
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    // Проверяем что startDate <= finishDate
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
+    const { error } = await supabase
+      .from('loadings')
+      .update({
+        loading_start: startDate,
+        loading_finish: finishDate,
+      })
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[updateLoadingDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { loadingId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateLoadingDates] Unexpected error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
+    }
   }
 }

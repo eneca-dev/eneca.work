@@ -61,6 +61,8 @@ interface BudgetRowProps {
   syncStatus?: SyncStatus
   /** ID проекта который сейчас синхронизируется */
   syncingProjectId?: string | null
+  /** ID раздела для подсветки */
+  highlightSectionId?: string | null
 }
 
 // ============================================================================
@@ -114,6 +116,7 @@ export const BudgetRow = React.memo(function BudgetRow({
   onProjectSync,
   syncStatus,
   syncingProjectId,
+  highlightSectionId,
 }: BudgetRowProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -190,6 +193,7 @@ export const BudgetRow = React.memo(function BudgetRow({
   // Стили строки в зависимости от типа
   const isProject = node.type === 'project'
   const isObject = node.type === 'object'
+  const isHighlighted = isSection && highlightSectionId === node.id
 
   const rowStyles = cn(
     'group flex items-center border-b transition-colors',
@@ -223,7 +227,10 @@ export const BudgetRow = React.memo(function BudgetRow({
   return (
     <>
       {/* Main row */}
-      <div className={rowStyles}>
+      <div
+        id={isSection ? `section-${node.id}` : undefined}
+        className={rowStyles}
+      >
         {/* ===== НАИМЕНОВАНИЕ ===== */}
         <div
           className="flex items-center gap-2 min-w-[400px] w-[400px] px-2 shrink-0"
@@ -403,6 +410,7 @@ export const BudgetRow = React.memo(function BudgetRow({
             onProjectSync={onProjectSync}
             syncStatus={syncStatus}
             syncingProjectId={syncingProjectId}
+            highlightSectionId={highlightSectionId}
           />
         ))}
 

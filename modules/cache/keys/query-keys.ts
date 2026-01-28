@@ -102,6 +102,13 @@ export const queryKeys = {
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
     // structure moved to filterStructure.project() for unified caching
+    /** Дерево проекта для loading-modal-new (иерархия: project -> stage -> object -> section) */
+    tree: (projectId: string) => [...queryKeys.projects.detail(projectId), 'tree'] as const,
+    /** Список проектов для loading-modal-new (с фильтрацией my/all) */
+    listForModal: (mode: 'my' | 'all', userId?: string) =>
+      [...queryKeys.projects.lists(), 'modal', mode, userId] as const,
+    /** Breadcrumbs для узла дерева проекта (section или decomposition_stage) */
+    breadcrumbs: (nodeId: string) => [...queryKeys.projects.all, 'breadcrumbs', nodeId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -192,6 +199,15 @@ export const queryKeys = {
     items: (stageId: string) => [...queryKeys.decomposition.all, 'items', stageId] as const,
     /** Агрегированные часы работы для задач */
     workLogs: (itemIdsKey: string) => [...queryKeys.decomposition.all, 'work-logs', itemIdsKey] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Decomposition Stages (этапы декомпозиции для модалок)
+  // -------------------------------------------------------------------------
+  decompositionStages: {
+    all: ['decomposition-stages'] as const,
+    /** Список этапов декомпозиции для раздела */
+    list: (sectionId: string) => [...queryKeys.decompositionStages.all, 'list', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------
