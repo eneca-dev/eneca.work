@@ -107,7 +107,6 @@ export const TableWithResizeButtons = Extension.create({
                 const header = target.closest('th')
                 if (header) {
                   // Start resize operation
-                  console.log('Starting column resize for:', header)
                   // You can implement the actual resize logic here
                 }
                 
@@ -126,7 +125,6 @@ export const TableWithResizeButtons = Extension.create({
                   // Handle keyboard resize
                   const header = target.closest('th')
                   if (header) {
-                    console.log('Keyboard resize for:', header)
                     // You can implement the actual resize logic here
                   }
                   
