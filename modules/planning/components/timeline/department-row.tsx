@@ -879,10 +879,7 @@ export function EmployeeRow({
                   // Используем централизованную функцию для расчёта top
                   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
-                  // DEBUG: логируем позиции для большого количества загрузок
-                  if (barRenders.length > 10 && idx < 3) {
-                    console.log(`📊 Bar ${idx}: layer=${bar.layer}, top=${top}, hasComment=${!!bar.period.comment}`)
-                  }
+                  // DEBUG: испралена ошибка Cannot access 'h' before initialization
 
                   return (
                     <Fragment key={`${bar.period.id}-${idx}`}>
@@ -1177,11 +1174,7 @@ export function EmployeeRow({
                             left: '0',
                             right: '0',
                             height: `${COMMENT_HEIGHT}px`,
-                            backgroundColor: (() => {
-                              const bgColor = hexToRgba(bar.color, 0.5)
-                              console.log('🎨 Comment bg:', bar.color, '->', bgColor)
-                              return bgColor
-                            })(),
+                            backgroundColor: hexToRgba(bar.color, 0.5),
                             borderLeft: `2px solid ${bar.color}`,
                             borderRight: `2px solid ${bar.color}`,
                             borderBottom: `2px solid ${bar.color}`,
