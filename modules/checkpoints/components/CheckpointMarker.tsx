@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState, useRef, useLayoutEffect } from 'react'
-import { parseISO, differenceInDays, format } from 'date-fns'
+import { differenceInDays } from 'date-fns'
+import { parseMinskDate, formatMinsk } from '@/lib/timezone-utils'
 import type { Checkpoint } from '../actions/checkpoints'
 import type { TimelineRange } from '@/modules/resource-graph/types'
 import {
@@ -91,7 +92,7 @@ export function CheckpointMarkers({
     // Вычисляем позиции для горизонтальной линии (используем базовую позицию без смещения)
     const positions = checkpoints
       .map((cp) => {
-        const cpDate = parseISO(cp.checkpoint_date)
+        const cpDate = parseMinskDate(cp.checkpoint_date)
         const dayOffset = differenceInDays(cpDate, range.start)
         const x = dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
         return { checkpoint: cp, x }
@@ -214,7 +215,7 @@ function CheckpointMarkerSvg({
 
   // Базовая X позиция (центр дня)
   const x = useMemo(() => {
-    const cpDate = parseISO(checkpoint.checkpoint_date)
+    const cpDate = parseMinskDate(checkpoint.checkpoint_date)
     const dayOffset = differenceInDays(cpDate, range.start)
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
@@ -352,7 +353,7 @@ function CheckpointTooltipWrapper({
 
   // Вычисляем X позицию (центр дня)
   const x = useMemo(() => {
-    const cpDate = parseISO(checkpoint.checkpoint_date)
+    const cpDate = parseMinskDate(checkpoint.checkpoint_date)
     const dayOffset = differenceInDays(cpDate, range.start)
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
@@ -474,7 +475,7 @@ function CheckpointTooltipWrapper({
 
           {/* Date at bottom */}
           <div className="pt-1.5 border-t border-slate-700/50 text-[10px] text-slate-500 tabular-nums">
-            {format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
+            {formatMinsk(parseMinskDate(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
           </div>
         </div>
       </TooltipContent>
