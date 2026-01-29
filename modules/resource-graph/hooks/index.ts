@@ -593,7 +593,10 @@ export const useCreateLoading = createCacheMutation<
   },
 
   // Инвалидируем кеш после создания чтобы получить реальный ID
-  invalidateKeys: (input) => [queryKeys.resourceGraph.loadings(input.sectionId)],
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.loadings(input.sectionId),
+    ['resource-graph', 'sectionsBatch'], // Инвалидируем sectionsBatch чтобы timeline обновился
+  ],
 })
 
 /**
@@ -670,9 +673,12 @@ export const useUpdateLoading = createCacheMutation<
   // При изменении responsibleId или stageId нужен refetch
   invalidateKeys: (input) => {
     if (input.updates.responsibleId || input.updates.stageId) {
-      return [queryKeys.resourceGraph.loadings(input.sectionId)]
+      return [
+        queryKeys.resourceGraph.loadings(input.sectionId),
+        ['resource-graph', 'sectionsBatch'], // Инвалидируем sectionsBatch чтобы timeline обновился
+      ]
     }
-    return []
+    return [['resource-graph', 'sectionsBatch']] // Всегда инвалидируем sectionsBatch для timeline
   },
 })
 
@@ -716,6 +722,9 @@ export const useDeleteLoading = createCacheMutation<
       return deleteLoadingFromCache(oldData as Loading[] | undefined, input.loadingId)
     },
   },
+
+  // Инвалидируем sectionsBatch чтобы timeline обновился
+  invalidateKeys: () => [['resource-graph', 'sectionsBatch']],
 })
 
 // ============================================================================
