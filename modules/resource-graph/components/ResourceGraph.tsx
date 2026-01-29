@@ -8,7 +8,7 @@
 'use client'
 
 import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
-import { Database } from 'lucide-react'
+import { Database, ChevronLeft, ChevronRight } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
 import { useResourceGraphData, useCompanyCalendarEvents, usePrefetchSectionsBatch } from '../hooks'
@@ -141,9 +141,21 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
     })
   }, []) // Один раз при монтировании
 
-  // Data fetching with external query params
-  const { data, isLoading, error } = useResourceGraphData(
-    filtersApplied ? queryParams : undefined,
+  // Pagination state from store
+  const { currentPage, pageSize, setCurrentPage, resetPagination } = useFiltersStore()
+
+  // Reset pagination when filters change
+  const queryParamsKey = useMemo(() => JSON.stringify(queryParams), [queryParams])
+  useEffect(() => {
+    resetPagination()
+  }, [queryParamsKey, resetPagination])
+
+  // Data fetching with external query params + pagination
+  const { data, pagination, isLoading, error } = useResourceGraphData(
+    {
+      filters: filtersApplied ? queryParams : undefined,
+      pagination: { page: currentPage, pageSize },
+    },
     { enabled: shouldFetchData }
   )
 
@@ -197,6 +209,31 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Структура
                 </span>
+
+                {/* Compact Pagination */}
+                {!isLoading && pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground">
+                      {pagination.page}/{pagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="p-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Предыдущая страница"
+                    >
+                      <ChevronLeft size={14} className="text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === pagination.totalPages}
+                      className="p-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Следующая страница"
+                    >
+                      <ChevronRight size={14} className="text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
               </div>
               {/* Timeline header with dates */}
               <TimelineHeader dayCells={dayCells} />
@@ -310,8 +347,8 @@ export function ResourceGraph() {
     })
   }, []) // Один раз при монтировании
 
-  // Filters store
-  const { filterString, setFilterString} = useFiltersStore()
+  // Filters store + pagination
+  const { filterString, setFilterString, currentPage, pageSize, setCurrentPage } = useFiltersStore()
   const { settings } = useDisplaySettingsStore()
 
   // Load filter options for autocomplete
@@ -323,8 +360,11 @@ export function ResourceGraph() {
     return tokensToQueryParams(parsed.tokens, RESOURCE_GRAPH_FILTER_CONFIG)
   }, [filterString])
 
-  // Data fetching - всегда загружаем данные (фильтры применяются на сервере)
-  const { data, isLoading, error } = useResourceGraphData(queryParams)
+  // Data fetching - всегда загружаем данные (фильтры применяются на сервере) + pagination
+  const { data, pagination, isLoading, error } = useResourceGraphData({
+    filters: queryParams,
+    pagination: { page: currentPage, pageSize },
+  })
 
   // Background prefetch of sections batch data after initial load
   usePrefetchSectionsBatch(data, { enabled: !isLoading && !!data })
@@ -378,6 +418,31 @@ export function ResourceGraph() {
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Структура
                 </span>
+
+                {/* Compact Pagination */}
+                {!isLoading && pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground">
+                      {pagination.page}/{pagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="p-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Предыдущая страница"
+                    >
+                      <ChevronLeft size={14} className="text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === pagination.totalPages}
+                      className="p-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Следующая страница"
+                    >
+                      <ChevronRight size={14} className="text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
               </div>
               {/* Timeline header with dates */}
               <TimelineHeader dayCells={dayCells} />

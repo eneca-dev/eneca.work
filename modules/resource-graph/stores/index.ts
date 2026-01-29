@@ -117,6 +117,18 @@ interface FiltersState {
   getQueryParams: () => FilterQueryParams
   /** Проверить есть ли активные фильтры */
   hasFilters: () => boolean
+
+  // Pagination
+  /** Текущая страница (1-based) */
+  currentPage: number
+  /** Размер страницы */
+  pageSize: number
+  /** Установить текущую страницу */
+  setCurrentPage: (page: number) => void
+  /** Установить размер страницы */
+  setPageSize: (size: number) => void
+  /** Сбросить пагинацию на первую страницу */
+  resetPagination: () => void
 }
 
 export const useFiltersStore = create<FiltersState>()(
@@ -124,8 +136,10 @@ export const useFiltersStore = create<FiltersState>()(
     persist(
       (set, get) => ({
         filterString: '',
+        currentPage: 1,
+        pageSize: 10,
 
-        setFilterString: (value) => set({ filterString: value }),
+        setFilterString: (value) => set({ filterString: value, currentPage: 1 }),
 
         clearFilters: () => set({ filterString: '' }),
 
@@ -139,6 +153,12 @@ export const useFiltersStore = create<FiltersState>()(
           const { filterString } = get()
           return hasActiveFilters(filterString, RESOURCE_GRAPH_FILTER_CONFIG)
         },
+
+        setCurrentPage: (page) => set({ currentPage: page }),
+
+        setPageSize: (size) => set({ pageSize: size, currentPage: 1 }),
+
+        resetPagination: () => set({ currentPage: 1 }),
       }),
       {
         name: 'resource-graph-filters',

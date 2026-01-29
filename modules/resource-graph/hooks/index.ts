@@ -14,6 +14,7 @@ import {
   createCacheMutation,
   queryKeys,
 } from '@/modules/cache'
+import { useQuery } from '@tanstack/react-query'
 
 import {
   getResourceGraphData,
@@ -49,8 +50,6 @@ import type {
   SectionsBatchOptions,
 } from '../types'
 
-import { useQuery } from '@tanstack/react-query'
-
 import {
   updateItemProgressInHierarchy,
   updateDecompositionStageDates,
@@ -71,20 +70,68 @@ export const resourceGraphKeys = queryKeys.resourceGraph
 // ============================================================================
 
 /**
- * Хук для получения данных графика ресурсов
+ * Хук для получения данных графика ресурсов с пагинацией
  *
  * Данные обновляются через Realtime подписки, поэтому staleTime = Infinity.
  * При изменениях в таблицах (sections, loadings, decomposition_* и др.)
  * Realtime автоматически инвалидирует кеш.
  *
+ * @param params - Параметры запроса (filters и pagination)
+ * @param options - Опции React Query
+ * @returns Данные проектов + pagination info
+ *
  * @example
- * const { data, isLoading, error } = useResourceGraphData({ project_id: 'xxx' })
+ * const { data, pagination, isLoading } = useResourceGraphData({
+ *   filters: { project_id: 'xxx' },
+ *   pagination: { page: 1, pageSize: 10 }
+ * })
  */
-export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParams>({
-  queryKey: (filters) => queryKeys.resourceGraph.list(filters),
-  queryFn: getResourceGraphData,
-  staleTime: Infinity, // Обновляется через Realtime
-})
+type PaginatedResult = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
+export function useResourceGraphData(
+  params?: {
+    filters?: FilterQueryParams
+    pagination?: { page: number; pageSize: number }
+  },
+  options?: { enabled?: boolean }
+) {
+  const queryKey = queryKeys.resourceGraph.list({
+    ...params?.filters,
+    ...(params?.pagination && {
+      _page: params.pagination.page,
+      _pageSize: params.pagination.pageSize,
+    }),
+  })
+
+  const query = useQuery<PaginatedResult>({
+    queryKey,
+    queryFn: async () => {
+      const result = await getResourceGraphData(params?.filters, params?.pagination)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result
+    },
+    staleTime: Infinity, // Обновляется через Realtime
+    gcTime: undefined,
+    enabled: options?.enabled,
+  })
+
+  return {
+    ...query,
+    data: query.data?.data as Project[] | undefined,
+    pagination: query.data?.pagination,
+  }
+}
 
 /**
  * Хук для получения загрузки конкретного пользователя

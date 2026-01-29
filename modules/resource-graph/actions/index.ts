@@ -8,7 +8,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import type { ActionResult } from '@/modules/cache'
+import type { ActionResult, PaginatedActionResult } from '@/modules/cache'
 import type {
   Project,
   ResourceGraphRow,
@@ -40,11 +40,13 @@ import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-fil
  * Фильтрация по разделу: если раздел проходит фильтр, вся структура выше и ниже тоже проходит
  *
  * @param filters - Параметры фильтрации (из InlineFilter)
- * @returns Список проектов с полной структурой
+ * @param pagination - Параметры пагинации { page: number, pageSize: number }
+ * @returns Список проектов с полной структурой + pagination info
  */
 export async function getResourceGraphData(
-  filters?: FilterQueryParams
-): Promise<ActionResult<Project[]>> {
+  filters?: FilterQueryParams,
+  pagination?: { page: number; pageSize: number }
+): Promise<PaginatedActionResult<Project>> {
   try {
     const supabase = await createClient()
 
@@ -209,10 +211,62 @@ export async function getResourceGraphData(
       return { success: false, error: error.message }
     }
 
+    // Если пагинация включена - применяем на server side
+    if (pagination) {
+      const { page, pageSize } = pagination
+
+      // Извлекаем уникальные project_id из результата
+      const uniqueProjectIds = [...new Set((data || []).map((row) => row.project_id))]
+      const totalCount = uniqueProjectIds.length
+      const totalPages = Math.ceil(totalCount / pageSize)
+
+      // Проверяем валидность страницы
+      if (page < 1 || (totalCount > 0 && page > totalPages)) {
+        return {
+          success: false,
+          error: `Невалидная страница: ${page}. Доступно страниц: ${totalPages}`,
+        }
+      }
+
+      // Применяем пагинацию к списку project_id
+      const startIndex = (page - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedProjectIds = uniqueProjectIds.slice(startIndex, endIndex)
+
+      // Фильтруем данные для проектов на текущей странице
+      const filteredData = (data || []).filter((row) =>
+        paginatedProjectIds.includes(row.project_id)
+      )
+
+      // Transform flat rows to hierarchy
+      const projects = transformRowsToHierarchy(filteredData as ResourceGraphRow[])
+
+      return {
+        success: true,
+        data: projects,
+        pagination: {
+          page,
+          pageSize,
+          total: totalCount,
+          totalPages,
+        },
+      }
+    }
+
+    // Без пагинации - возвращаем все данные
     // Transform flat rows to hierarchy
     const projects = transformRowsToHierarchy(data as ResourceGraphRow[])
 
-    return { success: true, data: projects }
+    return {
+      success: true,
+      data: projects,
+      pagination: {
+        page: 1,
+        pageSize: projects.length,
+        total: projects.length,
+        totalPages: 1,
+      },
+    }
   } catch (error) {
     console.error('[getResourceGraphData] Error:', error)
     return {
