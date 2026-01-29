@@ -425,6 +425,11 @@ export const useUpdateLoadingDates = createCacheMutation<
       )
     },
   },
+
+  // Инвалидируем sectionsBatch чтобы предотвратить rollback на timeline
+  invalidateKeys: () => [
+    ['resource-graph', 'sectionsBatch'],
+  ],
 })
 
 /**
