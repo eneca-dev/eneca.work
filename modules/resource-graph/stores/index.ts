@@ -174,11 +174,6 @@ interface UIState {
   batchExpand: (nodes: Array<{ type: TreeNodeType; id: string }>) => void
   batchCollapse: (nodes: Array<{ type: TreeNodeType; id: string }>) => void
 
-  // Bulk operations
-  expandAll: (nodesByType: Partial<Record<TreeNodeType, string[]>>) => void
-  expandToSections: (nodesByType: { project: string[]; object: string[] }) => void
-  collapseAll: (type?: TreeNodeType) => void
-
   // Selection
   setSelectedItem: (id: string | null, type?: TreeNodeType | null) => void
 }
@@ -307,66 +302,6 @@ export const useUIStateStore = create<UIState>()(
             }
 
             return hasChanges ? { expandedNodes: newExpandedNodes } : state
-          }),
-
-        expandAll: (nodesByType) =>
-          set((state) => {
-            const newExpandedNodes = { ...state.expandedNodes }
-
-            for (const [type, ids] of Object.entries(nodesByType) as [TreeNodeType, string[]][]) {
-              if (ids && ids.length > 0) {
-                const newSet = new Set(state.expandedNodes[type])
-                for (const id of ids) {
-                  newSet.add(id)
-                }
-                newExpandedNodes[type] = newSet
-              }
-            }
-
-            return { expandedNodes: newExpandedNodes }
-          }),
-
-        // Развернуть до уровня разделов (проекты + объекты, но НЕ разделы)
-        expandToSections: (nodesByType) =>
-          set((state) => {
-            // Клонируем только project и object Sets
-            const newProjectSet = new Set(state.expandedNodes.project)
-            const newObjectSet = new Set(state.expandedNodes.object)
-
-            // Добавляем все проекты
-            for (const id of nodesByType.project) {
-              newProjectSet.add(id)
-            }
-
-            // Добавляем все объекты
-            for (const id of nodesByType.object) {
-              newObjectSet.add(id)
-            }
-
-            // Сворачиваем все разделы и этапы декомпозиции
-            return {
-              expandedNodes: {
-                ...state.expandedNodes,
-                project: newProjectSet,
-                object: newObjectSet,
-                section: new Set(),
-                decomposition_stage: new Set(),
-              },
-            }
-          }),
-
-        collapseAll: (type) =>
-          set((state) => {
-            if (type) {
-              if (state.expandedNodes[type].size === 0) return state
-              return {
-                expandedNodes: {
-                  ...state.expandedNodes,
-                  [type]: new Set(),
-                },
-              }
-            }
-            return { expandedNodes: createEmptyExpandedNodes() }
           }),
 
         setSelectedItem: (id, type = null) =>
