@@ -5,7 +5,7 @@
     "name": "resource-graph",
     "displayName": "Resource Graph",
     "description": "Визуализация иерархии проектов с timeline, загрузками сотрудников, готовностью и бюджетами",
-    "version": "2.0.6",
+    "version": "2.0.13",
     "status": "stable",
     "route": "/dashboard/resource-graph",
     "tags": ["feature", "ui", "data-layer"]
@@ -1220,6 +1220,193 @@
       ]
     },
     {
+      "id": "RG-031",
+      "title": "[Refactor] Удалить функциональность expand/collapse controls",
+      "description": "Полностью удалить кнопки \"Развернуть все\", \"Развернуть до разделов\", \"Свернуть все\" и всю связанную с ними логику из модуля resource-graph.\n\n## Причины удаления\n1. **Проблемы с производительностью:**\n   - При нажатии \"Развернуть все\" страница зависает/падает (RG-031)\n   - Лаги при раскрытии до разделов (RG-032)\n   - Невозможно эффективно реализовать без виртуализации\n\n2. **Низкая ценность для пользователя:**\n   - Функция редко используется\n   - При большом количестве данных бесполезна (всё равно нужно скроллить)\n   - Лучше пользователь раскрывает только то что ему нужно\n\n3. **Альтернативы:**\n   - Браузерный поиск (Ctrl+F) для быстрого нахождения нужного элемента\n   - Фильтры для сужения списка проектов/разделов\n   - Ручное раскрытие конкретных узлов по клику\n\n## Что удалить\n\n### 1. Компонент ExpandCollapseControls\n```bash\nmodules/resource-graph/components/timeline/ExpandCollapseControls.tsx\n```\n- Удалить файл полностью\n- Убрать импорты из ResourceGraphInternal.tsx\n\n### 2. State в stores/ui-state.ts\nУдалить методы (если они есть):\n```typescript\n// Удалить:\nexpandAll: () => void\ncollapseAll: () => void\nexpandToLevel: (level: 'objects' | 'sections') => void\n```\n\nОставить только:\n```typescript\n// Оставить для ручного раскрытия:\ntoggleProject: (id: string) => void\ntoggleObject: (id: string) => void\ntoggleSection: (id: string) => void\nexpandedProjects: Set<string>\nexpandedObjects: Set<string>\nexpandedSections: Set<string>\n```\n\n### 3. Связанная логика\n- Удалить обработчики событий для expand/collapse all\n- Удалить utility функции для batch expand/collapse\n- Убрать тесты для этой функциональности (если есть)\n- Очистить типы и интерфейсы\n\n### 4. UI элементы\n- Удалить кнопки из toolbar/header\n- Убрать горячие клавиши (если назначены)\n- Убрать tooltips и hint texts\n\n## Что ОСТАВИТЬ\n\n✅ Индивидуальное раскрытие/сворачивание по клику на chevron\n✅ expandedProjects/Objects/Sections state для хранения раскрытых элементов\n✅ toggle методы для ручного управления\n✅ Персистентность состояния (если сохраняется в localStorage/URL)\n\n## Шаги реализации\n\n1. Удалить импорт ExpandCollapseControls из ResourceGraphInternal.tsx\n2. Удалить файл ExpandCollapseControls.tsx\n3. Очистить stores/ui-state.ts от методов expandAll/collapseAll\n4. Проверить что ничего не сломалось (npm run build)\n5. Убрать связанные типы/интерфейсы\n6. Обновить документацию модуля\n\n## Альтернативное решение (если передумаем)\n\nЕсли всё же нужна функция \"Развернуть всё\":\n1. Реализовать виртуализацию (react-window)\n2. Добавить ограничение max 100 элементов одновременно\n3. Показывать warning при большом количестве элементов\n4. Использовать Web Workers для тяжёлых вычислений\n\nНо проще просто удалить эту функцию.",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-29",
+      "assignee": null,
+      "createdAt": "2026-01-29",
+      "updatedAt": "2026-01-29",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/ExpandCollapseControls.tsx",
+        "modules/resource-graph/components/ResourceGraphInternal.tsx",
+        "modules/resource-graph/stores/ui-state.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Файл ExpandCollapseControls.tsx удалён",
+        "Кнопки \"Развернуть все\", \"Развернуть до разделов\", \"Свернуть все\" отсутствуют в UI",
+        "Методы expandAll/collapseAll удалены из store",
+        "Индивидуальное раскрытие по клику на chevron работает корректно",
+        "npm run build проходит без ошибок",
+        "README модуля обновлён (удалена документация по expand/collapse)"
+      ]
+    },
+    {
+      "id": "RG-033",
+      "title": "[Bug] Rollback дат при сдвиге граней загрузки на timeline",
+      "description": "При drag-resize граней загрузки сотрудника на timeline происходит rollback дат — они визуально меняются, но через мгновение возвращаются к старым значениям.\n\n## Проблема\n- Пользователь сдвигает левую или правую грань загрузки на timeline (drag-resize)\n- Визуально даты меняются (optimistic update)\n- Через ~200-500ms даты откатываются обратно к старым значениям\n- В БД изменения сохраняются, но UI не синхронизируется\n\n## Причина\nOptimistic update в `useUpdateLoadingDates` обновляет только кэш `resourceGraph.loadings(sectionId)`, но НЕ обновляет `sectionsBatch`, который используется для отображения на timeline. После мутации приходят старые данные и происходит rollback.\n\n## Решение\nДобавить `invalidateKeys` для `sectionsBatch` в хук `useUpdateLoadingDates` чтобы после мутации перезапрашивались свежие данные из БД.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-28",
+      "assignee": null,
+      "createdAt": "2026-01-28",
+      "updatedAt": "2026-01-28",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/hooks/index.ts"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "При drag-resize граней загрузки даты НЕ откатываются к старым значениям",
+        "Optimistic update: загрузка сразу отображается по новым датам",
+        "После refetch данные из БД соответствуют отображаемым на UI",
+        "Инвалидация кэша sectionsBatch происходит после мутации",
+        "UX: пользователь не видит 'rollback' эффекта"
+      ]
+    },
+    {
+      "id": "RG-034",
+      "title": "[Bug] Дата дедлайна чекпоинта отображается на день меньше",
+      "description": "На timeline графика дата дедлайна чекпоинта отображается на день раньше чем должна быть.\n\n## Проблема\n- В БД чекпоинт имеет deadline_date = '2026-01-15'\n- На timeline чекпоинт отображается 14 января (на день раньше)\n- При наведении tooltip также показывает 14 января\n- В модалке чекпоинта дата отображается корректно: 15 января\n\n## Воспроизведение\n1. Создать чекпоинт с deadline_date = '2026-01-20'\n2. Открыть график ресурсов\n3. Найти чекпоинт на timeline\n4. Наблюдать: чекпоинт отображается на позиции 19 января\n5. Открыть модалку чекпоинта → дата корректная: 20 января\n\n## Причина\n\n### Timezone off-by-one error\n\nВ БД хранится `deadline_date: date` (без времени):\n```sql\ndeadline_date | date | '2026-01-15'\n```\n\nПри парсинге в JavaScript:\n```typescript\nconst date = new Date('2026-01-15') // ISO string без timezone\n// Результат: 2026-01-14T21:00:00.000Z (UTC)\n// В Минске (UTC+3): 2026-01-15 00:00:00 ✅\n// НО при рендере на timeline используется UTC → показывает 14 января ❌\n```\n\n### Проблемное место в коде\n\nВозможно в `CheckpointMarker.tsx` или `utils/timeline-calculations.ts`:\n```typescript\n// WRONG:\nconst xPosition = (new Date(deadline_date).getTime() - startTime) / msPerPixel\n\n// CORRECT:\nconst xPosition = (parseMinskDate(deadline_date).getTime() - startTime) / msPerPixel\n```\n\nИли в `formatDate` utility:\n```typescript\n// WRONG:\nformat(new Date(dateString), 'dd.MM.yyyy')\n\n// CORRECT:\nformatMinskDate(parseMinskDate(dateString), 'dd.MM.yyyy')\n```\n\n## Решение\n\n### 1. Использовать parseMinskDate для deadline_date\n\n```typescript\n// lib/timezone-utils.ts\nimport { parseISO, addHours } from 'date-fns'\n\nexport function parseMinskDate(dateString: string): Date {\n  // Парсим как UTC и добавляем 3 часа для Минска\n  const utcDate = parseISO(dateString + 'T00:00:00Z')\n  return addHours(utcDate, 3)\n}\n```\n\nИспользовать во всех местах где отображается deadline_date:\n```typescript\n// modules/checkpoints/components/CheckpointMarker.tsx\nimport { parseMinskDate } from '@/lib/timezone-utils'\n\nconst deadlineTimestamp = parseMinskDate(checkpoint.deadline_date).getTime()\nconst xPosition = (deadlineTimestamp - timelineStart) / msPerPixel\n```\n\n### 2. Унифицировать форматирование дат\n\n```typescript\n// Везде где показывается дата чекпоинта:\nimport { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'\n\nconst formattedDate = formatMinskDate(\n  parseMinskDate(checkpoint.deadline_date),\n  'dd.MM.yyyy'\n)\n```\n\n### 3. Проверить все места использования deadline_date\n\nФайлы для проверки:\n- `modules/checkpoints/components/CheckpointMarker.tsx` - рендер на timeline\n- `modules/checkpoints/components/CheckpointTooltip.tsx` - tooltip\n- `modules/modals/components/checkpoint/CheckpointModal.tsx` - модалка (уже корректно?)\n- `modules/resource-graph/utils/timeline-calculations.ts` - вычисления позиции\n\n## Дополнительная проверка\n\nДобавить unit test:\n```typescript\ntest('checkpoint deadline renders on correct date', () => {\n  const checkpoint = { deadline_date: '2026-01-15' }\n  const position = calculateCheckpointPosition(checkpoint, timelineConfig)\n  \n  expect(position.date).toBe('15.01.2026') // Не 14.01.2026!\n})\n```\n\n## Похожие проблемы\n\nПроверить нет ли такой же проблемы с:\n- `section.start_date` / `section.finish_date`\n- `decomposition_stage.start_date` / `finish_date`\n- `loading.start_date` / `finish_date`\n- Все типы `date` (без времени) из БД",
+      "category": "bug",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-29",
+      "assignee": null,
+      "createdAt": "2026-01-28",
+      "updatedAt": "2026-01-29",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/checkpoints/components/CheckpointMarker.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Чекпоинт с deadline_date = '2026-01-15' отображается на timeline 15 января (не 14-го)",
+        "Tooltip чекпоинта показывает корректную дату: 15 января",
+        "Дата в модалке чекпоинта совпадает с датой на timeline",
+        "Все date поля из БД корректно парсятся через parseMinskDate",
+        "Нет off-by-one ошибок для start_date/finish_date разделов и этапов",
+        "Unit тесты покрывают timezone корректность"
+      ]
+    },
+    {
+      "id": "RG-035",
+      "title": "[Bug] Отсутствуют оптимистичные обновления при создании загрузки",
+      "description": "При создании новой загрузки сотрудника на графике отсутствуют оптимистичные обновления (optimistic updates) для показателей план/факт, освоения бюджета и других метрик раздела.\n\n## Проблема\n- Пользователь создаёт новую загрузку для сотрудника в этапе декомпозиции\n- Загрузка появляется на timeline мгновенно (optimistic update есть для самой loading)\n- НО показатели раздела НЕ обновляются:\n  - Процент освоения бюджета около раздела остаётся прежним\n  - План/Факт показатели не пересчитываются\n  - Прогресс бар раздела не обновляется\n- Только после refetch данных (или обновления страницы) показатели обновляются\n\n## Воспроизведение\n1. Открыть график ресурсов\n2. Раскрыть раздел с этапами\n3. Отметить текущие показатели раздела (например, \"Освоено: 30%\")\n4. Создать новую загрузку в одном из этапов\n5. Наблюдать:\n   - ✅ Загрузка появляется на timeline мгновенно\n   - ❌ Показатели раздела остаются прежними\n   - ❌ Процент освоения всё ещё 30%\n6. Обновить страницу → показатели корректны\n\n## Где отсутствуют optimistic updates\n\n### 1. SectionRow - показатели освоения бюджета\n```typescript\n// modules/resource-graph/components/timeline/rows/SectionRow.tsx\n// Строка ~45-60: показатели бюджета\n<div className=\"text-xs\">\n  Освоено: {section.budget_utilization_percent}% {/* ❌ Не обновляется */}\n</div>\n```\n\n### 2. SectionRow - план/факт часы\n```typescript\n// Строка ~65-75\n<div>\n  План: {section.planned_hours}ч {/* ❌ Не обновляется */}\n  Факт: {section.actual_hours}ч {/* ❌ Не обновляется */}\n</div>\n```\n\n### 3. ProgressBar компонент\n```typescript\n// modules/resource-graph/components/timeline/shared/ProgressBar.tsx\n// Прогресс бар показывает process_percent из БД\n<div style={{ width: `${section.progress_percent}%` }} /> {/* ❌ Не обновляется */}\n```\n\n### 4. Другие метрики\n- Общая загрузка сотрудника (workload indicators)\n- Метрики объекта (агрегация разделов)\n- Метрики проекта (агрегация объектов)\n\n## Причина\n\nВ `useCreateLoading` mutation optimistic update обновляет только массив `loadings`, но НЕ пересчитывает:\n```typescript\n// modules/resource-graph/hooks/index.ts\nexport const useCreateLoading = createCacheMutation({\n  mutationFn: createLoading,\n  onMutate: async (variables) => {\n    // ✅ Обновляем список loadings оптимистично\n    queryClient.setQueryData(['loadings'], (old) => [...old, newLoading])\n    \n    // ❌ НЕ обновляем section metrics\n    // ❌ НЕ обновляем object aggregations\n    // ❌ НЕ обновляем project totals\n  }\n})\n```\n\n## Решение\n\n### Вариант 1: Полный пересчёт в onMutate\n\n```typescript\nexport const useCreateLoading = createCacheMutation({\n  mutationFn: createLoading,\n  onMutate: async (variables) => {\n    const previousData = queryClient.getQueryData(queryKeys.resourceGraph.all())\n    \n    // 1. Добавляем loading оптимистично\n    queryClient.setQueryData(queryKeys.resourceGraph.all(), (old) => {\n      const newLoading = {\n        loading_id: `temp-${Date.now()}`,\n        ...variables,\n        created_at: new Date().toISOString()\n      }\n      \n      // 2. Пересчитываем метрики раздела\n      const updatedData = recalculateSectionMetrics(old, newLoading)\n      \n      // 3. Пересчитываем метрики объекта\n      const finalData = recalculateObjectMetrics(updatedData)\n      \n      return finalData\n    })\n    \n    return { previousData }\n  },\n  onError: (err, variables, context) => {\n    // Откатываем изменения при ошибке\n    queryClient.setQueryData(queryKeys.resourceGraph.all(), context.previousData)\n  }\n})\n```\n\n### Вариант 2: Invalidation вместо optimistic update\n\n```typescript\nexport const useCreateLoading = createCacheMutation({\n  mutationFn: createLoading,\n  onSuccess: async () => {\n    // Сразу после успешного создания инвалидируем кэш\n    await queryClient.invalidateQueries({\n      queryKey: queryKeys.resourceGraph.all()\n    })\n    // React Query автоматически запросит свежие данные с пересчитанными метриками\n  }\n})\n```\n\n### Вариант 3: Гибридный подход (Recommended)\n\n```typescript\nexport const useCreateLoading = createCacheMutation({\n  mutationFn: createLoading,\n  onMutate: async (variables) => {\n    // Optimistic update только для видимой loading bar\n    const newLoading = createOptimisticLoading(variables)\n    addLoadingToCache(newLoading)\n  },\n  onSuccess: async () => {\n    // После успеха сразу refetch для корректных метрик\n    await queryClient.invalidateQueries({\n      queryKey: queryKeys.resourceGraph.all(),\n      refetchType: 'active' // Только активные queries\n    })\n  }\n})\n```\n\n## Utility функции для пересчёта метрик\n\n```typescript\n// modules/resource-graph/utils/metrics-calculator.ts\n\nexport function recalculateSectionMetrics(\n  section: Section,\n  newLoading: Loading\n): Section {\n  // Пересчитываем бюджет\n  const totalBudget = section.budget + newLoading.cost\n  const utilization = (totalBudget / section.planned_budget) * 100\n  \n  // Пересчитываем часы\n  const totalHours = section.actual_hours + newLoading.hours\n  \n  return {\n    ...section,\n    budget_utilization_percent: utilization,\n    actual_hours: totalHours\n  }\n}\n\nexport function recalculateObjectMetrics(\n  object: Object,\n  updatedSection: Section\n): Object {\n  // Агрегируем метрики всех разделов вверх к объекту\n  const sections = object.sections.map(s => \n    s.section_id === updatedSection.section_id ? updatedSection : s\n  )\n  \n  const totalBudget = sections.reduce((sum, s) => sum + s.budget, 0)\n  const totalHours = sections.reduce((sum, s) => sum + s.actual_hours, 0)\n  \n  return {\n    ...object,\n    sections,\n    total_budget: totalBudget,\n    total_hours: totalHours\n  }\n}\n```\n\n## Аналогичные проблемы\n\nПроверить optimistic updates также для:\n- `useUpdateLoading` - обновление существующей загрузки\n- `useDeleteLoading` - удаление загрузки\n- `useCreateCheckpoint` - создание чекпоинта\n- `useUpdateSection` - обновление раздела\n\n## Приоритет\n\nHigh priority для основных операций:\n1. createLoading / updateLoading / deleteLoading\n2. updateSection (изменение дат, бюджета)\n\nMedium priority для остальных:\n3. createCheckpoint\n4. Агрегация метрик вверх по иерархии",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-28",
+      "updatedAt": "2026-01-28",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/hooks/index.ts",
+        "modules/resource-graph/utils/metrics-calculator.ts",
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/shared/ProgressBar.tsx"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "При создании загрузки показатели освоения бюджета раздела обновляются мгновенно",
+        "План/Факт часы раздела обновляются оптимистично",
+        "Прогресс бар раздела обновляется без задержки",
+        "При ошибке создания загрузки все метрики откатываются к исходным значениям",
+        "Optimistic updates работают также для updateLoading и deleteLoading",
+        "Метрики объекта и проекта пересчитываются корректно (агрегация вверх)",
+        "UX: пользователь видит мгновенную реакцию интерфейса на свои действия"
+      ]
+    },
+    {
+      "id": "RG-036",
+      "title": "[Feature] Нет пагинации на проектах в графике",
+      "description": "В списке проектов на графике ресурсов отсутствует пагинация.\n\n## Проблема\n- При большом количестве проектов (50+) все проекты загружаются одновременно\n- Страница становится медленной\n- Скроллинг затруднён\n- Долгая загрузка initial render\n\n## Решение\nДобавить пагинацию для списка проектов:\n- Server-side pagination в запросе к БД\n- Показывать по 20 проектов на страницу\n- Кнопки \"Загрузить ещё\" или классическая пагинация\n- Сохранять состояние пагинации при переходах\n\n## Затронутые компоненты\n- ProjectList компонент\n- getProjects query\n- Resource Graph store (для сохранения состояния)",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-29",
+      "assignee": null,
+      "createdAt": "2026-01-29",
+      "updatedAt": "2026-01-29",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/ProjectList.tsx",
+        "modules/resource-graph/hooks/index.ts",
+        "modules/resource-graph/actions/index.ts"
+      ],
+      "estimatedHours": 3,
+      "acceptanceCriteria": [
+        "Проекты загружаются порциями по 20 штук",
+        "Есть UI для перехода между страницами или кнопка \"Загрузить ещё\"",
+        "При переходе между страницами состояние сохраняется",
+        "Производительность улучшена при большом количестве проектов"
+      ]
+    },
+    {
+      "id": "RG-037",
+      "title": "[Bug] В разделе даты пофиксить",
+      "description": "Проблемы с отображением и обработкой дат в разделах на графике.\n\n## РЕШЕНО: Hard update при изменении дат в модалке раздела\n\n**Проблема:**\n- При изменении даты в модалке раздела (SectionPanel) происходил hard update (немедленное сохранение в БД)\n- Обновление срабатывало ДО того, как пользователь завершил выбор дат\n- При переходе между месяцами в календаре также триггерилась мутация\n\n**Решение:**\n- Разделена логика изменения и сохранения дат:\n  - `handleDatesChange` теперь только обновляет локальное состояние (`pendingRange`)\n  - `handleDatesSave` выполняет фактическое сохранение в БД\n  - `handleDatesCancel` сбрасывает изменения\n- Добавлены явные кнопки \"Сохранить\" и \"Отмена\" под календарем\n- Сохранение происходит только при нажатии кнопки \"Сохранить\"\n\n## Затронутые компоненты\n- components/modals/SectionPanel.tsx (date handling logic)",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-29",
+      "updatedAt": "2026-01-29",
+      "completedAt": "2026-01-29",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "components/modals/SectionPanel.tsx"
+      ],
+      "estimatedHours": 2,
+      "actualHours": 1,
+      "acceptanceCriteria": [
+        "✅ Изменение дат в календаре НЕ триггерит update в БД",
+        "✅ При переходе между месяцами календаря НЕ происходит сохранения",
+        "✅ Сохранение происходит ТОЛЬКО при нажатии кнопки \"Сохранить\"",
+        "✅ Кнопка \"Отмена\" корректно сбрасывает локальное состояние"
+      ]
+    },
+    {
+      "id": "RG-038",
+      "title": "[Refactor] Переделать полностью логику с бюджетами на графике",
+      "description": "Текущая логика работы с бюджетами на графике требует полного рефакторинга.\n\n## Проблемы текущей реализации\n- Бюджетные расчёты разбросаны по разным компонентам\n- Сложно отследить откуда берутся значения\n- Проблемы с производительностью при пересчёте\n- Нет единого источника правды для бюджетных данных\n- Путаница между плановым и фактическим бюджетом\n\n## Цели рефакторинга\n1. Централизовать всю логику бюджетов в отдельном модуле\n2. Создать чёткие типы для бюджетных данных\n3. Упростить расчёты освоения бюджета\n4. Улучшить производительность\n5. Сделать код более поддерживаемым\n\n## Предлагаемая структура\n```\nmodules/resource-graph/\n  utils/\n    budget-calculator.ts      # Все расчёты бюджета\n    budget-aggregator.ts      # Агрегация вверх по иерархии\n  types/\n    budget.ts                 # Типы для бюджета\n  hooks/\n    useBudgetMetrics.ts       # Hook для получения метрик\n```\n\n## Что нужно переделать\n- [ ] BudgetSpendingArea компонент\n- [ ] Расчёты budget_utilization_percent\n- [ ] Агрегация бюджета от loadings → stage → section → object → project\n- [ ] Optimistic updates для бюджетных операций\n- [ ] Кэширование бюджетных метрик",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-29",
+      "updatedAt": "2026-01-29",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/utils/budget-calculator.ts",
+        "modules/resource-graph/components/timeline/BudgetSpendingArea.tsx",
+        "modules/resource-graph/hooks/index.ts",
+        "modules/resource-graph/types/budget.ts"
+      ],
+      "estimatedHours": 8,
+      "acceptanceCriteria": [
+        "Вся логика бюджетов вынесена в отдельные утилиты",
+        "Чёткие типы для всех бюджетных данных",
+        "Производительность расчётов улучшена",
+        "Код легко читается и поддерживается",
+        "Нет дублирования логики",
+        "Все тесты проходят"
+      ]
+    },
+    {
       "id": "RG-AUDIT",
       "title": "Full Module Audit: Resource Graph",
       "description": "Полный аудит модуля resource-graph для подтверждения качества перед production.\n\nАудит включает проверку: базы данных, безопасности, бизнес-логики, производительности, качества кода и кэширования.",
@@ -1303,6 +1490,77 @@
   ],
 
   "changelog": [
+    {
+      "version": "2.0.13",
+      "date": "2026-01-29",
+      "changes": [
+        "[RG-037] Исправлен hard update при изменении дат раздела в модалке SectionPanel",
+        "Разделена логика изменения и сохранения дат: handleDatesChange (локальное состояние) vs handleDatesSave (DB update)",
+        "Добавлены кнопки 'Сохранить' и 'Отмена' для явного подтверждения изменений дат",
+        "Теперь переход между месяцами в календаре НЕ триггерит обновление в БД",
+        "Сохранение происходит ТОЛЬКО при нажатии кнопки 'Сохранить'"
+      ]
+    },
+    {
+      "version": "2.0.12",
+      "date": "2026-01-29",
+      "changes": [
+        "[RG-036] Добавлена пагинация для проектов в графике (по 10 проектов на страницу)",
+        "Модифицирован action getResourceGraphData для поддержки server-side pagination",
+        "Обновлен хук useResourceGraphData - теперь возвращает pagination info (page, pageSize, total, totalPages)",
+        "Добавлено состояние пагинации в FiltersStore (currentPage, pageSize, setCurrentPage, setPageSize, resetPagination)",
+        "Добавлены UI контролы пагинации в ResourceGraph и ResourceGraphInternal компоненты (кнопки Назад/Вперед + info)",
+        "Состояние текущей страницы сохраняется в localStorage через persist middleware"
+      ]
+    },
+    {
+      "version": "2.0.11",
+      "date": "2026-01-29",
+      "changes": [
+        "[RG-031] Удалена функциональность expand/collapse controls (\"Развернуть все\", \"До разделов\", \"Свернуть все\")",
+        "Удалены обработчики handleExpandAll, handleExpandToSections, handleCollapseAll из ResourceGraph.tsx",
+        "Удалены методы expandAll, expandToSections, collapseAll из stores/index.ts",
+        "Удалены UI кнопки и импорты иконок ChevronsUpDown, ChevronsDownUp, ChevronDown",
+        "Оставлено индивидуальное раскрытие узлов по клику на chevron"
+      ]
+    },
+    {
+      "version": "2.0.10",
+      "date": "2026-01-29",
+      "changes": [
+        "[Tasks] Удалены задачи RG-031 и RG-032 (баги с expand/collapse)",
+        "[Tasks] Создана новая задача RG-031: удалить функциональность expand/collapse controls полностью",
+        "Решение: вместо исправления багов с производительностью — удалить редко используемую функцию"
+      ]
+    },
+    {
+      "version": "2.0.9",
+      "date": "2026-01-29",
+      "changes": [
+        "[Bug Fix] Исправлено отсутствие обновления timeline при создании/обновлении/удалении загрузок",
+        "Добавлена инвалидация кэша sectionsBatch в useCreateLoading для мгновенного отображения новой загрузки",
+        "Добавлена инвалидация кэша sectionsBatch в useUpdateLoading для синхронизации timeline",
+        "Добавлена инвалидация кэша sectionsBatch в useDeleteLoading для мгновенного удаления с timeline",
+        "[Tasks] Добавлены задачи RG-036 (пагинация проектов), RG-037 (фикс дат раздела), RG-038 (рефакторинг бюджетов)"
+      ]
+    },
+    {
+      "version": "2.0.8",
+      "date": "2026-01-29",
+      "changes": [
+        "[RG-034] Исправлен timezone off-by-one баг отображения дат чекпоинтов на timeline",
+        "Заменен parseISO на parseMinskDate для корректного парсинга checkpoint_date в часовом поясе Минска",
+        "Исправлено форматирование дат чекпоинтов: format + parseISO → formatMinsk + parseMinskDate"
+      ]
+    },
+    {
+      "version": "2.0.7",
+      "date": "2026-01-28",
+      "changes": [
+        "[RG-033] Исправлен rollback дат при drag-resize загрузок на timeline",
+        "Добавлена инвалидация кэша sectionsBatch в useUpdateLoadingDates для предотвращения отката дат"
+      ]
+    },
     {
       "version": "2.0.6",
       "date": "2026-01-06",

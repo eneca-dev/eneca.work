@@ -49,6 +49,22 @@
         "modules/resource-graph/components/timeline/rows/DecompositionItemRow.tsx"
       ],
       "solution": "Бюджет задачи (из таблицы budgets с entity_type='decomposition_item') уже вычислялся в v_resource_graph. Добавлено UI отображение: 1) В TaskSidebar - полная секция с прогресс-баром, суммами и процентом, цветовой индикацией; 2) В DecompositionItemRow sidebar - компактный бейдж с иконкой Wallet и процентом расхода. Цвета: зелёный (<80%), жёлтый (80-100%), красный (>100%)."
+    },
+    {
+      "id": "RG-037",
+      "title": "[Bug] В разделе даты пофиксить",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-29",
+      "completedAt": "2026-01-29",
+      "changelogEntry": "[RG-037] Исправлен hard update при изменении дат в модалках раздела и этапа",
+      "relatedFiles": [
+        "components/modals/SectionPanel.tsx",
+        "modules/modals/components/section/SectionModal.tsx",
+        "modules/modals/components/stage/StageModal.tsx"
+      ],
+      "solution": "Исправлен баг hard update при изменении дат в трёх модалках. Разделена логика изменения и сохранения: 1) SectionPanel.tsx - handleDatesChange только обновляет pendingRange, handleDatesSave выполняет DB update; 2) SectionModal.tsx и StageModal.tsx - handleStartDateChange/handleEndDateChange обновляют pendingDates локально, handleDatesSave сохраняет в БД через mutation. Добавлены кнопки 'Сохранить' (галочка) и 'Отмена' (крестик) в одну линию с DateRangeInput. Сохранение происходит ТОЛЬКО при явном нажатии кнопки, а не при каждом клике в календаре или переходе между месяцами."
     }
   ]
 }

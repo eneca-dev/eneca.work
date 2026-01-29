@@ -517,16 +517,26 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
   const [pendingRange, setPendingRange] = useState<DateRange | null>(null)
 
-  const handleDatesChange = async (range: DateRange) => {
+  // Только обновляем локальное состояние, БЕЗ сохранения в БД
+  const handleDatesChange = (range: DateRange) => {
     setPendingRange(range)
+  }
 
-    // Ничего не выбрано — ничего не делаем
-    if (!range.from && !range.to) return
+  // Сохранение дат в БД (вызывается только при нажатии кнопки "Сохранить")
+  const handleDatesSave = async () => {
+    if (!pendingRange) return
+
+    // Если ничего не выбрано — ничего не делаем
+    if (!pendingRange.from && !pendingRange.to) {
+      setIsEditingDates(false)
+      setPendingRange(null)
+      return
+    }
 
     setSavingField('section_dates')
     try {
-      const startStr = range.from ? formatDateISO(range.from) : null
-      const endStr = range.to ? formatDateISO(range.to) : null
+      const startStr = pendingRange.from ? formatDateISO(pendingRange.from) : null
+      const endStr = pendingRange.to ? formatDateISO(pendingRange.to) : null
 
       const { error } = await supabase
         .from('sections')
@@ -543,6 +553,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
       setNotification('Сроки раздела обновлены')
       setIsEditingDates(false)
+      setPendingRange(null)
 
       // Плавное обновление дерева проектов
       if (typeof window !== 'undefined') {
@@ -554,6 +565,12 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     } finally {
       setSavingField(null)
     }
+  }
+
+  // Отмена редактирования дат
+  const handleDatesCancel = () => {
+    setPendingRange(null)
+    setIsEditingDates(false)
   }
 
   const renderEditableField = (
@@ -1108,8 +1125,26 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                             placeholder="Выберите период"
                             calendarWidth="500px"
                           />
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                             Выберите начальную и конечную даты. Для одного дня щёлкните по дате дважды.
+                          </div>
+                          {/* Кнопки управления */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleDatesSave}
+                              disabled={savingField === 'section_dates'}
+                              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {savingField === 'section_dates' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              Сохранить
+                            </button>
+                            <button
+                              onClick={handleDatesCancel}
+                              disabled={savingField === 'section_dates'}
+                              className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                            >
+                              Отмена
+                            </button>
                           </div>
                         </div>
                       ) : (

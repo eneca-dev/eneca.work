@@ -9,10 +9,12 @@ import {
   X,
   Edit3,
   Loader2,
+  Check,
   ListTodo,
   Clock,
   CheckCircle2,
   Layers,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUsers, type CachedUser } from '@/modules/cache'
@@ -156,10 +158,19 @@ export function StageModal({
   const [saveError, setSaveError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
+  // Локальное состояние для дат (перед сохранением)
+  const [isEditingDates, setIsEditingDates] = useState(false)
+  const [pendingDates, setPendingDates] = useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
+  })
+
   useEffect(() => {
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
+      setIsEditingDates(false)
+      setPendingDates({ start: null, end: null })
     }
   }, [isOpen])
 
@@ -260,14 +271,60 @@ export function StageModal({
     }
   }, [form, saveField])
 
-  const handleDateChange = useCallback(
-    async (field: 'startDate' | 'endDate', value: string) => {
+  // Локальное изменение дат (БЕЗ сохранения в БД)
+  const handleStartDateChange = useCallback(
+    (value: string) => {
       const dateValue = value || null
-      setValue(field, dateValue)
-      await saveField(field, dateValue)
+      setPendingDates((prev) => ({ ...prev, start: dateValue }))
     },
-    [setValue, saveField]
+    []
   )
+
+  const handleEndDateChange = useCallback(
+    (value: string) => {
+      const dateValue = value || null
+      setPendingDates((prev) => ({ ...prev, end: dateValue }))
+    },
+    []
+  )
+
+  // Сохранение дат в БД (вызывается кнопкой "Сохранить")
+  const handleDatesSave = useCallback(async () => {
+    setSavingField('dates')
+    setSaveError(null)
+
+    try {
+      await updateMutation.mutateAsync({
+        stageId,
+        sectionId,
+        startDate: pendingDates.start,
+        endDate: pendingDates.end,
+      })
+      setValue('startDate', pendingDates.start)
+      setValue('endDate', pendingDates.end)
+      setIsEditingDates(false)
+    } catch (err) {
+      console.error('Save dates error:', err)
+      setSaveError(err instanceof Error ? err.message : 'Ошибка сохранения дат')
+    } finally {
+      setSavingField(null)
+    }
+  }, [stageId, sectionId, updateMutation, pendingDates, setValue])
+
+  // Отмена редактирования дат
+  const handleDatesCancel = useCallback(() => {
+    setPendingDates({ start: null, end: null })
+    setIsEditingDates(false)
+  }, [])
+
+  // Начать редактирование дат
+  const handleDatesEdit = useCallback(() => {
+    setPendingDates({
+      start: watchedStartDate,
+      end: watchedEndDate,
+    })
+    setIsEditingDates(true)
+  }, [watchedStartDate, watchedEndDate])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Keyboard handlers
@@ -417,23 +474,60 @@ export function StageModal({
                   />
                 </div>
 
-                {/* Period - full width to prevent overflow */}
+                {/* Period - with save/cancel */}
                 <div>
                   <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Период
                   </label>
-                  <DateRangeInput
-                    idPrefix="stage-date"
-                    startDate={watchedStartDate ?? null}
-                    endDate={watchedEndDate ?? null}
-                    onStartDateChange={(v) => handleDateChange('startDate', v)}
-                    onEndDateChange={(v) => handleDateChange('endDate', v)}
-                    savingField={
-                      savingField === 'startDate' || savingField === 'endDate'
-                        ? (savingField as 'startDate' | 'endDate')
-                        : null
-                    }
-                  />
+                  {isEditingDates ? (
+                    <div className="flex items-center gap-2">
+                      <DateRangeInput
+                        idPrefix="stage-date"
+                        startDate={pendingDates.start}
+                        endDate={pendingDates.end}
+                        onStartDateChange={handleStartDateChange}
+                        onEndDateChange={handleEndDateChange}
+                      />
+                      <button
+                        onClick={handleDatesSave}
+                        disabled={savingField === 'dates'}
+                        className={cn(
+                          'p-1 rounded text-green-600 hover:bg-green-500/10',
+                          'transition-colors shrink-0',
+                          savingField === 'dates' && 'opacity-50'
+                        )}
+                        aria-label="Сохранить даты"
+                      >
+                        {savingField === 'dates' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={handleDatesCancel}
+                        disabled={savingField === 'dates'}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted/50 transition-colors shrink-0"
+                        aria-label="Отменить"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleDatesEdit}
+                      className="group w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                      aria-label="Редактировать даты"
+                    >
+                      <CalendarDays className="w-3 h-3" />
+                      <span className="flex-1 text-left">
+                        {watchedStartDate && watchedEndDate
+                          ? `${new Date(watchedStartDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} - ${new Date(watchedEndDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
+                          : 'Не указаны'}
+                      </span>
+                      <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Responsibles - Full Width */}

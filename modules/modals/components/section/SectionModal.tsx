@@ -15,6 +15,7 @@ import {
   ListTodo,
   Target,
   Trash2,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -153,6 +154,13 @@ export function SectionModal({
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
+  // Локальное состояние для дат (перед сохранением)
+  const [isEditingDates, setIsEditingDates] = useState(false)
+  const [pendingDates, setPendingDates] = useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
+  })
+
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
@@ -163,6 +171,8 @@ export function SectionModal({
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
+      setIsEditingDates(false)
+      setPendingDates({ start: null, end: null })
     }
   }, [isOpen, initialTab])
 
@@ -253,23 +263,61 @@ export function SectionModal({
     [saveField]
   )
 
+  // Локальное изменение дат (БЕЗ сохранения в БД)
   const handleStartDateChange = useCallback(
-    async (value: string) => {
+    (value: string) => {
       const dateValue = value || null
-      setValue('startDate', dateValue)
-      await saveField('startDate', dateValue)
+      setPendingDates((prev) => ({ ...prev, start: dateValue }))
     },
-    [setValue, saveField]
+    []
   )
 
   const handleEndDateChange = useCallback(
-    async (value: string) => {
+    (value: string) => {
       const dateValue = value || null
-      setValue('endDate', dateValue)
-      await saveField('endDate', dateValue)
+      setPendingDates((prev) => ({ ...prev, end: dateValue }))
     },
-    [setValue, saveField]
+    []
   )
+
+  // Сохранение дат в БД (вызывается кнопкой "Сохранить")
+  const handleDatesSave = useCallback(async () => {
+    setSavingField('dates')
+    setSaveError(null)
+
+    try {
+      await updateMutation.mutateAsync({
+        sectionId,
+        data: {
+          startDate: pendingDates.start,
+          endDate: pendingDates.end,
+        },
+      })
+      setValue('startDate', pendingDates.start)
+      setValue('endDate', pendingDates.end)
+      setIsEditingDates(false)
+    } catch (err) {
+      console.error('Save dates error:', err)
+      setSaveError(err instanceof Error ? err.message : 'Ошибка сохранения дат')
+    } finally {
+      setSavingField(null)
+    }
+  }, [sectionId, updateMutation, pendingDates, setValue])
+
+  // Отмена редактирования дат
+  const handleDatesCancel = useCallback(() => {
+    setPendingDates({ start: null, end: null })
+    setIsEditingDates(false)
+  }, [])
+
+  // Начать редактирование дат
+  const handleDatesEdit = useCallback(() => {
+    setPendingDates({
+      start: watchedStartDate,
+      end: watchedEndDate,
+    })
+    setIsEditingDates(true)
+  }, [watchedStartDate, watchedEndDate])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Keyboard handlers
@@ -464,19 +512,58 @@ export function SectionModal({
                 {/* Divider */}
                 <div className="h-4 w-px bg-border/50" />
 
-                {/* Dates */}
-                <DateRangeInput
-                  idPrefix="section-date"
-                  startDate={watchedStartDate ?? null}
-                  endDate={watchedEndDate ?? null}
-                  onStartDateChange={handleStartDateChange}
-                  onEndDateChange={handleEndDateChange}
-                  savingField={
-                    savingField === 'startDate' || savingField === 'endDate'
-                      ? (savingField as 'startDate' | 'endDate')
-                      : null
-                  }
-                />
+                {/* Dates - with save/cancel */}
+                <div className="flex items-center gap-2">
+                  {isEditingDates ? (
+                    <>
+                      <DateRangeInput
+                        idPrefix="section-date"
+                        startDate={pendingDates.start}
+                        endDate={pendingDates.end}
+                        onStartDateChange={handleStartDateChange}
+                        onEndDateChange={handleEndDateChange}
+                      />
+                      <button
+                        onClick={handleDatesSave}
+                        disabled={savingField === 'dates'}
+                        className={cn(
+                          'p-1 rounded text-green-600 hover:bg-green-500/10',
+                          'transition-colors',
+                          savingField === 'dates' && 'opacity-50'
+                        )}
+                        aria-label="Сохранить даты"
+                      >
+                        {savingField === 'dates' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={handleDatesCancel}
+                        disabled={savingField === 'dates'}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted/50 transition-colors"
+                        aria-label="Отменить"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleDatesEdit}
+                      className="group flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Редактировать даты"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      <span>
+                        {watchedStartDate && watchedEndDate
+                          ? `${new Date(watchedStartDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} - ${new Date(watchedEndDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
+                          : 'Не указаны'}
+                      </span>
+                      <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
+                </div>
 
                 {/* Divider */}
                 <div className="h-4 w-px bg-border/50" />
