@@ -444,7 +444,7 @@ export function useBudgetsHierarchy(
     isLoading: projectsLoading,
     error: projectsError,
     refetch: refetchProjects,
-  } = useResourceGraphData(filters || {}, { enabled })
+  } = useResourceGraphData({ filters: filters || {} }, { enabled })
 
   // Загружаем все активные бюджеты
   const {
