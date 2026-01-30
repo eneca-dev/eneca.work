@@ -65,6 +65,20 @@ export interface DecompositionDataResult {
 // ============================================================================
 
 /**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
+/**
  * Ищет раздел в кешированных данных Resource Graph
  */
 function findSectionInCache(
@@ -72,13 +86,16 @@ function findSectionInCache(
   sectionId: string
 ): Section | null {
   // Получаем все закешированные запросы resourceGraph
-  const queries = queryClient.getQueriesData<Project[]>({
+  const queries = queryClient.getQueriesData<CachedResourceGraphData>({
     queryKey: queryKeys.resourceGraph.lists(),
   })
 
   // Ищем раздел во всех закешированных проектах
-  for (const [, projects] of queries) {
-    if (!projects) continue
+  for (const [, cachedData] of queries) {
+    if (!cachedData?.data) continue
+
+    // Извлекаем массив проектов из кешированного результата
+    const projects = cachedData.data
 
     for (const project of projects) {
       for (const obj of project.objects) {
