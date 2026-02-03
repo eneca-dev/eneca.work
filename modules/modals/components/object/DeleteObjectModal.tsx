@@ -23,6 +23,20 @@ let deleteOperationCounter = 0
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 export interface DeleteObjectModalProps {
   isOpen: boolean
   onClose: () => void
@@ -201,19 +215,22 @@ export function DeleteObjectModal({
     currentOperationRef.current = operationId
 
     // Сохраняем предыдущие данные для отката
-    const previousData = queryClient.getQueriesData<Project[]>({
+    const previousData = queryClient.getQueriesData<CachedResourceGraphData>({
       queryKey: queryKeys.resourceGraph.all,
     })
 
     // Оптимистично удаляем объект из кэша
-    queryClient.setQueriesData<Project[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return oldData.map((project) => ({
-          ...project,
-          objects: project.objects.filter((obj) => obj.id !== objectId),
-        }))
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: oldData.data.map((project) => ({
+            ...project,
+            objects: project.objects.filter((obj) => obj.id !== objectId),
+          })),
+        }
       }
     )
 

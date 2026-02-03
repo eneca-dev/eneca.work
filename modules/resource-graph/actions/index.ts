@@ -1699,11 +1699,13 @@ export async function getWorkCategories(): Promise<ActionResult<Array<{
  *
  * Вызывается при развороте объекта (Object).
  *
+ * @param objectId - ID объекта (для загрузки бюджета объекта)
  * @param sectionIds - Массив ID секций объекта
  * @param options - Опции загрузки (includeBudgets для контроля доступа)
- * @returns Batch данные для всех секций
+ * @returns Batch данные для всех секций + бюджет объекта
  */
 export async function getSectionsBatchData(
+  objectId: string,
   sectionIds: string[],
   options?: SectionsBatchOptions
 ): Promise<ActionResult<SectionsBatchData>> {
@@ -1718,6 +1720,7 @@ export async function getSectionsBatchData(
           stageResponsibles: {},
           checkpoints: {},
           budgets: {},
+          objectBudget: null,
         },
       }
     }
@@ -1727,7 +1730,7 @@ export async function getSectionsBatchData(
     const supabase = await createClient()
 
     // Выполняем все запросы параллельно на сервере
-    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, linkedCheckpointsResult, budgetsResult] = await Promise.all([
+    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, linkedCheckpointsResult, budgetsResult, objectBudgetResult] = await Promise.all([
       // 1. Work Logs для всех секций
       supabase
         .from('work_logs')
@@ -1842,6 +1845,26 @@ export async function getSectionsBatchData(
             .in('entity_id', sectionIds)
             .eq('is_active', true)
         : Promise.resolve({ data: [], error: null }),
+
+      // 6. Budget объекта (опционально по permissions)
+      includeBudgets
+        ? supabase
+            .from('v_cache_budgets')
+            .select(`
+              budget_id,
+              entity_id,
+              name,
+              total_amount,
+              total_spent,
+              remaining_amount,
+              spent_percentage,
+              is_active
+            `)
+            .eq('entity_type', 'object')
+            .eq('entity_id', objectId)
+            .eq('is_active', true)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ])
 
     // Проверяем ошибки
@@ -1869,11 +1892,15 @@ export async function getSectionsBatchData(
       console.error('[getSectionsBatchData] Budgets error:', budgetsResult.error)
       return { success: false, error: budgetsResult.error.message }
     }
+    if (objectBudgetResult.error) {
+      console.error('[getSectionsBatchData] ObjectBudget error:', objectBudgetResult.error)
+      return { success: false, error: objectBudgetResult.error.message }
+    }
 
-    // Собираем все stage_id для запроса readiness snapshots
+    // Собираем все stage_id для запроса readiness snapshots и бюджетов
     const stageIds = (stagesResult.data || []).map(s => s.decomposition_stage_id)
 
-    // 4. Параллельно получаем snapshots и profiles для ответственных
+    // 4. Параллельно получаем snapshots, profiles для ответственных, и бюджеты для stages
     const allUserIds = new Set<string>()
     for (const stage of stagesResult.data || []) {
       const responsibles = stage.decomposition_stage_responsibles as string[] | null
@@ -1884,7 +1911,7 @@ export async function getSectionsBatchData(
       }
     }
 
-    const [snapshotsResult, profilesResult] = await Promise.all([
+    const [snapshotsResult, profilesResult, stageBudgetsResult] = await Promise.all([
       stageIds.length > 0
         ? supabase
             .from('stage_readiness_snapshots')
@@ -1899,6 +1926,26 @@ export async function getSectionsBatchData(
             .select('user_id, first_name, last_name, avatar_url')
             .in('user_id', Array.from(allUserIds))
         : Promise.resolve({ data: [], error: null }),
+
+      // Загружаем бюджеты для decomposition_stages (если есть permission)
+      includeBudgets && stageIds.length > 0
+        ? supabase
+            .from('v_cache_budgets')
+            .select(`
+              budget_id,
+              entity_type,
+              entity_id,
+              name,
+              total_amount,
+              total_spent,
+              remaining_amount,
+              spent_percentage,
+              is_active
+            `)
+            .eq('entity_type', 'decomposition_stage')
+            .in('entity_id', stageIds)
+            .eq('is_active', true)
+        : Promise.resolve({ data: [], error: null }),
     ])
 
     if (snapshotsResult.error) {
@@ -1908,6 +1955,10 @@ export async function getSectionsBatchData(
     if (profilesResult.error) {
       console.error('[getSectionsBatchData] Profiles error:', profilesResult.error)
       return { success: false, error: profilesResult.error.message }
+    }
+    if (stageBudgetsResult.error) {
+      console.error('[getSectionsBatchData] StageBudgets error:', stageBudgetsResult.error)
+      return { success: false, error: stageBudgetsResult.error.message }
     }
 
     // ============================
@@ -2286,20 +2337,29 @@ export async function getSectionsBatchData(
       }
     }
 
-    // Budgets: группируем по sectionId (entity_id для entity_type='section')
+    // Budgets: группируем по составному ключу entity_type:entity_id
     // V2: total_amount → planned_amount, total_spent → spent_amount
     // type_name и type_color больше не используются (V2 не имеет budget_types)
     const budgets: Record<string, BatchBudget[]> = {}
+
+    // Инициализируем ключи для sections
     for (const sectionId of sectionIds) {
-      budgets[sectionId] = []
+      budgets[`section:${sectionId}`] = []
     }
 
-    for (const row of budgetsResult.data || []) {
-      const sectionId = row.entity_id
-      if (!sectionId) continue
+    // Инициализируем ключи для stages
+    for (const stageId of stageIds) {
+      budgets[`decomposition_stage:${stageId}`] = []
+    }
 
-      if (!budgets[sectionId]) {
-        budgets[sectionId] = []
+    // Обрабатываем бюджеты sections
+    for (const row of budgetsResult.data || []) {
+      const entityId = row.entity_id
+      if (!entityId) continue
+
+      const key = `section:${entityId}`
+      if (!budgets[key]) {
+        budgets[key] = []
       }
 
       // V2 mapping: total_amount → planned_amount, total_spent → spent_amount
@@ -2308,7 +2368,7 @@ export async function getSectionsBatchData(
       const remaining_amount = Number(row.remaining_amount) || 0
       const spent_percentage = Number(row.spent_percentage) || 0
 
-      budgets[sectionId].push({
+      budgets[key].push({
         budget_id: row.budget_id,
         name: row.name,
         planned_amount,
@@ -2321,6 +2381,57 @@ export async function getSectionsBatchData(
       })
     }
 
+    // Обрабатываем бюджеты stages
+    for (const row of stageBudgetsResult.data || []) {
+      const entityId = row.entity_id
+      if (!entityId) continue
+
+      const key = `decomposition_stage:${entityId}`
+      if (!budgets[key]) {
+        budgets[key] = []
+      }
+
+      // V2 mapping: planned_amount as total_amount, spent_amount as total_spent
+      const planned_amount = Number(row.total_amount) || 0
+      const spent_amount = Number(row.total_spent) || 0
+      const remaining_amount = Number(row.remaining_amount) || 0
+      const spent_percentage = Number(row.spent_percentage) || 0
+
+      budgets[key].push({
+        budget_id: row.budget_id,
+        name: row.name,
+        planned_amount,
+        spent_amount,
+        remaining_amount,
+        spent_percentage,
+        type_name: null, // V2: budget_types не используются
+        type_color: null, // V2: budget_types не используются
+        is_active: row.is_active ?? true,
+      })
+    }
+
+    // Обрабатываем бюджет объекта
+    let objectBudget: BatchBudget | null = null
+    if (objectBudgetResult.data) {
+      const row = objectBudgetResult.data
+      const planned_amount = Number(row.total_amount) || 0
+      const spent_amount = Number(row.total_spent) || 0
+      const remaining_amount = Number(row.remaining_amount) || 0
+      const spent_percentage = Number(row.spent_percentage) || 0
+
+      objectBudget = {
+        budget_id: row.budget_id,
+        name: row.name,
+        planned_amount,
+        spent_amount,
+        remaining_amount,
+        spent_percentage,
+        type_name: null, // V2: budget_types не используются
+        type_color: null, // V2: budget_types не используются
+        is_active: row.is_active ?? true,
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -2330,6 +2441,7 @@ export async function getSectionsBatchData(
         stageResponsibles,
         checkpoints,
         budgets,
+        objectBudget,
       },
     }
   } catch (error) {

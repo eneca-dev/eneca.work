@@ -83,6 +83,8 @@ export const useCreateWorkLog = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),
+    // Инвалидируем batch данные для обновления бюджетов этапов
+    queryKeys.resourceGraph.allSectionsBatch(),
     // Инвалидируем бюджеты для обновления spent_amount
     queryKeys.budgets.all,
   ],

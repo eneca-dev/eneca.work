@@ -13,7 +13,21 @@ import { queryKeys } from '@/modules/cache'
 // Types
 // ============================================================================
 
-export type OptimisticSnapshot = Array<[QueryKey, HierarchyNode[] | undefined]>
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: HierarchyNode[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
+export type OptimisticSnapshot = Array<[QueryKey, CachedResourceGraphData | undefined]>
 
 // ============================================================================
 // Snapshot Operations
@@ -23,7 +37,7 @@ export type OptimisticSnapshot = Array<[QueryKey, HierarchyNode[] | undefined]>
  * Сохраняет текущее состояние кэша для возможного отката
  */
 export function saveOptimisticSnapshot(queryClient: QueryClient): OptimisticSnapshot {
-  return queryClient.getQueriesData<HierarchyNode[]>({
+  return queryClient.getQueriesData<CachedResourceGraphData>({
     queryKey: queryKeys.resourceGraph.all,
   })
 }

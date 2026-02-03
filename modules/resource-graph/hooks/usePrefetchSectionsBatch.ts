@@ -107,7 +107,7 @@ export function usePrefetchSectionsBatch(
       await queryClient.prefetchQuery({
         queryKey: queryKeys.resourceGraph.sectionsBatch(obj.id),
         queryFn: async () => {
-          const result = await getSectionsBatchData(sectionIds)
+          const result = await getSectionsBatchData(obj.id, sectionIds)
           if (!result.success) {
             throw new Error(result.error)
           }
@@ -212,7 +212,7 @@ export function usePrefetchObjectData() {
       await queryClient.prefetchQuery({
         queryKey: queryKeys.resourceGraph.sectionsBatch(object.id),
         queryFn: async () => {
-          const result = await getSectionsBatchData(sectionIds)
+          const result = await getSectionsBatchData(object.id, sectionIds)
           if (!result.success) {
             throw new Error(result.error)
           }

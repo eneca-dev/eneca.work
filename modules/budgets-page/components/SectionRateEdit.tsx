@@ -26,6 +26,20 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: HierarchyNode[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 interface SectionRateEditProps {
   /** ID раздела */
   sectionId: string
@@ -98,15 +112,18 @@ export function SectionRateEdit({
     const snapshot = saveOptimisticSnapshot(queryClient)
 
     // Optimistic update
-    queryClient.setQueriesData<HierarchyNode[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return updateHierarchyNode(
-          oldData,
-          (node) => node.id === sectionId,
-          (node) => ({ ...node, hourlyRate: newRate })
-        )
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: updateHierarchyNode(
+            oldData.data,
+            (node) => node.id === sectionId,
+            (node) => ({ ...node, hourlyRate: newRate })
+          ),
+        }
       }
     )
 

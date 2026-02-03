@@ -5,7 +5,7 @@
     "name": "resource-graph",
     "displayName": "Resource Graph",
     "description": "Визуализация иерархии проектов с timeline, загрузками сотрудников, готовностью и бюджетами",
-    "version": "2.0.13",
+    "version": "2.0.16",
     "status": "stable",
     "route": "/dashboard/resource-graph",
     "tags": ["feature", "ui", "data-layer"]
@@ -1490,6 +1490,39 @@
   ],
 
   "changelog": [
+    {
+      "version": "2.0.16",
+      "date": "2026-01-30",
+      "changes": [
+        "[RG-041] Исправлена ошибка 'nodes.filter is not a function' в модуле budgets-page при удалении этапа",
+        "Баг возник после добавления пагинации - inline CRUD компоненты budgets-page использовали старую структуру кеша",
+        "Обновлены 7 файлов: optimistic-updates.ts, StageInlineDelete, StageInlineCreate, ItemInlineDelete, ItemInlineCreate, ItemHoursEdit, SectionRateEdit",
+        "Добавлен тип CachedResourceGraphData для работы с пагинированной структурой { success, data, pagination }",
+        "Теперь создание/удаление/редактирование этапов и задач в разделе 'Бюджеты' работает корректно"
+      ]
+    },
+    {
+      "version": "2.0.15",
+      "date": "2026-01-30",
+      "changes": [
+        "[RG-040] Исправлена ошибка 'oldData.map is not a function' при удалении и создании разделов/объектов",
+        "Баг возник после добавления пагинации - структура кеша resourceGraph изменилась, но модалки не были обновлены",
+        "Обновлены все модалки для работы с новой структурой кеша: DeleteSectionModal, DeleteObjectModal, SectionCreateModal, ObjectCreateModal",
+        "Добавлен тип CachedResourceGraphData во все модалки для типобезопасной работы с кешем",
+        "Теперь удаление и создание разделов/объектов работает корректно"
+      ]
+    },
+    {
+      "version": "2.0.14",
+      "date": "2026-01-30",
+      "changes": [
+        "[RG-039] Исправлена критическая ошибка 'projects is not iterable' при открытии вкладки задачи в модалке раздела",
+        "Баг возник после добавления пагинации - структура кеша изменилась с Project[] на { success: true, data: Project[], pagination: {...} }",
+        "Обновлена функция findSectionInCache в modules/modals/hooks/useDecompositionData.ts для работы с новой структурой кеша",
+        "Добавлен тип CachedResourceGraphData для типизации кешированных данных resourceGraph",
+        "Теперь вкладка 'Задачи' в модалке раздела корректно работает с пагинированными данными"
+      ]
+    },
     {
       "version": "2.0.13",
       "date": "2026-01-29",

@@ -3,6 +3,43 @@
   "moduleName": "resource-graph",
   "archivedTasks": [
     {
+      "id": "RG-041",
+      "title": "Ошибка при удалении этапа в budgets-page: 'nodes.filter is not a function'",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-30",
+      "completedAt": "2026-01-30",
+      "changelogEntry": "[RG-041] Исправлена ошибка 'nodes.filter is not a function' в модуле budgets-page при удалении этапа",
+      "relatedFiles": [
+        "modules/budgets-page/utils/optimistic-updates.ts",
+        "modules/budgets-page/components/StageInlineDelete.tsx",
+        "modules/budgets-page/components/StageInlineCreate.tsx",
+        "modules/budgets-page/components/ItemInlineDelete.tsx",
+        "modules/budgets-page/components/ItemInlineCreate.tsx",
+        "modules/budgets-page/components/ItemHoursEdit.tsx",
+        "modules/budgets-page/components/SectionRateEdit.tsx"
+      ],
+      "solution": "После добавления пагинации структура кеша resourceGraph изменилась. Модуль budgets-page использовал optimistic updates с HierarchyNode[], но получал пагинированную структуру. Обновлены все inline CRUD компоненты: добавлен тип CachedResourceGraphData, исправлены setQueriesData для работы с oldData.data вместо oldData, обновлена функция saveOptimisticSnapshot в optimistic-updates.ts."
+    },
+    {
+      "id": "RG-040",
+      "title": "Ошибка при удалении раздела: 'oldData.map is not a function'",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-30",
+      "completedAt": "2026-01-30",
+      "changelogEntry": "[RG-040] Исправлена ошибка 'oldData.map is not a function' при удалении и создании разделов/объектов",
+      "relatedFiles": [
+        "modules/modals/components/section/DeleteSectionModal.tsx",
+        "modules/modals/components/section/SectionCreateModal.tsx",
+        "modules/modals/components/object/DeleteObjectModal.tsx",
+        "modules/modals/components/object/ObjectCreateModal.tsx"
+      ],
+      "solution": "После добавления пагинации структура кеша resourceGraph изменилась с Project[] на { success: true, data: Project[], pagination }. Обновлены все модалки для работы с новой структурой: добавлен тип CachedResourceGraphData, исправлены getQueriesData и setQueriesData для корректного доступа к oldData.data вместо прямого oldData."
+    },
+    {
       "id": "RG-001",
       "title": "Исправить рендеринг вертикальных связей чекпоинтов",
       "category": "bug",
@@ -65,6 +102,20 @@
         "modules/modals/components/stage/StageModal.tsx"
       ],
       "solution": "Исправлен баг hard update при изменении дат в трёх модалках. Разделена логика изменения и сохранения: 1) SectionPanel.tsx - handleDatesChange только обновляет pendingRange, handleDatesSave выполняет DB update; 2) SectionModal.tsx и StageModal.tsx - handleStartDateChange/handleEndDateChange обновляют pendingDates локально, handleDatesSave сохраняет в БД через mutation. Добавлены кнопки 'Сохранить' (галочка) и 'Отмена' (крестик) в одну линию с DateRangeInput. Сохранение происходит ТОЛЬКО при явном нажатии кнопки, а не при каждом клике в календаре или переходе между месяцами."
+    },
+    {
+      "id": "RG-039",
+      "title": "[Bug] Ошибка 'projects is not iterable' при открытии вкладки задачи в модалке раздела",
+      "category": "bug",
+      "priority": "critical",
+      "status": "done",
+      "createdAt": "2026-01-30",
+      "completedAt": "2026-01-30",
+      "changelogEntry": "[RG-039] Исправлена ошибка 'projects is not iterable' в useDecompositionData при работе с кешем resourceGraph",
+      "relatedFiles": [
+        "modules/modals/hooks/useDecompositionData.ts"
+      ],
+      "solution": "После добавления пагинации в useResourceGraphData структура кешированных данных изменилась с Project[] на { success: true, data: Project[], pagination: {...} }. Функция findSectionInCache пыталась итерироваться по projects напрямую, что приводило к ошибке. Исправление: 1) Добавлен тип CachedResourceGraphData для описания новой структуры кеша; 2) Изменён generic в getQueriesData с Project[] на CachedResourceGraphData; 3) Добавлено извлечение массива проектов из cachedData.data перед итерацией. Теперь вкладка 'Задачи' в модалке раздела корректно работает с новой структурой кешированных данных."
     }
   ]
 }

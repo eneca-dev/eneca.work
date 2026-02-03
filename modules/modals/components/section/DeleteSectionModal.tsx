@@ -23,6 +23,20 @@ let deleteSectionOperationCounter = 0
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 export interface DeleteSectionModalProps {
   isOpen: boolean
   onClose: () => void
@@ -147,22 +161,25 @@ export function DeleteSectionModal({
     currentOperationRef.current = operationId
 
     // Сохраняем предыдущие данные для отката
-    const previousData = queryClient.getQueriesData<Project[]>({
+    const previousData = queryClient.getQueriesData<CachedResourceGraphData>({
       queryKey: queryKeys.resourceGraph.all,
     })
 
     // Оптимистично удаляем раздел из кэша
-    queryClient.setQueriesData<Project[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return oldData.map((project) => ({
-          ...project,
-          objects: project.objects.map((obj) => ({
-            ...obj,
-            sections: obj.sections.filter((section) => section.id !== sectionId),
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: oldData.data.map((project) => ({
+            ...project,
+            objects: project.objects.map((obj) => ({
+              ...obj,
+              sections: obj.sections.filter((section) => section.id !== sectionId),
+            })),
           })),
-        }))
+        }
       }
     )
 

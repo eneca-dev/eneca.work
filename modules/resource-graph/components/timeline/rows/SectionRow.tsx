@@ -151,7 +151,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   )
 
   // Бюджет раздела из batch данных (первый активный бюджет)
-  const sectionBudget = batchData?.budgets[section.id]?.[0] ?? null
+  // Используем составной ключ section:id после изменения группировки бюджетов
+  const sectionBudget = batchData?.budgets[`section:${section.id}`]?.[0] ?? null
 
   // Mutation для обновления дат раздела
   const updateSectionDates = useUpdateSectionDates()
@@ -615,23 +616,28 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
               ))}
             </div>
           )}
-          {section.decompositionStages.map((stage) => (
-            <DecompositionStageRow
-              key={stage.id}
-              stage={stage}
-              dayCells={dayCells}
-              range={range}
-              workLogs={workLogs}
-              loadings={loadings}
-              stageReadiness={stageReadinessMap?.[stage.id]}
-              responsibles={stageResponsiblesMap?.[stage.id]}
-              sectionId={section.id}
-              sectionName={section.name}
-              sectionBudget={sectionBudget}
-              sectionBudgetSpending={section.budgetSpending}
-              onWorkLogCreated={invalidateBatchData}
-            />
-          ))}
+          {section.decompositionStages.map((stage) => {
+            // Бюджет этапа из batch данных (используем составной ключ decomposition_stage:id)
+            const stageBudget = batchData?.budgets[`decomposition_stage:${stage.id}`]?.[0] ?? null
+
+            return (
+              <DecompositionStageRow
+                key={stage.id}
+                stage={stage}
+                dayCells={dayCells}
+                range={range}
+                workLogs={workLogs}
+                loadings={loadings}
+                stageReadiness={stageReadinessMap?.[stage.id]}
+                responsibles={stageResponsiblesMap?.[stage.id]}
+                sectionId={section.id}
+                sectionName={section.name}
+                stageBudget={stageBudget}
+                sectionBudgetSpending={section.budgetSpending}
+                onWorkLogCreated={invalidateBatchData}
+              />
+            )
+          })}
         </>
       )}
 

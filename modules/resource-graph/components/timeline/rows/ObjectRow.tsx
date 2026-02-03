@@ -1,8 +1,14 @@
 'use client'
 
 import { useMemo, useCallback } from 'react'
-import { ChevronRight, Box } from 'lucide-react'
+import { ChevronRight, Box, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import type { ProjectObject, TimelineRange } from '../../../types'
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid } from '../shared'
@@ -15,6 +21,15 @@ import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../const
 import { usePrefetchCheckpoints } from '@/modules/checkpoints'
 import { useSectionsBatch, usePrefetchObjectData } from '../../../hooks'
 import { useRowExpanded } from '../../../stores'
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Форматирует сумму бюджета с разделителями тысяч */
+function formatBudgetAmount(amount: number): string {
+  return amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+}
 
 // ============================================================================
 // Object Row
@@ -65,6 +80,9 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
     return aggregateSectionsMetrics(object.sections)
   }, [object.sections])
 
+  // Бюджет объекта из batch данных
+  const objectBudget = batchData?.objectBudget ?? null
+
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
   const depth = 1
@@ -91,7 +109,7 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
             <button
               onClick={toggle}
               onMouseEnter={handleMouseEnter}
-              className="p-0.5 hover:bg-muted rounded transition-colors"
+              className="p-0.5 hover:bg-muted rounded transition-colors shrink-0"
             >
               <ChevronRight
                 className={cn(
@@ -101,16 +119,38 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
               />
             </button>
           ) : (
-            <div className="w-5" />
+            <div className="w-5 shrink-0" />
           )}
           {/* Icon */}
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground shrink-0">
             <Box className="w-4 h-4" />
           </span>
           {/* Label */}
-          <span className="text-sm truncate flex-1 min-w-0" title={object.name}>
+          <span className="text-sm truncate min-w-0" title={object.name}>
             {object.name}
           </span>
+
+          {/* Бюджет */}
+          {objectBudget && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-[10px] text-amber-500 flex items-center gap-0.5 shrink-0 ml-1.5">
+                    <Wallet className="w-3 h-3" />
+                    {formatBudgetAmount(objectBudget.planned_amount)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <div className="space-y-1">
+                    <div className="font-medium">{objectBudget.name}</div>
+                    <div>Бюджет: {objectBudget.planned_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
+                    <div>Освоено: {objectBudget.spent_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN ({Math.round(objectBudget.spent_percentage)}%)</div>
+                    <div>Остаток: {objectBudget.remaining_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
 
         {/* Timeline area - fixed width, isolate creates stacking context, overflow-hidden clips bleeding elements */}

@@ -25,6 +25,20 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: HierarchyNode[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 interface ItemHoursEditProps {
   /** ID задачи */
   itemId: string
@@ -53,15 +67,18 @@ export function ItemHoursEdit({
     const snapshot = saveOptimisticSnapshot(queryClient)
 
     // Optimistic update
-    queryClient.setQueriesData<HierarchyNode[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return updateHierarchyNode(
-          oldData,
-          (node) => node.id === itemId,
-          (node) => ({ ...node, plannedHours: newValue })
-        )
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: updateHierarchyNode(
+            oldData.data,
+            (node) => node.id === itemId,
+            (node) => ({ ...node, plannedHours: newValue })
+          ),
+        }
       }
     )
 

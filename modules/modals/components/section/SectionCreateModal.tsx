@@ -23,6 +23,20 @@ let createSectionOperationCounter = 0
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 export interface SectionCreateModalProps {
   isOpen: boolean
   onClose: () => void
@@ -122,23 +136,26 @@ export function SectionCreateModal({
     }
 
     // Сохраняем предыдущие данные для отката
-    const previousData = queryClient.getQueriesData<Project[]>({
+    const previousData = queryClient.getQueriesData<CachedResourceGraphData>({
       queryKey: queryKeys.resourceGraph.all,
     })
 
     // Оптимистично добавляем раздел в кэш
-    queryClient.setQueriesData<Project[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return oldData.map((project) => ({
-          ...project,
-          objects: project.objects.map((obj) =>
-            obj.id === objectId
-              ? { ...obj, sections: [...obj.sections, optimisticSection] }
-              : obj
-          ),
-        }))
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: oldData.data.map((project) => ({
+            ...project,
+            objects: project.objects.map((obj) =>
+              obj.id === objectId
+                ? { ...obj, sections: [...obj.sections, optimisticSection] }
+                : obj
+            ),
+          })),
+        }
       }
     )
 
@@ -180,23 +197,26 @@ export function SectionCreateModal({
       }
 
       // Обновляем кэш с реальным ID
-      queryClient.setQueriesData<Project[]>(
+      queryClient.setQueriesData<CachedResourceGraphData>(
         { queryKey: queryKeys.resourceGraph.all },
         (oldData) => {
-          if (!oldData) return oldData
-          return oldData.map((project) => ({
-            ...project,
-            objects: project.objects.map((obj) =>
-              obj.id === objectId
-                ? {
-                    ...obj,
-                    sections: obj.sections.map((section) =>
-                      section.id === tempId ? { ...section, id: data.section_id } : section
-                    ),
-                  }
-                : obj
-            ),
-          }))
+          if (!oldData?.data) return oldData
+          return {
+            ...oldData,
+            data: oldData.data.map((project) => ({
+              ...project,
+              objects: project.objects.map((obj) =>
+                obj.id === objectId
+                  ? {
+                      ...obj,
+                      sections: obj.sections.map((section) =>
+                        section.id === tempId ? { ...section, id: data.section_id } : section
+                      ),
+                    }
+                  : obj
+              ),
+            })),
+          }
         }
       )
 

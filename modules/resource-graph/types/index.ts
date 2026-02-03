@@ -113,6 +113,19 @@ export interface DecompositionStage {
   items: DecompositionItem[]
   /** Фактическая готовность (ежедневные снэпшоты) */
   actualReadiness?: ReadinessPoint[]
+  /** Бюджет этапа (заполняется из batch данных) */
+  budget?: {
+    /** ID бюджета (может быть null если бюджет не создан) */
+    id: string | null
+    /** Общая сумма бюджета */
+    total: number
+    /** Израсходовано */
+    spent: number
+    /** Остаток */
+    remaining: number
+    /** Процент расхода */
+    percentage: number
+  }
 }
 
 /**
@@ -490,4 +503,6 @@ export interface SectionsBatchData {
   checkpoints: Record<string, BatchCheckpoint[]>
   /** Budgets по секциям: Record<sectionId, BatchBudget[]> (может быть пустым если нет доступа) */
   budgets: Record<string, BatchBudget[]>
+  /** Бюджет объекта (может быть null если нет бюджета или нет доступа) */
+  objectBudget: BatchBudget | null
 }

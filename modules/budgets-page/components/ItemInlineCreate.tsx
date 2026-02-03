@@ -27,6 +27,20 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: HierarchyNode[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 interface ItemInlineCreateProps {
   /** ID этапа декомпозиции */
   stageId: string
@@ -58,16 +72,19 @@ export function ItemInlineCreate({
       const snapshot = saveOptimisticSnapshot(queryClient)
 
       // Optimistic update
-      queryClient.setQueriesData<HierarchyNode[]>(
+      queryClient.setQueriesData<CachedResourceGraphData>(
         { queryKey: queryKeys.resourceGraph.all },
         (oldData) => {
-          if (!oldData) return oldData
-          return addChildToParent(
-            oldData,
-            stageId,
-            'decomposition_stage',
-            createOptimisticItem(tempId, value, operationId)
-          )
+          if (!oldData?.data) return oldData
+          return {
+            ...oldData,
+            data: addChildToParent(
+              oldData.data,
+              stageId,
+              'decomposition_stage',
+              createOptimisticItem(tempId, value, operationId)
+            ),
+          }
         }
       )
 
@@ -86,15 +103,18 @@ export function ItemInlineCreate({
         if (isOperationStale(operationId)) return
 
         // Заменяем temp ID на реальный
-        queryClient.setQueriesData<HierarchyNode[]>(
+        queryClient.setQueriesData<CachedResourceGraphData>(
           { queryKey: queryKeys.resourceGraph.all },
           (oldData) => {
-            if (!oldData || !result.data) return oldData
-            return updateHierarchyNode(
-              oldData,
-              (node) => node.id === tempId,
-              (node) => ({ ...node, id: result.data.decomposition_item_id })
-            )
+            if (!oldData?.data || !result.data) return oldData
+            return {
+              ...oldData,
+              data: updateHierarchyNode(
+                oldData.data,
+                (node) => node.id === tempId,
+                (node) => ({ ...node, id: result.data.decomposition_item_id })
+              ),
+            }
           }
         )
 

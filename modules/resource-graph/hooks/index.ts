@@ -348,7 +348,7 @@ export function useSectionsBatch(
   return useQuery<SectionsBatchData>({
     queryKey: queryKeys.resourceGraph.sectionsBatch(objectId),
     queryFn: async () => {
-      const result = await getSectionsBatchData(sectionIds, batchOptions)
+      const result = await getSectionsBatchData(objectId, sectionIds, batchOptions)
       if (!result.success) {
         throw new Error(result.error)
       }

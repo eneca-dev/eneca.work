@@ -25,6 +25,20 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: HierarchyNode[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 interface ItemInlineDeleteProps {
   /** ID задачи */
   itemId: string
@@ -51,11 +65,14 @@ export function ItemInlineDelete({
     const snapshot = saveOptimisticSnapshot(queryClient)
 
     // Optimistic update
-    queryClient.setQueriesData<HierarchyNode[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return removeHierarchyNode(oldData, itemId)
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: removeHierarchyNode(oldData.data, itemId),
+        }
       }
     )
 

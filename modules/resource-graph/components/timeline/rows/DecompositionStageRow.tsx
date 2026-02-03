@@ -65,8 +65,8 @@ interface DecompositionStageRowProps {
   sectionId: string
   /** Section name (for work log modal) */
   sectionName: string
-  /** Бюджет раздела (для отображения в sidebar) */
-  sectionBudget?: BatchBudget | null
+  /** Бюджет этапа (для отображения в sidebar) */
+  stageBudget?: BatchBudget | null
   /** История расхода бюджета раздела (для графика) */
   sectionBudgetSpending?: BudgetSpendingPoint[]
   /** Callback after work log created */
@@ -86,7 +86,7 @@ export function DecompositionStageRow({
   responsibles,
   sectionId,
   sectionName,
-  sectionBudget,
+  stageBudget,
   sectionBudgetSpending,
   onWorkLogCreated,
 }: DecompositionStageRowProps) {
@@ -420,20 +420,20 @@ export function DecompositionStageRow({
             )}
 
             {/* Budget indicator */}
-            {sectionBudget && (
+            {stageBudget && (
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="text-[9px] text-amber-500 flex items-center gap-0.5 shrink-0">
                       <Wallet className="w-3 h-3" />
-                      {formatBudgetAmount(sectionBudget.planned_amount)}
+                      {formatBudgetAmount(stageBudget.planned_amount)}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-1">
-                      <div className="font-medium">{sectionBudget.name}</div>
-                      <div>Бюджет: {sectionBudget.planned_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
-                      <div>Освоено: {sectionBudget.spent_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN ({Math.round(sectionBudget.spent_percentage)}%)</div>
+                      <div className="font-medium">{stageBudget.name}</div>
+                      <div>Бюджет: {stageBudget.planned_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN</div>
+                      <div>Освоено: {stageBudget.spent_amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BYN ({Math.round(stageBudget.spent_percentage)}%)</div>
                     </div>
                   </TooltipContent>
                 </Tooltip>

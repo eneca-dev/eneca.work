@@ -23,6 +23,20 @@ let operationCounter = 0
 // Types
 // ============================================================================
 
+/**
+ * Тип кешированных данных Resource Graph (с пагинацией)
+ */
+type CachedResourceGraphData = {
+  success: true
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
 export interface ObjectCreateModalProps {
   isOpen: boolean
   onClose: () => void
@@ -104,20 +118,23 @@ export function ObjectCreateModal({
     }
 
     // Сохраняем предыдущие данные для отката
-    const previousData = queryClient.getQueriesData<Project[]>({
+    const previousData = queryClient.getQueriesData<CachedResourceGraphData>({
       queryKey: queryKeys.resourceGraph.all,
     })
 
     // Оптимистично добавляем объект в кэш
-    queryClient.setQueriesData<Project[]>(
+    queryClient.setQueriesData<CachedResourceGraphData>(
       { queryKey: queryKeys.resourceGraph.all },
       (oldData) => {
-        if (!oldData) return oldData
-        return oldData.map((project) =>
-          project.id === projectId
-            ? { ...project, objects: [...project.objects, optimisticObject] }
-            : project
-        )
+        if (!oldData?.data) return oldData
+        return {
+          ...oldData,
+          data: oldData.data.map((project) =>
+            project.id === projectId
+              ? { ...project, objects: [...project.objects, optimisticObject] }
+              : project
+          ),
+        }
       }
     )
 
@@ -147,20 +164,23 @@ export function ObjectCreateModal({
       }
 
       // Обновляем кэш с реальным ID
-      queryClient.setQueriesData<Project[]>(
+      queryClient.setQueriesData<CachedResourceGraphData>(
         { queryKey: queryKeys.resourceGraph.all },
         (oldData) => {
-          if (!oldData) return oldData
-          return oldData.map((project) =>
-            project.id === projectId
-              ? {
-                  ...project,
-                  objects: project.objects.map((obj) =>
-                    obj.id === tempId ? { ...obj, id: data.object_id } : obj
-                  ),
-                }
-              : project
-          )
+          if (!oldData?.data) return oldData
+          return {
+            ...oldData,
+            data: oldData.data.map((project) =>
+              project.id === projectId
+                ? {
+                    ...project,
+                    objects: project.objects.map((obj) =>
+                      obj.id === tempId ? { ...obj, id: data.object_id } : obj
+                    ),
+                  }
+                : project
+            ),
+          }
         }
       )
 
