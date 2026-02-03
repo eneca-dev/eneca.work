@@ -114,15 +114,8 @@ export async function syncProjectToWorksection(
     }
   }
 
-  // 4. Получаем URL сервиса из env (серверная переменная, не видна клиенту)
-  const syncServiceUrl = process.env.WORK_TO_WS_URL
-
-  if (!syncServiceUrl) {
-    return {
-      success: false,
-      error: 'Сервис синхронизации не настроен',
-    }
-  }
+  // Получаем URL
+  const syncServiceUrl = process.env.WORK_TO_WS_URL || 'https://work-to-ws.eneca.work'
 
   // 5. Отправляем запрос на VPS сервис
   try {
