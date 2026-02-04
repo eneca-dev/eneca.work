@@ -9,7 +9,7 @@
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/modules/cache'
+import { queryKeys, type CachedPaginatedData } from '@/modules/cache'
 import { InlineCreateForm } from './InlineCreateForm'
 import { useOperationGuard } from '../hooks/use-operation-guard'
 import { createDecompositionStage } from '../actions/decomposition'
@@ -27,19 +27,7 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: HierarchyNode[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+type CachedResourceGraphData = CachedPaginatedData<HierarchyNode>
 
 interface StageInlineCreateProps {
   /** ID раздела */

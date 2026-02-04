@@ -4,6 +4,8 @@
 
 export { useModal } from './useModal'
 export { useUpdateSection } from './useUpdateSection'
+export { usePendingDates } from './usePendingDates'
+export type { PendingDates, UsePendingDatesOptions, UsePendingDatesReturn } from './usePendingDates'
 
 // ============================================================================
 // Reference Data Hooks

@@ -8,6 +8,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import * as Sentry from '@sentry/nextjs'
 import type { ActionResult, PaginatedActionResult } from '@/modules/cache'
 import type {
   Project,
@@ -204,7 +205,10 @@ export async function getResourceGraphData(
       .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
-    const { data, error } = await query
+    const { data, error } = await Sentry.startSpan(
+      { name: 'getResourceGraphData.query', op: 'db.query' },
+      () => query
+    )
 
     if (error) {
       console.error('[getResourceGraphData] Supabase error:', error)
@@ -239,7 +243,10 @@ export async function getResourceGraphData(
       )
 
       // Transform flat rows to hierarchy
-      const projects = transformRowsToHierarchy(filteredData as ResourceGraphRow[])
+      const projects = Sentry.startSpan(
+        { name: 'getResourceGraphData.transform', op: 'serialize' },
+        () => transformRowsToHierarchy(filteredData as ResourceGraphRow[])
+      )
 
       return {
         success: true,
@@ -255,7 +262,10 @@ export async function getResourceGraphData(
 
     // Без пагинации - возвращаем все данные
     // Transform flat rows to hierarchy
-    const projects = transformRowsToHierarchy(data as ResourceGraphRow[])
+    const projects = Sentry.startSpan(
+      { name: 'getResourceGraphData.transform', op: 'serialize' },
+      () => transformRowsToHierarchy(data as ResourceGraphRow[])
+    )
 
     return {
       success: true,
@@ -1364,6 +1374,12 @@ export async function createLoading(input: {
 
     const supabase = await createClient()
 
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
     // RLS проверяет авторизацию на уровне базы данных
     const { data, error } = await supabase
       .from('loadings')
@@ -1419,6 +1435,12 @@ export async function updateLoading(
     }
 
     const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
 
     // RLS проверяет авторизацию на уровне базы данных
     // Формируем объект для обновления
@@ -1478,6 +1500,12 @@ export async function deleteLoading(
     }
 
     const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
 
     // RLS проверяет авторизацию на уровне базы данных
     const { error } = await supabase
@@ -1730,7 +1758,9 @@ export async function getSectionsBatchData(
     const supabase = await createClient()
 
     // Выполняем все запросы параллельно на сервере
-    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, linkedCheckpointsResult, budgetsResult, objectBudgetResult] = await Promise.all([
+    const [workLogsResult, loadingsResult, stagesResult, checkpointsResult, linkedCheckpointsResult, budgetsResult, objectBudgetResult] = await Sentry.startSpan(
+      { name: 'getSectionsBatchData.firstBatch', op: 'db.query' },
+      () => Promise.all([
       // 1. Work Logs для всех секций
       supabase
         .from('work_logs')
@@ -1865,7 +1895,7 @@ export async function getSectionsBatchData(
             .eq('is_active', true)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
-    ])
+    ]))
 
     // Проверяем ошибки
     if (workLogsResult.error) {
@@ -1911,7 +1941,9 @@ export async function getSectionsBatchData(
       }
     }
 
-    const [snapshotsResult, profilesResult, stageBudgetsResult] = await Promise.all([
+    const [snapshotsResult, profilesResult, stageBudgetsResult] = await Sentry.startSpan(
+      { name: 'getSectionsBatchData.secondBatch', op: 'db.query' },
+      () => Promise.all([
       stageIds.length > 0
         ? supabase
             .from('stage_readiness_snapshots')
@@ -1946,7 +1978,7 @@ export async function getSectionsBatchData(
             .in('entity_id', stageIds)
             .eq('is_active', true)
         : Promise.resolve({ data: [], error: null }),
-    ])
+    ]))
 
     if (snapshotsResult.error) {
       console.error('[getSectionsBatchData] Snapshots error:', snapshotsResult.error)

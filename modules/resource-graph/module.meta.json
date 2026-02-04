@@ -1486,6 +1486,34 @@
         "7. Протестировать все interactive элементы (drag, resize, click)",
         "8. Проверить с разными ролями пользователей"
       ]
+    },
+    {
+      "id": "RG-042",
+      "title": "[Refactor] Рефакторинг модалок и исправление hardcoded цветов",
+      "description": "P2 задачи из аудита коммитов:\n\n1. **Разбить SectionModal** (~689 строк) на подкомпоненты:\n   - SectionModalHeader\n   - SectionModalTabs\n   - SectionModalDates\n   - SectionModalContent\n\n2. **Разбить StageModal** (~679 строк) на подкомпоненты:\n   - StageModalHeader\n   - StageModalDates\n   - StageModalLoadings\n   - StageModalContent\n\n3. **Исправить hardcoded цвета:**\n   - `bg-slate-900` → `bg-card` в Create/Delete модалках\n   - `bg-teal-500` → `bg-amber-500` в SectionCreateModal (соответствие дизайн-системе)",
+      "category": "refactor",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-02-04",
+      "updatedAt": "2026-02-04",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/modals/components/section/SectionModal.tsx",
+        "modules/modals/components/stage/StageModal.tsx",
+        "modules/modals/components/section/SectionCreateModal.tsx",
+        "modules/modals/components/object/DeleteObjectModal.tsx",
+        "modules/modals/components/section/DeleteSectionModal.tsx"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "SectionModal разбит на 4+ подкомпонента, основной файл < 200 строк",
+        "StageModal разбит на 4+ подкомпонента, основной файл < 200 строк",
+        "Нет hardcoded bg-slate-900, используется bg-card",
+        "Нет bg-teal-500, используется bg-amber-500",
+        "npm run build проходит без ошибок"
+      ]
     }
   ],
 

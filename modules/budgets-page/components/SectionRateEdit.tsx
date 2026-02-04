@@ -10,7 +10,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { queryKeys } from '@/modules/cache'
+import { queryKeys, type CachedPaginatedData } from '@/modules/cache'
 import { useOperationGuard } from '../hooks/use-operation-guard'
 import { updateSectionHourlyRate } from '../actions/decomposition'
 import {
@@ -26,19 +26,7 @@ import type { HierarchyNode } from '../types'
 // Types
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: HierarchyNode[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+type CachedResourceGraphData = CachedPaginatedData<HierarchyNode>
 
 interface SectionRateEditProps {
   /** ID раздела */

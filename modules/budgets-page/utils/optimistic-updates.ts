@@ -7,25 +7,13 @@
 
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import type { HierarchyNode, BudgetInfo } from '../types'
-import { queryKeys } from '@/modules/cache'
+import { queryKeys, type CachedPaginatedData } from '@/modules/cache'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: HierarchyNode[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+type CachedResourceGraphData = CachedPaginatedData<HierarchyNode>
 
 export type OptimisticSnapshot = Array<[QueryKey, CachedResourceGraphData | undefined]>
 

@@ -10,9 +10,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Loader2, AlertTriangle, Trash2, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
-import { queryKeys } from '@/modules/cache'
+import { queryKeys, type CachedPaginatedData } from '@/modules/cache'
 import { cn } from '@/lib/utils'
 import type { Project } from '@/modules/resource-graph/types'
 
@@ -23,19 +24,7 @@ let deleteOperationCounter = 0
 // Types
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: Project[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+type CachedResourceGraphData = CachedPaginatedData<Project>
 
 export interface DeleteObjectModalProps {
   isOpen: boolean
@@ -250,8 +239,23 @@ export function DeleteObjectModal({
     onClose()
 
     try {
-      // Получаем все разделы объекта
-      const { data: sections } = await supabase
+      await Sentry.startSpan(
+        {
+          name: 'DeleteObject',
+          op: 'db.mutation',
+          attributes: {
+            objectId,
+            objectName,
+            sectionsCount: deleteStats.sections_count,
+            relatedItemsCount: deleteStats.sections_count +
+              deleteStats.decomposition_stages_count +
+              deleteStats.decomposition_items_count +
+              deleteStats.budgets_count,
+          },
+        },
+        async () => {
+          // Получаем все разделы объекта
+          const { data: sections } = await supabase
         .from('sections')
         .select('section_id')
         .eq('section_object_id', objectId)
@@ -405,12 +409,14 @@ export function DeleteObjectModal({
         return
       }
 
-      // Инвалидируем другие связанные кэши (resourceGraph уже обновлён оптимистично)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.sections.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
-      ])
+          // Инвалидируем другие связанные кэши (resourceGraph уже обновлён оптимистично)
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.sections.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
+          ])
+        }
+      )
 
       const successMessage = deletedItems.length > 0
         ? `Также удалено: ${deletedItems.join(', ')}`

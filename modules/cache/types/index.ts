@@ -70,6 +70,12 @@ export type PaginatedActionResult<T> =
   | { success: false; error: string }
 
 /**
+ * Тип успешного результата с пагинацией (для работы с кэшированными данными)
+ * Используется когда данные уже в кэше и success: true гарантирован
+ */
+export type CachedPaginatedData<T> = Extract<PaginatedActionResult<T>, { success: true }>
+
+/**
  * Базовые фильтры для списков
  */
 export interface BaseFilters {

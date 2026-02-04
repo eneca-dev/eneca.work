@@ -13,7 +13,7 @@
 
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys, staleTimePresets } from '@/modules/cache'
+import { queryKeys, staleTimePresets, type CachedPaginatedData } from '@/modules/cache'
 
 // Hooks
 import { useDecompositionBootstrap, useEmployees } from './useDecompositionStage'
@@ -64,19 +64,8 @@ export interface DecompositionDataResult {
 // Helpers - Transform resourceGraph data to modal format
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: Project[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+// Алиас для удобства чтения
+type CachedResourceGraphData = CachedPaginatedData<Project>
 
 /**
  * Ищет раздел в кешированных данных Resource Graph

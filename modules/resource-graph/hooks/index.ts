@@ -475,7 +475,7 @@ export const useUpdateLoadingDates = createCacheMutation<
 
   // Инвалидируем sectionsBatch чтобы предотвратить rollback на timeline
   invalidateKeys: () => [
-    ['resource-graph', 'sectionsBatch'],
+    queryKeys.resourceGraph.allSectionsBatch(),
   ],
 })
 
@@ -642,7 +642,7 @@ export const useCreateLoading = createCacheMutation<
   // Инвалидируем кеш после создания чтобы получить реальный ID
   invalidateKeys: (input) => [
     queryKeys.resourceGraph.loadings(input.sectionId),
-    ['resource-graph', 'sectionsBatch'], // Инвалидируем sectionsBatch чтобы timeline обновился
+    queryKeys.resourceGraph.allSectionsBatch(), // Инвалидируем sectionsBatch чтобы timeline обновился
   ],
 })
 
@@ -722,10 +722,10 @@ export const useUpdateLoading = createCacheMutation<
     if (input.updates.responsibleId || input.updates.stageId) {
       return [
         queryKeys.resourceGraph.loadings(input.sectionId),
-        ['resource-graph', 'sectionsBatch'], // Инвалидируем sectionsBatch чтобы timeline обновился
+        queryKeys.resourceGraph.allSectionsBatch(), // Инвалидируем sectionsBatch чтобы timeline обновился
       ]
     }
-    return [['resource-graph', 'sectionsBatch']] // Всегда инвалидируем sectionsBatch для timeline
+    return [queryKeys.resourceGraph.allSectionsBatch()] // Всегда инвалидируем sectionsBatch для timeline
   },
 })
 
@@ -771,7 +771,7 @@ export const useDeleteLoading = createCacheMutation<
   },
 
   // Инвалидируем sectionsBatch чтобы timeline обновился
-  invalidateKeys: () => [['resource-graph', 'sectionsBatch']],
+  invalidateKeys: () => [queryKeys.resourceGraph.allSectionsBatch()],
 })
 
 // ============================================================================

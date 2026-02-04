@@ -21,7 +21,7 @@ import { useUsers, type CachedUser } from '@/modules/cache'
 import type { DecompositionStage, DecompositionItem } from '@/modules/resource-graph/types'
 import { useStageResponsibles } from '@/modules/resource-graph/hooks'
 import type { BaseModalProps } from '../../types'
-import { useUpdateDecompositionStage, useStageStatuses } from '../../hooks'
+import { useUpdateDecompositionStage, useStageStatuses, usePendingDates } from '../../hooks'
 import { StatusDropdown, type StatusOption } from '../section/StatusDropdown'
 import { DateRangeInput } from '../section/DateRangeInput'
 import { ResponsiblesDropdown } from './ResponsiblesDropdown'
@@ -158,21 +158,33 @@ export function StageModal({
   const [saveError, setSaveError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
-  // Локальное состояние для дат (перед сохранением)
-  const [isEditingDates, setIsEditingDates] = useState(false)
-  const [pendingDates, setPendingDates] = useState<{ start: string | null; end: string | null }>({
-    start: null,
-    end: null,
+  // Pending dates через хук
+  const dates = usePendingDates({
+    onSave: async (pendingDates) => {
+      setSavingField('dates')
+      try {
+        await updateMutation.mutateAsync({
+          stageId,
+          sectionId,
+          startDate: pendingDates.start,
+          endDate: pendingDates.end,
+        })
+        setValue('startDate', pendingDates.start)
+        setValue('endDate', pendingDates.end)
+      } finally {
+        setSavingField(null)
+      }
+    },
+    onSaveError: (err) => setSaveError(err.message),
   })
 
   useEffect(() => {
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
-      setIsEditingDates(false)
-      setPendingDates({ start: null, end: null })
+      dates.reset()
     }
-  }, [isOpen])
+  }, [isOpen, dates.reset])
 
   useEffect(() => {
     if (editingName && nameInputRef.current) {
@@ -271,60 +283,10 @@ export function StageModal({
     }
   }, [form, saveField])
 
-  // Локальное изменение дат (БЕЗ сохранения в БД)
-  const handleStartDateChange = useCallback(
-    (value: string) => {
-      const dateValue = value || null
-      setPendingDates((prev) => ({ ...prev, start: dateValue }))
-    },
-    []
-  )
-
-  const handleEndDateChange = useCallback(
-    (value: string) => {
-      const dateValue = value || null
-      setPendingDates((prev) => ({ ...prev, end: dateValue }))
-    },
-    []
-  )
-
-  // Сохранение дат в БД (вызывается кнопкой "Сохранить")
-  const handleDatesSave = useCallback(async () => {
-    setSavingField('dates')
-    setSaveError(null)
-
-    try {
-      await updateMutation.mutateAsync({
-        stageId,
-        sectionId,
-        startDate: pendingDates.start,
-        endDate: pendingDates.end,
-      })
-      setValue('startDate', pendingDates.start)
-      setValue('endDate', pendingDates.end)
-      setIsEditingDates(false)
-    } catch (err) {
-      console.error('Save dates error:', err)
-      setSaveError(err instanceof Error ? err.message : 'Ошибка сохранения дат')
-    } finally {
-      setSavingField(null)
-    }
-  }, [stageId, sectionId, updateMutation, pendingDates, setValue])
-
-  // Отмена редактирования дат
-  const handleDatesCancel = useCallback(() => {
-    setPendingDates({ start: null, end: null })
-    setIsEditingDates(false)
-  }, [])
-
-  // Начать редактирование дат
+  // Handler для редактирования дат (wrapper для хука)
   const handleDatesEdit = useCallback(() => {
-    setPendingDates({
-      start: watchedStartDate,
-      end: watchedEndDate,
-    })
-    setIsEditingDates(true)
-  }, [watchedStartDate, watchedEndDate])
+    dates.handleEdit(watchedStartDate, watchedEndDate)
+  }, [dates, watchedStartDate, watchedEndDate])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Keyboard handlers
@@ -479,17 +441,17 @@ export function StageModal({
                   <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Период
                   </label>
-                  {isEditingDates ? (
+                  {dates.isEditing ? (
                     <div className="flex items-center gap-2">
                       <DateRangeInput
                         idPrefix="stage-date"
-                        startDate={pendingDates.start}
-                        endDate={pendingDates.end}
-                        onStartDateChange={handleStartDateChange}
-                        onEndDateChange={handleEndDateChange}
+                        startDate={dates.pendingDates.start}
+                        endDate={dates.pendingDates.end}
+                        onStartDateChange={dates.handleStartDateChange}
+                        onEndDateChange={dates.handleEndDateChange}
                       />
                       <button
-                        onClick={handleDatesSave}
+                        onClick={dates.handleSave}
                         disabled={savingField === 'dates'}
                         className={cn(
                           'p-1 rounded text-green-600 hover:bg-green-500/10',
@@ -505,7 +467,7 @@ export function StageModal({
                         )}
                       </button>
                       <button
-                        onClick={handleDatesCancel}
+                        onClick={dates.handleCancel}
                         disabled={savingField === 'dates'}
                         className="p-1 rounded text-muted-foreground hover:bg-muted/50 transition-colors shrink-0"
                         aria-label="Отменить"
@@ -515,7 +477,7 @@ export function StageModal({
                     </div>
                   ) : (
                     <button
-                      onClick={handleDatesEdit}
+                      onClick={() => dates.handleEdit(watchedStartDate, watchedEndDate)}
                       className="group w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                       aria-label="Редактировать даты"
                     >

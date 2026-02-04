@@ -24,7 +24,7 @@ import { useUsers, type CachedUser } from '@/modules/cache'
 import type { Section } from '@/modules/resource-graph/types'
 import { getInitials } from '@/modules/resource-graph/utils'
 import type { BaseModalProps } from '../../types'
-import { useUpdateSection } from '../../hooks/useUpdateSection'
+import { useUpdateSection, usePendingDates } from '../../hooks'
 import { SectionMetrics } from './SectionMetrics'
 import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
@@ -154,11 +154,25 @@ export function SectionModal({
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
-  // Локальное состояние для дат (перед сохранением)
-  const [isEditingDates, setIsEditingDates] = useState(false)
-  const [pendingDates, setPendingDates] = useState<{ start: string | null; end: string | null }>({
-    start: null,
-    end: null,
+  // Pending dates через хук
+  const dates = usePendingDates({
+    onSave: async (pendingDates) => {
+      setSavingField('dates')
+      try {
+        await updateMutation.mutateAsync({
+          sectionId,
+          data: {
+            startDate: pendingDates.start,
+            endDate: pendingDates.end,
+          },
+        })
+        setValue('startDate', pendingDates.start)
+        setValue('endDate', pendingDates.end)
+      } finally {
+        setSavingField(null)
+      }
+    },
+    onSaveError: (err) => setSaveError(err.message),
   })
 
   const originalDescription = useRef<string>('')
@@ -171,10 +185,9 @@ export function SectionModal({
     if (!isOpen) {
       setEditingName(false)
       setSaveError(null)
-      setIsEditingDates(false)
-      setPendingDates({ start: null, end: null })
+      dates.reset()
     }
-  }, [isOpen, initialTab])
+  }, [isOpen, initialTab, dates.reset])
 
   // Focus name input when editing starts
   useEffect(() => {
@@ -263,61 +276,10 @@ export function SectionModal({
     [saveField]
   )
 
-  // Локальное изменение дат (БЕЗ сохранения в БД)
-  const handleStartDateChange = useCallback(
-    (value: string) => {
-      const dateValue = value || null
-      setPendingDates((prev) => ({ ...prev, start: dateValue }))
-    },
-    []
-  )
-
-  const handleEndDateChange = useCallback(
-    (value: string) => {
-      const dateValue = value || null
-      setPendingDates((prev) => ({ ...prev, end: dateValue }))
-    },
-    []
-  )
-
-  // Сохранение дат в БД (вызывается кнопкой "Сохранить")
-  const handleDatesSave = useCallback(async () => {
-    setSavingField('dates')
-    setSaveError(null)
-
-    try {
-      await updateMutation.mutateAsync({
-        sectionId,
-        data: {
-          startDate: pendingDates.start,
-          endDate: pendingDates.end,
-        },
-      })
-      setValue('startDate', pendingDates.start)
-      setValue('endDate', pendingDates.end)
-      setIsEditingDates(false)
-    } catch (err) {
-      console.error('Save dates error:', err)
-      setSaveError(err instanceof Error ? err.message : 'Ошибка сохранения дат')
-    } finally {
-      setSavingField(null)
-    }
-  }, [sectionId, updateMutation, pendingDates, setValue])
-
-  // Отмена редактирования дат
-  const handleDatesCancel = useCallback(() => {
-    setPendingDates({ start: null, end: null })
-    setIsEditingDates(false)
-  }, [])
-
-  // Начать редактирование дат
+  // Handlers для дат используем из хука dates.*
   const handleDatesEdit = useCallback(() => {
-    setPendingDates({
-      start: watchedStartDate,
-      end: watchedEndDate,
-    })
-    setIsEditingDates(true)
-  }, [watchedStartDate, watchedEndDate])
+    dates.handleEdit(watchedStartDate, watchedEndDate)
+  }, [dates, watchedStartDate, watchedEndDate])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Keyboard handlers
@@ -514,17 +476,17 @@ export function SectionModal({
 
                 {/* Dates - with save/cancel */}
                 <div className="flex items-center gap-2">
-                  {isEditingDates ? (
+                  {dates.isEditing ? (
                     <>
                       <DateRangeInput
                         idPrefix="section-date"
-                        startDate={pendingDates.start}
-                        endDate={pendingDates.end}
-                        onStartDateChange={handleStartDateChange}
-                        onEndDateChange={handleEndDateChange}
+                        startDate={dates.pendingDates.start}
+                        endDate={dates.pendingDates.end}
+                        onStartDateChange={dates.handleStartDateChange}
+                        onEndDateChange={dates.handleEndDateChange}
                       />
                       <button
-                        onClick={handleDatesSave}
+                        onClick={dates.handleSave}
                         disabled={savingField === 'dates'}
                         className={cn(
                           'p-1 rounded text-green-600 hover:bg-green-500/10',
@@ -540,7 +502,7 @@ export function SectionModal({
                         )}
                       </button>
                       <button
-                        onClick={handleDatesCancel}
+                        onClick={dates.handleCancel}
                         disabled={savingField === 'dates'}
                         className="p-1 rounded text-muted-foreground hover:bg-muted/50 transition-colors"
                         aria-label="Отменить"

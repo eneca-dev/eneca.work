@@ -12,7 +12,7 @@ import { Loader2, AlertTriangle, Trash2, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
-import { queryKeys } from '@/modules/cache'
+import { queryKeys, type CachedPaginatedData } from '@/modules/cache'
 import { cn } from '@/lib/utils'
 import type { Project } from '@/modules/resource-graph/types'
 
@@ -23,19 +23,7 @@ let deleteSectionOperationCounter = 0
 // Types
 // ============================================================================
 
-/**
- * Тип кешированных данных Resource Graph (с пагинацией)
- */
-type CachedResourceGraphData = {
-  success: true
-  data: Project[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+type CachedResourceGraphData = CachedPaginatedData<Project>
 
 export interface DeleteSectionModalProps {
   isOpen: boolean

@@ -8,6 +8,7 @@
 export type {
   ActionResult,
   PaginatedActionResult,
+  CachedPaginatedData,
   BaseFilters,
   RealtimePayload,
   RealtimeSubscriptionConfig,
