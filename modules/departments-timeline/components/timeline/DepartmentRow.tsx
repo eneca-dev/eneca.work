@@ -6,14 +6,16 @@
 
 'use client'
 
-import { Fragment, useMemo } from 'react'
+import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
-import { formatMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { useDepartmentsTimelineUIStore, useRowExpanded } from '../../stores'
 import { useConfirmTeamActivity, useConfirmMultipleTeamsActivity } from '../../hooks'
 import { FreshnessIndicator } from '@/components/shared/timeline'
 import { TeamRow } from './TeamRow'
+import { ProjectRow } from './ProjectRow'
+import { groupEmployeesByProjects } from '../../utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import type { Department, TeamFreshness, DayCell } from '../../types'
 
@@ -31,6 +33,16 @@ export function DepartmentRow({
   freshnessData,
 }: DepartmentRowProps) {
   const { isExpanded, toggle } = useRowExpanded('department', department.id)
+  const groupByMode = useDepartmentsTimelineUIStore((state) => state.groupByMode)
+
+  // Get today's date for project grouping filter
+  const today = useMemo(() => formatMinskDate(getTodayMinsk()), [])
+
+  // Group employees by projects (for 'projects' mode)
+  const projectGroups = useMemo(() => {
+    if (groupByMode !== 'projects') return []
+    return groupEmployeesByProjects(department, today)
+  }, [department, today, groupByMode])
 
   // Mutations for freshness
   const confirmActivityMutation = useConfirmTeamActivity()
@@ -214,18 +226,30 @@ export function DepartmentRow({
         </div>
       </div>
 
-      {/* Teams (expanded) */}
+      {/* Expanded content: Teams or Projects depending on groupByMode */}
       {isExpanded && (
         <>
-          {department.teams.map((team) => (
-            <TeamRow
-              key={team.id}
-              team={team}
-              dayCells={dayCells}
-              freshnessData={freshnessData}
-              onConfirmActivity={handleConfirmActivity}
-            />
-          ))}
+          {groupByMode === 'teams' ? (
+            // Mode: By Teams (Department → Team → Employee)
+            department.teams.map((team) => (
+              <TeamRow
+                key={team.id}
+                team={team}
+                dayCells={dayCells}
+                freshnessData={freshnessData}
+                onConfirmActivity={handleConfirmActivity}
+              />
+            ))
+          ) : (
+            // Mode: By Projects (Department → Project → Employee)
+            projectGroups.map((project) => (
+              <ProjectRow
+                key={project.projectId}
+                project={project}
+                dayCells={dayCells}
+              />
+            ))
+          )}
         </>
       )}
     </>

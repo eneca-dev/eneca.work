@@ -6,7 +6,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import type { TreeNodeType } from '../types'
+import type { TreeNodeType, GroupByMode } from '../types'
 
 // ============================================================================
 // UI State Store
@@ -22,6 +22,8 @@ interface UIState {
   selectedItemId: string | null
   /** Тип выбранного элемента */
   selectedItemType: TreeNodeType | null
+  /** Режим группировки: по командам или по проектам */
+  groupByMode: GroupByMode
 
   // Check operations
   isExpanded: (type: TreeNodeType, id: string) => boolean
@@ -41,12 +43,16 @@ interface UIState {
 
   // Selection
   setSelectedItem: (id: string | null, type?: TreeNodeType | null) => void
+
+  // Group by mode
+  setGroupByMode: (mode: GroupByMode) => void
 }
 
 const createEmptyExpandedNodes = (): Record<TreeNodeType, Set<string>> => ({
   department: new Set(),
   team: new Set(),
   employee: new Set(),
+  project: new Set(),
 })
 
 /** Сериализация Set в массив для localStorage */
@@ -56,6 +62,7 @@ const serializeExpandedNodes = (
   department: Array.from(nodes.department),
   team: Array.from(nodes.team),
   employee: Array.from(nodes.employee),
+  project: Array.from(nodes.project),
 })
 
 /** Десериализация массива в Set из localStorage */
@@ -65,6 +72,7 @@ const deserializeExpandedNodes = (
   department: new Set(nodes.department || []),
   team: new Set(nodes.team || []),
   employee: new Set(nodes.employee || []),
+  project: new Set(nodes.project || []),
 })
 
 export const useDepartmentsTimelineUIStore = create<UIState>()(
@@ -74,6 +82,7 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         expandedNodes: createEmptyExpandedNodes(),
         selectedItemId: null,
         selectedItemType: null,
+        groupByMode: 'teams',
 
         isExpanded: (type, id) => get().expandedNodes[type].has(id),
 
@@ -193,11 +202,15 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
 
         setSelectedItem: (id, type = null) =>
           set({ selectedItemId: id, selectedItemType: type }),
+
+        setGroupByMode: (mode) =>
+          set({ groupByMode: mode }),
       }),
       {
         name: 'departments-timeline-ui-state',
         partialize: (state) => ({
           expandedNodes: state.expandedNodes,
+          groupByMode: state.groupByMode,
         }),
         storage: {
           getItem: (name) => {

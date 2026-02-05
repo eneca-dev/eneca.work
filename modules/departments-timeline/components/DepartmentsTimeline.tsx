@@ -8,8 +8,9 @@
 'use client'
 
 import { useMemo, useCallback, useRef, useState } from 'react'
-import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
+import { ChevronsUpDown, ChevronsDownUp, Database, Users, FolderKanban } from 'lucide-react'
 import { addDays } from 'date-fns'
+import { cn } from '@/lib/utils'
 import { getTodayMinsk } from '@/lib/timezone-utils'
 import { useDepartmentsData, useTeamsFreshness, useCompanyCalendarEvents } from '../hooks'
 import { useDepartmentsTimelineUIStore } from '../stores'
@@ -106,7 +107,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
   // UI state
-  const { collapseAll, expandAll } = useDepartmentsTimelineUIStore()
+  const { collapseAll, expandAll, groupByMode, setGroupByMode } = useDepartmentsTimelineUIStore()
 
   // Data fetching with external query params
   const { data: departments, isLoading, error } = useDepartmentsData(
@@ -185,14 +186,50 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
           >
             <div className="flex" style={{ minWidth: totalWidth }}>
               {/* Sidebar header - sticky left */}
-              <div
-                className="shrink-0 flex items-center justify-between px-3 py-1.5 border-r border-border bg-card sticky left-0 z-20"
-                style={{ width: SIDEBAR_WIDTH }}
-              >
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Отделы / Команды
-                </span>
-                <TooltipProvider>
+              <TooltipProvider>
+                <div
+                  className="shrink-0 flex items-center justify-between px-3 py-1.5 border-r border-border bg-card sticky left-0 z-20"
+                  style={{ width: SIDEBAR_WIDTH }}
+                >
+                  {/* Group by mode toggle */}
+                  <div className="flex items-center gap-1 p-0.5 bg-muted/60 rounded-md">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setGroupByMode('teams')}
+                          className={cn(
+                            'flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all duration-200',
+                            groupByMode === 'teams'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                          )}
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Команды</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Группировка по командам</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setGroupByMode('projects')}
+                          className={cn(
+                            'flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all duration-200',
+                            groupByMode === 'projects'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                          )}
+                        >
+                          <FolderKanban className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Проекты</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Группировка по проектам (на сегодня)</TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  {/* Expand/Collapse buttons */}
                   <div className="flex items-center gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -221,8 +258,8 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                       <TooltipContent side="bottom">Свернуть всё</TooltipContent>
                     </Tooltip>
                   </div>
-                </TooltipProvider>
-              </div>
+                </div>
+              </TooltipProvider>
               {/* Timeline header with dates */}
               <TimelineHeader dayCells={dayCells} />
             </div>

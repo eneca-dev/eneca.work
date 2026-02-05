@@ -154,7 +154,14 @@ export interface TeamBatchOptions {
 /**
  * Типы узлов дерева для expand/collapse
  */
-export type TreeNodeType = 'department' | 'team' | 'employee'
+export type TreeNodeType = 'department' | 'team' | 'employee' | 'project'
+
+/**
+ * Режим группировки в таймлайне отделов
+ * - 'teams' — группировка по командам (Department → Team → Employee)
+ * - 'projects' — группировка по проектам (Department → Project → Employee)
+ */
+export type GroupByMode = 'teams' | 'projects'
 
 /**
  * Универсальный узел дерева
@@ -163,4 +170,16 @@ export interface TreeNode {
   type: TreeNodeType
   id: string
   parentId?: string
+}
+
+/**
+ * Проект с сотрудниками (для режима группировки по проектам)
+ */
+export interface ProjectGroup {
+  projectId: string
+  projectName: string
+  projectStatus?: string
+  employees: Employee[]
+  /** Общая загрузка по проекту на каждый день */
+  dailyWorkloads?: Record<string, number>
 }

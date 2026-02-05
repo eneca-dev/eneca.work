@@ -22,6 +22,9 @@ export const DEPARTMENT_ROW_HEIGHT = 48
 /** Высота строки команды */
 export const TEAM_ROW_HEIGHT = 40
 
+/** Высота строки проекта */
+export const PROJECT_ROW_HEIGHT = 40
+
 /** Высота строки сотрудника (базовая) */
 export const EMPLOYEE_ROW_HEIGHT = 44
 
