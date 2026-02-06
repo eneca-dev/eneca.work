@@ -49,41 +49,71 @@ CREATE TABLE public.assignments (
   CONSTRAINT assignments_from_section_id_fkey FOREIGN KEY (from_section_id) REFERENCES public.sections(section_id),
   CONSTRAINT assignments_to_section_id_fkey FOREIGN KEY (to_section_id) REFERENCES public.sections(section_id)
 );
-CREATE TABLE public.budget_types (
-  type_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL UNIQUE,
-  color character varying NOT NULL DEFAULT '#6B7280'::character varying,
-  description text,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT budget_types_pkey PRIMARY KEY (type_id)
-);
-CREATE TABLE public.budget_versions (
-  version_id uuid NOT NULL DEFAULT gen_random_uuid(),
+CREATE TABLE public.budget_expenses (
+  expense_id uuid NOT NULL DEFAULT gen_random_uuid(),
   budget_id uuid NOT NULL,
-  planned_amount numeric NOT NULL CHECK (planned_amount >= 0::numeric),
-  effective_from date NOT NULL DEFAULT CURRENT_DATE,
-  effective_to date,
-  comment text,
-  created_by uuid NOT NULL,
+  part_id uuid,
+  amount numeric NOT NULL,
+  description text,
+  expense_date date NOT NULL DEFAULT CURRENT_DATE,
+  work_log_id uuid,
+  status character varying NOT NULL DEFAULT 'approved'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying]::text[])),
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  rejection_reason text,
+  created_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT budget_versions_pkey PRIMARY KEY (version_id),
-  CONSTRAINT budget_versions_budget_id_fkey FOREIGN KEY (budget_id) REFERENCES public.budgets(budget_id),
-  CONSTRAINT budget_versions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+  CONSTRAINT budget_expenses_pkey PRIMARY KEY (expense_id),
+  CONSTRAINT budget_expenses_budget_id_fkey FOREIGN KEY (budget_id) REFERENCES public.budgets(budget_id),
+  CONSTRAINT budget_expenses_part_id_fkey FOREIGN KEY (part_id) REFERENCES public.budget_parts(part_id),
+  CONSTRAINT budget_expenses_work_log_id_fkey FOREIGN KEY (work_log_id) REFERENCES public.work_logs(work_log_id),
+  CONSTRAINT budget_expenses_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(user_id),
+  CONSTRAINT budget_expenses_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id)
+);
+CREATE TABLE public.budget_history (
+  history_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  budget_id uuid NOT NULL,
+  change_type character varying NOT NULL CHECK (change_type::text = ANY (ARRAY['created'::character varying, 'amount_changed'::character varying, 'parts_changed'::character varying, 'status_changed'::character varying]::text[])),
+  previous_state jsonb,
+  new_state jsonb,
+  comment text,
+  changed_by uuid,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT budget_history_pkey PRIMARY KEY (history_id),
+  CONSTRAINT budget_history_budget_id_fkey FOREIGN KEY (budget_id) REFERENCES public.budgets(budget_id),
+  CONSTRAINT budget_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.profiles(user_id)
+);
+CREATE TABLE public.budget_parts (
+  part_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  budget_id uuid NOT NULL,
+  part_type USER-DEFINED NOT NULL DEFAULT 'main'::budget_part_type,
+  custom_name character varying,
+  percentage numeric CHECK (percentage IS NULL OR percentage >= 0::numeric AND percentage <= 100::numeric),
+  fixed_amount numeric,
+  calculated_amount numeric DEFAULT COALESCE(fixed_amount, (0)::numeric),
+  requires_approval boolean NOT NULL DEFAULT false,
+  approval_threshold numeric,
+  color character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT budget_parts_pkey PRIMARY KEY (part_id),
+  CONSTRAINT budget_parts_budget_id_fkey FOREIGN KEY (budget_id) REFERENCES public.budgets(budget_id)
 );
 CREATE TABLE public.budgets (
   budget_id uuid NOT NULL DEFAULT gen_random_uuid(),
   entity_type USER-DEFINED NOT NULL,
   entity_id uuid NOT NULL,
-  name character varying NOT NULL,
+  parent_budget_id uuid,
+  total_amount numeric NOT NULL DEFAULT 0,
+  name character varying NOT NULL DEFAULT 'Бюджет'::character varying,
+  description text,
   is_active boolean NOT NULL DEFAULT true,
-  created_by uuid NOT NULL,
+  created_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  budget_type_id uuid NOT NULL,
   CONSTRAINT budgets_pkey PRIMARY KEY (budget_id),
-  CONSTRAINT budgets_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
-  CONSTRAINT budgets_budget_type_id_fkey FOREIGN KEY (budget_type_id) REFERENCES public.budget_types(type_id)
+  CONSTRAINT budgets_v2_parent_budget_id_fkey FOREIGN KEY (parent_budget_id) REFERENCES public.budgets(budget_id),
+  CONSTRAINT budgets_v2_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.calendar_events (
   calendar_event_id uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
@@ -130,6 +160,19 @@ CREATE TABLE public.chat_messages (
   CONSTRAINT chat_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.chat_conversations(id),
   CONSTRAINT chat_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.checkpoint_audit (
+  audit_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  checkpoint_id uuid NOT NULL,
+  changed_by uuid,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  operation_type text NOT NULL CHECK (operation_type = ANY (ARRAY['CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'COMPLETE'::text, 'UNCOMPLETE'::text])),
+  field_name text NOT NULL,
+  old_value text,
+  new_value text,
+  CONSTRAINT checkpoint_audit_pkey PRIMARY KEY (audit_id),
+  CONSTRAINT checkpoint_audit_checkpoint_id_fkey FOREIGN KEY (checkpoint_id) REFERENCES public.section_checkpoints(checkpoint_id),
+  CONSTRAINT checkpoint_audit_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.checkpoint_blobs (
   thread_id text NOT NULL,
   checkpoint_ns text NOT NULL DEFAULT ''::text,
@@ -160,7 +203,9 @@ CREATE TABLE public.checkpoint_types (
   description text,
   is_custom boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT checkpoint_types_pkey PRIMARY KEY (type_id)
+  created_by uuid,
+  CONSTRAINT checkpoint_types_pkey PRIMARY KEY (type_id),
+  CONSTRAINT checkpoint_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.checkpoint_writes (
   thread_id text NOT NULL,
@@ -221,6 +266,19 @@ CREATE TABLE public.countries (
   name text NOT NULL UNIQUE,
   CONSTRAINT countries_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.dashboard_widgets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  viz_type text NOT NULL CHECK (viz_type = ANY (ARRAY['bar'::text, 'line'::text, 'pie'::text, 'table'::text, 'radar'::text, 'radialBar'::text, 'area'::text])),
+  layout jsonb NOT NULL DEFAULT '{"h": 3, "w": 4, "x": 0, "y": 0}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  widget_data jsonb,
+  z_index integer NOT NULL DEFAULT 0,
+  CONSTRAINT dashboard_widgets_pkey PRIMARY KEY (id),
+  CONSTRAINT dashboard_widgets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.dec_template_stages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   template_id uuid NOT NULL,
@@ -270,14 +328,16 @@ CREATE TABLE public.decomposition_items (
   decomposition_item_progress integer DEFAULT 0 CHECK (decomposition_item_progress >= 0 AND decomposition_item_progress <= 100),
   decomposition_item_stage_id uuid,
   decomposition_item_difficulty_id uuid,
+  external_id text,
+  external_source text,
   CONSTRAINT decomposition_items_pkey PRIMARY KEY (decomposition_item_id),
   CONSTRAINT decomposition_items_decomposition_item_section_id_fkey FOREIGN KEY (decomposition_item_section_id) REFERENCES public.sections(section_id),
   CONSTRAINT decomposition_items_decomposition_item_work_category_id_fkey FOREIGN KEY (decomposition_item_work_category_id) REFERENCES public.work_categories(work_category_id),
   CONSTRAINT decomposition_items_decomposition_item_responsible_fkey FOREIGN KEY (decomposition_item_responsible) REFERENCES public.profiles(user_id),
-  CONSTRAINT decomposition_items_decomposition_item_stage_id_fkey FOREIGN KEY (decomposition_item_stage_id) REFERENCES public.decomposition_stages(decomposition_stage_id),
   CONSTRAINT decomposition_items_decomposition_item_created_by_fkey FOREIGN KEY (decomposition_item_created_by) REFERENCES public.profiles(user_id),
   CONSTRAINT decomposition_items_decomposition_item_status_id_fkey FOREIGN KEY (decomposition_item_status_id) REFERENCES public.section_statuses(id),
-  CONSTRAINT decomposition_items_difficulty_fkey FOREIGN KEY (decomposition_item_difficulty_id) REFERENCES public.decomposition_difficulty_levels(difficulty_id)
+  CONSTRAINT decomposition_items_difficulty_fkey FOREIGN KEY (decomposition_item_difficulty_id) REFERENCES public.decomposition_difficulty_levels(difficulty_id),
+  CONSTRAINT decomposition_items_decomposition_item_stage_id_fkey FOREIGN KEY (decomposition_item_stage_id) REFERENCES public.decomposition_stages(decomposition_stage_id)
 );
 CREATE TABLE public.decomposition_stages (
   decomposition_stage_id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -292,7 +352,11 @@ CREATE TABLE public.decomposition_stages (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   decomposition_stage_responsibles ARRAY DEFAULT '{}'::uuid[],
+  stage_status_id uuid,
+  external_id text,
+  external_source text,
   CONSTRAINT decomposition_stages_pkey PRIMARY KEY (decomposition_stage_id),
+  CONSTRAINT decomposition_stages_stage_status_id_fkey FOREIGN KEY (stage_status_id) REFERENCES public.stage_statuses(id),
   CONSTRAINT decomposition_stages_decomposition_stage_section_id_fkey FOREIGN KEY (decomposition_stage_section_id) REFERENCES public.sections(section_id),
   CONSTRAINT decomposition_stages_decomposition_stage_status_id_fkey FOREIGN KEY (decomposition_stage_status_id) REFERENCES public.section_statuses(id),
   CONSTRAINT decomposition_stages_decomposition_stage_created_by_fkey FOREIGN KEY (decomposition_stage_created_by) REFERENCES public.profiles(user_id)
@@ -331,7 +395,7 @@ CREATE TABLE public.decomposition_templates (
 CREATE TABLE public.departments (
   ws_department_id integer,
   department_name text UNIQUE,
-  department_id uuid NOT NULL,
+  department_id uuid NOT NULL CHECK (department_id <> '00000000-0000-0000-0000-000000000000'::uuid),
   department_head_id uuid,
   subdivision_id uuid NOT NULL,
   CONSTRAINT departments_pkey PRIMARY KEY (department_id),
@@ -359,6 +423,17 @@ CREATE TABLE public.feedback_analytics_access (
   CONSTRAINT feedback_analytics_access_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES auth.users(id),
   CONSTRAINT feedback_analytics_access_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.item_progress_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  old_progress integer,
+  new_progress integer NOT NULL,
+  changed_by uuid,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_progress_history_pkey PRIMARY KEY (id),
+  CONSTRAINT item_progress_history_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.decomposition_items(decomposition_item_id),
+  CONSTRAINT item_progress_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.profiles(user_id)
+);
 CREATE TABLE public.loadings (
   loading_id uuid NOT NULL DEFAULT gen_random_uuid(),
   loading_responsible uuid,
@@ -382,7 +457,7 @@ CREATE TABLE public.loadings (
   CONSTRAINT loadings_loading_task_fkey FOREIGN KEY (loading_task) REFERENCES public.tasks(task_id),
   CONSTRAINT loadings_loading_stage_fkey FOREIGN KEY (loading_stage) REFERENCES public.decomposition_stages(decomposition_stage_id),
   CONSTRAINT loadings_loading_responsible_fkey FOREIGN KEY (loading_responsible) REFERENCES public.profiles(user_id),
-  CONSTRAINT loadings_loading_section_fk FOREIGN KEY (loading_section) REFERENCES public.sections(section_id)
+  CONSTRAINT loadings_loading_section_fkey FOREIGN KEY (loading_section) REFERENCES public.sections(section_id)
 );
 CREATE TABLE public.loadings_orphans_backup (
   loading_id uuid,
@@ -444,9 +519,9 @@ CREATE TABLE public.objects (
   external_source text DEFAULT 'worksection'::text,
   external_updated_at timestamp with time zone,
   CONSTRAINT objects_pkey PRIMARY KEY (object_id),
-  CONSTRAINT objects_object_stage_id_fkey FOREIGN KEY (object_stage_id) REFERENCES public.stages(stage_id),
   CONSTRAINT objects_object_project_id_fkey FOREIGN KEY (object_project_id) REFERENCES public.projects(project_id),
-  CONSTRAINT objects_object_responsible_fkey FOREIGN KEY (object_responsible) REFERENCES public.profiles(user_id)
+  CONSTRAINT objects_object_responsible_fkey FOREIGN KEY (object_responsible) REFERENCES public.profiles(user_id),
+  CONSTRAINT objects_object_stage_id_fkey FOREIGN KEY (object_stage_id) REFERENCES public.stages(stage_id)
 );
 CREATE TABLE public.permissions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -469,10 +544,10 @@ CREATE TABLE public.plan_loadings (
   plan_loading_stage uuid,
   plan_loading_category uuid,
   CONSTRAINT plan_loadings_pkey PRIMARY KEY (plan_loading_id),
-  CONSTRAINT plan_loadings_plan_loading_section_fkey FOREIGN KEY (plan_loading_section) REFERENCES public.sections(section_id),
   CONSTRAINT plan_loadings_plan_loading_created_by_fkey FOREIGN KEY (plan_loading_created_by) REFERENCES auth.users(id),
   CONSTRAINT plan_loadings_plan_loading_stage_fkey FOREIGN KEY (plan_loading_stage) REFERENCES public.decomposition_stages(decomposition_stage_id),
-  CONSTRAINT plan_loadings_plan_loading_category_fkey FOREIGN KEY (plan_loading_category) REFERENCES public.categories(category_id)
+  CONSTRAINT plan_loadings_plan_loading_category_fkey FOREIGN KEY (plan_loading_category) REFERENCES public.categories(category_id),
+  CONSTRAINT plan_loadings_plan_loading_section_fkey FOREIGN KEY (plan_loading_section) REFERENCES public.sections(section_id)
 );
 CREATE TABLE public.positions (
   ws_position_id integer,
@@ -498,6 +573,7 @@ CREATE TABLE public.profiles (
   city_id uuid,
   subdivision_id uuid,
   is_service boolean NOT NULL DEFAULT false,
+  must_change_password boolean DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT profiles_department_membership_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
   CONSTRAINT profiles_team_membership_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id),
@@ -518,6 +594,22 @@ CREATE TABLE public.project_deletion_log (
   error_message text,
   deleted_counts jsonb,
   CONSTRAINT project_deletion_log_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.project_reports (
+  report_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  stage_id uuid NOT NULL,
+  comment text NOT NULL,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  actual_readiness numeric CHECK (actual_readiness >= 0::numeric AND actual_readiness <= 100::numeric),
+  planned_readiness numeric CHECK (planned_readiness >= 0::numeric AND planned_readiness <= 100::numeric),
+  budget_spent numeric CHECK (budget_spent >= 0::numeric),
+  project_id uuid,
+  CONSTRAINT project_reports_pkey PRIMARY KEY (report_id),
+  CONSTRAINT project_reports_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id),
+  CONSTRAINT project_reports_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id),
+  CONSTRAINT project_reports_stage_id_fkey FOREIGN KEY (stage_id) REFERENCES public.stages(stage_id)
 );
 CREATE TABLE public.project_tag_links (
   project_id uuid NOT NULL,
@@ -542,7 +634,7 @@ CREATE TABLE public.project_tags (
   CONSTRAINT project_tags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.projects (
-  project_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL DEFAULT gen_random_uuid() CHECK (project_id <> '00000000-0000-0000-0000-000000000000'::uuid),
   project_name text NOT NULL,
   project_description text,
   project_manager uuid,
@@ -554,6 +646,7 @@ CREATE TABLE public.projects (
   external_id text,
   external_source text DEFAULT 'worksection'::text,
   external_updated_at timestamp without time zone,
+  stage_type text,
   CONSTRAINT projects_pkey PRIMARY KEY (project_id),
   CONSTRAINT projects_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(client_id),
   CONSTRAINT projects_project_lead_engineer_fkey FOREIGN KEY (project_lead_engineer) REFERENCES public.profiles(user_id),
@@ -586,10 +679,14 @@ CREATE TABLE public.section_checkpoints (
   custom_color text,
   created_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  completed_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT section_checkpoints_pkey PRIMARY KEY (checkpoint_id),
   CONSTRAINT section_checkpoints_section_fkey FOREIGN KEY (section_id) REFERENCES public.sections(section_id),
   CONSTRAINT section_checkpoints_type_fkey FOREIGN KEY (type_id) REFERENCES public.checkpoint_types(type_id),
-  CONSTRAINT section_checkpoints_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id)
+  CONSTRAINT section_checkpoints_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id),
+  CONSTRAINT section_checkpoints_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.section_comments (
   comment_id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -647,6 +744,7 @@ CREATE TABLE public.sections (
   section_status_id uuid,
   last_responsible_updated timestamp with time zone,
   last_status_updated timestamp with time zone,
+  section_hourly_rate numeric DEFAULT NULL::numeric,
   CONSTRAINT sections_pkey PRIMARY KEY (section_id),
   CONSTRAINT sections_section_object_id_fkey FOREIGN KEY (section_object_id) REFERENCES public.objects(object_id),
   CONSTRAINT sections_section_project_id_fkey FOREIGN KEY (section_project_id) REFERENCES public.projects(project_id),
@@ -681,6 +779,17 @@ CREATE TABLE public.stage_readiness_snapshots (
   CONSTRAINT stage_readiness_snapshots_pkey PRIMARY KEY (snapshot_id),
   CONSTRAINT stage_readiness_snapshots_stage_id_fkey FOREIGN KEY (stage_id) REFERENCES public.decomposition_stages(decomposition_stage_id)
 );
+CREATE TABLE public.stage_statuses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  color character varying NOT NULL,
+  description text,
+  kanban_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT stage_statuses_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.stages (
   stage_id uuid NOT NULL DEFAULT gen_random_uuid(),
   stage_name text NOT NULL,
@@ -695,7 +804,7 @@ CREATE TABLE public.stages (
   CONSTRAINT stages_stage_project_id_fkey FOREIGN KEY (stage_project_id) REFERENCES public.projects(project_id)
 );
 CREATE TABLE public.subdivisions (
-  subdivision_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subdivision_id uuid NOT NULL DEFAULT gen_random_uuid() CHECK (subdivision_id <> '00000000-0000-0000-0000-000000000000'::uuid),
   subdivision_name text NOT NULL UNIQUE,
   subdivision_head_id uuid,
   created_at timestamp with time zone DEFAULT now(),
@@ -726,7 +835,7 @@ CREATE TABLE public.tasks (
 CREATE TABLE public.teams (
   ws_team_id integer,
   team_name text,
-  team_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  team_id uuid NOT NULL DEFAULT gen_random_uuid() CHECK (team_id <> '00000000-0000-0000-0000-000000000000'::uuid),
   department_id uuid NOT NULL,
   team_lead_id uuid,
   CONSTRAINT teams_pkey PRIMARY KEY (team_id),
@@ -825,10 +934,11 @@ CREATE TABLE public.work_logs (
   work_log_hourly_rate numeric NOT NULL CHECK (work_log_hourly_rate >= 0::numeric),
   work_log_amount numeric DEFAULT (work_log_hours * work_log_hourly_rate),
   budget_id uuid NOT NULL,
+  external_id text,
+  external_source text,
   CONSTRAINT work_logs_pkey PRIMARY KEY (work_log_id),
   CONSTRAINT work_logs_decomposition_item_id_fkey FOREIGN KEY (decomposition_item_id) REFERENCES public.decomposition_items(decomposition_item_id),
-  CONSTRAINT work_logs_work_log_created_by_fkey FOREIGN KEY (work_log_created_by) REFERENCES public.profiles(user_id),
-  CONSTRAINT work_logs_budget_id_fkey FOREIGN KEY (budget_id) REFERENCES public.budgets(budget_id)
+  CONSTRAINT work_logs_work_log_created_by_fkey FOREIGN KEY (work_log_created_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.work_schedules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

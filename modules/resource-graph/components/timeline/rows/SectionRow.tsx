@@ -41,6 +41,9 @@ const SectionModal = dynamic(
 import { CheckpointCreateModal } from '@/modules/modals'
 import { CheckpointMarkers } from '@/modules/checkpoints'
 import { mapBatchCheckpointToCheckpoint } from '../../../utils'
+// MOCK DATA - prototype only
+import { getMockCheckpointsForSection } from '@/modules/checkpoints/mocks/mock-checkpoint-data'
+import { useCheckpointFilters } from '@/modules/checkpoints/stores/checkpoint-filter-store'
 
 // ============================================================================
 // Helpers
@@ -78,6 +81,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
   const queryClient = useQueryClient()
+
+  // MOCK DATA - prototype: фильтры чекпоинтов
+  const { selectedTypeIds, showProblemsOnly } = useCheckpointFilters()
 
   // Оптимистичные даты для мгновенного рендеринга рамки
   const [optimisticDates, setOptimisticDates] = useState<{
@@ -145,9 +151,33 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded, objectI
   // Checkpoints из batch данных (загружены в ObjectRow одним запросом)
   // Маппим BatchCheckpoint в Checkpoint для совместимости с CheckpointMarkers
   const batchCheckpoints = batchData?.checkpoints[section.id] ?? []
+  const allCheckpoints = useMemo(
+    () => {
+      const realCheckpoints = batchCheckpoints.map(mapBatchCheckpointToCheckpoint)
+      // MOCK DATA - prototype: добавляем моковые чекпоинты для демонстрации функционала "чекпоинты-проблемы"
+      // В production версии здесь будет проверка isDemoProject1(projectName)
+      const mockCheckpoints = getMockCheckpointsForSection(section.id)
+      return [...realCheckpoints, ...mockCheckpoints]
+    },
+    [batchCheckpoints, section.id]
+  )
+
+  // MOCK DATA - prototype: фильтрация чекпоинтов
   const checkpoints = useMemo(
-    () => batchCheckpoints.map(mapBatchCheckpointToCheckpoint),
-    [batchCheckpoints]
+    () => {
+      return allCheckpoints.filter((cp) => {
+        // Фильтр по типу
+        if (selectedTypeIds.length > 0 && !selectedTypeIds.includes(cp.type_id)) {
+          return false
+        }
+        // Фильтр по проблемам
+        if (showProblemsOnly && !cp.is_problem) {
+          return false
+        }
+        return true
+      })
+    },
+    [allCheckpoints, selectedTypeIds, showProblemsOnly]
   )
 
   // Бюджет раздела из batch данных (первый активный бюджет)

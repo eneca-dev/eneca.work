@@ -78,6 +78,21 @@ export interface Checkpoint {
   project_manager: string | null
   linked_sections: Array<{ section_id: string; section_name: string; object_id: string | null }>
   linked_sections_count: number
+  // MOCK DATA - prototype fields for checkpoint-problems feature
+  is_problem?: boolean
+  problem_resolutions?: ProblemResolution[]
+}
+
+/** История решений проблемного чекпоинта (MOCK DATA - prototype only) */
+export interface ProblemResolution {
+  resolution_id: string
+  resolved_by: string
+  resolved_by_name: string
+  resolved_at: string
+  comment: string
+  deadline_shift_days: number
+  /** Тип действия: 'comment' - добавлен комментарий, 'closed' - проблема закрыта */
+  action_type?: 'comment' | 'closed'
 }
 
 /** Запись audit trail */

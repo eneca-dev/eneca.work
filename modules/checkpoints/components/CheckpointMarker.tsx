@@ -17,13 +17,17 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getIcon } from '../constants/icon-map'
+import { AlertTriangle, CheckCircle } from 'lucide-react'
+import { ResolveProblemModal } from './ResolveProblemModal'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const MARKER_RADIUS = 8    // Радиус маркера
+const MARKER_RADIUS = 8    // Радиус маркера для обычных чекпоинтов
+const PROBLEM_MARKER_RADIUS = 11  // Радиус маркера для проблемных чекпоинтов (диаметр 22px)
 const ICON_SIZE = 10       // Размер иконки внутри маркера
+const PROBLEM_ICON_SIZE = 14  // Размер иконки для проблемных чекпоинтов
 
 // Смещение для чекпоинтов на одну дату (вертикальное)
 const OVERLAP_OFFSET_Y = 12   // Компактное смещение по Y для каждого следующего чекпоинта
@@ -74,6 +78,15 @@ export function CheckpointMarkers({
   sectionId,
   rowHeight = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS,
 }: CheckpointMarkersProps) {
+  // MOCK DATA - prototype: state для модалки решения проблемы
+  const [resolveProblemModal, setResolveProblemModal] = useState<{
+    checkpoint: Checkpoint | null
+    initialCloseProblem: boolean
+  }>({
+    checkpoint: null,
+    initialCloseProblem: false,
+  })
+
   if (!checkpoints || checkpoints.length === 0) return null
 
   // Группируем чекпоинты по датам и вычисляем их позиции
@@ -104,8 +117,8 @@ export function CheckpointMarkers({
 
   // Y позиция для чекпоинтов — НАД графиком (в верхней части строки)
   // График занимает нижние 56px, чекпоинты — верхнюю часть
-  // Компактно: 4px отступ сверху, маркер 16px, 4px отступ снизу = 24px
-  const baseY = MARKER_RADIUS + 4  // 8 + 4 = 12px от верха
+  // Используем больший радиус для проблемных чекпоинтов: 11 + 4 = 15px от верха
+  const baseY = PROBLEM_MARKER_RADIUS + 4  // 11 + 4 = 15px от верха (учитываем максимальный размер)
 
   return (
     <TooltipProvider>
@@ -183,10 +196,21 @@ export function CheckpointMarkers({
               overlapIndex={overlapIndex}
               baseY={baseY}
               sectionId={sectionId}
+              onOpenResolveProblem={(checkpoint, initialCloseProblem = false) =>
+                setResolveProblemModal({ checkpoint, initialCloseProblem })
+              }
             />
           )
         })}
       </div>
+
+      {/* MOCK DATA - prototype: модалка решения проблемы */}
+      <ResolveProblemModal
+        open={resolveProblemModal.checkpoint !== null}
+        onClose={() => setResolveProblemModal({ checkpoint: null, initialCloseProblem: false })}
+        checkpoint={resolveProblemModal.checkpoint}
+        initialCloseProblem={resolveProblemModal.initialCloseProblem}
+      />
     </TooltipProvider>
   )
 }
@@ -249,9 +273,10 @@ function CheckpointMarkerSvg({
     const wrapperRect = contentWrapper.getBoundingClientRect()
 
     // getBoundingClientRect для circle даёт bounding box (левый верхний угол)
-    // Добавляем MARKER_RADIUS чтобы получить центр круга
-    const absoluteX = circleRect.left - wrapperRect.left + MARKER_RADIUS
-    const absoluteY = circleRect.top - wrapperRect.top + MARKER_RADIUS
+    // Добавляем радиус маркера чтобы получить центр круга
+    const markerRadius = checkpoint.is_problem ? PROBLEM_MARKER_RADIUS : MARKER_RADIUS
+    const absoluteX = circleRect.left - wrapperRect.left + markerRadius
+    const absoluteY = circleRect.top - wrapperRect.top + markerRadius
 
     registerCheckpoint({ checkpoint, sectionId, x: absoluteX, y: absoluteY })
 
@@ -267,46 +292,90 @@ function CheckpointMarkerSvg({
   const isDependant = checkpoint.section_id !== sectionId
   const isCompleted = checkpoint.status === 'completed' || checkpoint.status === 'completed_late'
 
-  // Цвет: серый для зависимых и выполненных, иначе цвет типа
-  const baseColor = isDependant ? '#6B7280' : isCompleted ? '#9CA3AF' : (checkpoint.color || '#6B7280')
+  // MOCK DATA - prototype: проблемный чекпоинт
+  const isProblem = checkpoint.is_problem === true
+  // MOCK DATA - prototype: решенная проблема (была проблемой, но теперь решена)
+  const isResolvedProblem = !isProblem && checkpoint.problem_resolutions && checkpoint.problem_resolutions.length > 0
+
+  // Радиус: больше для проблемных чекпоинтов
+  const markerRadius = isProblem ? PROBLEM_MARKER_RADIUS : MARKER_RADIUS
+  const iconSize = isProblem ? PROBLEM_ICON_SIZE : ICON_SIZE
+
+  // Цвет: красный для активных проблем, янтарный для решенных, серый для зависимых и выполненных, иначе цвет типа
+  let baseColor = checkpoint.color || '#6B7280'
+  if (isProblem) {
+    baseColor = '#ef4444' // red-500 для активных проблем
+  } else if (isResolvedProblem) {
+    baseColor = '#f59e0b' // amber-500 для решенных проблем
+  } else if (isDependant) {
+    baseColor = '#6B7280'
+  } else if (isCompleted) {
+    baseColor = '#9CA3AF'
+  }
+
   const rgb = hexToRgb(baseColor)
-  const bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isDependant ? 0.1 : isCompleted ? 0.12 : 0.15})` : 'rgba(107, 114, 128, 0.1)'
+  let bgColorRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isDependant ? 0.1 : isCompleted ? 0.12 : 0.15})` : 'rgba(107, 114, 128, 0.1)'
+
+  // Для проблемных чекпоинтов: красный фон
+  if (isProblem) {
+    bgColorRgba = '#fecaca' // red-200 для активных проблем
+  } else if (isResolvedProblem) {
+    bgColorRgba = '#fde68a' // amber-200 для решенных проблем
+  }
 
   return (
     <g transform={`translate(${x}, ${y})`}>
-      <g className={cn("checkpoint-marker", checkpoint.status === 'pending' && !isDependant && "animate-pulse-subtle")}>
+      <g className={cn(
+        "checkpoint-marker",
+        checkpoint.status === 'pending' && !isDependant && "animate-pulse-subtle",
+        isProblem && "animate-pulse-subtle" // Проблемные чекпоинты всегда пульсируют
+      )}>
         {/* Непрозрачный фоновый круг (скрывает линию под чекпоинтом) */}
         <circle
           ref={circleRef}
           cx={0}
           cy={0}
-          r={MARKER_RADIUS}
+          r={markerRadius}
           className="fill-background"
         />
         {/* Цветной круг поверх фона - цвет из типа */}
         <circle
           cx={0}
           cy={0}
-          r={MARKER_RADIUS}
+          r={markerRadius}
           fill={bgColorRgba}
           stroke={baseColor}
-          strokeWidth={isDependant ? 1 : 1.5}
+          strokeWidth={isProblem ? 2 : isDependant ? 1 : 1.5}
           strokeDasharray={isDependant ? "2,2" : undefined}
           opacity={isDependant ? 0.6 : 1}
         />
         <foreignObject
-          x={-ICON_SIZE / 2}
-          y={-ICON_SIZE / 2}
-          width={ICON_SIZE}
-          height={ICON_SIZE}
+          x={-iconSize / 2}
+          y={-iconSize / 2}
+          width={iconSize}
+          height={iconSize}
           className="pointer-events-none overflow-visible"
         >
           <div className="flex items-center justify-center w-full h-full">
-            <IconComponent
-              size={ICON_SIZE}
-              style={{ color: baseColor, opacity: isDependant ? 0.5 : 1 }}
-              strokeWidth={2.5}
-            />
+            {isProblem ? (
+              <AlertTriangle
+                size={iconSize}
+                style={{ color: baseColor }}
+                strokeWidth={2.5}
+              />
+            ) : isResolvedProblem ? (
+              <CheckCircle
+                size={iconSize}
+                style={{ color: baseColor }}
+                strokeWidth={2.5}
+              />
+            ) : (
+              <IconComponent
+                size={iconSize}
+                style={{ color: baseColor, opacity: isDependant ? 0.5 : 1 }}
+                strokeWidth={2.5}
+              />
+            )}
           </div>
         </foreignObject>
         {/* Зелёная галочка для выполненных чекпоинтов */}
@@ -339,6 +408,7 @@ function CheckpointTooltipWrapper({
   overlapIndex,
   baseY,
   sectionId,
+  onOpenResolveProblem,
 }: {
   checkpoint: Checkpoint
   range: TimelineRange
@@ -347,6 +417,7 @@ function CheckpointTooltipWrapper({
   overlapIndex: number
   baseY: number
   sectionId: string
+  onOpenResolveProblem?: (checkpoint: Checkpoint, initialCloseProblem?: boolean) => void
 }) {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -366,8 +437,26 @@ function CheckpointTooltipWrapper({
   const isDependant = checkpoint.section_id !== sectionId
   const isCompleted = checkpoint.status === 'completed' || checkpoint.status === 'completed_late'
 
-  // Цвет: серый для зависимых и выполненных, иначе цвет типа
-  const typeColor = isDependant ? '#6B7280' : isCompleted ? '#9CA3AF' : (checkpoint.color || '#6B7280')
+  // MOCK DATA - prototype: проблемный чекпоинт
+  const isProblem = checkpoint.is_problem === true
+  // MOCK DATA - prototype: решенная проблема (была проблемой, но теперь решена)
+  const isResolvedProblem = !isProblem && checkpoint.problem_resolutions && checkpoint.problem_resolutions.length > 0
+
+  // Радиус: больше для проблемных чекпоинтов
+  const markerRadius = isProblem ? PROBLEM_MARKER_RADIUS : MARKER_RADIUS
+
+  // Цвет: красный для активных проблем, янтарный для решенных, серый для зависимых и выполненных, иначе цвет типа
+  let typeColor = checkpoint.color || '#6B7280'
+  if (isProblem) {
+    typeColor = '#ef4444' // red-500 для активных проблем
+  } else if (isResolvedProblem) {
+    typeColor = '#f59e0b' // amber-500 для решенных проблем
+  } else if (isDependant) {
+    typeColor = '#6B7280'
+  } else if (isCompleted) {
+    typeColor = '#9CA3AF'
+  }
+
   const linkedSections = checkpoint.linked_sections || []
 
   return (
@@ -376,10 +465,10 @@ function CheckpointTooltipWrapper({
         <div
           className="absolute pointer-events-auto cursor-pointer"
           style={{
-            left: x - MARKER_RADIUS - 4,
-            top: y - MARKER_RADIUS - 4,
-            width: (MARKER_RADIUS + 4) * 2,
-            height: (MARKER_RADIUS + 4) * 2,
+            left: x - markerRadius - 4,
+            top: y - markerRadius - 4,
+            width: (markerRadius + 4) * 2,
+            height: (markerRadius + 4) * 2,
           }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
@@ -391,9 +480,9 @@ function CheckpointTooltipWrapper({
             style={{
               left: 4,
               top: 4,
-              width: MARKER_RADIUS * 2,
-              height: MARKER_RADIUS * 2,
-              boxShadow: isHovered ? `0 0 8px 0 ${typeColor}` : 'none',
+              width: markerRadius * 2,
+              height: markerRadius * 2,
+              boxShadow: isHovered ? `0 0 ${isProblem ? 12 : 8}px 0 ${typeColor}` : 'none',
               transform: isHovered ? 'scale(1.15)' : 'scale(1)',
             }}
           />
@@ -416,6 +505,20 @@ function CheckpointTooltipWrapper({
           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">
             Чекпоинт
           </span>
+          {/* MOCK DATA - prototype: бейдж проблемы */}
+          {isProblem && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 flex-shrink-0 flex items-center gap-1">
+              <AlertTriangle size={10} />
+              ПРОБЛЕМА
+            </span>
+          )}
+          {/* MOCK DATA - prototype: бейдж решенной проблемы */}
+          {isResolvedProblem && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 flex-shrink-0 flex items-center gap-1">
+              <CheckCircle size={10} />
+              РЕШЕНО
+            </span>
+          )}
           {isCompleted && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 flex-shrink-0">
               выполнен
@@ -469,6 +572,87 @@ function CheckpointTooltipWrapper({
                   </span>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* MOCK DATA - prototype: история решений */}
+          {checkpoint.problem_resolutions && checkpoint.problem_resolutions.length > 0 && (
+            <div className="pt-1.5 border-t border-slate-700/50">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3 text-amber-400" />
+                История решений ({checkpoint.problem_resolutions.length})
+              </div>
+              <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+                {checkpoint.problem_resolutions.map((resolution) => {
+                  const isClosed = resolution.action_type === 'closed'
+                  return (
+                    <div
+                      key={resolution.resolution_id}
+                      className={`p-2 rounded border space-y-1 ${
+                        isClosed
+                          ? 'bg-green-500/10 border-green-500/30'
+                          : 'bg-slate-800/50 border-slate-700/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1">
+                          {isClosed ? (
+                            <CheckCircle className="h-3 w-3 text-green-400" />
+                          ) : (
+                            <AlertTriangle className="h-3 w-3 text-blue-400" />
+                          )}
+                          <span className="text-[9px] font-medium text-slate-300">
+                            {resolution.resolved_by_name}
+                          </span>
+                        </div>
+                        <span className="text-[8px] text-slate-500 tabular-nums">
+                          {format(parseISO(resolution.resolved_at), 'dd.MM.yyyy HH:mm')}
+                        </span>
+                      </div>
+                      {isClosed ? (
+                        <p className="text-[9px] text-green-400 font-medium">
+                          Проблема закрыта
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">
+                          {resolution.comment}
+                        </p>
+                      )}
+                      {resolution.deadline_shift_days !== 0 && (
+                        <p className="text-[9px] text-amber-400">
+                          Сдвиг: {resolution.deadline_shift_days > 0 ? '+' : ''}{resolution.deadline_shift_days} дн.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* MOCK DATA - prototype: кнопки для работы с проблемой */}
+          {isProblem && (
+            <div className="pt-2 border-t border-slate-700/50 space-y-1.5">
+              <button
+                className="w-full px-2 py-1.5 rounded text-[11px] font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1.5"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenResolveProblem?.(checkpoint, false)
+                }}
+              >
+                <AlertTriangle size={12} />
+                Добавить комментарий
+              </button>
+              <button
+                className="w-full px-2 py-1.5 rounded text-[11px] font-medium bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors flex items-center justify-center gap-1.5"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenResolveProblem?.(checkpoint, true)
+                }}
+              >
+                <CheckCircle size={12} />
+                Закрыть проблему
+              </button>
             </div>
           )}
 
