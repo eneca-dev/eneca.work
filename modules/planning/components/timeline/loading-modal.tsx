@@ -679,9 +679,9 @@ export function LoadingModal({
       const stageNodes = buildStageNodes(projectData, node.projectId)
       console.log(`📊 stageNodes построено: ${stageNodes.length}`)
 
-      // Check if project has stageless objects (objects with stage_id = null)
+      // Build stageless objects (objects with stage_id = null) - project can have both staged and stageless objects
       const hasStages = projectData.some(row => row.stage_id !== null)
-      const stagelessObjectNodes = hasStages ? [] : buildStagelessObjectNodes(projectData, node.projectId)
+      const stagelessObjectNodes = buildStagelessObjectNodes(projectData, node.projectId)
       console.log(`📊 stagelessObjectNodes построено: ${stagelessObjectNodes.length}`)
 
       // Build full hierarchy
@@ -767,9 +767,14 @@ export function LoadingModal({
       }
       totalObjectNodes += stagelessObjectNodes.length
 
+      console.log(`📊 Объединение узлов: stageNodes=${stageNodes.length}, stagelessObjectNodes=${stagelessObjectNodes.length}`)
+      stageNodes.forEach(s => console.log(`  ✅ Stage: ${s.name}`))
+      stagelessObjectNodes.forEach(o => console.log(`  ✅ Stageless Object: ${o.name}`))
+
       // Update tree with loaded children
-      // If project has no stages, show stageless objects directly under project
-      const projectChildren = stageNodes.length > 0 ? stageNodes : stagelessObjectNodes
+      // Project can have both stages with objects AND stageless objects
+      const projectChildren = [...stageNodes, ...stagelessObjectNodes]
+      console.log(`📊 Итого projectChildren: ${projectChildren.length} узлов`)
 
       setTreeData((prevTree) => {
         const updateNode = (nodes: FileTreeNode[]): FileTreeNode[] => {
