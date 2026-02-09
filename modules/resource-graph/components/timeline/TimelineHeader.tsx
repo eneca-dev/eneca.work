@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
-import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk, formatMinsk, getMinskWeek } from '@/lib/timezone-utils'
 
 export interface DayCell {
   date: Date
@@ -58,11 +58,11 @@ export function generateDayCells(
     cells.push({
       date,
       dayOfMonth,
-      dayOfWeek: format(date, 'EEEEEE', { locale: ru }),
+      dayOfWeek: formatMinsk(date, 'EEEEEE', { locale: ru }),
       isWeekend: isDefaultWeekend,
       isToday: dateKey === todayKey,
       isMonthStart: dayOfMonth === 1,
-      monthName: format(date, 'LLLL yyyy', { locale: ru }),
+      monthName: formatMinsk(date, 'LLLL yyyy', { locale: ru }),
       // Calendar info
       isHoliday: dayInfo.isHoliday,
       holidayName: dayInfo.holidayName,
@@ -88,11 +88,11 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
     const result: { weekNum: number; startIdx: number; daysCount: number }[] = []
     let currentWeekStart = 0
     let currentWeekNum = dayCells.length > 0
-      ? getWeek(dayCells[0].date, { weekStartsOn: 1, locale: ru })
+      ? getMinskWeek(dayCells[0].date)
       : 1
 
     dayCells.forEach((cell, idx) => {
-      const dayNum = getDay(cell.date)
+      const dayNum = getMinskDayOfWeek(cell.date)
       // Понедельник = начало новой недели
       if (dayNum === 1 && idx > 0) {
         result.push({
@@ -100,7 +100,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
           startIdx: currentWeekStart,
           daysCount: idx - currentWeekStart,
         })
-        currentWeekNum = getWeek(cell.date, { weekStartsOn: 1, locale: ru })
+        currentWeekNum = getMinskWeek(cell.date)
         currentWeekStart = idx
       }
     })
@@ -122,7 +122,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
     let currentCount = 0
 
     dayCells.forEach((cell) => {
-      const monthKey = format(cell.date, 'yyyy-MM')
+      const monthKey = formatMinsk(cell.date, 'yyyy-MM')
       if (monthKey !== currentMonth) {
         if (currentMonth) {
           result.push({ name: currentMonth, daysCount: currentCount })
@@ -140,7 +140,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
 
     return result.map((m) => ({
       ...m,
-      name: format(new Date(m.name + '-01'), 'LLLL yyyy', { locale: ru }),
+      name: formatMinsk(new Date(m.name + '-01'), 'LLLL yyyy', { locale: ru }),
     }))
   }, [dayCells])
 

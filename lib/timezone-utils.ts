@@ -6,6 +6,8 @@
  */
 
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
+import { getWeek as dfGetWeek } from 'date-fns'
+import { ru } from 'date-fns/locale'
 
 // Константа часового пояса Минска
 const MINSK_TZ = 'Europe/Minsk'
@@ -127,6 +129,20 @@ export function getMinskFullYear(date: Date): number {
  */
 export function formatMinsk(date: Date, formatStr: string, options?: { locale?: Locale }): string {
   return formatInTimeZone(date, MINSK_TZ, formatStr, options)
+}
+
+/**
+ * Получает номер недели для даты в часовом поясе Минска
+ *
+ * @param date - Date объект
+ * @returns Номер недели (1-53)
+ *
+ * @example
+ * getMinskWeek(new Date("2024-12-22T00:00:00Z")) // → 51
+ */
+export function getMinskWeek(date: Date): number {
+  const minskDate = toZonedTime(date, MINSK_TZ)
+  return dfGetWeek(minskDate, { weekStartsOn: 1, locale: ru })
 }
 
 /**

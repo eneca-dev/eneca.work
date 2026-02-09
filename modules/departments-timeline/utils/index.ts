@@ -5,8 +5,9 @@
  * Плюс дополнительные утилиты для отрисовки загрузок
  */
 
+import { addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { formatMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
 import type { DayCell } from '../types'
 
 // Re-export date utils from resource-graph
@@ -106,14 +107,14 @@ function calculateDailyWorkloadsFromLoadings(loadings: Loading[]): Record<string
   const workloads: Record<string, number> = {}
 
   for (const loading of loadings) {
-    const startDate = new Date(loading.startDate)
-    const endDate = new Date(loading.endDate)
-    const currentDate = new Date(startDate)
+    const startDate = parseMinskDate(loading.startDate)
+    const endDate = parseMinskDate(loading.endDate)
+    let currentDate = startDate
 
     while (currentDate <= endDate) {
       const dateKey = formatMinskDate(currentDate)
       workloads[dateKey] = (workloads[dateKey] || 0) + (loading.rate || 1)
-      currentDate.setDate(currentDate.getDate() + 1)
+      currentDate = addDays(currentDate, 1)
     }
   }
 

@@ -5,8 +5,9 @@
  */
 
 import { addDays, differenceInDays, startOfWeek, endOfWeek, format } from 'date-fns'
+import { toZonedTime } from 'date-fns-tz'
 import { ru } from 'date-fns/locale'
-import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk, formatMinsk, parseMinskDate } from '@/lib/timezone-utils'
 import type {
   TimelineRange,
   TimelineScale,
@@ -93,13 +94,13 @@ export function generateTimelineDates(
 export function formatTimelineHeader(date: Date, scale: TimelineScale): string {
   switch (scale) {
     case 'day':
-      return format(date, 'd', { locale: ru })
+      return formatMinsk(date, 'd', { locale: ru })
     case 'week':
-      return format(date, 'dd.MM', { locale: ru })
+      return formatMinsk(date, 'dd.MM', { locale: ru })
     case 'month':
-      return format(date, 'LLL', { locale: ru })
+      return formatMinsk(date, 'LLL', { locale: ru })
     case 'quarter':
-      return `Q${Math.ceil((date.getMonth() + 1) / 3)}`
+      return `Q${Math.ceil((toZonedTime(date, 'Europe/Minsk').getMonth() + 1) / 3)}`
   }
 }
 
@@ -150,7 +151,7 @@ export function calculateItemPosition(
  * @returns true если выходной
  */
 export function isWeekend(date: Date): boolean {
-  const day = date.getDay()
+  const day = getMinskDayOfWeek(date)
   return day === 0 || day === 6
 }
 
@@ -400,8 +401,8 @@ export function buildCalendarMap(events: CompanyCalendarEvent[]): Map<string, Pa
 
   for (const event of events) {
     // Парсим дату начала
-    const startDate = new Date(event.dateStart)
-    const endDate = event.dateEnd ? new Date(event.dateEnd) : startDate
+    const startDate = parseMinskDate(event.dateStart)
+    const endDate = event.dateEnd ? parseMinskDate(event.dateEnd) : startDate
 
     // Обрабатываем каждый день диапазона
     let current = startDate

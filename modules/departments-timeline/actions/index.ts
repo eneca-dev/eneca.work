@@ -7,10 +7,11 @@
 
 'use server'
 
+import { addDays } from 'date-fns'
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
 import type { Department, Team, Employee, Loading, TeamFreshness } from '../types'
-import { formatMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
@@ -33,14 +34,14 @@ function calculateDailyWorkloads(loadings: Loading[]): Record<string, number> {
   const workloads: Record<string, number> = {}
 
   for (const loading of loadings) {
-    const startDate = new Date(loading.startDate)
-    const endDate = new Date(loading.endDate)
-    const currentDate = new Date(startDate)
+    const startDate = parseMinskDate(loading.startDate)
+    const endDate = parseMinskDate(loading.endDate)
+    let currentDate = startDate
 
     while (currentDate <= endDate) {
       const dateKey = formatMinskDate(currentDate)
       workloads[dateKey] = (workloads[dateKey] || 0) + (loading.rate || 1)
-      currentDate.setDate(currentDate.getDate() + 1)
+      currentDate = addDays(currentDate, 1)
     }
   }
 
@@ -258,7 +259,7 @@ export async function getDepartmentsData(
         employee.loadings!.push({
           id: item.loading_id,
           employeeId: item.user_id,
-          responsibleId: (item as any).loading_responsible ?? item.user_id,
+          responsibleId: item.loading_responsible ?? item.user_id,
           responsibleName: item.full_name ?? undefined,
           responsibleAvatarUrl: item.avatar_url ?? undefined,
           responsibleTeamName: item.final_team_name ?? undefined,
