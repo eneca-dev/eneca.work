@@ -4,10 +4,10 @@
  * Утилиты для работы с данными графика ресурсов
  */
 
-import { addDays, differenceInDays, startOfWeek, endOfWeek, format } from 'date-fns'
+import { addDays, differenceInDays, format } from 'date-fns'
 import { toZonedTime } from 'date-fns-tz'
 import { ru } from 'date-fns/locale'
-import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk, formatMinsk, parseMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getTodayMinsk, formatMinsk, parseMinskDate, getMinskWeekBounds } from '@/lib/timezone-utils'
 import type {
   TimelineRange,
   TimelineScale,
@@ -156,16 +156,15 @@ export function isWeekend(date: Date): boolean {
 }
 
 /**
- * Получает границы недели
+ * Получает границы недели в часовом поясе Минска
+ *
+ * Использует Minsk-aware расчет для корректной работы независимо от timezone браузера.
  *
  * @param date - Дата
- * @returns Начало и конец недели
+ * @returns Начало и конец недели (понедельник - воскресенье) в Минске
  */
 export function getWeekBounds(date: Date): { start: Date; end: Date } {
-  return {
-    start: startOfWeek(date, { weekStartsOn: 1 }),
-    end: endOfWeek(date, { weekStartsOn: 1 }),
-  }
+  return getMinskWeekBounds(date)
 }
 
 // ============================================================================

@@ -247,6 +247,7 @@ export function DepartmentRow({
                 key={project.projectId}
                 project={project}
                 dayCells={dayCells}
+                freshnessData={freshnessData}
               />
             ))
           )}

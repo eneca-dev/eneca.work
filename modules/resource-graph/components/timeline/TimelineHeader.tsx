@@ -117,30 +117,32 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
 
   // Группировка по месяцам
   const months = useMemo(() => {
-    const result: { name: string; daysCount: number }[] = []
-    let currentMonth = ''
+    const result: { monthKey: string; firstDate: Date; daysCount: number }[] = []
+    let currentMonthKey = ''
     let currentCount = 0
+    let firstDateOfMonth: Date | null = null
 
     dayCells.forEach((cell) => {
       const monthKey = formatMinsk(cell.date, 'yyyy-MM')
-      if (monthKey !== currentMonth) {
-        if (currentMonth) {
-          result.push({ name: currentMonth, daysCount: currentCount })
+      if (monthKey !== currentMonthKey) {
+        if (currentMonthKey && firstDateOfMonth) {
+          result.push({ monthKey: currentMonthKey, firstDate: firstDateOfMonth, daysCount: currentCount })
         }
-        currentMonth = monthKey
+        currentMonthKey = monthKey
+        firstDateOfMonth = cell.date
         currentCount = 1
       } else {
         currentCount++
       }
     })
 
-    if (currentCount > 0) {
-      result.push({ name: currentMonth, daysCount: currentCount })
+    if (currentCount > 0 && firstDateOfMonth) {
+      result.push({ monthKey: currentMonthKey, firstDate: firstDateOfMonth, daysCount: currentCount })
     }
 
     return result.map((m) => ({
-      ...m,
-      name: formatMinsk(new Date(m.name + '-01'), 'LLLL yyyy', { locale: ru }),
+      name: formatMinsk(m.firstDate, 'LLLL yyyy', { locale: ru }),
+      daysCount: m.daysCount,
     }))
   }, [dayCells])
 

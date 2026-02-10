@@ -6,7 +6,7 @@
  */
 
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
-import { getWeek as dfGetWeek } from 'date-fns'
+import { getWeek as dfGetWeek, startOfWeek, endOfWeek } from 'date-fns'
 import { ru } from 'date-fns/locale'
 
 // Константа часового пояса Минска
@@ -143,6 +143,36 @@ export function formatMinsk(date: Date, formatStr: string, options?: { locale?: 
 export function getMinskWeek(date: Date): number {
   const minskDate = toZonedTime(date, MINSK_TZ)
   return dfGetWeek(minskDate, { weekStartsOn: 1, locale: ru })
+}
+
+/**
+ * Получает границы недели (начало и конец) для даты в часовом поясе Минска
+ *
+ * Неделя начинается с понедельника (weekStartsOn: 1)
+ *
+ * @param date - Date объект
+ * @returns Объект с началом и концом недели в Минске
+ *
+ * @example
+ * // Если 2026-02-09 понедельник в Минске
+ * getMinskWeekBounds(new Date("2026-02-09T00:00:00Z"))
+ * // → { start: Mon 2026-02-09, end: Sun 2026-02-15 }
+ *
+ * @example
+ * // Важно: учитывает timezone
+ * // В Лондоне (UTC+0): 2026-02-09 22:00 = воскресенье
+ * // В Минске (UTC+3): 2026-02-10 01:00 = понедельник (следующая неделя!)
+ * getMinskWeekBounds(new Date("2026-02-09T22:00:00Z"))
+ * // → { start: Mon 2026-02-09, end: Sun 2026-02-15 } (неделя с 9 по 15)
+ */
+export function getMinskWeekBounds(date: Date): { start: Date; end: Date } {
+  // Конвертируем в время Минска для правильного расчета
+  const minskDate = toZonedTime(date, MINSK_TZ)
+
+  return {
+    start: startOfWeek(minskDate, { weekStartsOn: 1 }),
+    end: endOfWeek(minskDate, { weekStartsOn: 1 }),
+  }
 }
 
 /**
