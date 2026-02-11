@@ -2,8 +2,8 @@
  * CreateDeptLoadingModal — модалка создания загрузки (прототип)
  *
  * Только именные загрузки (безличные убраны).
- * Дерево: Отдел → Проект → Объект/Раздел (leaf).
- * Этап — текстовое поле.
+ * Дерево: Проект → Объект/Раздел (leaf).
+ * Этап — дропдаун.
  */
 
 'use client'
@@ -28,7 +28,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Building2,
   FolderKanban,
   Box,
   ChevronDown,
@@ -43,7 +42,7 @@ import { MOCK_DEPARTMENTS, MOCK_EMPLOYEES } from '../../mock/data'
 
 interface BreadcrumbItem {
   name: string
-  icon: typeof Building2
+  icon: typeof FolderKanban
   iconColor: string
 }
 
@@ -52,6 +51,14 @@ interface BreadcrumbItem {
 // ============================================================================
 
 const QUICK_RATES = [0.2, 0.25, 0.5, 0.75, 1.0]
+
+const STAGE_OPTIONS = [
+  'Концепция',
+  'Моделирование',
+  'Расчёты',
+  'Проектирование',
+  'Чертежи',
+] as const
 
 // ============================================================================
 // TreeNode (sub-component)
@@ -144,46 +151,46 @@ export function CreateDeptLoadingModal({ open, onClose, initialSectionId }: Crea
     })
   }
 
+  // --- Flatten all projects from all departments ---
+  const allProjects = useMemo(() => {
+    return MOCK_DEPARTMENTS.flatMap((dept) => dept.projects)
+  }, [])
+
   // --- Auto-select when opened from timeline row ---
   useEffect(() => {
     if (!open || !initialSectionId) return
 
-    for (const dept of MOCK_DEPARTMENTS) {
-      for (const proj of dept.projects) {
-        for (const os of proj.objectSections) {
-          if (os.id === initialSectionId) {
-            setSelectedOsId(initialSectionId)
-            setExpandedNodes(new Set([dept.id, proj.id]))
-            return
-          }
+    for (const proj of allProjects) {
+      for (const os of proj.objectSections) {
+        if (os.id === initialSectionId) {
+          setSelectedOsId(initialSectionId)
+          setExpandedNodes(new Set([proj.id]))
+          return
         }
       }
     }
-  }, [open, initialSectionId])
+  }, [open, initialSectionId, allProjects])
 
   // --- Derived data ---
 
   const { selectedOs, breadcrumbs } = useMemo(() => {
     if (!selectedOsId) return { selectedOs: null, breadcrumbs: [] }
 
-    for (const dept of MOCK_DEPARTMENTS) {
-      for (const proj of dept.projects) {
-        for (const os of proj.objectSections) {
-          if (os.id === selectedOsId) {
-            return {
-              selectedOs: os,
-              breadcrumbs: [
-                { name: dept.name, icon: Building2, iconColor: 'text-primary' },
-                { name: proj.name, icon: FolderKanban, iconColor: 'text-amber-500' },
-                { name: `${os.objectName} / ${os.sectionName}`, icon: Box, iconColor: 'text-cyan-500' },
-              ] as BreadcrumbItem[],
-            }
+    for (const proj of allProjects) {
+      for (const os of proj.objectSections) {
+        if (os.id === selectedOsId) {
+          return {
+            selectedOs: os,
+            breadcrumbs: [
+              { name: proj.name, icon: FolderKanban, iconColor: 'text-amber-500' },
+              { name: `${os.objectName} / ${os.sectionName}`, icon: Box, iconColor: 'text-cyan-500' },
+            ] as BreadcrumbItem[],
           }
         }
       }
     }
     return { selectedOs: null, breadcrumbs: [] }
-  }, [selectedOsId])
+  }, [selectedOsId, allProjects])
 
   // --- Handlers ---
 
@@ -262,39 +269,27 @@ export function CreateDeptLoadingModal({ open, onClose, initialSectionId }: Crea
           {/* ===================== LEFT PANEL — Tree ===================== */}
           <div className="w-[340px] border-r flex flex-col overflow-hidden bg-card">
             <div className="flex-1 overflow-y-auto p-2">
-              {MOCK_DEPARTMENTS.map((dept) => (
+              {allProjects.map((proj) => (
                 <TreeNode
-                  key={dept.id}
-                  icon={Building2}
-                  iconClassName="text-primary"
-                  label={dept.name}
-                  isExpanded={expandedNodes.has(dept.id)}
-                  onToggle={() => toggleNode(dept.id)}
+                  key={proj.id}
+                  icon={FolderKanban}
+                  iconClassName="text-amber-500"
+                  label={proj.name}
+                  isExpanded={expandedNodes.has(proj.id)}
+                  onToggle={() => toggleNode(proj.id)}
                   depth={0}
                 >
-                  {dept.projects.map((proj) => (
+                  {proj.objectSections.map((os) => (
                     <TreeNode
-                      key={proj.id}
-                      icon={FolderKanban}
-                      iconClassName="text-amber-500"
-                      label={proj.name}
-                      isExpanded={expandedNodes.has(proj.id)}
-                      onToggle={() => toggleNode(proj.id)}
+                      key={os.id}
+                      icon={Box}
+                      iconClassName="text-cyan-500"
+                      label={`${os.objectName} / ${os.sectionName}`}
+                      isExpandable={false}
+                      isSelected={selectedOsId === os.id}
+                      onSelect={() => setSelectedOsId(os.id)}
                       depth={1}
-                    >
-                      {proj.objectSections.map((os) => (
-                        <TreeNode
-                          key={os.id}
-                          icon={Box}
-                          iconClassName="text-cyan-500"
-                          label={`${os.objectName} / ${os.sectionName}`}
-                          isExpandable={false}
-                          isSelected={selectedOsId === os.id}
-                          onSelect={() => setSelectedOsId(os.id)}
-                          depth={2}
-                        />
-                      ))}
-                    </TreeNode>
+                    />
                   ))}
                 </TreeNode>
               ))}
@@ -356,7 +351,7 @@ export function CreateDeptLoadingModal({ open, onClose, initialSectionId }: Crea
                   </Select>
                 </div>
 
-                {/* Stage name (optional text field) */}
+                {/* Stage name (optional dropdown) */}
                 <div>
                   <Label className="text-sm font-medium">
                     Этап{' '}
@@ -364,12 +359,18 @@ export function CreateDeptLoadingModal({ open, onClose, initialSectionId }: Crea
                       (необязательно)
                     </span>
                   </Label>
-                  <Input
-                    placeholder="Например: Моделирование"
-                    value={stageName}
-                    onChange={(e) => setStageName(e.target.value)}
-                    className="mt-1.5"
-                  />
+                  <Select value={stageName} onValueChange={setStageName}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Выберите этап" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STAGE_OPTIONS.map((stage) => (
+                        <SelectItem key={stage} value={stage}>
+                          {stage}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Rate */}
