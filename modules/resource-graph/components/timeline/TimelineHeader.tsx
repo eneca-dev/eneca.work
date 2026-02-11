@@ -77,12 +77,15 @@ export function generateDayCells(
 
 interface TimelineHeaderProps {
   dayCells: DayCell[]
+  /** Override cell width (default: DAY_CELL_WIDTH from constants) */
+  cellWidth?: number
 }
 
 /**
  * Заголовок timeline с неделями и днями
  */
-export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
+export function TimelineHeader({ dayCells, cellWidth }: TimelineHeaderProps) {
+  const cw = cellWidth ?? DAY_CELL_WIDTH
   // Группировка по неделям (с нумерацией от начала года)
   const weeks = useMemo(() => {
     const result: { weekNum: number; startIdx: number; daysCount: number }[] = []
@@ -145,11 +148,11 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
   }, [dayCells])
 
   // Общая ширина timeline
-  const totalWidth = dayCells.length * DAY_CELL_WIDTH
+  const totalWidth = dayCells.length * cw
 
   // Минимальная ширина для отображения текста
-  const MIN_DAYS_FOR_MONTH_NAME = 4  // ~144px
-  const MIN_DAYS_FOR_WEEK_NAME = 3   // ~108px
+  const MIN_DAYS_FOR_MONTH_NAME = 4
+  const MIN_DAYS_FOR_WEEK_NAME = 3
 
   return (
     <div className="flex flex-col bg-card border-b border-border" style={{ width: totalWidth }}>
@@ -159,7 +162,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
           <div
             key={i}
             className="flex items-center justify-center text-xs font-medium text-muted-foreground capitalize overflow-hidden"
-            style={{ width: month.daysCount * DAY_CELL_WIDTH }}
+            style={{ width: month.daysCount * cw }}
           >
             {month.daysCount >= MIN_DAYS_FOR_MONTH_NAME && month.name}
           </div>
@@ -175,7 +178,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               'flex items-center justify-center text-[10px] text-muted-foreground overflow-hidden',
               i < weeks.length - 1 && 'border-r border-border/30'
             )}
-            style={{ width: week.daysCount * DAY_CELL_WIDTH }}
+            style={{ width: week.daysCount * cw }}
           >
             {week.daysCount >= MIN_DAYS_FOR_WEEK_NAME && `Нед. ${week.weekNum}`}
           </div>
@@ -204,7 +207,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 !cell.isToday && isRegularWeekend && 'bg-muted/50 dark:bg-muted/30',
                 i < dayCells.length - 1 && 'border-r border-border/20'
               )}
-              style={{ width: DAY_CELL_WIDTH }}
+              style={{ width: cw }}
               title={cell.holidayName || undefined}
             >
               <span

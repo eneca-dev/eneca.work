@@ -7,10 +7,12 @@
 
 // Re-export timeline constants from resource-graph
 export {
-  DAY_CELL_WIDTH,
   ROW_HEIGHT,
   SIDEBAR_WIDTH,
 } from '@/modules/resource-graph/constants'
+
+/** Ширина ячейки дня — шире чем в resource-graph (36) для heatmap с процентами */
+export const DAY_CELL_WIDTH = 48
 
 // ============================================================================
 // Department Timeline Specific Constants

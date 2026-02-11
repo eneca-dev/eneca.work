@@ -154,7 +154,7 @@ export interface TeamBatchOptions {
 /**
  * Типы узлов дерева для expand/collapse
  */
-export type TreeNodeType = 'department' | 'team' | 'employee'
+export type TreeNodeType = 'department' | 'team' | 'employee' | 'project' | 'object' | 'section'
 
 /**
  * Универсальный узел дерева

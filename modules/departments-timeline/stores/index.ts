@@ -22,6 +22,8 @@ interface UIState {
   selectedItemId: string | null
   /** Тип выбранного элемента */
   selectedItemType: TreeNodeType | null
+  /** Переопределения ёмкости для ObjectSection (osId → dateStr → capacity) */
+  capacityOverrides: Record<string, Record<string, number>>
 
   // Check operations
   isExpanded: (type: TreeNodeType, id: string) => boolean
@@ -41,12 +43,18 @@ interface UIState {
 
   // Selection
   setSelectedItem: (id: string | null, type?: TreeNodeType | null) => void
+
+  // Capacity (per-date)
+  setCapacity: (osId: string, dateStr: string, value: number) => void
 }
 
 const createEmptyExpandedNodes = (): Record<TreeNodeType, Set<string>> => ({
   department: new Set(),
   team: new Set(),
   employee: new Set(),
+  project: new Set(),
+  object: new Set(),
+  section: new Set(),
 })
 
 /** Сериализация Set в массив для localStorage */
@@ -56,6 +64,9 @@ const serializeExpandedNodes = (
   department: Array.from(nodes.department),
   team: Array.from(nodes.team),
   employee: Array.from(nodes.employee),
+  project: Array.from(nodes.project),
+  object: Array.from(nodes.object),
+  section: Array.from(nodes.section),
 })
 
 /** Десериализация массива в Set из localStorage */
@@ -65,6 +76,9 @@ const deserializeExpandedNodes = (
   department: new Set(nodes.department || []),
   team: new Set(nodes.team || []),
   employee: new Set(nodes.employee || []),
+  project: new Set(nodes.project || []),
+  object: new Set(nodes.object || []),
+  section: new Set(nodes.section || []),
 })
 
 export const useDepartmentsTimelineUIStore = create<UIState>()(
@@ -74,6 +88,7 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         expandedNodes: createEmptyExpandedNodes(),
         selectedItemId: null,
         selectedItemType: null,
+        capacityOverrides: {},
 
         isExpanded: (type, id) => get().expandedNodes[type].has(id),
 
@@ -193,11 +208,29 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
 
         setSelectedItem: (id, type = null) =>
           set({ selectedItemId: id, selectedItemType: type }),
+
+        setCapacity: (osId, dateStr, value) =>
+          set((state) => ({
+            capacityOverrides: {
+              ...state.capacityOverrides,
+              [osId]: { ...state.capacityOverrides[osId], [dateStr]: value },
+            },
+          })),
       }),
       {
         name: 'departments-timeline-ui-state',
+        version: 1,
+        migrate: (persisted: any, version: number) => {
+          if (version === 0) {
+            // v0 had capacityOverrides as Record<string, number>
+            // v1 has Record<string, Record<string, number>>
+            return { ...persisted, capacityOverrides: {} }
+          }
+          return persisted as any
+        },
         partialize: (state) => ({
           expandedNodes: state.expandedNodes,
+          capacityOverrides: state.capacityOverrides,
         }),
         storage: {
           getItem: (name) => {
@@ -255,3 +288,14 @@ export function useRowExpanded(type: TreeNodeType, id: string) {
 
   return { isExpanded, toggle }
 }
+
+/**
+ * Хук для получения per-date переопределений ёмкости ObjectSection
+ */
+export function useDateCapacityOverrides(osId: string): Record<string, number> {
+  return useDepartmentsTimelineUIStore(
+    (state) => state.capacityOverrides[osId] ?? EMPTY_DATE_OVERRIDES
+  )
+}
+
+const EMPTY_DATE_OVERRIDES: Record<string, number> = {}
