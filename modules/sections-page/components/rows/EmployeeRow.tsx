@@ -207,7 +207,7 @@ function LoadingBar({
       const maxOffset = Math.max(0, displayWidth - 48)
       const clampedOffset = Math.min(offset, maxOffset)
 
-      badgeElement.style.transform = `translateX(${clampedOffset}px)`
+            badgeElement.style.transform = `translateX(${clampedOffset}px)`
     }
 
     updateBadgePosition()
@@ -338,10 +338,10 @@ function LoadingBar({
           />
         </>
 
-        {/* Sticky rate badge (always visible, positioned near top) */}
+        {/* Sticky rate badge (always visible, vertically centered) */}
         <div
           ref={rateBadgeRef}
-          className="absolute left-1.5 top-1 flex-shrink-0 transition-transform duration-150 ease-out"
+          className="absolute left-0.5 top-[1px] flex-shrink-0 transition-transform duration-150 ease-out"
           style={{ zIndex: 10 }}
         >
           <span className="inline-flex items-center justify-center min-w-[32px] px-1 py-0.5 bg-black/20 text-white text-[10px] font-semibold rounded shadow-sm">
