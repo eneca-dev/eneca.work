@@ -239,8 +239,16 @@ export interface DepartmentFreshness {
 export interface TimelineUnit {
   date: Date
   label: string
+  dateKey?: string
+  dayOfMonth?: number
+  dayOfWeek?: string
   isWeekend?: boolean
   isWorkingDay?: boolean
+  isHoliday?: boolean
+  holidayName?: string
+  isToday?: boolean
+  isMonthStart?: boolean
+  monthName?: string
   width?: number
   left?: number
 }

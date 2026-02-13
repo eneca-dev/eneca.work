@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useMemo, useState, Fragment, useCallback } from 'react'
+import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Building2, MessageSquare, UserPlus } from 'lucide-react'
 import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
@@ -123,6 +123,11 @@ function LoadingBarWithResize({
   onLoadingClick,
   onLoadingResize,
 }: LoadingBarWithResizeProps) {
+  // Refs for containers (to update transform without re-render)
+  const textRef = useRef<HTMLDivElement>(null)
+  const commentRef = useRef<HTMLDivElement>(null)
+  const rateBadgeRef = useRef<HTMLDivElement>(null)
+
   // Используем useTimelineResize только для loading (не для других типов периодов)
   const canResize = bar.period.type === 'loading'
 
@@ -175,6 +180,93 @@ function LoadingBarWithResize({
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : startDateString
   const displayEndDate = isResizing && previewDates ? previewDates.endDate : endDateString
 
+  // Smooth text scroll effect: text moves when bar goes under sidebar
+  useEffect(() => {
+    const textElement = textRef.current
+    if (!textElement) return
+
+    const scrollContainer = textElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateTextPosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Text should move only when bar goes under sidebar
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Allow text to move fully off-screen (no limit)
+      // Text will be hidden by parent overflow-hidden
+      textElement.style.transform = `translateX(${offset}px)`
+    }
+
+    updateTextPosition()
+    scrollContainer.addEventListener('scroll', updateTextPosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateTextPosition)
+    }
+  }, [displayLeft, displayWidth])
+
+  // Sticky rate badge effect: moves opposite direction to stay visible
+  useEffect(() => {
+    const badgeElement = rateBadgeRef.current
+    if (!badgeElement) return
+
+    const scrollContainer = badgeElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateBadgePosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Badge should move right to compensate scroll and stay visible
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Limit offset so ENTIRE badge stays within bar
+      // Badge: 0.5px (left-0.5) + 36px (w-[36px]) + 6px (padding) = 42.5px ≈ 48px
+      const maxOffset = Math.max(0, displayWidth - 48)
+      const clampedOffset = Math.min(offset, maxOffset)
+
+      badgeElement.style.transform = `translateX(${clampedOffset}px)`
+    }
+
+    updateBadgePosition()
+    scrollContainer.addEventListener('scroll', updateBadgePosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateBadgePosition)
+    }
+  }, [displayLeft, displayWidth])
+
+  // Smooth comment scroll effect: comment moves when bar goes under sidebar
+  useEffect(() => {
+    const commentElement = commentRef.current
+    if (!commentElement) return
+
+    const scrollContainer = commentElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateCommentPosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Comment should move only when bar goes under sidebar
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Allow comment to move fully off-screen (no limit)
+      // Comment will be hidden by parent overflow-hidden
+      commentElement.style.transform = `translateX(${offset}px)`
+    }
+
+    updateCommentPosition()
+    scrollContainer.addEventListener('scroll', updateCommentPosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateCommentPosition)
+    }
+  }, [displayLeft, displayWidth])
+
   return (
     <Fragment>
       {/* Main bar */}
@@ -222,8 +314,23 @@ function LoadingBarWithResize({
           </>
         )}
 
+        {/* Sticky rate badge (always visible, stops at right edge) */}
+        <div
+          ref={rateBadgeRef}
+          className="absolute left-0.5 top-0 bottom-0 flex items-center flex-shrink-0 transition-transform duration-150 ease-out"
+          style={{ zIndex: 10 }}
+        >
+          <span className="inline-flex items-center justify-center w-[36px] h-[20px] bg-black/20 text-white text-[10px] font-semibold tabular-nums rounded shadow-sm">
+            {bar.period.rate || 1}
+          </span>
+        </div>
+
         {/* Bar content */}
-        <div className="relative w-full h-full flex items-center" style={{ zIndex: 2 }}>
+        <div
+          ref={textRef}
+          className="absolute left-[42px] top-0 bottom-0 flex items-center transition-transform duration-200 ease-out"
+          style={{ zIndex: 2 }}
+        >
           {bar.period.type === 'loading' && (() => {
             const labelParts = getBarLabelParts(bar.period, displayWidth)
             const maxLines = 2
@@ -231,9 +338,6 @@ function LoadingBarWithResize({
             if (labelParts.displayMode === 'icon-only') {
               return (
                 <div className="flex items-center gap-1">
-                  <span className="px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded">
-                    {bar.period.rate || 1}
-                  </span>
                   <FolderKanban size={11} className="text-white" />
                 </div>
               )
@@ -242,10 +346,7 @@ function LoadingBarWithResize({
             if (labelParts.displayMode === 'minimal' || labelParts.displayMode === 'compact') {
               let lineCount = 0
               return (
-                <div className="flex items-start gap-1 overflow-hidden w-full h-full">
-                  <span className="mt-0.5 px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded flex-shrink-0">
-                    {bar.period.rate || 1}
-                  </span>
+                <div className="flex items-center gap-1 overflow-hidden w-full h-full">
                   <div className="flex flex-col justify-center items-start overflow-hidden flex-1" style={{ gap: 2 }}>
                     {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
                       <div className="flex items-center gap-1 w-full overflow-hidden">
@@ -271,10 +372,7 @@ function LoadingBarWithResize({
             // Full mode
             let lineCount = 0
             return (
-              <div className="flex items-start gap-1.5 overflow-hidden w-full">
-                <span className="mt-0.5 px-1.5 py-0.5 bg-black/15 text-white text-[10px] font-semibold rounded flex-shrink-0">
-                  {bar.period.rate || 1}
-                </span>
+              <div className="flex items-center gap-1.5 overflow-hidden w-full">
                 <div className="flex flex-col justify-center overflow-hidden flex-1" style={{ gap: 1 }}>
                   {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
                     <div className="flex items-center gap-1 overflow-hidden">
@@ -358,7 +456,7 @@ function LoadingBarWithResize({
             }}
           />
           <div
-            className="absolute flex items-center gap-1 px-2 pointer-events-auto cursor-pointer"
+            className="absolute pointer-events-auto cursor-pointer overflow-hidden"
             style={{
               top: COMMENT_GAP - 2,
               left: 0,
@@ -375,10 +473,16 @@ function LoadingBarWithResize({
             }}
             title={bar.period.comment}
           >
-            <MessageSquare size={11} className="text-white flex-shrink-0" />
-            <span className="text-[10px] leading-tight truncate text-white font-medium">
-              {bar.period.comment}
-            </span>
+            <div
+              ref={commentRef}
+              className="flex items-center gap-1 px-2 transition-transform duration-200 ease-out"
+              style={{ height: COMMENT_HEIGHT }}
+            >
+              <MessageSquare size={11} className="text-white flex-shrink-0" />
+              <span className="text-[10px] leading-tight truncate text-white font-medium">
+                {bar.period.comment}
+              </span>
+            </div>
           </div>
         </div>
       )}

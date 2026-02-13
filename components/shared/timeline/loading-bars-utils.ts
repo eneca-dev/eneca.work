@@ -10,8 +10,8 @@ import type { Loading, TimelineUnit } from "@/types/planning"
 /**
  * Константы для расчёта высоты и позиционирования полосок загрузки
  */
-export const BASE_BAR_HEIGHT = 42 // Фиксированная высота полоски загрузки
-export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
+export const BASE_BAR_HEIGHT = 32 // Фиксированная высота полоски загрузки
+export const BAR_GAP = 4 // Минимальное расстояние между полосками при стакинге
 
 // Константы для комментариев
 export const COMMENT_HEIGHT = 18 // Высота плашки комментария в пикселях

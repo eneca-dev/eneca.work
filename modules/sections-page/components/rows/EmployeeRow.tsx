@@ -146,6 +146,7 @@ function LoadingBar({
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
   const rateBadgeRef = useRef<HTMLDivElement>(null)
+  const commentRef = useRef<HTMLDivElement>(null)
 
   // Convert Date to ISO string for useTimelineResize
   const startDateString = bar.period.startDate instanceof Date
@@ -246,6 +247,33 @@ function LoadingBar({
     }
   }, [displayLeft, displayWidth])
 
+  // Smooth comment scroll effect: comment moves when bar goes under sidebar
+  useEffect(() => {
+    const commentElement = commentRef.current
+    if (!commentElement) return
+
+    const scrollContainer = commentElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateCommentPosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Comment should move only when bar goes under sidebar
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Allow comment to move fully off-screen (no limit)
+      // Comment will be hidden by parent overflow-hidden
+      commentElement.style.transform = `translateX(${offset}px)`
+    }
+
+    updateCommentPosition()
+    scrollContainer.addEventListener('scroll', updateCommentPosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateCommentPosition)
+    }
+  }, [displayLeft, displayWidth])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
   const colorScheme = getLoadingColorScheme(bar.period.id)
@@ -341,10 +369,10 @@ function LoadingBar({
         {/* Sticky rate badge (always visible, vertically centered) */}
         <div
           ref={rateBadgeRef}
-          className="absolute left-0.5 top-[1px] flex-shrink-0 transition-transform duration-150 ease-out"
+          className="absolute left-0.5 top-0 bottom-0 flex items-center flex-shrink-0 transition-transform duration-150 ease-out"
           style={{ zIndex: 10 }}
         >
-          <span className="inline-flex items-center justify-center min-w-[32px] px-1 py-0.5 bg-black/20 text-white text-[10px] font-semibold rounded shadow-sm">
+          <span className="inline-flex items-center justify-center w-[36px] h-[20px] bg-black/20 text-white text-[10px] font-semibold tabular-nums rounded shadow-sm">
             {bar.period.rate || 1}
           </span>
         </div>
@@ -352,7 +380,7 @@ function LoadingBar({
         {/* Bar content with smooth scrolling text */}
         <div
           ref={textRef}
-          className="absolute left-[40px] top-1 flex flex-col justify-start items-start gap-0.5 transition-transform duration-200 ease-out"
+          className="absolute left-[42px] top-0 bottom-0 flex flex-col justify-center items-start gap-0.5 transition-transform duration-200 ease-out"
           style={{ zIndex: 2, maxWidth: displayWidth - 48 }}
         >
           {/* Line 1: Section name with icon */}
@@ -400,7 +428,7 @@ function LoadingBar({
                 width: overlayWidth,
                 top: -3,
                 bottom: -3,
-                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.3) 4px, rgba(255, 255, 255, 0.3) 15px)',
+                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
                 borderTop: `3px dashed ${colorScheme.bg}`,
                 borderBottom: `3px dashed ${colorScheme.bg}`,
                 zIndex: 1,
@@ -415,7 +443,7 @@ function LoadingBar({
         <div
           className="absolute pointer-events-none transition-all duration-200"
           style={{
-            top: top + BASE_BAR_HEIGHT,
+            top: top + BASE_BAR_HEIGHT - 4,
             left: displayLeft,
             width: displayWidth,
             height: COMMENT_GAP + COMMENT_HEIGHT,
@@ -434,7 +462,7 @@ function LoadingBar({
             }}
           />
           <div
-            className="absolute flex items-center gap-1 px-2 pointer-events-auto cursor-pointer"
+            className="absolute pointer-events-auto cursor-pointer overflow-hidden"
             style={{
               top: COMMENT_GAP - 2,
               left: 0,
@@ -451,10 +479,16 @@ function LoadingBar({
             }}
             title={bar.period.comment}
           >
-            <MessageSquare size={11} className="text-white flex-shrink-0" />
-            <span className="text-[10px] leading-tight truncate text-white font-medium">
-              {bar.period.comment}
-            </span>
+            <div
+              ref={commentRef}
+              className="flex items-center gap-1 px-2 transition-transform duration-200 ease-out"
+              style={{ height: COMMENT_HEIGHT }}
+            >
+              <MessageSquare size={11} className="text-white flex-shrink-0" />
+              <span className="text-[10px] leading-tight truncate text-white font-medium">
+                {bar.period.comment}
+              </span>
+            </div>
           </div>
         </div>
       )}
