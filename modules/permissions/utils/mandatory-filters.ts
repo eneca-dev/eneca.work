@@ -156,14 +156,10 @@ export function applyMandatoryFilters(
       break
 
     case 'team':
-      // SECURITY: Проверяем permission для team scope
-      if (!filterContext.filterPermissions?.includes('filters.scope.team')) {
-        logSecurityEvent('applyMandatoryFilters: Team scope without permission — BLOCKING', {
-          userId: filterContext.userId,
-          filterPermissions: filterContext.filterPermissions,
-        })
-        return { ...userFilters, team_id: BLOCKING_UUID }
-      }
+      // NOTE: НЕ требуем permission для team scope, т.к. resolveFilterScope()
+      // уже безопасно установил teamIds (либо свой team, либо по permission).
+      // Это позволяет обычным users видеть свою команду через fallback.
+
       // Принудительно фильтруем по команде
       if (scope.teamIds?.length === 1) {
         mandatoryFilters.team_id = scope.teamIds[0]

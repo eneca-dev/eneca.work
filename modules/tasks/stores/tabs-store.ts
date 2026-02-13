@@ -13,7 +13,7 @@ import { nanoid } from 'nanoid'
 // Types
 // ============================================================================
 
-export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments'
+export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments' | 'sections'
 
 // Маппинг viewMode → иконка (lucide-react)
 export const VIEW_MODE_ICONS = {
@@ -21,6 +21,7 @@ export const VIEW_MODE_ICONS = {
   timeline: 'GanttChart',
   departments: 'Users',
   budgets: 'Wallet',
+  sections: 'FolderTree',
 } as const
 
 export type TabIconName = (typeof VIEW_MODE_ICONS)[TasksViewMode]
@@ -88,6 +89,15 @@ const SYSTEM_TABS: TaskTab[] = [
     filterString: '',
     isSystem: true,
     order: 3,
+    createdAt: '2024-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'sections',
+    name: 'Разделы',
+    viewMode: 'sections',
+    filterString: '',
+    isSystem: true,
+    order: 4,
     createdAt: '2024-01-01T00:00:00.000Z',
   },
 ]

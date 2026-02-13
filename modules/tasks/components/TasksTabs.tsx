@@ -10,6 +10,7 @@ import {
   GanttChart,
   Users,
   Wallet,
+  FolderTree,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -32,6 +33,7 @@ const VIEW_MODE_ICON_MAP: Record<TasksViewMode, LucideIcon> = {
   timeline: GanttChart,
   departments: Users,
   budgets: Wallet,
+  sections: FolderTree,
 }
 
 // ============================================================================
