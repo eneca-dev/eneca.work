@@ -44,3 +44,5 @@ tsconfig.tsbuildinfo
 .claude/settings.local.json
 
 .claude
+
+.agents
