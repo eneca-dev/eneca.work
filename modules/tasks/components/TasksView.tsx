@@ -18,6 +18,7 @@ import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { ResourceGraphInternal } from '@/modules/resource-graph/components/ResourceGraph'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
+import { SectionsPageInternal } from '@/modules/sections-page'
 import { TasksTabs } from './TasksTabs'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 
@@ -139,6 +140,11 @@ export function TasksView() {
         )}
         {tabs.length > 0 && viewMode === 'departments' && (
           <DepartmentsTimelineInternal
+            queryParams={queryParams}
+          />
+        )}
+        {tabs.length > 0 && viewMode === 'sections' && (
+          <SectionsPageInternal
             queryParams={queryParams}
           />
         )}

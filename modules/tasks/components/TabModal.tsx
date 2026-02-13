@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, LayoutGrid, Users } from 'lucide-react'
+import { X, Plus, LayoutGrid, GanttChart, Users, Wallet, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
 
@@ -26,6 +26,8 @@ const VIEW_MODE_OPTIONS: {
 }[] = [
   { value: 'kanban', label: 'Канбан', icon: LayoutGrid },
   { value: 'departments', label: 'Отделы', icon: Users },
+  { value: 'budgets', label: 'Бюджеты', icon: Wallet },
+  { value: 'sections', label: 'Разделы', icon: FolderTree },
 ]
 
 // ============================================================================
@@ -96,7 +98,7 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 z-50 bg-black/20 dark:bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       />
 
@@ -105,10 +107,8 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
         <div
           className={cn(
             'pointer-events-auto w-full max-w-sm',
-            'bg-white border border-slate-300',
-            'dark:bg-slate-900/95 dark:backdrop-blur-md dark:border-slate-700/50',
-            'rounded-lg shadow-2xl',
-            'shadow-slate-500/20 dark:shadow-black/50',
+            'bg-background border border-border',
+            'rounded-lg shadow-lg',
             'transform transition-all duration-200',
             open ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
           )}
@@ -116,16 +116,16 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
           onKeyDown={handleKeyDown}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-300 dark:border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
             <div className="flex items-center gap-2">
               <Plus className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-xs font-medium text-foreground">
                 {isEditing ? 'Редактировать вкладку' : 'Новая вкладка'}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -135,7 +135,7 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
           <div className="px-4 py-4 space-y-4">
             {/* Name */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Название
               </label>
               <input
@@ -147,21 +147,21 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
                 maxLength={30}
                 className={cn(
                   'w-full px-3 py-2 text-sm',
-                  'bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700',
-                  'rounded text-slate-800 dark:text-slate-200',
-                  'placeholder:text-slate-400 dark:placeholder:text-slate-600',
-                  'focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30',
+                  'bg-background border border-input',
+                  'rounded-md text-foreground',
+                  'placeholder:text-muted-foreground',
+                  'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                   'transition-colors'
                 )}
               />
-              <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 text-right">
+              <div className="mt-1 text-[10px] text-muted-foreground text-right">
                 {name.length}/30
               </div>
             </div>
 
             {/* View Mode */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                 Тип отображения
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -175,10 +175,10 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
                       type="button"
                       onClick={() => setViewMode(option.value)}
                       className={cn(
-                        'flex items-center gap-2 px-3 py-2 rounded border text-sm transition-colors',
+                        'flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors',
                         isSelected
-                          ? 'border-primary bg-primary/10 text-slate-800 dark:text-slate-200'
-                          : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-input text-muted-foreground hover:border-primary/50 hover:bg-muted'
                       )}
                     >
                       <Icon className={cn('w-4 h-4', isSelected && 'text-primary')} />
@@ -191,14 +191,13 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-300 dark:border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border">
             <button
               onClick={onClose}
               className={cn(
-                'px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
-                'border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600',
-                'bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800',
+                'px-3 py-1.5 text-[11px] font-medium rounded-md',
+                'text-muted-foreground hover:text-foreground',
+                'border border-input hover:bg-muted',
                 'transition-colors'
               )}
             >
@@ -208,10 +207,10 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
               onClick={handleSubmit}
               disabled={!isFormValid}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-white bg-primary hover:bg-primary/90',
+                'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md',
+                'text-primary-foreground bg-primary hover:bg-primary/90',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700'
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
               <Plus className="w-3 h-3" />

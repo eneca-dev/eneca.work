@@ -97,7 +97,7 @@ export function FilterSuggestions({
 
           return (
             <button
-              key={`${suggestion.type}-${suggestion.label}`}
+              key={`${suggestion.type}-${idx}-${suggestion.label}`}
               id={optionId}
               type="button"
               role="option"

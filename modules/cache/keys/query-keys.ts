@@ -429,6 +429,18 @@ export const queryKeys = {
     /** Данные актуальности команд */
     freshness: () => [...queryKeys.departmentsTimeline.all, 'freshness'] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Sections Page (страница разделов - иерархия отделы → проекты → разделы)
+  // -------------------------------------------------------------------------
+  sectionsPage: {
+    all: ['sections-page'] as const,
+    lists: () => [...queryKeys.sectionsPage.all, 'list'] as const,
+    /** Иерархия отделов → проектов → разделов с фильтрами */
+    list: (filters?: Record<string, unknown>) => [...queryKeys.sectionsPage.lists(), filters] as const,
+    /** Capacity для конкретного раздела */
+    capacity: (sectionId: string) => [...queryKeys.sectionsPage.all, 'capacity', sectionId] as const,
+  },
 } as const
 
 // ============================================================================
