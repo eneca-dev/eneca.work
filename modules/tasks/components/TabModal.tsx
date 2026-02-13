@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, LayoutGrid, GanttChart, Users, Wallet } from 'lucide-react'
+import { X, Plus, LayoutGrid, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
 
@@ -25,9 +25,7 @@ const VIEW_MODE_OPTIONS: {
   icon: typeof LayoutGrid
 }[] = [
   { value: 'kanban', label: 'Канбан', icon: LayoutGrid },
-  { value: 'timeline', label: 'График', icon: GanttChart },
   { value: 'departments', label: 'Отделы', icon: Users },
-  { value: 'budgets', label: 'Бюджеты', icon: Wallet },
 ]
 
 // ============================================================================
