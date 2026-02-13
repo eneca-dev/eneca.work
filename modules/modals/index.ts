@@ -50,6 +50,9 @@ export type {
   // Loading Modal New
   LoadingModalNewCreateData,
   LoadingModalNewEditData,
+  // Section Loading
+  SectionLoadingCreateData,
+  SectionLoadingEditData,
   // Employee
   EmployeeViewData,
   // Progress
@@ -118,6 +121,8 @@ export {
   openLoadingEdit,
   openLoadingModalNewCreate,
   openLoadingModalNewEdit,
+  openSectionLoadingCreate,
+  openSectionLoadingEdit,
   openEmployeeView,
   closeModal,
   openCheckpointCreate,
@@ -159,6 +164,14 @@ export { LoadingModal, type LoadingModalProps, LoadingModalContainer } from './c
 
 // Loading Modal New
 export { LoadingModalNewContainer, LoadingModalNew, type LoadingModalNewProps } from './components/loading-modal-new'
+
+// Section Loading
+export {
+  SectionLoadingModal,
+  SectionLoadingModalContainer,
+  type SectionLoadingModalProps,
+  type SectionLoadingFormData,
+} from './components/section-loading'
 
 // Employee
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'

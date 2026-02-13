@@ -1,0 +1,653 @@
+/**
+ * Employee Row Component
+ *
+ * Строка сотрудника с цветными барами загрузок (несколько loadings на одной строке)
+ */
+
+'use client'
+
+import { useMemo, useState, Fragment, useCallback, useEffect, useRef } from 'react'
+import { cn } from '@/lib/utils'
+import { Box, Layers, MessageSquare } from 'lucide-react'
+import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
+import { useSectionsPageActions } from '../../context'
+import { useUpdateLoadingDates } from '../../hooks'
+import {
+  loadingsToPeriods,
+  calculateBarRenders,
+  calculateBarTop,
+  formatBarTooltip,
+  splitPeriodByNonWorkingDays,
+  BASE_BAR_HEIGHT,
+  BAR_GAP,
+  COMMENT_HEIGHT,
+  COMMENT_GAP,
+  getLoadingColorScheme,
+} from '../../utils/loading-bars-utils'
+import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
+import type { SectionLoading, DayCell, TimelineRange } from '../../types'
+import type { TimelineUnit } from '@/types/planning'
+import { getCellClassNames } from '../../utils/cell-utils'
+import { useTimelineResize } from '@/modules/resource-graph/hooks'
+
+interface EmployeeRowProps {
+  employee: {
+    employeeId: string
+    employeeName: string
+    employeeAvatarUrl: string | null
+    employeeDepartmentName: string | null
+    employeeCategory: string | null
+    loadings: SectionLoading[]
+  }
+  sectionId: string
+  sectionName: string
+  projectName: string
+  objectName: string
+  dayCells: DayCell[]
+  stages?: Array<{ id: string; name: string; order: number | null }>
+}
+
+// Convert DayCell to TimelineUnit for compatibility with loading-bars-utils
+function dayCellsToTimelineUnits(dayCells: DayCell[]): TimelineUnit[] {
+  return dayCells.map((cell, index) => {
+    return {
+      date: cell.date,
+      label: cell.dayOfMonth.toString(),
+      dateKey: formatMinskDate(cell.date),
+      dayOfMonth: cell.dayOfMonth,
+      dayOfWeek: cell.dayOfWeek,
+      isWeekend: cell.isWeekend,
+      isWorkingDay: cell.isWorkday, // Используем готовое поле из DayCell
+      isHoliday: cell.isHoliday,
+      holidayName: cell.holidayName || undefined,
+      isToday: cell.isToday,
+      isMonthStart: cell.isMonthStart,
+      monthName: cell.monthName,
+      left: index * DAY_CELL_WIDTH,
+      width: DAY_CELL_WIDTH,
+    }
+  })
+}
+
+// Helper to convert color to rgba
+function hexToRgba(color: string, alpha: number): string {
+  if (color.startsWith('rgba')) {
+    const match = color.match(/[\d.]+/g)
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
+    }
+  }
+  if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g)
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
+    }
+  }
+  let hex = color.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+// Get initials for avatar
+function getInitials(name?: string): string {
+  if (!name) return '??'
+  const trimmed = name.trim()
+  if (!trimmed) return '??'
+  const parts = trimmed.split(/\s+/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return trimmed.substring(0, 2).toUpperCase()
+}
+
+// Helper to calculate TimelineRange from DayCells
+function calculateTimelineRange(dayCells: DayCell[]): TimelineRange {
+  if (dayCells.length === 0) {
+    const today = new Date()
+    return { start: today, end: today, totalDays: 0 }
+  }
+
+  return {
+    start: dayCells[0].date,
+    end: dayCells[dayCells.length - 1].date,
+    totalDays: dayCells.length,
+  }
+}
+
+/**
+ * Loading Bar Component with drag-to-resize
+ */
+interface LoadingBarProps {
+  bar: ReturnType<typeof calculateBarRenders>[0]
+  barRenders: ReturnType<typeof calculateBarRenders>
+  timeUnits: TimelineUnit[]
+  timelineRange: TimelineRange
+  onLoadingClick: (loading: SectionLoading) => void
+  onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
+}
+
+function LoadingBar({
+  bar,
+  barRenders,
+  timeUnits,
+  timelineRange,
+  onLoadingClick,
+  onLoadingResize,
+}: LoadingBarProps) {
+  // Refs for containers (to update transform without re-render)
+  const textRef = useRef<HTMLDivElement>(null)
+  const rateBadgeRef = useRef<HTMLDivElement>(null)
+
+  // Convert Date to ISO string for useTimelineResize
+  const startDateString = bar.period.startDate instanceof Date
+    ? formatMinskDate(bar.period.startDate)
+    : bar.period.startDate
+  const endDateString = bar.period.endDate instanceof Date
+    ? formatMinskDate(bar.period.endDate)
+    : bar.period.endDate
+
+  const {
+    leftHandleProps,
+    rightHandleProps,
+    isResizing,
+    previewPosition,
+    previewDates,
+    wasRecentlyDragging,
+  } = useTimelineResize({
+    startDate: startDateString,
+    endDate: endDateString,
+    range: timelineRange,
+    onResize: (newStartDate, newEndDate) => {
+      onLoadingResize(bar.period.id, newStartDate, newEndDate)
+    },
+    minDays: 1,
+    disabled: false,
+  })
+
+  // Handle click with wasRecentlyDragging check
+  const handleClick = useCallback(() => {
+    if (bar.period.type !== 'loading') return
+
+    // Don't open modal if just finished dragging
+    if (wasRecentlyDragging()) return
+
+    onLoadingClick(bar.period.loading)
+  }, [bar.period, onLoadingClick, wasRecentlyDragging])
+
+  // Use preview position if resizing, otherwise original
+  const displayLeft = previewPosition?.left ?? bar.left
+  const displayWidth = previewPosition?.width ?? bar.width
+
+  // Sticky rate badge effect: moves opposite direction to stay visible
+  useEffect(() => {
+    const badgeElement = rateBadgeRef.current
+    if (!badgeElement) return
+
+    const scrollContainer = badgeElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateBadgePosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Badge should move right to compensate scroll and stay visible
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Limit offset so ENTIRE badge stays within bar
+      // Badge: 6px (left-1.5) + 32px (min-w) + 8px (px-1 both sides) + 2px (safety) = 48px
+      const maxOffset = Math.max(0, displayWidth - 48)
+      const clampedOffset = Math.min(offset, maxOffset)
+
+      badgeElement.style.transform = `translateX(${clampedOffset}px)`
+    }
+
+    updateBadgePosition()
+    scrollContainer.addEventListener('scroll', updateBadgePosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateBadgePosition)
+    }
+  }, [displayLeft, displayWidth])
+
+  // Smooth text scroll effect: text moves when bar goes under sidebar
+  useEffect(() => {
+    const textElement = textRef.current
+    if (!textElement) return
+
+    const scrollContainer = textElement.closest('.overflow-auto')
+    if (!scrollContainer) return
+
+    const updateTextPosition = () => {
+      const scrollLeft = scrollContainer.scrollLeft
+
+      // Text should move only when bar goes under sidebar
+      const overlap = scrollLeft - displayLeft
+      const offset = Math.max(0, overlap)
+
+      // Allow text to move fully off-screen (no limit)
+      // Text will be hidden by parent overflow-hidden
+      textElement.style.transform = `translateX(${offset}px)`
+    }
+
+    updateTextPosition()
+    scrollContainer.addEventListener('scroll', updateTextPosition, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', updateTextPosition)
+    }
+  }, [displayLeft, displayWidth])
+
+
+  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
+  const colorScheme = getLoadingColorScheme(bar.period.id)
+
+  // Split period by non-working days for diagonal stripe overlay
+  const nonWorkingSegments = useMemo(() => {
+    const startIdx = timeUnits.findIndex(u => u.dateKey === formatMinskDate(bar.period.startDate))
+    const endIdx = timeUnits.findIndex(u => u.dateKey === formatMinskDate(bar.period.endDate))
+    if (startIdx === -1 || endIdx === -1) return []
+
+    const segments: Array<{ startIdx: number; endIdx: number }> = []
+    let currentSegmentStart: number | null = null
+
+    for (let idx = startIdx; idx <= endIdx; idx++) {
+      const unit = timeUnits[idx]
+      const isNonWorking = !unit.isWorkingDay
+
+      if (isNonWorking) {
+        if (currentSegmentStart === null) {
+          currentSegmentStart = idx
+        }
+      } else {
+        if (currentSegmentStart !== null) {
+          segments.push({
+            startIdx: currentSegmentStart,
+            endIdx: idx - 1,
+          })
+          currentSegmentStart = null
+        }
+      }
+    }
+
+    // Close last segment
+    if (currentSegmentStart !== null) {
+      segments.push({
+        startIdx: currentSegmentStart,
+        endIdx,
+      })
+    }
+
+    return segments
+  }, [bar.period.startDate, bar.period.endDate, timeUnits])
+
+  // Extract display info from period
+  const sectionText = bar.period.sectionName || bar.period.objectName || ''
+  const stageText = bar.period.stageName || ''
+
+  return (
+    <Fragment>
+      {/* Main bar */}
+      <div
+        className={cn(
+          'absolute transition-all duration-200 pointer-events-auto flex items-center',
+          bar.period.type === 'loading' && 'cursor-pointer hover:brightness-110',
+          isResizing && 'ring-2 ring-primary/50 z-50'
+        )}
+        style={{
+          left: displayLeft,
+          width: displayWidth,
+          height: BASE_BAR_HEIGHT,
+          top,
+          backgroundColor: colorScheme.bg,
+          opacity: 0.85,
+          border: `2px solid ${colorScheme.bg}`,
+          paddingLeft: 6,
+          paddingRight: 6,
+          overflow: 'hidden',
+          filter: 'brightness(1.05)',
+          borderTopLeftRadius: 4,
+          borderTopRightRadius: 4,
+          borderBottomLeftRadius: bar.period.comment ? 0 : 4,
+          borderBottomRightRadius: bar.period.comment ? 0 : 4,
+        }}
+        title={formatBarTooltip(bar.period)}
+        onClick={handleClick}
+      >
+        {/* Resize handles */}
+        <>
+          {/* Left handle */}
+          <div
+            {...leftHandleProps}
+            className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+            style={{ zIndex: 20 }}
+          />
+          {/* Right handle */}
+          <div
+            {...rightHandleProps}
+            className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+            style={{ zIndex: 20 }}
+          />
+        </>
+
+        {/* Sticky rate badge (always visible, positioned near top) */}
+        <div
+          ref={rateBadgeRef}
+          className="absolute left-1.5 top-1 flex-shrink-0 transition-transform duration-150 ease-out"
+          style={{ zIndex: 10 }}
+        >
+          <span className="inline-flex items-center justify-center min-w-[32px] px-1 py-0.5 bg-black/20 text-white text-[10px] font-semibold rounded shadow-sm">
+            {bar.period.rate || 1}
+          </span>
+        </div>
+
+        {/* Bar content with smooth scrolling text */}
+        <div
+          ref={textRef}
+          className="absolute left-[40px] top-1 flex flex-col justify-start items-start gap-0.5 transition-transform duration-200 ease-out"
+          style={{ zIndex: 2, maxWidth: displayWidth - 48 }}
+        >
+          {/* Line 1: Section name with icon */}
+          {sectionText && (
+            <div className="flex items-center gap-1 w-full overflow-hidden">
+              <Box size={11} className="text-white flex-shrink-0" />
+              <span className="text-[10px] font-semibold text-white truncate leading-tight">
+                {sectionText}
+              </span>
+            </div>
+          )}
+
+          {/* Line 2: Stage name with icon */}
+          {stageText && (
+            <div className="flex items-center gap-1 w-full overflow-hidden">
+              <Layers size={10} className="text-white/90 flex-shrink-0" />
+              <span className="text-[9px] font-medium text-white/90 truncate leading-tight">
+                {stageText}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Non-working days overlay */}
+        {nonWorkingSegments.map((segment, segmentIdx) => {
+          const barStartLeft = timeUnits[Math.min(...barRenders.map(b =>
+            timeUnits.findIndex(u => u.dateKey === formatMinskDate(b.period.startDate))
+          ).filter(i => i !== -1))]?.left ?? 0
+
+          const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
+          const overlayLeft = segmentStartLeft - bar.left
+
+          let overlayWidth = 0
+          for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+            overlayWidth += timeUnits[idx]?.width ?? DAY_CELL_WIDTH
+          }
+          overlayWidth -= 3
+
+          return (
+            <div
+              key={`non-working-${segmentIdx}`}
+              className="absolute pointer-events-none"
+              style={{
+                left: overlayLeft,
+                width: overlayWidth,
+                top: -3,
+                bottom: -3,
+                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.3) 4px, rgba(255, 255, 255, 0.3) 15px)',
+                borderTop: `3px dashed ${colorScheme.bg}`,
+                borderBottom: `3px dashed ${colorScheme.bg}`,
+                zIndex: 1,
+              }}
+            />
+          )
+        })}
+      </div>
+
+      {/* Comment below bar */}
+      {bar.period.type === 'loading' && bar.period.comment && (
+        <div
+          className="absolute pointer-events-none transition-all duration-200"
+          style={{
+            top: top + BASE_BAR_HEIGHT,
+            left: displayLeft,
+            width: displayWidth,
+            height: COMMENT_GAP + COMMENT_HEIGHT,
+            zIndex: 3,
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: 3,
+              right: 3,
+              height: COMMENT_GAP,
+              borderTop: '2px dashed #ffffff',
+              opacity: 1,
+            }}
+          />
+          <div
+            className="absolute flex items-center gap-1 px-2 pointer-events-auto cursor-pointer"
+            style={{
+              top: COMMENT_GAP - 2,
+              left: 0,
+              right: 0,
+              height: COMMENT_HEIGHT,
+              backgroundColor: hexToRgba(colorScheme.bg, 0.5),
+              borderLeft: `2px solid ${colorScheme.bg}`,
+              borderRight: `2px solid ${colorScheme.bg}`,
+              borderBottom: `2px solid ${colorScheme.bg}`,
+              borderBottomLeftRadius: 4,
+              borderBottomRightRadius: 4,
+              opacity: 0.85,
+              filter: 'brightness(1.05)',
+            }}
+            title={bar.period.comment}
+          >
+            <MessageSquare size={11} className="text-white flex-shrink-0" />
+            <span className="text-[10px] leading-tight truncate text-white font-medium">
+              {bar.period.comment}
+            </span>
+          </div>
+        </div>
+      )}
+    </Fragment>
+  )
+}
+
+export function EmployeeRow({
+  employee,
+  sectionId,
+  sectionName,
+  projectName,
+  objectName,
+  dayCells,
+  stages,
+}: EmployeeRowProps) {
+  const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const { onEditLoading } = useSectionsPageActions()
+
+  // Mutation hook для обновления дат загрузки
+  const updateLoadingDates = useUpdateLoadingDates()
+
+  // Timeline range для useTimelineResize
+  const timelineRange = useMemo(() => calculateTimelineRange(dayCells), [dayCells])
+
+  // Обработчик клика на loading bar для редактирования
+  const handleLoadingClick = useCallback((loading: SectionLoading) => {
+    onEditLoading(
+      loading.id,
+      {
+        id: loading.id,
+        employee_id: loading.employeeId,
+        start_date: loading.startDate,
+        end_date: loading.endDate,
+        rate: loading.rate,
+        comment: loading.comment || null,
+        stage_id: loading.stageId,
+      },
+      {
+        sectionId,
+        sectionName,
+        objectName,
+        projectName,
+      },
+      stages
+    )
+  }, [onEditLoading, sectionId, sectionName, objectName, projectName, stages])
+
+  // Callback для обработки resize загрузки
+  const handleLoadingResize = useCallback(
+    (loadingId: string, startDate: string, finishDate: string) => {
+      updateLoadingDates.mutate({
+        loadingId,
+        employeeId: employee.employeeId,
+        startDate,
+        finishDate,
+      })
+    },
+    [employee.employeeId, updateLoadingDates]
+  )
+
+  // Convert dayCells to TimelineUnits for loading bar utils
+  const timeUnits = useMemo(() => dayCellsToTimelineUnits(dayCells), [dayCells])
+
+  // Convert loadings to periods
+  const allPeriods = useMemo(() => {
+    return loadingsToPeriods(employee.loadings)
+  }, [employee.loadings])
+
+  // Calculate bar renders
+  const barRenders = useMemo(() => {
+    return calculateBarRenders(allPeriods, dayCells, DAY_CELL_WIDTH)
+  }, [allPeriods, dayCells])
+
+  // Calculate dynamic row height based on loadings
+  const actualRowHeight = useMemo(() => {
+    if (barRenders.length === 0) return EMPLOYEE_ROW_HEIGHT
+
+    let maxBottom = 0
+    barRenders.forEach((bar) => {
+      const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
+      let totalBarHeight = top + BASE_BAR_HEIGHT
+      if (bar.period.type === 'loading' && bar.period.comment) {
+        totalBarHeight += COMMENT_GAP + COMMENT_HEIGHT
+      }
+      maxBottom = Math.max(maxBottom, totalBarHeight)
+    })
+
+    return Math.max(EMPLOYEE_ROW_HEIGHT, maxBottom + 8)
+  }, [barRenders])
+
+  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+
+  // Calculate employment rate (sum of max concurrent loadings, capped at highest rate)
+  const employmentRate = useMemo(() => {
+    if (employee.loadings.length === 0) return 1
+
+    // For display purposes, show the max rate among all loadings
+    const maxRate = Math.max(...employee.loadings.map(l => l.rate))
+    return maxRate
+  }, [employee.loadings])
+
+  return (
+    <div className="group/employee min-w-full relative border-b border-border/30">
+      <div
+        className="flex transition-colors"
+        style={{ height: actualRowHeight }}
+      >
+        {/* Sidebar - sticky left */}
+        <div
+          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
+          style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
+        >
+          {/* Left: avatar + name (indented) */}
+          <div className="flex items-center gap-2 min-w-0 pl-10">
+            <TooltipProvider>
+              <Tooltip open={hoveredAvatar}>
+                <TooltipTrigger asChild>
+                  <Avatar
+                    className="h-8 w-8 flex-shrink-0 cursor-pointer"
+                    onMouseEnter={() => setHoveredAvatar(true)}
+                    onMouseLeave={() => setHoveredAvatar(false)}
+                  >
+                    <AvatarImage src={employee.employeeAvatarUrl || undefined} />
+                    <AvatarFallback className="text-xs">
+                      {getInitials(employee.employeeName)}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {employee.employeeName}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-medium truncate">
+                  {employee.employeeName || 'Не указан'}
+                </span>
+              </div>
+              <div className="text-[10px] text-muted-foreground truncate">
+                {employee.employeeCategory || 'Без категории'}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: rate */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary cursor-default">
+                    {employmentRate}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  Ставка
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Timeline cells with loading bars */}
+        <div className="flex relative z-0" style={{ width: timelineWidth }}>
+          {/* Loading bars overlay */}
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
+            {barRenders.map((bar, idx) => (
+              <LoadingBar
+                key={`${bar.period.id}-${idx}`}
+                bar={bar}
+                barRenders={barRenders}
+                timeUnits={timeUnits}
+                timelineRange={timelineRange}
+                onLoadingClick={handleLoadingClick}
+                onLoadingResize={handleLoadingResize}
+              />
+            ))}
+          </div>
+
+          {/* Background cells */}
+          {dayCells.map((cell, i) => (
+            <div
+              key={i}
+              className={getCellClassNames(cell)}
+              style={{
+                width: DAY_CELL_WIDTH,
+                height: actualRowHeight,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

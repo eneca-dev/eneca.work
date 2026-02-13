@@ -214,3 +214,53 @@ export const openLoadingModalNewEdit = (
     sectionId,
     ...options,
   })
+
+/**
+ * Открыть модалку создания загрузки на раздел (sections-page)
+ */
+export const openSectionLoadingCreate = (
+  sectionId: string,
+  sectionName: string,
+  objectName: string,
+  projectName: string,
+  employeeId?: string,
+  stages?: Array<{ id: string; name: string; order: number | null }>
+) =>
+  useModalStore.getState().openModal('section-loading-create', {
+    sectionId,
+    sectionName,
+    objectName,
+    projectName,
+    employeeId,
+    stages,
+  })
+
+/**
+ * Открыть модалку редактирования загрузки на раздел (sections-page)
+ */
+export const openSectionLoadingEdit = (
+  loadingId: string,
+  sectionId: string,
+  sectionName: string,
+  objectName: string,
+  projectName: string,
+  loading: {
+    id: string
+    employee_id: string
+    start_date: string
+    end_date: string
+    rate: number
+    comment: string | null
+    stage_id?: string | null
+  },
+  stages?: Array<{ id: string; name: string; order: number | null }>
+) =>
+  useModalStore.getState().openModal('section-loading-edit', {
+    loadingId,
+    sectionId,
+    sectionName,
+    objectName,
+    projectName,
+    loading,
+    stages,
+  })
