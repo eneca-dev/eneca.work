@@ -25,7 +25,7 @@ import { TimelineHeader, generateDayCells } from '@/modules/resource-graph/compo
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY, TOTAL_DAYS } from '../constants'
 import { DepartmentRow } from './rows/DepartmentRow'
 import { Skeleton } from '@/components/ui/skeleton'
-import { openSectionLoadingCreate, openSectionLoadingEdit } from '@/modules/modals'
+import { openLoadingModalNewCreate, openLoadingModalNewEdit } from '@/modules/modals'
 import type { TimelineRange, DayCell } from '../types'
 import type { FilterQueryParams } from '@/modules/cache'
 import type { CompanyCalendarEvent } from '@/modules/resource-graph/types'
@@ -70,14 +70,15 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
     },
     stages?: Array<{ id: string; name: string; order: number | null }>
   ) => {
-    openSectionLoadingEdit(
+    openLoadingModalNewEdit(
       loadingId,
       breadcrumbs.sectionId,
-      breadcrumbs.sectionName,
-      breadcrumbs.objectName,
-      breadcrumbs.projectName,
-      loading,
-      stages
+      {
+        loading: {
+          ...loading,
+          section_id: breadcrumbs.sectionId,
+        },
+      }
     )
   }, [])
 

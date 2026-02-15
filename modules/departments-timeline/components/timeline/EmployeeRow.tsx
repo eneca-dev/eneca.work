@@ -687,6 +687,9 @@ export function EmployeeRow({
               </div>
               <div className="text-[10px] text-muted-foreground truncate">
                 {employee.position || 'Без должности'}
+                {employee.categoryName && employee.categoryName !== 'Не применяется' && (
+                  <span className="text-primary font-medium"> · {employee.categoryName}</span>
+                )}
               </div>
             </div>
           </div>

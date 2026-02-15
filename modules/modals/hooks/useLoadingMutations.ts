@@ -50,6 +50,7 @@ interface OptimisticContext {
   previousDepartmentsData?: unknown
   previousResourceGraphData?: unknown
   previousProjectsData?: unknown
+  previousSectionsPageData?: unknown
 }
 
 // ============================================================================
@@ -80,6 +81,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
       // Сохраняем снапшот текущих данных для отката при ошибке
@@ -92,6 +94,26 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       const previousProjectsData = queryClient.getQueriesData({
         queryKey: queryKeys.projects.all,
       })
+      const previousSectionsPageData = queryClient.getQueriesData({
+        queryKey: queryKeys.sectionsPage.all,
+      })
+
+      // Создаём временную загрузку с optimistic ID (используется во всех optimistic updates)
+      const tempLoading = {
+        id: `temp-${Date.now()}-${Math.random()}`,
+        employeeId: input.employeeId,
+        responsibleId: input.employeeId,
+        stageId: input.stageId,
+        sectionId: input.stageId, // stageId может быть как stage, так и section
+        startDate: input.startDate,
+        endDate: input.endDate,
+        rate: input.rate,
+        comment: input.comment || undefined,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        _optimistic: true, // Метка для отладки
+      }
 
       // Оптимистично обновляем departments timeline
       // Находим все активные запросы departments timeline и добавляем новую загрузку
@@ -113,23 +135,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           if (!departments || !Array.isArray(departments) || departments.length === 0) {
             console.warn('⚠️ [CREATE onMutate] Нет departments в кеше')
             return old
-          }
-
-          // Создаём временную загрузку с optimistic ID
-          const tempLoading = {
-            id: `temp-${Date.now()}-${Math.random()}`,
-            employeeId: input.employeeId,
-            responsibleId: input.employeeId,
-            stageId: input.stageId,
-            sectionId: input.stageId, // stageId может быть как stage, так и section
-            startDate: input.startDate,
-            endDate: input.endDate,
-            rate: input.rate,
-            comment: input.comment || undefined,
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: null,
-            _optimistic: true, // Метка для отладки
           }
 
           // Добавляем загрузку к соответствующему сотруднику
@@ -186,12 +191,83 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
 
       console.log('✨ [CREATE onMutate] Optimistic update для resourceGraph.loadings применён')
+
+      // Оптимистично обновляем sectionsPage (вкладка "Разделы")
+      // Получаем данные пользователя из кеша
+      const usersCache = queryClient.getQueryData<any[]>(queryKeys.users.lists())
+      const employee = usersCache?.find((u: any) => u.user_id === input.employeeId)
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sectionsPage.lists() },
+        (old: any) => {
+          if (!old || !Array.isArray(old)) {
+            console.warn('⚠️ [CREATE onMutate] Нет данных sectionsPage в кеше')
+            return old
+          }
+
+          // Структура: Department[] -> Project[] -> ObjectSection[] -> SectionLoading[]
+          const updatedDepartments = old.map((dept: any) => ({
+            ...dept,
+            projects: dept.projects.map((project: any) => ({
+              ...project,
+              objectSections: project.objectSections.map((objectSection: any) => {
+                // Проверяем что это нужный раздел
+                if (objectSection.sectionId === input.stageId) {
+                  console.log('✅ [CREATE onMutate] Добавляем загрузку в sectionsPage:', {
+                    sectionId: objectSection.sectionId,
+                    employeeId: input.employeeId,
+                  })
+
+                  return {
+                    ...objectSection,
+                    loadings: [
+                      ...(objectSection.loadings || []),
+                      {
+                        ...tempLoading,
+                        sectionId: objectSection.sectionId,
+                        sectionName: objectSection.sectionName,
+                        projectId: objectSection.projectId,
+                        projectName: objectSection.projectName,
+                        objectId: objectSection.objectId,
+                        objectName: objectSection.objectName,
+                        stageId: input.stageId,
+                        stageName: null,
+                        employeeId: input.employeeId,
+                        employeeName: employee?.full_name || 'Загрузка...',
+                        employeeFirstName: employee?.first_name,
+                        employeeLastName: employee?.last_name,
+                        employeeEmail: employee?.email,
+                        employeeAvatarUrl: employee?.avatar_url,
+                        employeeCategory: employee?.category,
+                        employeeDepartmentId: employee?.department_id || dept.id,
+                        employeeDepartmentName: employee?.department_name || dept.name,
+                        startDate: input.startDate,
+                        endDate: input.endDate,
+                        rate: input.rate,
+                        comment: input.comment,
+                        status: 'active',
+                      }
+                    ],
+                    totalLoadings: (objectSection.totalLoadings || 0) + 1,
+                  }
+                }
+                return objectSection
+              }),
+            })),
+          }))
+
+          return updatedDepartments
+        }
+      )
+
+      console.log('✨ [CREATE onMutate] Optimistic update для sectionsPage применён')
       console.log('✨ Optimistic create: временная загрузка добавлена в UI')
 
       return {
         previousDepartmentsData,
         previousResourceGraphData,
         previousProjectsData,
+        previousSectionsPageData,
       }
     },
 
@@ -203,6 +279,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
       options.onCreateSuccess?.(data)
     },
@@ -223,6 +300,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousProjectsData) {
         context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousSectionsPageData) {
+        context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -258,6 +340,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
       // Сохраняем снапшот текущих данных для отката при ошибке
@@ -269,6 +352,9 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousProjectsData = queryClient.getQueriesData({
         queryKey: queryKeys.projects.all,
+      })
+      const previousSectionsPageData = queryClient.getQueriesData({
+        queryKey: queryKeys.sectionsPage.all,
       })
 
       // Оптимистично обновляем departments timeline
@@ -503,12 +589,82 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
 
       console.log('✨ [UPDATE onMutate] Optimistic update для resourceGraph.loadings применён')
+
+      // Оптимистично обновляем sectionsPage (вкладка "Разделы")
+      // Получаем данные пользователя из кеша (если меняется сотрудник)
+      const usersCache = queryClient.getQueryData<any[]>(queryKeys.users.lists())
+      const newEmployee = input.employeeId
+        ? usersCache?.find((u: any) => u.user_id === input.employeeId)
+        : undefined
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sectionsPage.lists() },
+        (old: any) => {
+          if (!old || !Array.isArray(old)) {
+            console.warn('⚠️ [UPDATE onMutate] Нет данных sectionsPage в кеше')
+            return old
+          }
+
+          // Структура: Department[] -> Project[] -> ObjectSection[] -> SectionLoading[]
+          const updatedDepartments = old.map((dept: any) => ({
+            ...dept,
+            projects: dept.projects.map((project: any) => ({
+              ...project,
+              objectSections: project.objectSections.map((objectSection: any) => {
+                const updatedLoadings = (objectSection.loadings || []).map((loading: any) => {
+                  if (loading.id === input.loadingId) {
+                    console.log('✅ [UPDATE onMutate] Обновляем загрузку в sectionsPage:', {
+                      sectionId: objectSection.sectionId,
+                      loadingId: loading.id,
+                      oldEmployeeId: loading.employeeId,
+                      newEmployeeId: input.employeeId,
+                    })
+
+                    return {
+                      ...loading,
+                      ...(input.employeeId !== undefined && newEmployee && {
+                        employeeId: input.employeeId,
+                        employeeName: newEmployee.full_name,
+                        employeeFirstName: newEmployee.first_name,
+                        employeeLastName: newEmployee.last_name,
+                        employeeEmail: newEmployee.email,
+                        employeeAvatarUrl: newEmployee.avatar_url,
+                        employeeCategory: newEmployee.category,
+                        employeeDepartmentId: newEmployee.department_id,
+                        employeeDepartmentName: newEmployee.department_name,
+                      }),
+                      ...(input.stageId !== undefined && { stageId: input.stageId }),
+                      ...(input.startDate !== undefined && { startDate: input.startDate }),
+                      ...(input.endDate !== undefined && { endDate: input.endDate }),
+                      ...(input.rate !== undefined && { rate: input.rate }),
+                      ...(input.comment !== undefined && { comment: input.comment }),
+                      updatedAt: new Date().toISOString(),
+                      _optimistic: true,
+                    }
+                  }
+                  return loading
+                })
+
+                return {
+                  ...objectSection,
+                  loadings: updatedLoadings,
+                }
+              }),
+            })),
+          }))
+
+          return updatedDepartments
+        }
+      )
+
+      console.log('✨ [UPDATE onMutate] Optimistic update для sectionsPage применён')
       console.log('✨ Optimistic update: загрузка обновлена в UI:', input.loadingId)
 
       return {
         previousDepartmentsData,
         previousResourceGraphData,
         previousProjectsData,
+        previousSectionsPageData,
       }
     },
 
@@ -520,6 +676,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
       options.onUpdateSuccess?.(data)
     },
@@ -540,6 +697,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousProjectsData) {
         context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousSectionsPageData) {
+        context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -573,6 +735,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
       // Сохраняем снапшот текущих данных для отката при ошибке
@@ -584,6 +747,9 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousProjectsData = queryClient.getQueriesData({
         queryKey: queryKeys.projects.all,
+      })
+      const previousSectionsPageData = queryClient.getQueriesData({
+        queryKey: queryKeys.sectionsPage.all,
       })
 
       // Оптимистично удаляем загрузку из departments timeline
@@ -643,12 +809,46 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         }
       })
 
+      // Оптимистично удаляем из sectionsPage (вкладка "Разделы")
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sectionsPage.lists() },
+        (old: any) => {
+          if (!old || !Array.isArray(old)) {
+            console.warn('⚠️ [ARCHIVE onMutate] Нет данных sectionsPage в кеше')
+            return old
+          }
+
+          // Структура: Department[] -> Project[] -> ObjectSection[] -> SectionLoading[]
+          const updatedDepartments = old.map((dept: any) => ({
+            ...dept,
+            projects: dept.projects.map((project: any) => ({
+              ...project,
+              objectSections: project.objectSections.map((objectSection: any) => {
+                const updatedLoadings = (objectSection.loadings || []).filter(
+                  (loading: any) => loading.id !== input.loadingId
+                )
+
+                return {
+                  ...objectSection,
+                  loadings: updatedLoadings,
+                  totalLoadings: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+
+          return updatedDepartments
+        }
+      )
+
+      console.log('✨ [ARCHIVE onMutate] Optimistic update для sectionsPage применён')
       console.log('✨ Optimistic archive: загрузка удалена из UI')
 
       return {
         previousDepartmentsData,
         previousResourceGraphData,
         previousProjectsData,
+        previousSectionsPageData,
       }
     },
 
@@ -660,6 +860,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
       options.onArchiveSuccess?.(data)
     },
@@ -680,6 +881,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousProjectsData) {
         context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousSectionsPageData) {
+        context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -713,6 +919,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
       // Сохраняем снапшот текущих данных для отката при ошибке
@@ -724,6 +931,9 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousProjectsData = queryClient.getQueriesData({
         queryKey: queryKeys.projects.all,
+      })
+      const previousSectionsPageData = queryClient.getQueriesData({
+        queryKey: queryKeys.sectionsPage.all,
       })
 
       // Оптимистично удаляем загрузку из departments timeline
@@ -783,12 +993,46 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         }
       })
 
+      // Оптимистично удаляем из sectionsPage (вкладка "Разделы")
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sectionsPage.lists() },
+        (old: any) => {
+          if (!old || !Array.isArray(old)) {
+            console.warn('⚠️ [DELETE onMutate] Нет данных sectionsPage в кеше')
+            return old
+          }
+
+          // Структура: Department[] -> Project[] -> ObjectSection[] -> SectionLoading[]
+          const updatedDepartments = old.map((dept: any) => ({
+            ...dept,
+            projects: dept.projects.map((project: any) => ({
+              ...project,
+              objectSections: project.objectSections.map((objectSection: any) => {
+                const updatedLoadings = (objectSection.loadings || []).filter(
+                  (loading: any) => loading.id !== input.loadingId
+                )
+
+                return {
+                  ...objectSection,
+                  loadings: updatedLoadings,
+                  totalLoadings: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+
+          return updatedDepartments
+        }
+      )
+
+      console.log('✨ [DELETE onMutate] Optimistic update для sectionsPage применён')
       console.log('✨ Optimistic delete: загрузка удалена из UI')
 
       return {
         previousDepartmentsData,
         previousResourceGraphData,
         previousProjectsData,
+        previousSectionsPageData,
       }
     },
 
@@ -800,6 +1044,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
       options.onDeleteSuccess?.(data.id)
     },
@@ -820,6 +1065,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousProjectsData) {
         context.previousProjectsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousSectionsPageData) {
+        context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }

@@ -26,7 +26,7 @@ const VIEW_MODE_OPTIONS: {
 }[] = [
   { value: 'kanban', label: 'Канбан', icon: LayoutGrid },
   { value: 'departments', label: 'Отделы', icon: Users },
-  { value: 'budgets', label: 'Бюджеты', icon: Wallet },
+  // { value: 'budgets', label: 'Бюджеты', icon: Wallet },
   { value: 'sections', label: 'Разделы', icon: FolderTree },
 ]
 
