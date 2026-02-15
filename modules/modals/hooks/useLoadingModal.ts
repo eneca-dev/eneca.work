@@ -32,6 +32,8 @@ export interface LoadingFormData {
   rate: number
   /** Комментарий */
   comment: string
+  /** ID этапа декомпозиции (опционально) */
+  decompositionStageId: string
 }
 
 /**
@@ -120,6 +122,7 @@ function getDefaultFormData(): LoadingFormData {
     endDate: getDateInDays(7), // Через неделю
     rate: 1.0,
     comment: '',
+    decompositionStageId: '', // Опциональный этап
   }
 }
 
@@ -170,6 +173,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
         endDate,
         rate: initialLoading.rate,
         comment: initialLoading.comment ?? '',
+        decompositionStageId: '', // Будет установлено в LoadingModalNew на основе breadcrumbs
       }
       console.log('✅ [useLoadingModal] Initializing form with edit data:', initialFormData)
       return initialFormData
@@ -273,7 +277,9 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     }
 
     // Проверяем изменение раздела/этапа
-    const sectionChanged = selectedSectionId !== initialLoading.section_id
+    // Итоговый stageId = decompositionStageId (если выбран) || selectedSectionId (раздел)
+    const currentStageId = formData.decompositionStageId || selectedSectionId
+    const sectionChanged = currentStageId !== initialLoading.section_id
 
     // Нормализуем даты из initialLoading к формату YYYY-MM-DD для корректного сравнения
     const initialStartDate = typeof initialLoading.start_date === 'string'
