@@ -8,7 +8,7 @@
 
 import { useMemo, useState, Fragment, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { Box, Layers, MessageSquare } from 'lucide-react'
+import { Box, Layers, MessageSquare, UserPlus } from 'lucide-react'
 import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useSectionsPageActions } from '../../context'
 import { useUpdateLoadingDates } from '../../hooks'
+import { openLoadingModalNewCreate } from '@/modules/modals'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -550,6 +551,17 @@ export function EmployeeRow({
     [employee.employeeId, updateLoadingDates]
   )
 
+  // Обработчик создания новой загрузки для сотрудника
+  const handleCreateLoading = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    // Открываем модалку создания загрузки с предзаполненными сотрудником и разделом
+    openLoadingModalNewCreate({
+      employeeId: employee.employeeId,
+      sectionId: sectionId,
+    })
+  }, [employee.employeeId, sectionId])
+
   // Convert dayCells to TimelineUnits for loading bar utils
   const timeUnits = useMemo(() => dayCellsToTimelineUnits(dayCells), [dayCells])
 
@@ -602,6 +614,15 @@ export function EmployeeRow({
           className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
           style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
         >
+          {/* Create loading button - positioned at right edge of sidebar */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+            onClick={handleCreateLoading}
+          >
+            <UserPlus className="w-3 h-3" />
+            <span>Загрузка</span>
+          </button>
+
           {/* Left: avatar + name (indented) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
             <TooltipProvider>
