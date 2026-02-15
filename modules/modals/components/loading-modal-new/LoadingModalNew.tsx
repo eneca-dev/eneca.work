@@ -332,9 +332,9 @@ export function LoadingModalNew({
     return employee?.full_name || undefined
   }, [users, employeeId])
 
-  const stageName = selectedBreadcrumbs && selectedBreadcrumbs.length > 0
-    ? selectedBreadcrumbs[selectedBreadcrumbs.length - 1].name
-    : undefined
+  // Извлекаем раздел и этап из breadcrumbs
+  const sectionName = selectedBreadcrumbs?.find(b => b.type === 'section')?.name
+  const stageName = selectedBreadcrumbs?.find(b => b.type === 'decomposition_stage')?.name
   const startDate = mode === 'edit' && editData?.loading?.start_date
     ? editData.loading.start_date
     : formData.startDate
@@ -524,6 +524,7 @@ export function LoadingModalNew({
         onConfirm={handleArchiveConfirm}
         loading={archiveLoading.isPending}
         employeeName={employeeName}
+        sectionName={sectionName}
         stageName={stageName}
         startDate={startDate}
         endDate={endDate}
@@ -536,6 +537,7 @@ export function LoadingModalNew({
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading.isPending}
         employeeName={employeeName}
+        sectionName={sectionName}
         stageName={stageName}
         startDate={startDate}
         endDate={endDate}
