@@ -202,9 +202,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       setOriginalSectionId(id)
       setOriginalSectionName(name ?? null)
       setOriginalBreadcrumbs(breadcrumbs ?? null)
-
-      // Сбрасываем режим проекта на 'my' - логика автопереключения в ProjectTree сама определит нужный режим
-      setProjectMode('my')
+      // Сбрасываем этап декомпозиции, так как он специфичен для конкретного раздела
+      setFormData((prev) => ({ ...prev, decompositionStageId: '' }))
     }
   }, [isChangingStage])
 
