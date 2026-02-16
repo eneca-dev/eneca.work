@@ -63,6 +63,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -958,6 +965,13 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -1176,6 +1190,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "budget_expenses_created_by_fkey"
@@ -1469,6 +1490,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "budget_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "budget_history_changed_by_fkey"
@@ -1788,6 +1816,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -2043,6 +2078,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
+            columns: ["calendar_event_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
@@ -2671,6 +2713,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "checkpoint_types_created_by_fkey"
@@ -3403,6 +3452,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "dec_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -3599,7 +3655,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "dec_templates_department_id_fkey"
@@ -3813,6 +3869,13 @@ export type Database = {
             columns: ["decomposition_item_created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "decomposition_items_decomposition_item_created_by_fkey"
+            columns: ["decomposition_item_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -4003,6 +4066,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "decomposition_items_decomposition_item_responsible_fkey"
+            columns: ["decomposition_item_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "decomposition_items_decomposition_item_responsible_fkey"
@@ -4526,6 +4596,13 @@ export type Database = {
             columns: ["decomposition_stage_created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "decomposition_stages_decomposition_stage_created_by_fkey"
+            columns: ["decomposition_stage_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -4951,6 +5028,13 @@ export type Database = {
             columns: ["decomposition_template_item_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "decomposition_template_items_decomposition_template_item_r_fkey"
+            columns: ["decomposition_template_item_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -5205,7 +5289,7 @@ export type Database = {
             columns: ["decomposition_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "decomposition_templates_decomposition_department_id_fkey"
@@ -5325,6 +5409,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "decomposition_templates_decomposition_template_creator_id_fkey"
+            columns: ["decomposition_template_creator_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "decomposition_templates_decomposition_template_creator_id_fkey"
@@ -5552,6 +5643,13 @@ export type Database = {
             columns: ["department_head_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "departments_department_head_id_fkey"
+            columns: ["department_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -5740,6 +5838,13 @@ export type Database = {
             foreignKeyName: "departments_subdivision_id_fkey"
             columns: ["subdivision_id"]
             isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "departments_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
             referencedRelation: "view_subdivisions_with_heads"
             referencedColumns: ["subdivision_id"]
           },
@@ -5855,6 +5960,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "item_progress_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "item_progress_history_changed_by_fkey"
@@ -6118,6 +6230,76 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "decomposition_stages"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_stage_agg"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_full"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_pivot"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_stats"
+            referencedColumns: ["stage_id"]
+          },
+          {
             foreignKeyName: "loadings_loading_responsible_fkey"
             columns: ["loading_responsible"]
             isOneToOne: false
@@ -6137,6 +6319,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "loadings_loading_responsible_fkey"
@@ -6489,76 +6678,6 @@ export type Database = {
             referencedColumns: ["section_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "decomposition_stages"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "v_resource_graph"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_decomposition_stage_agg"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_employee_workloads"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_full"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_fixed"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_v2"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_pivot"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_stats"
-            referencedColumns: ["stage_id"]
-          },
-          {
             foreignKeyName: "loadings_loading_task_fkey"
             columns: ["loading_task"]
             isOneToOne: false
@@ -6591,7 +6710,7 @@ export type Database = {
             columns: ["shortage_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "loadings_shortage_department_id_fkey"
@@ -6970,6 +7089,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "notions_notion_created_by_fkey"
+            columns: ["notion_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "notions_notion_created_by_fkey"
@@ -7404,6 +7530,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "objects_object_responsible_fkey"
+            columns: ["object_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "objects_object_responsible_fkey"
@@ -8154,7 +8287,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -8281,6 +8414,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_org_structure"
             referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "profiles_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
           },
           {
             foreignKeyName: "profiles_subdivision_id_fkey"
@@ -8504,6 +8644,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "project_reports_created_by_fkey"
@@ -9036,6 +9183,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "project_tag_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -9459,6 +9613,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "project_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -9649,6 +9810,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "project_tags_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "project_tags_updated_by_fkey"
@@ -9955,6 +10123,13 @@ export type Database = {
             columns: ["project_lead_engineer"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["project_lead_engineer"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -10145,6 +10320,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "projects_project_manager_fkey"
@@ -10429,6 +10611,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_capacity_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "section_capacity_created_by_fkey"
@@ -10855,6 +11044,13 @@ export type Database = {
             columns: ["completed_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -11045,6 +11241,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "section_checkpoints_created_by_fkey"
@@ -11457,6 +11660,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "section_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -11850,6 +12060,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
@@ -12848,6 +13065,13 @@ export type Database = {
             columns: ["section_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -13490,6 +13714,13 @@ export type Database = {
             columns: ["subdivision_head_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "subdivisions_subdivision_head_id_fkey"
+            columns: ["subdivision_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -13916,6 +14147,13 @@ export type Database = {
             columns: ["task_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "tasks_task_responsible_fkey"
+            columns: ["task_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -14137,7 +14375,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "teams_department_id_fkey"
@@ -14257,6 +14495,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "teams_team_lead_id_fkey"
+            columns: ["team_lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "teams_team_lead_id_fkey"
@@ -14478,6 +14723,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "fk_confirmed_by"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "fk_confirmed_by"
@@ -15003,6 +15255,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_favorite_projects_user_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -15285,6 +15544,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -15494,6 +15760,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "user_permissions_cache_user_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "user_permissions_cache_user_fkey"
@@ -15721,6 +15994,13 @@ export type Database = {
             columns: ["user_report_created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_reports_user_report_created_by_fkey"
+            columns: ["user_report_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -15942,6 +16222,13 @@ export type Database = {
             columns: ["assigned_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_roles_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -16139,6 +16426,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "user_roles_user_id_fkey"
@@ -16436,6 +16730,13 @@ export type Database = {
             columns: ["work_log_created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "work_logs_work_log_created_by_fkey"
+            columns: ["work_log_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -16660,6 +16961,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "work_schedules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "work_schedules_user_id_fkey"
@@ -16898,6 +17206,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "loadings_loading_responsible_fkey"
@@ -17300,6 +17615,76 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "decomposition_stages"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_stage_agg"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_full"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_pivot"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_stats"
+            referencedColumns: ["stage_id"]
+          },
+          {
             foreignKeyName: "loadings_loading_responsible_fkey"
             columns: ["loading_responsible"]
             isOneToOne: false
@@ -17319,6 +17704,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "loadings_loading_responsible_fkey"
@@ -17671,76 +18063,6 @@ export type Database = {
             referencedColumns: ["section_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "decomposition_stages"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "v_resource_graph"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_decomposition_stage_agg"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_employee_workloads"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_full"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_fixed"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_v2"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_pivot"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_stats"
-            referencedColumns: ["stage_id"]
-          },
-          {
             foreignKeyName: "loadings_loading_task_fkey"
             columns: ["loading_task"]
             isOneToOne: false
@@ -17803,6 +18125,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "budgets_v2_created_by_fkey"
@@ -18129,6 +18458,13 @@ export type Database = {
             columns: ["object_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "objects_object_responsible_fkey"
+            columns: ["object_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -18374,6 +18710,13 @@ export type Database = {
             columns: ["lead_engineer_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["lead_engineer_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -18570,6 +18913,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -18760,6 +19110,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -19321,6 +19678,13 @@ export type Database = {
             columns: ["section_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -19529,6 +19893,13 @@ export type Database = {
             foreignKeyName: "departments_subdivision_id_fkey"
             columns: ["department_subdivision_id"]
             isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "departments_subdivision_id_fkey"
+            columns: ["department_subdivision_id"]
+            isOneToOne: false
             referencedRelation: "view_subdivisions_with_heads"
             referencedColumns: ["subdivision_id"]
           },
@@ -19677,7 +20048,7 @@ export type Database = {
             columns: ["team_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "teams_department_id_fkey"
@@ -20366,6 +20737,13 @@ export type Database = {
             columns: ["project_manager"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -20783,6 +21161,13 @@ export type Database = {
             columns: ["item_responsible_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "decomposition_items_decomposition_item_responsible_fkey"
+            columns: ["item_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -20999,6 +21384,13 @@ export type Database = {
             foreignKeyName: "departments_subdivision_id_fkey"
             columns: ["section_subdivision_id"]
             isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "departments_subdivision_id_fkey"
+            columns: ["section_subdivision_id"]
+            isOneToOne: false
             referencedRelation: "view_subdivisions_with_heads"
             referencedColumns: ["subdivision_id"]
           },
@@ -21035,7 +21427,7 @@ export type Database = {
             columns: ["section_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -21155,6 +21547,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "projects_project_manager_fkey"
@@ -21351,6 +21750,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -21597,6 +22003,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
+            columns: ["calendar_event_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
@@ -22198,6 +22611,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "departments_department_head_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -22372,14 +22792,25 @@ export type Database = {
       }
       view_departments_sections_loadings: {
         Row: {
+          capacity_date: string | null
+          capacity_value: number | null
           default_capacity: number | null
+          department_head_avatar_url: string | null
+          department_head_email: string | null
+          department_head_id: string | null
+          department_head_name: string | null
           department_id: string | null
           department_name: string | null
           employee_avatar_url: string | null
           employee_category: string | null
+          employee_department_id: string | null
+          employee_department_name: string | null
           employee_first_name: string | null
           employee_id: string | null
           employee_last_name: string | null
+          employee_position: string | null
+          employee_subdivision_id: string | null
+          employee_subdivision_name: string | null
           loading_comment: string | null
           loading_finish: string | null
           loading_id: string | null
@@ -22404,73 +22835,75 @@ export type Database = {
           section_start_date: string | null
           section_type: string | null
           stage_name: string | null
+          subdivision_id: string | null
+          subdivision_name: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "decomposition_stages"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "v_resource_graph"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_decomposition_stage_agg"
             referencedColumns: ["stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_employee_workloads"
             referencedColumns: ["stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_project_tree_full"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_project_tree_with_loadings"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_project_tree_with_loadings_fixed"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_project_tree_with_loadings_v2"
             referencedColumns: ["decomposition_stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_stage_difficulty_pivot"
             referencedColumns: ["stage_id"]
           },
           {
-            foreignKeyName: "loadings_loading_stage_fkey"
+            foreignKeyName: "fk_loadings_stage"
             columns: ["loading_stage"]
             isOneToOne: false
             referencedRelation: "view_stage_difficulty_stats"
@@ -22512,6 +22945,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "departments_department_head_id_fkey"
+            columns: ["department_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "departments_department_head_id_fkey"
@@ -22706,6 +23146,13 @@ export type Database = {
             foreignKeyName: "departments_subdivision_id_fkey"
             columns: ["subdivision_id"]
             isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "departments_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
             referencedRelation: "view_subdivisions_with_heads"
             referencedColumns: ["subdivision_id"]
           },
@@ -22753,6 +23200,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
@@ -22955,7 +23409,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -23205,6 +23659,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "calendar_events_calendar_event_created_by_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -23401,7 +23862,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -23690,6 +24151,13 @@ export type Database = {
             columns: ["loading_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -23886,7 +24354,7 @@ export type Database = {
             columns: ["original_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -24146,6 +24614,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -24383,6 +24858,13 @@ export type Database = {
             columns: ["department_head_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "departments_department_head_id_fkey"
+            columns: ["department_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -24573,6 +25055,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "teams_team_lead_id_fkey"
+            columns: ["team_lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "teams_team_lead_id_fkey"
@@ -24801,6 +25290,13 @@ export type Database = {
             columns: ["department_head_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "departments_department_head_id_fkey"
+            columns: ["department_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -24991,6 +25487,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "teams_team_lead_id_fkey"
+            columns: ["team_lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "teams_team_lead_id_fkey"
@@ -25208,6 +25711,13 @@ export type Database = {
             foreignKeyName: "departments_subdivision_id_fkey"
             columns: ["subdivision_id"]
             isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "departments_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
             referencedRelation: "view_subdivisions_with_heads"
             referencedColumns: ["subdivision_id"]
           },
@@ -25373,6 +25883,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "projects_project_manager_fkey"
@@ -25633,7 +26150,7 @@ export type Database = {
             columns: ["responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -25920,6 +26437,13 @@ export type Database = {
             columns: ["lead_engineer_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["lead_engineer_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -26116,6 +26640,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -26306,6 +26837,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -26564,7 +27102,7 @@ export type Database = {
             columns: ["responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -26802,6 +27340,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -26992,6 +27537,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -27252,7 +27804,7 @@ export type Database = {
             columns: ["responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -27539,6 +28091,13 @@ export type Database = {
             columns: ["lead_engineer_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["lead_engineer_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -27735,6 +28294,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -27925,6 +28491,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -28191,6 +28764,13 @@ export type Database = {
             columns: ["project_manager"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -28381,6 +28961,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -28676,7 +29263,7 @@ export type Database = {
             columns: ["responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -28963,6 +29550,13 @@ export type Database = {
             columns: ["lead_engineer_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["lead_engineer_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -29159,6 +29753,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -29349,6 +29950,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -29615,7 +30223,7 @@ export type Database = {
             columns: ["responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -29902,6 +30510,13 @@ export type Database = {
             columns: ["lead_engineer_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_lead_engineer_fkey"
+            columns: ["lead_engineer_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -30098,6 +30713,13 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -30288,6 +30910,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "sections_section_responsible_fkey"
@@ -30585,6 +31214,13 @@ export type Database = {
             columns: ["loading_responsible_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -30788,7 +31424,7 @@ export type Database = {
             columns: ["shortage_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "loadings_shortage_department_id_fkey"
@@ -31026,7 +31662,7 @@ export type Database = {
             columns: ["loading_responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -31351,6 +31987,13 @@ export type Database = {
             columns: ["loading_responsible_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -31554,7 +32197,7 @@ export type Database = {
             columns: ["shortage_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "loadings_shortage_department_id_fkey"
@@ -31792,7 +32435,7 @@ export type Database = {
             columns: ["loading_responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -32117,6 +32760,13 @@ export type Database = {
             columns: ["loading_responsible_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -32320,7 +32970,7 @@ export type Database = {
             columns: ["shortage_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "loadings_shortage_department_id_fkey"
@@ -32558,7 +33208,7 @@ export type Database = {
             columns: ["loading_responsible_department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -32853,6 +33503,13 @@ export type Database = {
             columns: ["project_manager"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -33049,6 +33706,13 @@ export type Database = {
             columns: ["completed_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -33239,6 +33903,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "section_checkpoints_created_by_fkey"
@@ -33623,6 +34294,13 @@ export type Database = {
             columns: ["section_responsible"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -33829,6 +34507,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "section_comments_author_id_fkey"
@@ -34458,6 +35143,76 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "decomposition_stages"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_stage_agg"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_full"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_pivot"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "fk_loadings_stage"
+            columns: ["loading_stage"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_stats"
+            referencedColumns: ["stage_id"]
+          },
+          {
             foreignKeyName: "loadings_loading_responsible_fkey"
             columns: ["loading_responsible"]
             isOneToOne: false
@@ -34477,6 +35232,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "loadings_loading_responsible_fkey"
+            columns: ["loading_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "loadings_loading_responsible_fkey"
@@ -34653,76 +35415,6 @@ export type Database = {
             referencedRelation: "view_users_with_details"
             referencedColumns: ["user_id"]
           },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "decomposition_stages"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "v_resource_graph"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_decomposition_stage_agg"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_employee_workloads"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_full"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_fixed"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_project_tree_with_loadings_v2"
-            referencedColumns: ["decomposition_stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_pivot"
-            referencedColumns: ["stage_id"]
-          },
-          {
-            foreignKeyName: "loadings_loading_stage_fkey"
-            columns: ["loading_stage"]
-            isOneToOne: false
-            referencedRelation: "view_stage_difficulty_stats"
-            referencedColumns: ["stage_id"]
-          },
         ]
       }
       view_sections_with_loadings_v2: {
@@ -34832,6 +35524,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "subdivisions_subdivision_head_id_fkey"
+            columns: ["subdivision_head_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "subdivisions_subdivision_head_id_fkey"
@@ -35042,6 +35741,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "teams_team_lead_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "teams_team_lead_id_fkey"
@@ -35260,7 +35966,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "teams_department_id_fkey"
@@ -35380,6 +36086,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "teams_team_lead_id_fkey"
+            columns: ["team_lead_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "teams_team_lead_id_fkey"
@@ -35584,6 +36297,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "user_roles_user_id_fkey"
@@ -35795,6 +36515,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -35999,6 +36726,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -36197,6 +36931,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "user_roles_user_id_fkey"
@@ -36418,6 +37159,13 @@ export type Database = {
             columns: ["user_report_created_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_reports_user_report_created_by_fkey"
+            columns: ["user_report_created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -36627,6 +37375,13 @@ export type Database = {
             columns: ["assigned_by"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "user_roles_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
             referencedColumns: ["employee_id"]
           },
           {
@@ -36824,6 +37579,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "user_roles_user_id_fkey"
@@ -37085,7 +37847,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -37354,7 +38116,7 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "view_departments_sections_loadings"
-            referencedColumns: ["department_id"]
+            referencedColumns: ["employee_department_id"]
           },
           {
             foreignKeyName: "profiles_department_membership_fkey"
@@ -38353,6 +39115,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_project_structure"
             referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "work_logs_work_log_created_by_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
           },
           {
             foreignKeyName: "work_logs_work_log_created_by_fkey"
