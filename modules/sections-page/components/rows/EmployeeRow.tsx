@@ -338,6 +338,7 @@ function LoadingBar({
           height: BASE_BAR_HEIGHT,
           top,
           backgroundColor: bar.color,
+          opacity: 0.8,
           border: `2px solid ${bar.color}`,
           paddingLeft: 6,
           paddingRight: 6,
@@ -470,12 +471,13 @@ function LoadingBar({
               left: 0,
               right: 0,
               height: COMMENT_HEIGHT,
-              backgroundColor: hexToRgba(bar.color, 0.4),
+              backgroundColor: hexToRgba(bar.color, 0.5),
               borderLeft: `2px solid ${bar.color}`,
               borderRight: `2px solid ${bar.color}`,
               borderBottom: `2px solid ${bar.color}`,
               borderBottomLeftRadius: 4,
               borderBottomRightRadius: 4,
+              opacity: 0.8,
               filter: 'brightness(1.1)',
             }}
             title={bar.period.comment}
