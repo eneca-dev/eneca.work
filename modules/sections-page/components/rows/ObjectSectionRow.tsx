@@ -168,7 +168,9 @@ export function ObjectSectionRow({
               employee={employee}
               sectionId={objectSection.sectionId}
               sectionName={objectSection.sectionName}
+              projectId={projectId}
               projectName={projectName}
+              objectId={objectSection.objectId}
               objectName={objectSection.objectName}
               dayCells={dayCells}
               stages={stages}

@@ -50,7 +50,9 @@ interface EmployeeRowProps {
   }
   sectionId: string
   sectionName: string
+  projectId: string
   projectName: string
+  objectId: string
   objectName: string
   dayCells: DayCell[]
   stages?: Array<{ id: string; name: string; order: number | null }>
@@ -502,7 +504,9 @@ export function EmployeeRow({
   employee,
   sectionId,
   sectionName,
+  projectId,
   projectName,
+  objectId,
   objectName,
   dayCells,
   stages,
@@ -530,14 +534,16 @@ export function EmployeeRow({
         stage_id: loading.stageId,
       },
       {
+        projectId,
+        projectName,
+        objectId,
+        objectName,
         sectionId,
         sectionName,
-        objectName,
-        projectName,
       },
       stages
     )
-  }, [onEditLoading, sectionId, sectionName, objectName, projectName, stages])
+  }, [onEditLoading, projectId, projectName, objectId, objectName, sectionId, sectionName, stages])
 
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
