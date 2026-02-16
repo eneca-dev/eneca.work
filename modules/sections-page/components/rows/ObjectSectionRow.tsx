@@ -60,6 +60,7 @@ export function ObjectSectionRow({
       employeeName: string
       employeeAvatarUrl: string | null
       employeeDepartmentName: string | null
+      employeePosition: string | null
       employeeCategory: string | null
       loadings: SectionLoading[]
     }>()
@@ -72,6 +73,7 @@ export function ObjectSectionRow({
           employeeName: loading.employeeName,
           employeeAvatarUrl: loading.employeeAvatarUrl,
           employeeDepartmentName: loading.employeeDepartmentName,
+          employeePosition: loading.employeePosition ?? null,
           employeeCategory: loading.employeeCategory,
           loadings: [],
         })

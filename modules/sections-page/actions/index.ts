@@ -287,6 +287,7 @@ export async function getSectionsHierarchy(
           employeeEmail: null, // View doesn't have email
           employeeAvatarUrl: row.employee_avatar_url,
           employeeCategory: row.employee_category,
+          employeePosition: row.employee_position,
           employeeDepartmentId: deptId, // Use parent department
           employeeDepartmentName: row.department_name,
           startDate: row.loading_start,

@@ -44,6 +44,7 @@ interface EmployeeRowProps {
     employeeName: string
     employeeAvatarUrl: string | null
     employeeDepartmentName: string | null
+    employeePosition: string | null
     employeeCategory: string | null
     loadings: SectionLoading[]
   }
@@ -651,7 +652,7 @@ export function EmployeeRow({
                 </span>
               </div>
               <div className="text-[10px] text-muted-foreground truncate">
-                {employee.employeeDepartmentName || 'Без отдела'}
+                {employee.employeePosition || 'Без должности'}
                 {employee.employeeCategory && employee.employeeCategory !== 'Не применяется' && (
                   <span className="text-primary font-medium"> · {employee.employeeCategory}</span>
                 )}
