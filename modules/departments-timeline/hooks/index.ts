@@ -198,7 +198,7 @@ export const useUpdateLoadingDates = createCacheMutation<
     },
   },
 
-  // Инвалидируем все departments timeline запросы после успешного обновления
+  // Инвалидируем departments timeline + sections page после успешного обновления
   // Это важно т.к. staleTime: Infinity и данные обновляются только через Realtime или invalidation
-  invalidateKeys: [queryKeys.departmentsTimeline.all],
+  invalidateKeys: [queryKeys.departmentsTimeline.all, queryKeys.sectionsPage.all],
 })

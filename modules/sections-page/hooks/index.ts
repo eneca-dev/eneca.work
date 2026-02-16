@@ -33,13 +33,13 @@ import type {
 /**
  * Получить иерархию отделов → проектов → разделов → загрузок
  *
- * TODO: Добавить Realtime подписку для автоматического обновления
- * при изменении loadings/section_capacity
+ * Данные обновляются через Realtime подписки (loadings, sections, departments, profiles),
+ * поэтому staleTime = Infinity — refetch происходит только при инвалидации кеша.
  */
 export const useSectionsHierarchy = createCacheQuery<Department[], FilterQueryParams>({
   queryKey: (filters) => queryKeys.sectionsPage.list(filters),
   queryFn: getSectionsHierarchy,
-  staleTime: 5 * 60 * 1000, // 5 минут - пока нет Realtime
+  staleTime: Infinity, // Обновляется через Realtime
   // enabled опция передаётся через второй параметр хука
 })
 
@@ -87,8 +87,8 @@ export const useCreateSectionLoading = createCacheMutation({
   mutationFn: createSectionLoading,
   invalidateKeys: (input) => [
     queryKeys.sectionsPage.lists(),
-    // Также инвалидируем resource-graph если есть
     queryKeys.resourceGraph.lists(),
+    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
   ],
   onSuccess: () => {
     toast.success('Загрузка создана')
@@ -103,6 +103,7 @@ export const useUpdateSectionLoading = createCacheMutation({
   invalidateKeys: () => [
     queryKeys.sectionsPage.lists(),
     queryKeys.resourceGraph.lists(),
+    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
   ],
   onSuccess: () => {
     toast.success('Загрузка обновлена')
@@ -117,6 +118,7 @@ export const useDeleteSectionLoading = createCacheMutation({
   invalidateKeys: () => [
     queryKeys.sectionsPage.lists(),
     queryKeys.resourceGraph.lists(),
+    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
   ],
   onSuccess: () => {
     toast.success('Загрузка удалена')
