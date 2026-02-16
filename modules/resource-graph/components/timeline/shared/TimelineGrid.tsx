@@ -36,11 +36,12 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
             key={i}
             className={cn(
               'absolute top-0 bottom-0',
-              cell.isToday && 'bg-primary/20',
               // Праздники - сохраняем amber акцент
               !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/5',
               // Обычные выходные - нейтральный серый
-              !cell.isToday && isRegularWeekend && 'bg-muted/30 dark:bg-muted/15'
+              !cell.isToday && isRegularWeekend && 'bg-muted/30 dark:bg-muted/15',
+              // Сегодня - наивысший приоритет, применяется последним
+              cell.isToday && 'bg-green-50 dark:bg-green-800 z-10'
             )}
             style={{
               left: i * DAY_CELL_WIDTH,

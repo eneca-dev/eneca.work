@@ -197,7 +197,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               className={cn(
                 'flex flex-col items-center justify-center text-[10px]',
                 // Сегодня - высший приоритет
-                cell.isToday && 'bg-primary/10',
+                cell.isToday && 'bg-green-50 dark:bg-green-700/40',
                 // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
                 !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/10',
                 // Стандартные выходные (Сб/Вс) - нейтральный серый фон
