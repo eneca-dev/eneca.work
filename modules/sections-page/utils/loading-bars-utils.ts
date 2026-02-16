@@ -6,6 +6,7 @@
 
 import { format, parseISO, eachDayOfInterval, isWithinInterval } from 'date-fns'
 import type { SectionLoading, DayCell, ObjectSection } from '../types'
+import { getSectionColor } from '@/components/shared/timeline/loading-bars-utils'
 
 // ============================================================================
 // Constants
@@ -14,7 +15,7 @@ import type { SectionLoading, DayCell, ObjectSection } from '../types'
 export const BASE_BAR_HEIGHT = 32
 export const BAR_GAP = 4
 export const COMMENT_HEIGHT = 18
-export const COMMENT_GAP = 4
+export const COMMENT_GAP = 2
 
 // ============================================================================
 // Types
@@ -38,10 +39,12 @@ export interface BarPeriod {
 
 export interface BarRender {
   period: BarPeriod
+  startIdx: number
+  endIdx: number
   left: number
   width: number
   color: string
-  stackIndex: number
+  layer: number // Слой для вертикального стакинга (0, 1, 2, ...)
 }
 
 // ============================================================================
@@ -92,7 +95,7 @@ export function loadingsToPeriods(loadings: SectionLoading[]): BarPeriod[] {
     startDate: parseISO(loading.startDate),
     endDate: parseISO(loading.endDate),
     rate: loading.rate,
-    color: getLoadingColor(loading.id),
+    color: getSectionColor(loading.projectId, loading.sectionId, loading.stageId, false),
     employeeName: loading.employeeName,
     projectName: loading.projectName || '',
     objectName: loading.objectName || '',
@@ -113,6 +116,9 @@ export function calculateBarRenders(
   dayCellWidth: number
 ): BarRender[] {
   const renders: BarRender[] = []
+
+  // Горизонтальный отступ между соседними полосками (в пикселях)
+  const HORIZONTAL_GAP = 3
 
   for (const period of periods) {
     // Find start and end indices in dayCells
@@ -136,10 +142,12 @@ export function calculateBarRenders(
       if (period.startDate <= firstDay && period.endDate >= lastDay) {
         renders.push({
           period,
-          left: 0,
-          width: dayCells.length * dayCellWidth,
+          startIdx: 0,
+          endIdx: dayCells.length - 1,
+          left: HORIZONTAL_GAP / 2,
+          width: dayCells.length * dayCellWidth - HORIZONTAL_GAP,
           color: period.color,
-          stackIndex: 0,
+          layer: 0,
         })
       }
       continue
@@ -149,15 +157,17 @@ export function calculateBarRenders(
     const visibleStartIndex = Math.max(0, startIndex === -1 ? 0 : startIndex)
     const visibleEndIndex = endIndex === -1 ? dayCells.length - 1 : endIndex
 
-    const left = visibleStartIndex * dayCellWidth
-    const width = (visibleEndIndex - visibleStartIndex + 1) * dayCellWidth
+    const left = visibleStartIndex * dayCellWidth + HORIZONTAL_GAP / 2
+    const width = (visibleEndIndex - visibleStartIndex + 1) * dayCellWidth - HORIZONTAL_GAP
 
     renders.push({
       period,
+      startIdx: visibleStartIndex,
+      endIdx: visibleEndIndex,
       left,
       width,
       color: period.color,
-      stackIndex: 0,
+      layer: 0,
     })
   }
 
@@ -175,11 +185,11 @@ export function calculateBarRenders(
 
       // Check if bars overlap
       if (current.left < otherRight && currentRight > other.left) {
-        maxStack = Math.max(maxStack, other.stackIndex + 1)
+        maxStack = Math.max(maxStack, other.layer + 1)
       }
     }
 
-    current.stackIndex = maxStack
+    current.layer = maxStack
   }
 
   return renders
@@ -192,11 +202,37 @@ export function calculateBarRenders(
 export function calculateBarTop(
   bar: BarRender,
   allBars: BarRender[],
-  barHeight: number,
+  baseBarHeight: number,
   barGap: number,
-  topPadding: number = 8
+  initialOffset: number = 8
 ): number {
-  return topPadding + bar.stackIndex * (barHeight + barGap)
+  let top = initialOffset
+
+  // Для каждого слоя ниже текущего, находим максимальную высоту бара в этом слое
+  for (let layer = 0; layer < bar.layer; layer++) {
+    // Находим все бары в этом слое
+    const barsInLayer = allBars.filter(other => other.layer === layer)
+
+    if (barsInLayer.length > 0) {
+      // Находим максимальную высоту среди баров этого слоя
+      let maxHeightInLayer = baseBarHeight
+
+      barsInLayer.forEach(other => {
+        let effectiveHeight = baseBarHeight
+
+        // Если у загрузки есть комментарий — добавляем его высоту
+        if (other.period.type === 'loading' && other.period.comment) {
+          effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
+        }
+
+        maxHeightInLayer = Math.max(maxHeightInLayer, effectiveHeight)
+      })
+
+      top += maxHeightInLayer + barGap
+    }
+  }
+
+  return top
 }
 
 // ============================================================================
@@ -216,12 +252,18 @@ export function calculateEmployeeRowHeight(
 
   if (barRenders.length === 0) return baseRowHeight
 
-  const maxStackIndex = Math.max(...barRenders.map((r) => r.stackIndex))
-  const barsHeight = (maxStackIndex + 1) * (BASE_BAR_HEIGHT + BAR_GAP)
-  const topPadding = 8
-  const bottomPadding = 8
+  let maxBottom = 0
+  barRenders.forEach((bar) => {
+    const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
+    let totalBarHeight = top + BASE_BAR_HEIGHT
+    // Учитываем комментарии
+    if (bar.period.type === 'loading' && bar.period.comment) {
+      totalBarHeight += COMMENT_GAP + COMMENT_HEIGHT
+    }
+    maxBottom = Math.max(maxBottom, totalBarHeight)
+  })
 
-  return Math.max(baseRowHeight, barsHeight + topPadding + bottomPadding)
+  return Math.max(baseRowHeight, maxBottom + 8)
 }
 
 // ============================================================================
