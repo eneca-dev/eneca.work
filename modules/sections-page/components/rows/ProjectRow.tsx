@@ -55,14 +55,14 @@ export function ProjectRow({
       {/* Project header row */}
       <div className="group/row min-w-full relative border-b border-border/50">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/20"
+          className="flex transition-colors"
           style={{ height: PROJECT_ROW_HEIGHT }}
-          onClick={handleToggle}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between pl-8 pr-3 border-r border-border bg-muted sticky left-0 z-10"
+            className="shrink-0 flex items-center justify-between pl-8 pr-3 border-r border-border bg-muted sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
+            onClick={handleToggle}
           >
             {/* Left: expand icon + project name */}
             <div className="flex items-center gap-2 min-w-0">

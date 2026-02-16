@@ -98,14 +98,14 @@ export function ObjectSectionRow({
       {/* Object/Section header row */}
       <div className="group/row min-w-full relative border-b border-border/50">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/30"
+          className="flex transition-colors"
           style={{ height: OBJECT_SECTION_ROW_HEIGHT }}
-          onClick={toggle}
         >
           {/* Sidebar */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 cursor-pointer hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
+            onClick={toggle}
           >
             <div className="flex items-center gap-2 min-w-0 pl-[40px]">
               <div className="flex-shrink-0">

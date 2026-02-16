@@ -39,14 +39,14 @@ export function DepartmentRow({
       {/* Department header row */}
       <div className="group/row min-w-full relative border-b border-border">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/20"
+          className="flex transition-colors"
           style={{ height: DEPARTMENT_ROW_HEIGHT }}
-          onClick={handleToggle}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
+            onClick={handleToggle}
           >
             {/* Left: expand icon + department name */}
             <div className="flex items-center gap-2 min-w-0">
