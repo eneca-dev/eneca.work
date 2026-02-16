@@ -7,6 +7,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
@@ -42,6 +43,9 @@ function isUuid(value: string): boolean {
 export async function getSectionsHierarchy(
   filters?: FilterQueryParams
 ): Promise<ActionResult<Department[]>> {
+  return Sentry.startSpan(
+    { name: 'getSectionsHierarchy', op: 'db.query' },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -160,6 +164,10 @@ export async function getSectionsHierarchy(
 
     if (error) {
       console.error('Error fetching sections hierarchy:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'getSectionsHierarchy', error_type: 'db_error', user_facing: 'true' },
+        extra: { appliedFilters: Object.keys(secureFilters || {}) },
+      })
       return {
         success: false,
         error: `Ошибка загрузки данных: ${error.message}`,
@@ -311,11 +319,15 @@ export async function getSectionsHierarchy(
     return { success: true, data: departments }
   } catch (error) {
     console.error('Unexpected error in getSectionsHierarchy:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'getSectionsHierarchy', error_type: 'unexpected_error', user_facing: 'true' },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
 
 // ============================================================================
@@ -328,6 +340,9 @@ export async function getSectionsHierarchy(
 export async function upsertSectionCapacity(
   input: CapacityInput
 ): Promise<ActionResult<SectionCapacity>> {
+  return Sentry.startSpan(
+    { name: 'upsertSectionCapacity', op: 'db.mutation', attributes: { 'section.id': input.sectionId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -367,6 +382,10 @@ export async function upsertSectionCapacity(
 
     if (error) {
       console.error('Error upserting section capacity:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'upsertSectionCapacity', error_type: 'db_error', user_facing: 'true' },
+        extra: { sectionId: input.sectionId, capacityDate: input.capacityDate },
+      })
       return {
         success: false,
         error: `Ошибка сохранения ёмкости: ${error.message}`,
@@ -387,11 +406,16 @@ export async function upsertSectionCapacity(
     }
   } catch (error) {
     console.error('Unexpected error in upsertSectionCapacity:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'upsertSectionCapacity', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { sectionId: input.sectionId },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
 
 /**
@@ -401,6 +425,9 @@ export async function deleteSectionCapacityOverride(
   sectionId: string,
   date: string
 ): Promise<ActionResult<void>> {
+  return Sentry.startSpan(
+    { name: 'deleteSectionCapacityOverride', op: 'db.mutation', attributes: { 'section.id': sectionId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -420,6 +447,10 @@ export async function deleteSectionCapacityOverride(
 
     if (error) {
       console.error('Error deleting capacity override:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'deleteSectionCapacityOverride', error_type: 'db_error', user_facing: 'true' },
+        extra: { sectionId, date },
+      })
       return {
         success: false,
         error: `Ошибка удаления: ${error.message}`,
@@ -429,11 +460,16 @@ export async function deleteSectionCapacityOverride(
     return { success: true, data: undefined }
   } catch (error) {
     console.error('Unexpected error in deleteSectionCapacityOverride:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'deleteSectionCapacityOverride', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { sectionId },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
 
 // ============================================================================
@@ -446,6 +482,9 @@ export async function deleteSectionCapacityOverride(
 export async function createSectionLoading(
   input: CreateLoadingInput
 ): Promise<ActionResult<{ loading_id: string }>> {
+  return Sentry.startSpan(
+    { name: 'createSectionLoading', op: 'db.mutation', attributes: { 'section.id': input.sectionId, 'employee.id': input.employeeId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -515,6 +554,10 @@ export async function createSectionLoading(
 
     if (error) {
       console.error('Error creating loading:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'createSectionLoading', error_type: 'db_error', user_facing: 'true' },
+        extra: { sectionId: input.sectionId, employeeId: input.employeeId },
+      })
       return {
         success: false,
         error: `Ошибка создания загрузки: ${error.message}`,
@@ -524,11 +567,16 @@ export async function createSectionLoading(
     return { success: true, data: { loading_id: data.loading_id } }
   } catch (error) {
     console.error('Unexpected error in createSectionLoading:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'createSectionLoading', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { sectionId: input.sectionId, employeeId: input.employeeId },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
 
 /**
@@ -537,6 +585,9 @@ export async function createSectionLoading(
 export async function updateSectionLoading(
   input: UpdateLoadingInput
 ): Promise<ActionResult<void>> {
+  return Sentry.startSpan(
+    { name: 'updateSectionLoading', op: 'db.mutation', attributes: { 'loading.id': input.loadingId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -626,6 +677,10 @@ export async function updateSectionLoading(
 
     if (error) {
       console.error('Error updating loading:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'updateSectionLoading', error_type: 'db_error', user_facing: 'true' },
+        extra: { loadingId: input.loadingId },
+      })
       return {
         success: false,
         error: `Ошибка обновления загрузки: ${error.message}`,
@@ -635,11 +690,16 @@ export async function updateSectionLoading(
     return { success: true, data: undefined }
   } catch (error) {
     console.error('Unexpected error in updateSectionLoading:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'updateSectionLoading', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { loadingId: input.loadingId },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
 
 /**
@@ -648,6 +708,9 @@ export async function updateSectionLoading(
 export async function deleteSectionLoading(
   loadingId: string
 ): Promise<ActionResult<void>> {
+  return Sentry.startSpan(
+    { name: 'deleteSectionLoading', op: 'db.mutation', attributes: { 'loading.id': loadingId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -670,6 +733,10 @@ export async function deleteSectionLoading(
 
     if (error) {
       console.error('Error deleting loading:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'deleteSectionLoading', error_type: 'db_error', user_facing: 'true' },
+        extra: { loadingId },
+      })
       return {
         success: false,
         error: `Ошибка удаления загрузки: ${error.message}`,
@@ -679,9 +746,14 @@ export async function deleteSectionLoading(
     return { success: true, data: undefined }
   } catch (error) {
     console.error('Unexpected error in deleteSectionLoading:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'deleteSectionLoading', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { loadingId },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
     }
   }
+  }) // end Sentry.startSpan
 }
