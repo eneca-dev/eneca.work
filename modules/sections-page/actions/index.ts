@@ -89,15 +89,18 @@ export async function getSectionsHierarchy(
     }
 
     // Фильтр по отделу
+    // Показывает раздел если:
+    // 1) Ответственный раздела из этого отдела ИЛИ
+    // 2) Есть загрузка сотрудника из этого отдела
     if (secureFilters?.department_id) {
       const departmentId = Array.isArray(secureFilters.department_id)
         ? secureFilters.department_id[0]
         : secureFilters.department_id
 
       if (isUuid(departmentId)) {
-        query = query.eq('department_id', departmentId)
+        query = query.or(`department_id.eq.${departmentId},employee_department_id.eq.${departmentId}`)
       } else {
-        query = query.ilike('department_name', departmentId)
+        query = query.or(`department_name.ilike.*${departmentId}*,employee_department_name.ilike.*${departmentId}*`)
       }
     }
 
@@ -108,38 +111,13 @@ export async function getSectionsHierarchy(
         : secureFilters.subdivision_id
 
       if (isUuid(subdivisionId)) {
-        // Для подразделения нужно получить все отделы подразделения
-        const { data: depts } = await supabase
-          .from('departments')
-          .select('department_id')
-          .eq('subdivision_id', subdivisionId)
-
-        const deptIds = depts?.map(d => d.department_id) || []
-        if (deptIds.length > 0) {
-          query = query.in('department_id', deptIds)
-        } else {
-          return { success: true, data: [] }
-        }
+        // Для подразделения показываем разделы если:
+        // 1) Ответственный из отдела этого подразделения ИЛИ
+        // 2) Есть загрузка сотрудника из отдела этого подразделения
+        query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
       } else {
-        // Фильтрация по названию подразделения
-        const { data: subdivisions } = await supabase
-          .from('subdivisions')
-          .select('subdivision_id')
-          .ilike('subdivision_name', subdivisionId)
-
-        if (subdivisions && subdivisions.length > 0) {
-          const { data: depts } = await supabase
-            .from('departments')
-            .select('department_id')
-            .in('subdivision_id', subdivisions.map(s => s.subdivision_id))
-
-          const deptIds = depts?.map(d => d.department_id) || []
-          if (deptIds.length > 0) {
-            query = query.in('department_id', deptIds)
-          } else {
-            return { success: true, data: [] }
-          }
-        }
+        // Фильтрация по названию подразделения (через OR)
+        query = query.or(`subdivision_name.ilike.*${subdivisionId}*,employee_subdivision_name.ilike.*${subdivisionId}*`)
       }
     }
 
@@ -171,137 +149,166 @@ export async function getSectionsHierarchy(
     }
 
     // Трансформация плоских строк в иерархию
+    // Раздел может появиться в нескольких отделах:
+    // 1) В отделе ответственного (всегда)
+    // 2) В отделах сотрудников с загрузками (если отличаются от отдела ответственного)
     const departmentsMap = new Map<string, Department>()
 
     for (const row of rows) {
-      const deptId = row.department_id
+      const responsibleDeptId = row.department_id
       const projectId = row.project_id
       const sectionId = row.section_id
       const loadingId = row.loading_id
+      const employeeDeptId = row.employee_department_id
 
-      // Получаем или создаём отдел
-      let department = departmentsMap.get(deptId)
-      if (!department) {
-        department = {
-          id: deptId,
-          name: row.department_name,
-          subdivisionId: row.subdivision_id,
-          subdivisionName: row.subdivision_name,
-          departmentHeadId: row.department_head_id,
-          departmentHeadName: row.department_head_name,
-          departmentHeadEmail: row.department_head_email,
-          departmentHeadAvatarUrl: row.department_head_avatar_url,
-          totalProjects: 0,
-          totalSections: 0,
-          totalLoadings: 0,
-          dailyWorkloads: {},
-          projects: [],
-        }
-        departmentsMap.set(deptId, department)
+      // Определяем в каких отделах должен появиться раздел
+      const departmentIds: Array<{ id: string; name: string; subdivisionId: string; subdivisionName: string }> = []
+
+      // 1) Всегда добавляем отдел ответственного
+      departmentIds.push({
+        id: responsibleDeptId,
+        name: row.department_name,
+        subdivisionId: row.subdivision_id,
+        subdivisionName: row.subdivision_name,
+      })
+
+      // 2) Если есть загрузка сотрудника из другого отдела - добавляем и его
+      if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
+        departmentIds.push({
+          id: employeeDeptId,
+          name: row.employee_department_name || 'Без отдела',
+          subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
+          subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+        })
       }
 
-      // Получаем или создаём проект
-      let project = department.projects.find((p) => p.id === projectId)
-      if (!project) {
-        project = {
-          id: projectId,
-          name: row.project_name,
-          status: row.project_status,
-          managerId: null, // View doesn't have project manager
-          managerName: null,
-          leadEngineerId: null,
-          leadEngineerName: null,
-          departmentId: deptId,
-          departmentName: row.department_name,
-          stageType: null, // View doesn't have stage type
-          totalSections: 0,
-          totalLoadings: 0,
-          dailyWorkloads: {},
-          objectSections: [],
+      // Обрабатываем раздел для КАЖДОГО отдела
+      for (const deptInfo of departmentIds) {
+        const deptId = deptInfo.id
+
+        // Получаем или создаём отдел
+        let department = departmentsMap.get(deptId)
+        if (!department) {
+          department = {
+            id: deptId,
+            name: deptInfo.name,
+            subdivisionId: deptInfo.subdivisionId,
+            subdivisionName: deptInfo.subdivisionName,
+            // Данные о руководителе берём только для отдела ответственного
+            departmentHeadId: deptId === responsibleDeptId ? row.department_head_id : null,
+            departmentHeadName: deptId === responsibleDeptId ? row.department_head_name : null,
+            departmentHeadEmail: deptId === responsibleDeptId ? row.department_head_email : null,
+            departmentHeadAvatarUrl: deptId === responsibleDeptId ? row.department_head_avatar_url : null,
+            totalProjects: 0,
+            totalSections: 0,
+            totalLoadings: 0,
+            dailyWorkloads: {},
+            projects: [],
+          }
+          departmentsMap.set(deptId, department)
         }
-        department.projects.push(project)
-        department.totalProjects++
-      }
 
-      // Получаем или создаём объект/раздел
-      let objectSection = project.objectSections.find((os) => os.id === sectionId)
-      if (!objectSection) {
-        // Собираем имя responsible из first_name и last_name
-        const responsibleName = row.responsible_first_name && row.responsible_last_name
-          ? `${row.responsible_first_name} ${row.responsible_last_name}`
-          : row.responsible_first_name || row.responsible_last_name || null
-
-        objectSection = {
-          id: sectionId,
-          name: `${row.object_name} / ${row.section_name}`,
-          objectId: row.object_id,
-          objectName: row.object_name,
-          sectionId: sectionId,
-          sectionName: row.section_name,
-          sectionType: row.section_type,
-          sectionResponsibleId: row.responsible_id,
-          sectionResponsibleName: responsibleName,
-          projectId: projectId,
-          projectName: row.project_name,
-          departmentId: deptId,
-          departmentName: row.department_name,
-          startDate: row.section_start_date,
-          endDate: row.section_end_date,
-          defaultCapacity: row.default_capacity != null ? parseFloat(String(row.default_capacity)) : null,
-          capacityOverrides: {},
-          dailyWorkloads: {},
-          loadings: [],
-          totalLoadings: 0,
+        // Получаем или создаём проект
+        let project = department.projects.find((p) => p.id === projectId)
+        if (!project) {
+          project = {
+            id: projectId,
+            name: row.project_name,
+            status: row.project_status,
+            managerId: null,
+            managerName: null,
+            leadEngineerId: null,
+            leadEngineerName: null,
+            departmentId: deptId,
+            departmentName: deptInfo.name,
+            stageType: null,
+            totalSections: 0,
+            totalLoadings: 0,
+            dailyWorkloads: {},
+            objectSections: [],
+          }
+          department.projects.push(project)
+          department.totalProjects++
         }
-        project.objectSections.push(objectSection)
-        project.totalSections++
-        department.totalSections++
-      }
 
-      // Добавляем capacity override если есть
-      if (row.capacity_date && row.capacity_value !== null) {
-        objectSection.capacityOverrides![row.capacity_date] = row.capacity_value
-      }
+        // Получаем или создаём объект/раздел
+        let objectSection = project.objectSections.find((os) => os.id === sectionId)
+        if (!objectSection) {
+          const responsibleName = row.responsible_first_name && row.responsible_last_name
+            ? `${row.responsible_first_name} ${row.responsible_last_name}`
+            : row.responsible_first_name || row.responsible_last_name || null
 
-      // Добавляем загрузку если есть
-      if (loadingId) {
-        // Собираем имя сотрудника из first_name и last_name
-        const employeeName = row.employee_first_name && row.employee_last_name
-          ? `${row.employee_first_name} ${row.employee_last_name}`
-          : row.employee_first_name || row.employee_last_name || 'Без имени'
-
-        const loading: SectionLoading = {
-          id: loadingId,
-          sectionId: sectionId,
-          sectionName: row.section_name,
-          projectId: projectId,
-          projectName: row.project_name,
-          objectId: row.object_id,
-          objectName: row.object_name,
-          stageId: row.loading_stage,
-          stageName: row.stage_name,
-          employeeId: row.employee_id,
-          employeeName: employeeName,
-          employeeFirstName: row.employee_first_name,
-          employeeLastName: row.employee_last_name,
-          employeeEmail: null, // View doesn't have email
-          employeeAvatarUrl: row.employee_avatar_url,
-          employeeCategory: row.employee_category,
-          employeePosition: row.employee_position,
-          employeeDepartmentId: deptId, // Use parent department
-          employeeDepartmentName: row.department_name,
-          startDate: row.loading_start,
-          endDate: row.loading_finish,
-          rate: row.loading_rate,
-          status: 'active', // View doesn't have status
-          comment: row.loading_comment,
-          createdAt: null,
-          updatedAt: null,
+          objectSection = {
+            id: sectionId,
+            name: `${row.object_name} / ${row.section_name}`,
+            objectId: row.object_id,
+            objectName: row.object_name,
+            sectionId: sectionId,
+            sectionName: row.section_name,
+            sectionType: row.section_type,
+            sectionResponsibleId: row.responsible_id,
+            sectionResponsibleName: responsibleName,
+            projectId: projectId,
+            projectName: row.project_name,
+            departmentId: deptId,
+            departmentName: deptInfo.name,
+            startDate: row.section_start_date,
+            endDate: row.section_end_date,
+            defaultCapacity: row.default_capacity != null ? parseFloat(String(row.default_capacity)) : null,
+            capacityOverrides: {},
+            dailyWorkloads: {},
+            loadings: [],
+            totalLoadings: 0,
+          }
+          project.objectSections.push(objectSection)
+          project.totalSections++
+          department.totalSections++
         }
-        objectSection.loadings.push(loading)
-        objectSection.totalLoadings = objectSection.loadings.length
-        project.totalLoadings++
-        department.totalLoadings++
+
+        // Добавляем capacity override только один раз (в отделе ответственного)
+        if (deptId === responsibleDeptId && row.capacity_date && row.capacity_value !== null) {
+          objectSection.capacityOverrides![row.capacity_date] = row.capacity_value
+        }
+
+        // Добавляем загрузку только в отдел сотрудника
+        if (loadingId && employeeDeptId === deptId) {
+          const employeeName = row.employee_first_name && row.employee_last_name
+            ? `${row.employee_first_name} ${row.employee_last_name}`
+            : row.employee_first_name || row.employee_last_name || 'Без имени'
+
+          const loading: SectionLoading = {
+            id: loadingId,
+            sectionId: sectionId,
+            sectionName: row.section_name,
+            projectId: projectId,
+            projectName: row.project_name,
+            objectId: row.object_id,
+            objectName: row.object_name,
+            stageId: row.loading_stage,
+            stageName: row.stage_name,
+            employeeId: row.employee_id,
+            employeeName: employeeName,
+            employeeFirstName: row.employee_first_name,
+            employeeLastName: row.employee_last_name,
+            employeeEmail: null,
+            employeeAvatarUrl: row.employee_avatar_url,
+            employeeCategory: row.employee_category,
+            employeePosition: row.employee_position,
+            employeeDepartmentId: employeeDeptId || deptId,
+            employeeDepartmentName: row.employee_department_name || row.department_name,
+            startDate: row.loading_start,
+            endDate: row.loading_finish,
+            rate: row.loading_rate,
+            status: 'active',
+            comment: row.loading_comment,
+            createdAt: null,
+            updatedAt: null,
+          }
+          objectSection.loadings.push(loading)
+          objectSection.totalLoadings = objectSection.loadings.length
+          project.totalLoadings++
+          department.totalLoadings++
+        }
       }
     }
 
