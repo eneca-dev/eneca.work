@@ -274,49 +274,6 @@ export interface TemplateSaveData {
 }
 
 // ============================================================================
-// Section Loading Modal Types
-// ============================================================================
-
-export interface SectionLoadingCreateData {
-  /** ID раздела */
-  sectionId: string
-  /** Название раздела */
-  sectionName: string
-  /** Название объекта */
-  objectName: string
-  /** Название проекта */
-  projectName: string
-  /** ID сотрудника (опционально, для предзаполнения) */
-  employeeId?: string
-  /** Этапы декомпозиции раздела */
-  stages?: Array<{
-    id: string
-    name: string
-    order: number | null
-  }>
-}
-
-export interface SectionLoadingEditData {
-  /** ID загрузки */
-  loadingId: string
-  /** Название раздела */
-  sectionName: string
-  /** Название объекта */
-  objectName: string
-  /** Название проекта */
-  projectName: string
-  /** Объект загрузки */
-  loading: {
-    id: string
-    employee_id: string
-    start_date: string
-    end_date: string
-    rate: number
-    comment: string | null
-  }
-}
-
-// ============================================================================
 // Global Modal Store Types
 // ============================================================================
 
@@ -341,8 +298,6 @@ export type ModalType =
   | 'checkpoint-edit'
   | 'template-select'
   | 'template-save'
-  | 'section-loading-create'
-  | 'section-loading-edit'
 
 export interface GlobalModalState {
   /** Текущая открытая модалка */

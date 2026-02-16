@@ -19,10 +19,12 @@ interface SectionsPageActions {
     comment: string | null
     stage_id?: string | null
   }, breadcrumbs: {
+    projectId: string
+    projectName: string
+    objectId: string
+    objectName: string
     sectionId: string
     sectionName: string
-    objectName: string
-    projectName: string
   }, stages?: Array<{ id: string; name: string; order: number | null }>) => void
 }
 
@@ -47,10 +49,12 @@ interface SectionsPageProviderProps {
     comment: string | null
     stage_id?: string | null
   }, breadcrumbs: {
+    projectId: string
+    projectName: string
+    objectId: string
+    objectName: string
     sectionId: string
     sectionName: string
-    objectName: string
-    projectName: string
   }, stages?: Array<{ id: string; name: string; order: number | null }>) => void
 }
 

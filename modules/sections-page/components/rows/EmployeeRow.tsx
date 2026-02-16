@@ -30,7 +30,6 @@ import {
   BAR_GAP,
   COMMENT_HEIGHT,
   COMMENT_GAP,
-  getLoadingColorScheme,
 } from '../../utils/loading-bars-utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
 import type { SectionLoading, DayCell, TimelineRange } from '../../types'
@@ -50,7 +49,9 @@ interface EmployeeRowProps {
   }
   sectionId: string
   sectionName: string
+  projectId: string
   projectName: string
+  objectId: string
   objectName: string
   dayCells: DayCell[]
   stages?: Array<{ id: string; name: string; order: number | null }>
@@ -278,7 +279,6 @@ function LoadingBar({
   }, [displayLeft, displayWidth])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
-  const colorScheme = getLoadingColorScheme(bar.period.id)
 
   // Split period by non-working days for diagonal stripe overlay
   const nonWorkingSegments = useMemo(() => {
@@ -337,13 +337,13 @@ function LoadingBar({
           width: displayWidth,
           height: BASE_BAR_HEIGHT,
           top,
-          backgroundColor: colorScheme.bg,
-          opacity: 0.85,
-          border: `2px solid ${colorScheme.bg}`,
+          backgroundColor: bar.color,
+          opacity: 0.8,
+          border: `2px solid ${bar.color}`,
           paddingLeft: 6,
           paddingRight: 6,
           overflow: 'hidden',
-          filter: 'brightness(1.05)',
+          filter: 'brightness(1.1)',
           borderTopLeftRadius: 4,
           borderTopRightRadius: 4,
           borderBottomLeftRadius: bar.period.comment ? 0 : 4,
@@ -407,37 +407,38 @@ function LoadingBar({
         </div>
 
         {/* Non-working days overlay */}
-        {nonWorkingSegments.map((segment, segmentIdx) => {
-          const barStartLeft = timeUnits[Math.min(...barRenders.map(b =>
-            timeUnits.findIndex(u => u.dateKey === formatMinskDate(b.period.startDate))
-          ).filter(i => i !== -1))]?.left ?? 0
+        {(() => {
+          const HORIZONTAL_GAP = 6
 
-          const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
-          const overlayLeft = segmentStartLeft - bar.left
+          return nonWorkingSegments.map((segment, segmentIdx) => {
+            const barStartLeft = timeUnits[bar.startIdx]?.left ?? 0
+            const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
+            const overlayLeft = segmentStartLeft - barStartLeft - HORIZONTAL_GAP / 2
 
-          let overlayWidth = 0
-          for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
-            overlayWidth += timeUnits[idx]?.width ?? DAY_CELL_WIDTH
-          }
-          overlayWidth -= 3
+            let overlayWidth = 0
+            for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+              overlayWidth += timeUnits[idx]?.width ?? DAY_CELL_WIDTH
+            }
+            overlayWidth -= 3
 
-          return (
-            <div
-              key={`non-working-${segmentIdx}`}
-              className="absolute pointer-events-none"
-              style={{
-                left: overlayLeft,
-                width: overlayWidth,
-                top: -3,
-                bottom: -3,
-                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
-                borderTop: `3px dashed ${colorScheme.bg}`,
-                borderBottom: `3px dashed ${colorScheme.bg}`,
-                zIndex: 1,
-              }}
-            />
-          )
-        })}
+            return (
+              <div
+                key={`non-working-${segmentIdx}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: overlayLeft,
+                  width: overlayWidth,
+                  top: -3,
+                  bottom: -3,
+                  backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
+                  borderTop: `3px dashed ${bar.color}`,
+                  borderBottom: `3px dashed ${bar.color}`,
+                  zIndex: 1,
+                }}
+              />
+            )
+          })
+        })()}
       </div>
 
       {/* Comment below bar */}
@@ -445,7 +446,7 @@ function LoadingBar({
         <div
           className="absolute pointer-events-none transition-all duration-200"
           style={{
-            top: top + BASE_BAR_HEIGHT - 4,
+            top: top + BASE_BAR_HEIGHT,
             left: displayLeft,
             width: displayWidth,
             height: COMMENT_GAP + COMMENT_HEIGHT,
@@ -455,7 +456,7 @@ function LoadingBar({
           <div
             style={{
               position: 'absolute',
-              top: 2,
+              top: -2,
               left: 3,
               right: 3,
               height: COMMENT_GAP,
@@ -470,14 +471,14 @@ function LoadingBar({
               left: 0,
               right: 0,
               height: COMMENT_HEIGHT,
-              backgroundColor: hexToRgba(colorScheme.bg, 0.5),
-              borderLeft: `2px solid ${colorScheme.bg}`,
-              borderRight: `2px solid ${colorScheme.bg}`,
-              borderBottom: `2px solid ${colorScheme.bg}`,
+              backgroundColor: hexToRgba(bar.color, 0.5),
+              borderLeft: `2px solid ${bar.color}`,
+              borderRight: `2px solid ${bar.color}`,
+              borderBottom: `2px solid ${bar.color}`,
               borderBottomLeftRadius: 4,
               borderBottomRightRadius: 4,
-              opacity: 0.85,
-              filter: 'brightness(1.05)',
+              opacity: 0.8,
+              filter: 'brightness(1.1)',
             }}
             title={bar.period.comment}
           >
@@ -502,7 +503,9 @@ export function EmployeeRow({
   employee,
   sectionId,
   sectionName,
+  projectId,
   projectName,
+  objectId,
   objectName,
   dayCells,
   stages,
@@ -530,14 +533,16 @@ export function EmployeeRow({
         stage_id: loading.stageId,
       },
       {
+        projectId,
+        projectName,
+        objectId,
+        objectName,
         sectionId,
         sectionName,
-        objectName,
-        projectName,
       },
       stages
     )
-  }, [onEditLoading, sectionId, sectionName, objectName, projectName, stages])
+  }, [onEditLoading, projectId, projectName, objectId, objectName, sectionId, sectionName, stages])
 
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(

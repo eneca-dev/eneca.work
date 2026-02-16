@@ -63,21 +63,48 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
       stage_id?: string | null
     },
     breadcrumbs: {
+      projectId: string
+      projectName: string
+      objectId: string
+      objectName: string
       sectionId: string
       sectionName: string
-      objectName: string
-      projectName: string
     },
     stages?: Array<{ id: string; name: string; order: number | null }>
   ) => {
+    // Формируем breadcrumbs для модалки с правильными ID
+    const modalBreadcrumbs: Array<{
+      id: string
+      name: string
+      type: 'project' | 'object' | 'section' | 'decomposition_stage'
+    }> = [
+      { id: breadcrumbs.projectId, name: breadcrumbs.projectName, type: 'project' },
+      { id: breadcrumbs.objectId, name: breadcrumbs.objectName, type: 'object' },
+      { id: breadcrumbs.sectionId, name: breadcrumbs.sectionName, type: 'section' },
+    ]
+
+    // Если загрузка связана с этапом декомпозиции - добавляем его в breadcrumbs
+    if (loading.stage_id && stages) {
+      const stage = stages.find(s => s.id === loading.stage_id)
+      if (stage) {
+        modalBreadcrumbs.push({
+          id: stage.id,
+          name: stage.name,
+          type: 'decomposition_stage',
+        })
+      }
+    }
+
     openLoadingModalNewEdit(
       loadingId,
       breadcrumbs.sectionId,
       {
         loading: {
           ...loading,
-          section_id: breadcrumbs.sectionId,
+          section_id: loading.stage_id || breadcrumbs.sectionId, // Используем stage_id если есть
         },
+        breadcrumbs: modalBreadcrumbs,
+        projectId: breadcrumbs.projectId,
       }
     )
   }, [])
