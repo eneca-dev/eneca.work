@@ -4,8 +4,8 @@
  * Loading Modal New - Главный контейнер модального окна
  *
  * Двухпанельный layout:
- * - Левая панель: ProjectTree (навигация по проектам, выбор раздела или этапа)
- * - Правая панель: LoadingForm (форма создания/редактирования загрузки)
+ * - Левая панель: ProjectTree (навигация по проектам, выбор раздела)
+ * - Правая панель: LoadingForm (форма создания/редактирования загрузки с опциональным выбором этапа)
  *
  * Режимы:
  * - CREATE: создание новой загрузки
@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
-import { Loader2, Folder, Box, CircleDashed, ListChecks, ChevronRight, Archive, Trash2 } from 'lucide-react'
+import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -55,7 +55,7 @@ export function LoadingModalNew({
   userId,
 }: LoadingModalNewProps) {
   // Функция получения иконки по типу элемента
-  const getIcon = (type: 'project' | 'object' | 'section' | 'decomposition_stage') => {
+  const getIcon = (type: 'project' | 'object' | 'section') => {
     switch (type) {
       case 'project':
         return Folder
@@ -63,8 +63,6 @@ export function LoadingModalNew({
         return Box
       case 'section':
         return CircleDashed
-      case 'decomposition_stage':
-        return ListChecks
       default:
         return Folder
     }
@@ -175,9 +173,20 @@ export function LoadingModalNew({
     ) {
       if (mode === 'edit' && editData?.loading) {
         // Режим редактирования
-        const sectionId = editData.loading.section_id
-        const lastBreadcrumb = effectiveBreadcrumbs[effectiveBreadcrumbs.length - 1]
-        selectSection(sectionId, lastBreadcrumb.name, effectiveBreadcrumbs)
+        // Проверяем, связана ли загрузка с этапом декомпозиции
+        const decompositionStage = effectiveBreadcrumbs.find(b => b.type === 'decomposition_stage')
+        const section = effectiveBreadcrumbs.find(b => b.type === 'section')
+
+        if (decompositionStage && section) {
+          // Загрузка связана с этапом декомпозиции
+          // Выбираем раздел в дереве
+          selectSection(section.id, section.name, effectiveBreadcrumbs)
+          // Устанавливаем этап декомпозиции в форме
+          setFormField('decompositionStageId', decompositionStage.id)
+        } else if (section) {
+          // Загрузка связана напрямую с разделом
+          selectSection(section.id, section.name, effectiveBreadcrumbs)
+        }
         setHasAutoSelected(true)
       } else if (mode === 'create' && createData?.sectionId) {
         // Режим создания с предзаполненным sectionId
@@ -189,7 +198,7 @@ export function LoadingModalNew({
         setIsFormVisible(true)
       }
     }
-  }, [mode, open, hasAutoSelected, effectiveBreadcrumbs, editData, createData, selectSection])
+  }, [mode, open, hasAutoSelected, effectiveBreadcrumbs, editData, createData, selectSection, setFormField])
 
   // Сброс состояния формы при изменении выбранного раздела (только в режиме создания без предзаполнения)
   useEffect(() => {
@@ -239,16 +248,18 @@ export function LoadingModalNew({
       return
     }
 
-    // Проверка что раздел/этап выбран
+    // Проверка что раздел выбран
     if (!selectedSectionId) {
       return
     }
 
+    // Определяем stageId: если выбран этап декомпозиции - используем его, иначе - раздел
+    const stageId = formData.decompositionStageId || selectedSectionId
+
     if (mode === 'create') {
       // Создание новой загрузки
-      // selectedSectionId может быть как ID раздела, так и ID этапа декомпозиции
       await createLoading.mutateAsync({
-        stageId: selectedSectionId,
+        stageId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
@@ -259,7 +270,7 @@ export function LoadingModalNew({
       // Редактирование существующей загрузки
       await updateLoading.mutateAsync({
         loadingId: editData.loading.id,
-        stageId: selectedSectionId ?? undefined,
+        stageId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
@@ -321,9 +332,9 @@ export function LoadingModalNew({
     return employee?.full_name || undefined
   }, [users, employeeId])
 
-  const stageName = selectedBreadcrumbs && selectedBreadcrumbs.length > 0
-    ? selectedBreadcrumbs[selectedBreadcrumbs.length - 1].name
-    : undefined
+  // Извлекаем раздел и этап из breadcrumbs
+  const sectionName = selectedBreadcrumbs?.find(b => b.type === 'section')?.name
+  const stageName = selectedBreadcrumbs?.find(b => b.type === 'decomposition_stage')?.name
   const startDate = mode === 'edit' && editData?.loading?.start_date
     ? editData.loading.start_date
     : formData.startDate
@@ -396,16 +407,16 @@ export function LoadingModalNew({
                 {/* Контент по центру */}
                 <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center">
                   {!selectedSectionId || !selectedBreadcrumbs || selectedBreadcrumbs.length === 0 ? (
-                    /* Этап не выбран */
+                    /* Раздел не выбран */
                     <div className="flex flex-col items-center gap-4">
                       <div className="text-lg font-medium text-muted-foreground">
-                        Выберите этап декомпозиции в дереве слева,
+                        Выберите раздел в дереве слева,
                         <br />
                         чтобы создать загрузку
                       </div>
                     </div>
                   ) : (
-                    /* Этап выбран - показываем кнопку */
+                    /* Раздел выбран - показываем кнопку */
                     <div className="flex flex-col items-center gap-4">
                       <Button
                         size="lg"
@@ -416,20 +427,22 @@ export function LoadingModalNew({
                       </Button>
                       {selectedBreadcrumbs && selectedBreadcrumbs.length > 0 && (
                         <div className="text-sm text-muted-foreground max-w-md">
-                          <div className="mb-1">Загрузка будет создана для</div>
+                          <div className="mb-1">Загрузка будет создана для раздела</div>
                           <div className="font-medium text-foreground flex items-center gap-1 flex-wrap justify-center">
-                            {selectedBreadcrumbs.map((item, index) => {
-                              const Icon = getIcon(item.type)
-                              return (
-                                <span key={`${item.id}-${index}`} className="flex items-center gap-1">
-                                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{item.name}</span>
-                                  {index < selectedBreadcrumbs.length - 1 && (
-                                    <ChevronRight className="h-3 w-3 mx-0.5 text-muted-foreground" />
-                                  )}
-                                </span>
-                              )
-                            })}
+                            {selectedBreadcrumbs
+                              .filter(item => item.type !== 'decomposition_stage')
+                              .map((item, index, filteredArray) => {
+                                const Icon = getIcon(item.type as 'project' | 'object' | 'section')
+                                return (
+                                  <span key={`${item.id}-${index}`} className="flex items-center gap-1">
+                                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                                    <span>{item.name}</span>
+                                    {index < filteredArray.length - 1 && (
+                                      <ChevronRight className="h-3 w-3 mx-0.5 text-muted-foreground" />
+                                    )}
+                                  </span>
+                                )
+                              })}
                           </div>
                         </div>
                       )}
@@ -511,6 +524,7 @@ export function LoadingModalNew({
         onConfirm={handleArchiveConfirm}
         loading={archiveLoading.isPending}
         employeeName={employeeName}
+        sectionName={sectionName}
         stageName={stageName}
         startDate={startDate}
         endDate={endDate}
@@ -523,6 +537,7 @@ export function LoadingModalNew({
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading.isPending}
         employeeName={employeeName}
+        sectionName={sectionName}
         stageName={stageName}
         startDate={startDate}
         endDate={endDate}

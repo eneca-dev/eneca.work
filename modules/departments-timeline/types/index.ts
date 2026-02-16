@@ -56,6 +56,7 @@ export interface Employee {
   departmentId?: string
   departmentName?: string
   position?: string
+  categoryName?: string
   avatarUrl?: string
   workload: number
   employmentRate?: number

@@ -236,6 +236,7 @@ export async function getDepartmentsData(
           lastName: item.last_name ?? undefined,
           email: item.email ?? undefined,
           position: item.position_name ?? undefined,
+          categoryName: item.category_name ?? undefined,
           avatarUrl: item.avatar_url ?? undefined,
           teamId: item.final_team_id ?? undefined,
           teamName: item.final_team_name ?? undefined,

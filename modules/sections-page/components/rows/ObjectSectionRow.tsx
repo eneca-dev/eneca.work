@@ -15,7 +15,7 @@ import { getCellClassNames } from '../../utils/cell-utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, OBJECT_SECTION_ROW_HEIGHT } from '../../constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
 import { EmployeeRow } from './EmployeeRow'
-import { openSectionLoadingCreate } from '@/modules/modals'
+import { openLoadingModalNewCreate } from '@/modules/modals'
 import { useDecompositionStages } from '@/modules/modals/hooks/useDecompositionStages'
 import type { ObjectSection, DayCell, SectionLoading } from '../../types'
 
@@ -85,15 +85,11 @@ export function ObjectSectionRow({
   // Handler для открытия модалки создания загрузки
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    openSectionLoadingCreate(
-      objectSection.sectionId,
-      objectSection.sectionName,
-      objectSection.objectName,
-      projectName,
-      undefined, // employeeId - будет выбран в форме
-      stages // передаем загруженные stages
-    )
-  }, [objectSection.sectionId, objectSection.sectionName, objectSection.objectName, projectName, stages])
+    openLoadingModalNewCreate({
+      sectionId: objectSection.sectionId,
+      projectId: projectId,
+    })
+  }, [objectSection.sectionId, projectId])
 
   return (
     <>

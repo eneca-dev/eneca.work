@@ -7,12 +7,12 @@
  * Включает:
  * - Переключатель "Мои проекты" / "Все проекты"
  * - Список проектов с поиском
- * - Иерархическое дерево (4 уровня): проект (со стадией) → объект → раздел → этап
+ * - Иерархическое дерево (3 уровня): проект (со стадией) → объект → раздел
+ * Этапы декомпозиции теперь не показываются в дереве - выбираются опционально в форме
  */
 
 import { useState, useMemo, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, ListChecks, RefreshCw, Plus, X, ExternalLink } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, RefreshCw, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -20,9 +20,6 @@ import { cn } from '@/lib/utils'
 import { useProjectsList, useProjectTree } from '../../hooks'
 import type { ProjectTreeNodeWithChildren } from '../../hooks/useProjectTree'
 import type { ProjectListItem } from '../../hooks'
-import { createDecompositionStage } from '../../actions/projects-tree'
-import { useToast } from '@/hooks/use-toast'
-import { useTasksTabsStore } from '@/modules/tasks/stores'
 
 /**
  * Breadcrumb item для отображения пути
@@ -46,20 +43,17 @@ interface ProjectItemProps {
   autoExpandBreadcrumbs?: BreadcrumbItem[] | null
   /** Режим "только просмотр" - блокирует взаимодействие */
   disabled?: boolean
-  /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
+  /** Режим работы модалки (create/edit) */
   modalMode?: 'create' | 'edit'
   /** Callback для закрытия модалки */
   onClose?: () => void
 }
 
 function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create', onClose }: ProjectItemProps) {
-  const router = useRouter()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
-  const [creatingStageForSection, setCreatingStageForSection] = useState<string | null>(null)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
   const [hasAutoExpandedAll, setHasAutoExpandedAll] = useState(false) // Флаг для автораскрытия всех узлов
-  const { toast } = useToast()
 
   // Загружаем дерево только когда проект раскрыт
   const { data: tree = [], isLoading, refetch: refetchTree } = useProjectTree({
@@ -165,64 +159,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     })
   }
 
-  // Создание базового этапа для раздела
-  const handleCreateBaseStage = async (section: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
-    e.stopPropagation() // Предотвращаем выбор раздела
-
-    // Кнопка всегда работает, даже при disabled дереве
-
-    if (!section.sectionId) {
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось определить ID раздела',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setCreatingStageForSection(section.id)
-
-    try {
-      const stageName = `Этап ${section.name}`
-      const result = await createDecompositionStage({
-        sectionId: section.sectionId,
-        name: stageName,
-      })
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
-      toast({
-        title: 'Этап создан',
-        description: `Создан этап "${stageName}"`,
-      })
-
-      // Обновляем дерево проекта
-      await refetchTree()
-
-      // Автоматически выбираем созданный этап
-      if (result.data) {
-        // Строим breadcrumbs для нового этапа
-        const breadcrumbs = buildBreadcrumbs(section)
-        breadcrumbs.push({
-          id: result.data.id,
-          name: stageName,
-          type: 'decomposition_stage',
-        })
-
-        onSectionSelect(result.data.id, stageName, breadcrumbs)
-      }
-    } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось создать этап',
-        variant: 'destructive',
-      })
-    } finally {
-      setCreatingStageForSection(null)
-    }
-  }
 
   // Функция для сбора пути от корня до узла
   const buildBreadcrumbs = (targetNode: ProjectTreeNodeWithChildren): BreadcrumbItem[] => {
@@ -274,47 +210,16 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     return uniqueBreadcrumbs
   }
 
-  // Выбор раздела или этапа декомпозиции
+  // Выбор раздела
   const handleSectionClick = (node: ProjectTreeNodeWithChildren) => {
     if (disabled) return // Блокируем в режиме disabled
 
-    // В режиме создания можно выбрать только этап декомпозиции
-    if (modalMode === 'create' && node.type === 'section') {
-      return // Блокируем выбор раздела в режиме создания
-    }
-
-    if (node.type === 'section' || node.type === 'decomposition_stage') {
+    if (node.type === 'section') {
       const breadcrumbs = buildBreadcrumbs(node)
       onSectionSelect(node.id, node.name, breadcrumbs)
     }
   }
 
-  // Переход к странице задач с фокусом на раздел
-  const handleGoToTasks = (node: ProjectTreeNodeWithChildren, e: React.MouseEvent) => {
-    e.stopPropagation() // Предотвращаем выбор раздела
-
-    // Кнопка всегда работает, даже при disabled дереве
-
-    if (node.type === 'section' && node.sectionId) {
-      // 1. Сначала переключаемся на вкладку "Бюджеты" через store
-      useTasksTabsStore.getState().setActiveTab('budgets')
-
-      // 2. Закрываем модалку
-      if (onClose) {
-        onClose()
-      }
-
-      // 3. Переходим на страницу задач с параметрами
-      const params = new URLSearchParams({
-        projectId: project.id,
-        sectionId: node.sectionId,
-        highlight: 'true',
-      })
-      const url = `/tasks?${params.toString()}`
-
-      router.push(url)
-    }
-  }
 
   // Цвет иконки и текста в зависимости от типа узла
   const getNodeColor = (nodeType: string) => {
@@ -332,28 +237,28 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
 
   // Рекурсивный рендер узла дерева
   const renderTreeNode = (node: ProjectTreeNodeWithChildren, depth: number = 1): React.ReactNode => {
-    const isNodeExpanded = expandedNodes.has(node.id)
-    const hasChildren = node.children && node.children.length > 0
+    // Пропускаем этапы декомпозиции - они больше не отображаются в дереве
+    if (node.type === 'decomposition_stage') {
+      return null
+    }
 
-    // В режиме создания раздел не кликабельный, только этап декомпозиции
-    const isClickable = modalMode === 'create'
-      ? node.type === 'decomposition_stage'
-      : (node.type === 'section' || node.type === 'decomposition_stage')
+    const isNodeExpanded = expandedNodes.has(node.id)
+
+    // Фильтруем детей: показываем только не-этапы
+    const filteredChildren = node.children?.filter(child => child.type !== 'decomposition_stage') ?? []
+    const hasChildren = filteredChildren.length > 0
+
+    // Раздел теперь всегда кликабельный (в обоих режимах)
+    const isClickable = node.type === 'section'
 
     const isSelected = isClickable && node.id === selectedSectionId
-    const isCreatingStage = creatingStageForSection === node.id
-
-    // Проверяем, является ли узел разделом без этапов
-    const isSectionWithoutStages = node.type === 'section' && !hasChildren
 
     const Icon =
       node.type === 'object'
         ? Box
         : node.type === 'section'
           ? CircleDashed
-          : node.type === 'decomposition_stage'
-            ? ListChecks
-            : Folder // project
+          : Folder // project
 
     const nodeColor = getNodeColor(node.type)
 
@@ -364,9 +269,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           onClick={() => {
             if (hasChildren) {
               handleNodeClick(node)
-            } else if (isSectionWithoutStages) {
-              // Для раздела без этапов - переключаем раскрытие для показа кнопки
-              toggleNode(node)
             }
             if (isClickable) {
               handleSectionClick(node)
@@ -383,7 +285,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           )}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
-          {hasChildren || isSectionWithoutStages ? (
+          {hasChildren ? (
             <span className="shrink-0">
               {isNodeExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -398,56 +300,15 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
         </button>
 
-        {/* Кнопки для раздела */}
-        {node.type === 'section' && isNodeExpanded && (
-          <div className="space-y-0.5">
-            {/* Кнопка "Перейти к задачам" - всегда показываем для разделов */}
-            {/* <button
-              type="button"
-              onClick={(e) => handleGoToTasks(node, e)}
-              className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-              style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}
-            >
-              <span className="w-3.5" />
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              <span className="text-xs">Перейти к задачам</span>
-            </button> */}
-
-            {/* Кнопка создания базового этапа - только для разделов без этапов */}
-            {isSectionWithoutStages && (
-              <button
-                type="button"
-                onClick={(e) => handleCreateBaseStage(node, e)}
-                disabled={isCreatingStage}
-                className="flex items-center gap-1.5 w-full py-1 text-sm transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-                style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}
-              >
-                <span className="w-3.5" />
-                {isCreatingStage ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                    <span className="text-xs">Создание...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-xs">Создать базовый этап</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Рекурсивно рендерим детей */}
+        {/* Рекурсивно рендерим детей (уже отфильтрованных) */}
         {isNodeExpanded && hasChildren && (
           <div>
-            {node.children!.map((child) => renderTreeNode(child, depth + 1))}
+            {filteredChildren.map((child) => renderTreeNode(child, depth + 1))}
           </div>
         )}
 
         {/* Пустое состояние для объекта без разделов */}
-        {isNodeExpanded && !hasChildren && !isSectionWithoutStages && node.type === 'object' && (
+        {isNodeExpanded && !hasChildren && node.type === 'object' && (
           <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
             Объект не содержит разделов
           </div>
@@ -558,9 +419,9 @@ export interface ProjectTreeProps {
   mode: 'my' | 'all'
   /** Callback при изменении режима */
   onModeChange: (mode: 'my' | 'all') => void
-  /** ID текущего выбранного раздела/этапа */
+  /** ID текущего выбранного раздела */
   selectedSectionId: string | null
-  /** Callback при выборе раздела/этапа */
+  /** Callback при выборе раздела */
   onSectionSelect: (sectionId: string, sectionName?: string, breadcrumbs?: BreadcrumbItem[]) => void
   /** ID пользователя для фильтра "Мои проекты" */
   userId: string
@@ -574,7 +435,7 @@ export interface ProjectTreeProps {
   className?: string
   /** Режим "только просмотр" - блокирует взаимодействие */
   disabled?: boolean
-  /** Режим работы модалки (create/edit) - в режиме create нельзя выбрать раздел */
+  /** Режим работы модалки (create/edit) */
   modalMode?: 'create' | 'edit'
   /** Callback для закрытия модалки */
   onClose?: () => void

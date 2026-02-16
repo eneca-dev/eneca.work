@@ -28,7 +28,9 @@ export interface DeleteConfirmationDialogProps {
   loading?: boolean
   /** Название сотрудника (для отображения) */
   employeeName?: string
-  /** Название раздела/этапа (для отображения) */
+  /** Название раздела (для отображения) */
+  sectionName?: string
+  /** Название этапа декомпозиции (для отображения, опционально) */
   stageName?: string
   /** Дата начала */
   startDate?: string
@@ -44,6 +46,7 @@ export function DeleteConfirmationDialog({
   onConfirm,
   loading = false,
   employeeName,
+  sectionName,
   stageName,
   startDate,
   endDate,
@@ -70,11 +73,16 @@ export function DeleteConfirmationDialog({
             <div className="space-y-2">
               <p>Вы уверены, что хотите безвозвратно удалить эту загрузку?</p>
 
-              {(employeeName || stageName || startDate || endDate || rate) && (
+              {(employeeName || sectionName || stageName || startDate || endDate || rate) && (
                 <div className="mt-3 p-3 bg-muted rounded-md text-sm space-y-1.5">
                   {employeeName && (
                     <div>
                       <span className="font-medium">Сотрудник:</span> {employeeName}
+                    </div>
+                  )}
+                  {sectionName && (
+                    <div>
+                      <span className="font-medium">Раздел:</span> {sectionName}
                     </div>
                   )}
                   {stageName && (

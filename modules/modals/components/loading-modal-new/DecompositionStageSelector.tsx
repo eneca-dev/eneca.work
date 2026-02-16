@@ -62,22 +62,58 @@ export function DecompositionStageSelector({
             aria-expanded={open}
             disabled={disabled || !sectionId}
             className={cn(
-              'w-full justify-between',
+              'w-full justify-between h-auto min-h-[40px]',
               error && 'border-red-500',
               !value && 'text-muted-foreground'
             )}
           >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {selectedStage ? selectedStage.name : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <span className="truncate">
+              {isLoading
+                ? 'Загрузка...'
+                : selectedStage
+                  ? selectedStage.name
+                  : placeholder}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[400px] p-0">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-0 data-[state=open]:animate-none data-[state=closed]:animate-none"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder="Поиск этапа..." />
             <CommandList>
               <CommandEmpty>Этапы не найдены</CommandEmpty>
               <CommandGroup>
+                {/* Опция "Без этапа" */}
+                <CommandItem
+                  value="без этапа"
+                  onSelect={() => {
+                    onChange('')
+                    setOpen(false)
+                  }}
+                  className="px-2 py-2 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 w-full min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-medium truncate text-muted-foreground">Без этапа</span>
+                    </div>
+                    <Check
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        !value ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </div>
+                </CommandItem>
+
+                {/* Разделитель, если есть этапы */}
+                {stages.length > 0 && (
+                  <div className="h-px bg-border my-1" />
+                )}
+
+                {/* Список этапов */}
                 {stages.map((stage) => (
                   <CommandItem
                     key={stage.id}
@@ -86,20 +122,23 @@ export function DecompositionStageSelector({
                       onChange(stage.id)
                       setOpen(false)
                     }}
+                    className="px-2 py-2 cursor-pointer"
                   >
-                    <Check
-                      className={cn(
-                        'mr-2 h-4 w-4',
-                        value === stage.id ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium">{stage.name}</div>
-                      {stage.description && (
-                        <div className="text-xs text-muted-foreground line-clamp-1">
-                          {stage.description}
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2 w-full min-w-0">
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="font-medium truncate">{stage.name}</span>
+                        {stage.description && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {stage.description}
+                          </span>
+                        )}
+                      </div>
+                      <Check
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          value === stage.id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
                     </div>
                   </CommandItem>
                 ))}
