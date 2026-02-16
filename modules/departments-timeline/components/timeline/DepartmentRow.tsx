@@ -99,7 +99,7 @@ export function DepartmentRow({
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
           >
             {/* Left: expand icon + department name */}
@@ -164,9 +164,10 @@ export function DepartmentRow({
                   key={i}
                   className={cn(
                     'border-r border-border/50 relative',
-                    cell.isToday && 'bg-primary/10',
                     !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
                     !cell.isToday && isWeekend && 'bg-muted/50',
+                    // Сегодня - применяется последним, но за загрузками
+                    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25',
                   )}
                   style={{
                     width: DAY_CELL_WIDTH,

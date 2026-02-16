@@ -145,6 +145,25 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
     collapseAll()
   }, [collapseAll])
 
+  // Scroll to today's date
+  const handleScrollToToday = useCallback(() => {
+    if (!contentScrollRef.current) return
+
+    // Find today's date index
+    const todayIndex = dayCells.findIndex((cell) => cell.isToday)
+    if (todayIndex === -1) return
+
+    // Calculate scroll position to center today's date
+    const cellPosition = todayIndex * DAY_CELL_WIDTH
+    const containerWidth = contentScrollRef.current.clientWidth
+    const scrollPosition = cellPosition - containerWidth / 2 + DAY_CELL_WIDTH / 2
+
+    contentScrollRef.current.scrollTo({
+      left: Math.max(0, scrollPosition),
+      behavior: 'smooth',
+    })
+  }, [dayCells])
+
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
     return (
@@ -224,7 +243,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                 </TooltipProvider>
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader dayCells={dayCells} />
+              <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />
             </div>
           </div>
         </header>

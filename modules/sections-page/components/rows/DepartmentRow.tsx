@@ -39,14 +39,14 @@ export function DepartmentRow({
       {/* Department header row */}
       <div className="group/row min-w-full relative border-b border-border">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/20"
+          className="flex transition-colors"
           style={{ height: DEPARTMENT_ROW_HEIGHT }}
-          onClick={handleToggle}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
+            onClick={handleToggle}
           >
             {/* Left: expand icon + department name */}
             <div className="flex items-center gap-2 min-w-0">
@@ -88,9 +88,11 @@ export function DepartmentRow({
                 <div
                   key={`${department.id}-${cell.dateKey}-${i}`}
                   className={cn(
-                    'border-r border-border/30',
-                    isWeekend && 'bg-muted/20',
-                    isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10'
+                    'border-r border-border/30 relative',
+                    !cell.isToday && isWeekend && 'bg-muted/20',
+                    !cell.isToday && isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10',
+                    // Сегодня - применяется последним, но за загрузками
+                    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25'
                   )}
                   style={{ width: DAY_CELL_WIDTH, height: DEPARTMENT_ROW_HEIGHT }}
                 />

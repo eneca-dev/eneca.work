@@ -22,8 +22,10 @@ export function getCellDayType(cell: DayCell) {
 export function getCellClassNames(cell: DayCell): string {
   const { isWeekend, isSpecialDayOff } = getCellDayType(cell)
   return cn(
-    'border-r border-border/30',
-    isWeekend && 'bg-muted/20',
-    isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10'
+    'border-r border-border/30 relative',
+    !cell.isToday && isWeekend && 'bg-muted/20',
+    !cell.isToday && isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10',
+    // Сегодня - применяется последним, но за загрузками
+    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25'
   )
 }
