@@ -32,6 +32,7 @@ export interface SectionLoading {
   employeeEmail?: string
   employeeAvatarUrl?: string
   employeeCategory?: string | null
+  employeePosition?: string | null
   employeeDepartmentId: string
   employeeDepartmentName: string
   startDate: string
