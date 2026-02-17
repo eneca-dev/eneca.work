@@ -132,7 +132,7 @@ export function LoadingForm({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Сотрудник */}
         <div>
-          <label className="block text-sm font-medium mb-2">Сотрудник</label>
+          <label className="block text-sm font-medium mb-2">Сотрудник <span className="text-muted-foreground">*</span></label>
           <EmployeeSelector
             value={formData.employeeId}
             onChange={(value) => onFieldChange('employeeId', value)}
@@ -144,7 +144,7 @@ export function LoadingForm({
 
         {/* Ставка загрузки */}
         <div>
-          <label className="block text-sm font-medium mb-2">Ставка загрузки</label>
+          <label className="block text-sm font-medium mb-2">Ставка загрузки <span className="text-muted-foreground">*</span></label>
           <RateInput
             value={formData.rate}
             onChange={(value) => onFieldChange('rate', value)}
@@ -155,7 +155,7 @@ export function LoadingForm({
 
         {/* Даты */}
         <div>
-          <label className="block text-sm font-medium mb-2">Период загрузки</label>
+          <label className="block text-sm font-medium mb-2">Период загрузки <span className="text-muted-foreground">*</span></label>
           <div className="space-y-2">
             <DateRangePicker
               value={{
@@ -192,11 +192,9 @@ export function LoadingForm({
               const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
 
               return businessDays > 0 ? (
-                <div className="text-sm text-muted-foreground space-y-1">
+                <div className="text-xs text-muted-foreground space-y-1">
                   <p>Количество рабочих дней: {businessDays}</p>
-                  <p>
-                    Количество рабочих часов с учётом ставки: {totalHours} ч
-                  </p>
+                  <p>Количество рабочих часов с учётом ставки: {totalHours} ч</p>
                 </div>
               ) : null
             })()}
@@ -210,7 +208,7 @@ export function LoadingForm({
         {/* Этап декомпозиции (опционально) */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Этап декомпозиции <span className="text-muted-foreground font-normal">(необязательно)</span>
+            Этап декомпозиции
           </label>
           <DecompositionStageSelector
             sectionId={sectionId}
@@ -224,7 +222,7 @@ export function LoadingForm({
         {/* Комментарий */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Комментарий <span className="text-muted-foreground font-normal">(необязательно)</span>
+            Комментарий
           </label>
           <Textarea
             value={formData.comment}

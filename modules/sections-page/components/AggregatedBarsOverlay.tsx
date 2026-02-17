@@ -272,7 +272,7 @@ export function AggregatedBarsOverlay({
                   ref={inputRef}
                   type="text"
                   value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
+                  onChange={(e) => setEditValue(e.target.value.replace(',', '.'))}
                   onBlur={handleSave}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSave()

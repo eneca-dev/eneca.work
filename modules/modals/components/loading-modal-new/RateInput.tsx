@@ -102,7 +102,7 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
 
       {/* Кастомный ввод */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">Или введите своё значение:</label>
+        <label className="text-xs text-muted-foreground">Или введите своё значение от 0.01 до 2.0:</label>
         <Input
           type="text"
           placeholder="1.25"
@@ -120,11 +120,11 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
             Ставка должна быть от 0.01 до 2.0
           </p>
         )}
-        {!error && !isInvalidRange && (
+        {/* {!error && !isInvalidRange && (
           <p className="text-xs text-muted-foreground">
             Введите значение от 0.01 до 2.0
           </p>
-        )}
+        )} */}
       </div>
     </div>
   )
