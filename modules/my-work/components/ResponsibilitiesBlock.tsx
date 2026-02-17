@@ -83,11 +83,11 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
   return (
     <div>
       <div className={`flex items-center gap-2 ${isCompact ? 'mb-3' : 'mb-4'}`}>
-        <User className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-        <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Вы ответственны за</h3>
+        <User className="h-4 w-4 text-primary" />
+        <h3 className="text-sm text-primary">Вы ответственны за</h3>
       </div>
       
-      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
+      <div className="bg-muted rounded-lg p-4">
         <ScrollableContainer maxHeight={isCompact ? "6rem" : "10rem"}>
           <div className={`grid grid-cols-2 ${isCompact ? 'gap-2' : 'gap-3'}`}>
             {groups.map((group, groupIndex) => (
@@ -98,7 +98,7 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                   ${isCompact ? 'border-l pl-2 py-1.5' : 'border-l pl-3 py-2'}
                 `}
               >
-                <div className={`text-xs font-medium text-gray-900 dark:text-white ${isCompact ? 'mb-0.5' : 'mb-1'}`}>{group.title}</div>
+                <div className={`text-xs font-medium text-foreground ${isCompact ? 'mb-0.5' : 'mb-1'}`}>{group.title}</div>
                 <div className={`flex flex-wrap ${isCompact ? 'gap-1' : 'gap-2'}`}>
                   {group.items.map((item, index) => (
                     (item.type === 'section_responsible' || item.type === 'project_manager' || item.type === 'lead_engineer') ? (
@@ -115,13 +115,13 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                           }
                           router.push('/dashboard/projects')
                         }}
-                        className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-white dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline truncate max-w-full cursor-pointer`}
+                        className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-primary hover:text-primary/80 hover:underline truncate max-w-full cursor-pointer`}
                         title={item.entity_name}
                       >
                         {item.entity_name}
                       </a>
                     ) : (
-                      <div key={index} className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-white dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 truncate max-w-full` } title={item.entity_name}>
+                      <div key={index} className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-muted-foreground truncate max-w-full` } title={item.entity_name}>
                         {item.entity_name}
                       </div>
                     )

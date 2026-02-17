@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useState } from 'react'
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { openLoadingModalNewCreate, openLoadingModalNewEdit } from '@/modules/modals'
 import type { TimelineRange, DayCell } from '../types'
 import type { FilterQueryParams } from '@/modules/cache'
-import type { CompanyCalendarEvent } from '@/modules/resource-graph/types'
+import { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
 
 function calculateTimelineRange(): TimelineRange {
   const today = getTodayMinsk()
@@ -148,8 +148,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
   // Timeline range and cells
   const range = useMemo(() => calculateTimelineRange(), [])
 
-  // TODO: Load calendar events from server
-  const calendarEvents: CompanyCalendarEvent[] = []
+  const { data: calendarEvents = [] } = useCompanyCalendarEvents()
 
   const dayCells = useMemo(
     () => generateDayCells(range, calendarEvents),
@@ -192,24 +191,26 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
     collapseAll()
   }, [collapseAll])
 
-  // Scroll to today's date
+  // Scroll to show today with 30 days before it
   const handleScrollToToday = useCallback(() => {
-    if (!contentScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
+    contentScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+    headerScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+  }, [])
 
-    // Find today's date index
-    const todayIndex = dayCells.findIndex((cell) => cell.isToday)
-    if (todayIndex === -1) return
+  // Scroll header to today-30 as soon as it renders (fires when shouldFetchData becomes true)
+  useEffect(() => {
+    if (!shouldFetchData || !headerScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
+    headerScrollRef.current.scrollLeft = scrollLeft
+  }, [shouldFetchData])
 
-    // Calculate scroll position to center today's date
-    const cellPosition = todayIndex * DAY_CELL_WIDTH
-    const containerWidth = contentScrollRef.current.clientWidth
-    const scrollPosition = cellPosition - containerWidth / 2 + DAY_CELL_WIDTH / 2
-
-    contentScrollRef.current.scrollTo({
-      left: Math.max(0, scrollPosition),
-      behavior: 'smooth',
-    })
-  }, [dayCells])
+  // Scroll content to today-23 when data finishes loading
+  useEffect(() => {
+    if (isLoading || !contentScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
+    contentScrollRef.current.scrollLeft = scrollLeft
+  }, [isLoading])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -261,6 +262,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Отделы / Проекты / Разделы
                   </span>
+                  {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                   <TooltipProvider>
                     <div className="flex items-center gap-1">
                       <Tooltip>
@@ -291,6 +293,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
                       </Tooltip>
                     </div>
                   </TooltipProvider>
+                  */}
                 </div>
                 {/* Timeline header with dates */}
                 <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />

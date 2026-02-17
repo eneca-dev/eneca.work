@@ -143,7 +143,7 @@ export const MyWorkWidget: React.FC = () => {
         <div className="p-6 pb-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
-            <h2 className="card-title dark:text-gray-200">Моя работа</h2>
+            <h2 className="card-title text-foreground">Моя работа</h2>
           </div>
         </div>
         <div className="flex-1 overflow-hidden px-6 flex items-center justify-center">
@@ -162,7 +162,7 @@ export const MyWorkWidget: React.FC = () => {
         <div className="p-6 pb-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
-            <h2 className="card-title dark:text-gray-200">Моя работа</h2>
+            <h2 className="card-title text-foreground">Моя работа</h2>
           </div>
         </div>
         <div className="flex-1 overflow-hidden px-6 flex items-center justify-center">
@@ -179,7 +179,7 @@ export const MyWorkWidget: React.FC = () => {
       <div className="p-6 pb-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />
-          <h2 className="card-title dark:text-gray-200">Моя работа</h2>
+          <h2 className="card-title text-foreground">Моя работа</h2>
         </div>
       </div>
       
@@ -191,18 +191,18 @@ export const MyWorkWidget: React.FC = () => {
             <div className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <h3 className="text-sm text-emerald-600 dark:text-emerald-400">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm text-primary">
                     {loadingStatus === 'active' ? 'Активные загрузки' : 'Архивированные'}
                   </h3>
                 </div>
-                <div className="flex items-center bg-gray-50 dark:bg-slate-600/20 rounded-lg p-1">
+                <div className="flex items-center bg-muted rounded-lg p-1">
                   <button
                     onClick={() => handleStatusChange('active')}
                     className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${
                       loadingStatus === 'active'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-gray-400 hover:text-gray-300'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     Активные
@@ -211,8 +211,8 @@ export const MyWorkWidget: React.FC = () => {
                     onClick={() => handleStatusChange('archived')}
                     className={`px-3 py-1 text-xs rounded-md transition-all duration-200 ${
                       loadingStatus === 'archived'
-                        ? 'bg-gray-600 text-white shadow-sm'
-                        : 'text-gray-400 hover:text-gray-300'
+                        ? 'bg-secondary text-secondary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     Архив
@@ -221,7 +221,7 @@ export const MyWorkWidget: React.FC = () => {
               </div>
 
               {/* Список загрузок с динамической высотой и невидимым скроллом */}
-              <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
+              <div className="bg-muted rounded-lg p-4">
                 <div
                   className="overflow-y-auto overflow-x-hidden pr-2 transition-all duration-300"
                 style={{
@@ -282,8 +282,8 @@ export const MyWorkWidget: React.FC = () => {
                   !selectedLoading || !isLeader ? '-mt-2' : // Если есть только один блок сверху
                   '-mt-4' // Если есть и график и ответственности
                 }`}>
-                  <Calendar className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Дедлайны</h3>
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm text-primary">Дедлайны</h3>
                 </div>
 
                               {/* Дедлайны без заголовка */}
