@@ -280,17 +280,24 @@ function LoadingBar({
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
-  // Split period by non-working days for diagonal stripe overlay
+  // Split period by non-working days (weekends + holidays) for diagonal stripe overlay
   const nonWorkingSegments = useMemo(() => {
     const startIdx = timeUnits.findIndex(u => u.dateKey === formatMinskDate(bar.period.startDate))
     const endIdx = timeUnits.findIndex(u => u.dateKey === formatMinskDate(bar.period.endDate))
-    if (startIdx === -1 || endIdx === -1) return []
+
+    // Если загрузка выходит за пределы видимого диапазона — используем границы видимой части бара
+    const effectiveStartIdx = startIdx === -1 ? bar.startIdx : startIdx
+    const effectiveEndIdx = endIdx === -1 ? bar.endIdx : endIdx
+
+    if (effectiveStartIdx > effectiveEndIdx || effectiveStartIdx >= timeUnits.length) return []
 
     const segments: Array<{ startIdx: number; endIdx: number }> = []
     let currentSegmentStart: number | null = null
 
-    for (let idx = startIdx; idx <= endIdx; idx++) {
+    for (let idx = effectiveStartIdx; idx <= effectiveEndIdx; idx++) {
       const unit = timeUnits[idx]
+      if (!unit) continue
+      // Не рабочий день: обычный выходной (сб/вс) ИЛИ праздник ИЛИ перенесённый выходной
       const isNonWorking = !unit.isWorkingDay
 
       if (isNonWorking) {
@@ -312,12 +319,12 @@ function LoadingBar({
     if (currentSegmentStart !== null) {
       segments.push({
         startIdx: currentSegmentStart,
-        endIdx,
+        endIdx: effectiveEndIdx,
       })
     }
 
     return segments
-  }, [bar.period.startDate, bar.period.endDate, timeUnits])
+  }, [bar.period.startDate, bar.period.endDate, bar.startIdx, bar.endIdx, timeUnits])
 
   // Extract display info from period
   const sectionText = bar.period.sectionName || bar.period.objectName || ''

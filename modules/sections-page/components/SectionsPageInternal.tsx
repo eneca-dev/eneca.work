@@ -193,7 +193,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
 
   // Scroll to show today with 30 days before it
   const handleScrollToToday = useCallback(() => {
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
     contentScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
     headerScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
   }, [])
@@ -201,14 +201,14 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
   // Scroll header to today-30 as soon as it renders (fires when shouldFetchData becomes true)
   useEffect(() => {
     if (!shouldFetchData || !headerScrollRef.current) return
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
     headerScrollRef.current.scrollLeft = scrollLeft
   }, [shouldFetchData])
 
-  // Scroll content to today-30 when data finishes loading
+  // Scroll content to today-23 when data finishes loading
   useEffect(() => {
     if (isLoading || !contentScrollRef.current) return
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    const scrollLeft = (DAYS_BEFORE_TODAY - 23) * DAY_CELL_WIDTH
     contentScrollRef.current.scrollLeft = scrollLeft
   }, [isLoading])
 
