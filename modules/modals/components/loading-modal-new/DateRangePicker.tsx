@@ -2,6 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
+import { Info } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip"
 
 export type DateRange = { from: Date | null; to: Date | null }
 
@@ -240,7 +247,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
   }
 
-  const renderMonth = (date: Date, showNavigation: 'left' | 'right' | 'none' = 'none') => {
+  const renderMonth = (date: Date, showNavigation: 'left' | 'right' | 'none' = 'none', hintIcon?: React.ReactNode) => {
     const year = date.getFullYear()
     const month = date.getMonth()
     const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7
@@ -267,7 +274,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
     return (
       <div className="flex-1" key={`${year}-${month}`}>
-        <div className="grid grid-cols-[28px_1fr_28px] items-center mb-1">
+        <div className={cn("grid items-center mb-1", hintIcon ? "grid-cols-[28px_1fr_auto]" : "grid-cols-[28px_1fr_28px]")}>
           {showNavigation === 'left' ? (
             <button
               className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
@@ -299,29 +306,32 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             {date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}
           </div>
           {showNavigation === 'right' ? (
-            <button
-              className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
-              onClick={handleNext}
-              onDragEnter={(e) => {
-                if (draggedBoundary) {
-                  e.preventDefault()
-                  startAutoScroll('next')
-                }
-              }}
-              onDragLeave={(e) => {
-                if (draggedBoundary) {
-                  e.preventDefault()
-                  stopAutoScroll()
-                }
-              }}
-              onDragOver={(e) => {
-                if (draggedBoundary) {
-                  e.preventDefault()
-                }
-              }}
-            >
-              →
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                onClick={handleNext}
+                onDragEnter={(e) => {
+                  if (draggedBoundary) {
+                    e.preventDefault()
+                    startAutoScroll('next')
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (draggedBoundary) {
+                    e.preventDefault()
+                    stopAutoScroll()
+                  }
+                }}
+                onDragOver={(e) => {
+                  if (draggedBoundary) {
+                    e.preventDefault()
+                  }
+                }}
+              >
+                →
+              </button>
+              {hintIcon}
+            </div>
           ) : (
             <span className="w-[28px] h-[24px]" />
           )}
@@ -417,7 +427,22 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <div className="font-sans bg-background rounded-lg p-2" style={{ width: calendarWidth }}>
             <div className="flex gap-4">
               {renderMonth(currentMonth, 'left')}
-              {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
+              {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right', (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors" type="button">
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[240px] text-xs leading-relaxed z-[3000]">
+                      <p className="font-semibold mb-1">Как изменить только одну дату периода:</p>
+                      <p className="mb-1">Перетащите начало или конец на нужную дату</p>
+                      <p>Для смены месяца — перетащите на стрелку (← →)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
             </div>
             {selectedDate && !hideSingleDateActions && (
               <div className="flex gap-2 mt-3 pt-2 border-t border-input">
@@ -461,7 +486,22 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               <div className="font-sans bg-background rounded-lg p-2" style={{ width: calendarWidth }}>
                 <div className="flex gap-4">
                   {renderMonth(currentMonth, 'left')}
-                  {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
+                  {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right', (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors" type="button">
+                            <Info className="w-3.5 h-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[240px] text-xs leading-relaxed z-[3000]">
+                          <p className="font-semibold mb-1">Как изменить только одну дату периода:</p>
+                          <p className="mb-1">Перетащите начало или конец на нужную дату</p>
+                          <p>Для смены месяца — перетащите на стрелку (← →)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
                 </div>
                 {selectedDate && !hideSingleDateActions && (
                   <div className="flex gap-2 mt-3 pt-2 border-t border-input">

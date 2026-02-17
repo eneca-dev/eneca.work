@@ -98,21 +98,21 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
       <div>
         {!hideHeader && (
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Дедлайны</h3>
+            <Calendar className="h-4 w-4 text-primary" />
+            <h3 className="text-sm text-primary">Дедлайны</h3>
           </div>
         )}
-        <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
+        <div className="bg-muted rounded-lg p-4">
           <div className={`flex items-center justify-center text-center ${
             isCompact ? 'gap-2 py-2' : 'gap-4 py-4'
           }`}>
             <Clock className={`text-emerald-400 flex-shrink-0 ${isCompact ? 'w-4 h-4' : 'w-6 h-6'}`} />
             <div>
-              <div className={`font-medium text-gray-900 dark:text-white ${isCompact ? 'text-sm' : 'text-base'}`}>
+              <div className={`font-medium text-foreground ${isCompact ? 'text-sm' : 'text-base'}`}>
                 Нет активных дедлайнов
               </div>
               {!isCompact && (
-                <div className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                <div className="text-muted-foreground text-sm mt-1">
                   У вас нет информации по дедлайнам, так как нет активных загрузок
                 </div>
               )}
@@ -127,12 +127,12 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
     <div>
       {!hideHeader && (
         <div className="flex items-center gap-2 mb-4">
-          <Calendar className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Дедлайны</h3>
+          <Calendar className="h-4 w-4 text-primary" />
+          <h3 className="text-sm text-primary">Дедлайны</h3>
         </div>
       )}
 
-      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-4">
+      <div className="bg-muted rounded-lg p-4">
         <ScrollableContainer maxHeight="8rem">
         <div className="space-y-2">
           {deadlines.map((deadline) => {
@@ -141,16 +141,16 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
             return (
               <div
                 key={deadline.id}
-                className="bg-gray-50 dark:bg-slate-600/20 rounded-lg p-2 border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors"
+                className="bg-muted rounded-lg p-2 border border-border hover:bg-muted/80 transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     {deadline.daysLeft < 0 ? (
                       <AlertTriangle className="h-3 w-3 text-red-400 flex-shrink-0" />
                     ) : (
-                      <Clock className="h-3 w-3 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                      <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                     )}
-                    <div className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                    <div className="text-xs text-foreground truncate">
                       {deadline.title}
                     </div>
                   </div>

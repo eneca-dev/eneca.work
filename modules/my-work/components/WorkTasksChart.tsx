@@ -219,16 +219,16 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
       {/* Заголовок */}
       <div className="flex items-center gap-2 mb-3">
         <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-        <h3 className="text-sm text-emerald-600 dark:text-emerald-400">
+        <h3 className="text-sm text-primary">
           График отчетов
         </h3>
       </div>
 
       {/* График */}
-      <div ref={containerRef} className="relative bg-gray-50 dark:bg-slate-600/20 rounded-lg px-12 py-3 overflow-visible">
+      <div ref={containerRef} className="relative bg-muted rounded-lg px-12 py-3 overflow-visible">
         {/* Сообщение для пустого состояния */}
         {!hasAnyData && (
-          <div className={`absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 flex items-center text-gray-900 dark:text-white animate-in fade-in-0 duration-300 max-w-sm ${
+          <div className={`absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 flex items-center text-foreground animate-in fade-in-0 duration-300 max-w-sm ${
             isCompact ? 'gap-2 px-4 py-3' : 'gap-3 px-6 py-4'
           }`}>
             <BarChart3 className={`text-emerald-400 ${isCompact ? 'w-4 h-4' : 'w-6 h-6'}`} />
@@ -237,7 +237,7 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
                 У вас нет выполненных задач
               </div>
               {!isCompact && (
-                <div className="text-gray-600 dark:text-gray-300 text-sm mt-1">
+                <div className="text-muted-foreground text-sm mt-1">
                   Чтобы отметить выполнение задачи, составьте отчет на вкладке декомпозиции
                 </div>
               )}
@@ -341,7 +341,7 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
         {/* Tooltip с детальной информацией */}
         {hoveredBarData && hoveredBarData.tasksCount > 0 && (
           <div 
-            className="absolute bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm text-gray-900 dark:text-white p-3 rounded-lg shadow-lg border border-gray-200 dark:border-white/20 text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs pointer-events-none"
+            className="absolute bg-popover/95 backdrop-blur-sm text-popover-foreground p-3 rounded-lg shadow-lg border border-border text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs pointer-events-none"
             style={{
               left: `${tooltipPosition.x}px`,
               top: `${Math.max(tooltipPosition.y - 10, 10)}px`,
@@ -349,8 +349,8 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
             }}
           >
             {/* Заголовок с датой и общими показателями */}
-            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-white/20">
-              <div className="font-semibold text-gray-900 dark:text-white mb-1">
+            <div className="mb-2 pb-2 border-b border-border">
+              <div className="font-semibold text-foreground mb-1">
                 {hoveredBarData.date.toLocaleDateString('ru-RU', { 
                   day: '2-digit', 
                   month: '2-digit',
@@ -372,21 +372,21 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
               {hoveredBarData.workLogs.slice(0, 5).map((log, idx) => (
                 <div 
                   key={log.work_log_id} 
-                  className="p-2 rounded border bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10"
+                  className="p-2 rounded border bg-muted/50 border-border"
                 >
-                  <div className="text-gray-900 dark:text-white text-xs mb-1 line-clamp-2">
+                  <div className="text-foreground text-xs mb-1 line-clamp-2">
                     {log.work_category_name || 'Без категории'}
                   </div>
-                  <div className="text-gray-600 dark:text-gray-300 text-xs mb-1">
+                  <div className="text-muted-foreground text-xs mb-1">
                     {log.section_name || 'Неизвестный раздел'}
                   </div>
-                  <div className="text-gray-500 dark:text-gray-400 text-xs">
+                  <div className="text-muted-foreground text-xs">
                     {log.work_log_hours} {pluralize(log.work_log_hours, ['час', 'часа', 'часов'])}
                   </div>
                 </div>
               ))}
               {hoveredBarData.workLogs.length > 5 && (
-                <div className="text-gray-500 dark:text-gray-400 text-xs text-center">
+                <div className="text-muted-foreground text-xs text-center">
                   ... и еще {hoveredBarData.workLogs.length - 5} {pluralizeReports(hoveredBarData.workLogs.length - 5)}
                 </div>
               )}
