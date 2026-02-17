@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useState } from 'react'
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
@@ -145,24 +145,26 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
     collapseAll()
   }, [collapseAll])
 
-  // Scroll to today's date
+  // Scroll to show today with 30 days before it
   const handleScrollToToday = useCallback(() => {
-    if (!contentScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    contentScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+    headerScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+  }, [])
 
-    // Find today's date index
-    const todayIndex = dayCells.findIndex((cell) => cell.isToday)
-    if (todayIndex === -1) return
+  // Scroll header to today-30 as soon as it renders (fires when shouldFetchData becomes true)
+  useEffect(() => {
+    if (!shouldFetchData || !headerScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    headerScrollRef.current.scrollLeft = scrollLeft
+  }, [shouldFetchData])
 
-    // Calculate scroll position to center today's date
-    const cellPosition = todayIndex * DAY_CELL_WIDTH
-    const containerWidth = contentScrollRef.current.clientWidth
-    const scrollPosition = cellPosition - containerWidth / 2 + DAY_CELL_WIDTH / 2
-
-    contentScrollRef.current.scrollTo({
-      left: Math.max(0, scrollPosition),
-      behavior: 'smooth',
-    })
-  }, [dayCells])
+  // Scroll content to today-30 when data finishes loading
+  useEffect(() => {
+    if (isLoading || !contentScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    contentScrollRef.current.scrollLeft = scrollLeft
+  }, [isLoading])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
