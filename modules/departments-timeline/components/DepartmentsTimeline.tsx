@@ -213,6 +213,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Отделы / Команды
                 </span>
+                {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                 <TooltipProvider>
                   <div className="flex items-center gap-1">
                     <Tooltip>
@@ -243,6 +244,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                     </Tooltip>
                   </div>
                 </TooltipProvider>
+                */}
               </div>
               {/* Timeline header with dates */}
               <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />

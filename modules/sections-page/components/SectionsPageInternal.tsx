@@ -262,6 +262,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Отделы / Проекты / Разделы
                   </span>
+                  {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                   <TooltipProvider>
                     <div className="flex items-center gap-1">
                       <Tooltip>
@@ -292,6 +293,7 @@ export function SectionsPageInternal({ queryParams }: SectionsPageInternalProps)
                       </Tooltip>
                     </div>
                   </TooltipProvider>
+                  */}
                 </div>
                 {/* Timeline header with dates */}
                 <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />
