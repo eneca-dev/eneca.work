@@ -26,7 +26,10 @@ export interface RateInputProps {
 const QUICK_RATES = [0.2, 0.25, 0.5, 0.75, 1.0]
 
 export function RateInput({ value, onChange, error, disabled = false }: RateInputProps) {
-  const [customValue, setCustomValue] = useState('')
+  const [customValue, setCustomValue] = useState(() => {
+    const isQuickRate = QUICK_RATES.some((rate) => Math.abs(value - rate) < 0.001)
+    return isQuickRate ? '' : String(value)
+  })
 
   const handleQuickSelect = (rate: number) => {
     onChange(rate)
