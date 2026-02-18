@@ -1017,6 +1017,10 @@ function ResizablePeriodBackground({
   // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
   const displayPosition = previewPosition ?? position
 
+  // Если бар клипован — не показываем handle на клипованном крае
+  const isClippedLeft = parseMinskDate(startDate) < range.start
+  const isClippedRight = parseMinskDate(endDate) > range.end
+
   // Цвет с низкой прозрачностью для фона
   const bgColor = color || '#3b82f6'
 
@@ -1032,34 +1036,38 @@ function ResizablePeriodBackground({
       }}
     >
       {/* Left resize handle */}
-      <div
-        {...leftHandleProps}
-        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
-        style={{
-          left: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
-          width: PERIOD_RESIZE_HANDLE_WIDTH,
-          zIndex: 10,
-        }}
-      >
+      {!isClippedLeft && (
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
-        />
-      </div>
+          {...leftHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+          style={{
+            left: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
+            width: PERIOD_RESIZE_HANDLE_WIDTH,
+            zIndex: 10,
+          }}
+        >
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+          />
+        </div>
+      )}
 
       {/* Right resize handle */}
-      <div
-        {...rightHandleProps}
-        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
-        style={{
-          right: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
-          width: PERIOD_RESIZE_HANDLE_WIDTH,
-          zIndex: 10,
-        }}
-      >
+      {!isClippedRight && (
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
-        />
-      </div>
+          {...rightHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+          style={{
+            right: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
+            width: PERIOD_RESIZE_HANDLE_WIDTH,
+            zIndex: 10,
+          }}
+        >
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+          />
+        </div>
+      )}
     </div>
   )
 }

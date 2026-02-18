@@ -216,6 +216,11 @@ function LoadingChip({
   // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
   const displayPosition = previewPosition ?? position
 
+  // Если бар клипован слева/справа — не показываем соответствующий handle,
+  // т.к. реальный край находится за пределами видимого календаря
+  const isClippedLeft = parseMinskDate(loading.startDate) < range.start
+  const isClippedRight = parseMinskDate(loading.finishDate) > range.end
+
   // Применяем отступы от краёв столбцов
   const paddedLeft = displayPosition.left + EDGE_PADDING
   const paddedWidth = Math.max(displayPosition.width - EDGE_PADDING * 2, CHIP_HEIGHT)
@@ -260,7 +265,7 @@ function LoadingChip({
       }}
     >
       {/* Left resize handle */}
-      {onResize && (
+      {onResize && !isClippedLeft && (
         <div
           {...leftHandleProps}
           className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
@@ -330,7 +335,7 @@ function LoadingChip({
       )}
 
       {/* Right resize handle */}
-      {onResize && (
+      {onResize && !isClippedRight && (
         <div
           {...rightHandleProps}
           className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"

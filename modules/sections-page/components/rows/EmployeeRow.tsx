@@ -9,7 +9,7 @@
 import { useMemo, useState, Fragment, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Box, Layers, MessageSquare, UserPlus } from 'lucide-react'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, getTodayMinsk, parseMinskDate } from '@/lib/timezone-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
@@ -176,6 +176,9 @@ function LoadingBar({
     minDays: 1,
     disabled: false,
   })
+
+  const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
+  const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
 
   // Handle click with wasRecentlyDragging check
   const handleClick = useCallback(() => {
@@ -362,17 +365,21 @@ function LoadingBar({
         {/* Resize handles */}
         <>
           {/* Left handle */}
-          <div
-            {...leftHandleProps}
-            className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-            style={{ zIndex: 20 }}
-          />
+          {!isClippedLeft && (
+            <div
+              {...leftHandleProps}
+              className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+              style={{ zIndex: 20 }}
+            />
+          )}
           {/* Right handle */}
-          <div
-            {...rightHandleProps}
-            className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-            style={{ zIndex: 20 }}
-          />
+          {!isClippedRight && (
+            <div
+              {...rightHandleProps}
+              className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+              style={{ zIndex: 20 }}
+            />
+          )}
         </>
 
         {/* Sticky rate badge (always visible, vertically centered) */}

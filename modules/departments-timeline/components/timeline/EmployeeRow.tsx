@@ -9,7 +9,7 @@
 import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Building2, MessageSquare, UserPlus } from 'lucide-react'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, getTodayMinsk, parseMinskDate } from '@/lib/timezone-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
@@ -159,6 +159,9 @@ function LoadingBarWithResize({
     disabled: !canResize,
   })
 
+  const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
+  const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
+
   // Обработчик клика с проверкой wasRecentlyDragging
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
@@ -300,17 +303,21 @@ function LoadingBarWithResize({
         {canResize && (
           <>
             {/* Left handle */}
-            <div
-              {...leftHandleProps}
-              className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-              style={{ zIndex: 20 }}
-            />
+            {!isClippedLeft && (
+              <div
+                {...leftHandleProps}
+                className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+                style={{ zIndex: 20 }}
+              />
+            )}
             {/* Right handle */}
-            <div
-              {...rightHandleProps}
-              className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-              style={{ zIndex: 20 }}
-            />
+            {!isClippedRight && (
+              <div
+                {...rightHandleProps}
+                className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+                style={{ zIndex: 20 }}
+              />
+            )}
           </>
         )}
 
