@@ -423,11 +423,8 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
             }
 
             if (!loadingFound) {
-              console.error('❌ [UPDATE onMutate] Загрузка НЕ найдена при первом проходе!', {
-                loadingId: input.loadingId,
-                targetEmployeeId: input.employeeId,
-                totalDepartments: departments.length,
-              })
+              // Нормальная ситуация: вкладка "Отделы" не загружена или загрузка вне видимости
+              console.warn('⚠️ [UPDATE onMutate] Загрузка не найдена в departmentsTimeline кеше (вкладка может быть не загружена)')
             }
           }
 
@@ -591,34 +588,51 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       console.log('✨ [UPDATE onMutate] Optimistic update для resourceGraph.loadings применён')
 
       // Оптимистично обновляем sectionsPage (вкладка "Разделы")
-      // Получаем данные пользователя из кеша (если меняется сотрудник)
-      const usersCache = queryClient.getQueryData<any[]>(queryKeys.users.lists())
-      const newEmployee = input.employeeId
-        ? usersCache?.find((u: any) => u.user_id === input.employeeId)
-        : undefined
+      // При смене раздела (stageId) — удаляем загрузку из старого места (появится в новом после refetch)
+      // При обновлении других полей — обновляем на месте
+      const isSectionChange = input.stageId !== undefined
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.sectionsPage.lists() },
-        (old: any) => {
-          if (!old || !Array.isArray(old)) {
-            console.warn('⚠️ [UPDATE onMutate] Нет данных sectionsPage в кеше')
-            return old
+      if (isSectionChange) {
+        // Optimistic removal — загрузка мгновенно исчезает из старого раздела
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.sectionsPage.lists() },
+          (old: any) => {
+            if (!old || !Array.isArray(old)) return old
+
+            return old.map((dept: any) => ({
+              ...dept,
+              projects: dept.projects.map((project: any) => ({
+                ...project,
+                objectSections: project.objectSections.map((objectSection: any) => ({
+                  ...objectSection,
+                  loadings: (objectSection.loadings || []).filter(
+                    (loading: any) => loading.id !== input.loadingId
+                  ),
+                })),
+              })),
+            }))
           }
+        )
+      } else {
+        // Обновление на месте (даты, ставка, комментарий, сотрудник)
+        const usersCache = queryClient.getQueryData<any[]>(queryKeys.users.lists())
+        const newEmployee = input.employeeId
+          ? usersCache?.find((u: any) => u.user_id === input.employeeId)
+          : undefined
 
-          // Структура: Department[] -> Project[] -> ObjectSection[] -> SectionLoading[]
-          const updatedDepartments = old.map((dept: any) => ({
-            ...dept,
-            projects: dept.projects.map((project: any) => ({
-              ...project,
-              objectSections: project.objectSections.map((objectSection: any) => {
-                const updatedLoadings = (objectSection.loadings || []).map((loading: any) => {
-                  if (loading.id === input.loadingId) {
-                    console.log('✅ [UPDATE onMutate] Обновляем загрузку в sectionsPage:', {
-                      sectionId: objectSection.sectionId,
-                      loadingId: loading.id,
-                      oldEmployeeId: loading.employeeId,
-                      newEmployeeId: input.employeeId,
-                    })
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.sectionsPage.lists() },
+          (old: any) => {
+            if (!old || !Array.isArray(old)) return old
+
+            return old.map((dept: any) => ({
+              ...dept,
+              projects: dept.projects.map((project: any) => ({
+                ...project,
+                objectSections: project.objectSections.map((objectSection: any) => ({
+                  ...objectSection,
+                  loadings: (objectSection.loadings || []).map((loading: any) => {
+                    if (loading.id !== input.loadingId) return loading
 
                     return {
                       ...loading,
@@ -633,7 +647,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                         employeeDepartmentId: newEmployee.department_id,
                         employeeDepartmentName: newEmployee.department_name,
                       }),
-                      ...(input.stageId !== undefined && { stageId: input.stageId }),
                       ...(input.startDate !== undefined && { startDate: input.startDate }),
                       ...(input.endDate !== undefined && { endDate: input.endDate }),
                       ...(input.rate !== undefined && { rate: input.rate }),
@@ -641,24 +654,13 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                       updatedAt: new Date().toISOString(),
                       _optimistic: true,
                     }
-                  }
-                  return loading
-                })
-
-                return {
-                  ...objectSection,
-                  loadings: updatedLoadings,
-                }
-              }),
-            })),
-          }))
-
-          return updatedDepartments
-        }
-      )
-
-      console.log('✨ [UPDATE onMutate] Optimistic update для sectionsPage применён')
-      console.log('✨ Optimistic update: загрузка обновлена в UI:', input.loadingId)
+                  }),
+                })),
+              })),
+            }))
+          }
+        )
+      }
 
       return {
         previousDepartmentsData,
