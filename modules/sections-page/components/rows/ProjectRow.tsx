@@ -105,6 +105,7 @@ export function ProjectRow({
                 dayCells={dayCells}
                 rowHeight={PROJECT_ROW_HEIGHT}
                 editable={false}
+                capacityHint="Ёмкость задаётся на строке раздела"
               />
             )}
             {dayCells.map((cell, i) => (
