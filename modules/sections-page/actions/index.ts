@@ -74,27 +74,68 @@ export async function getSectionsHierarchy(
     let query = supabase.from('view_departments_sections_loadings').select('*')
 
     // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
+    // Переменная для хранения разрешённого UUID отдела (для трансформации иерархии ниже)
+    let resolvedDeptUuid: string | undefined
 
     // Фильтр по команде (через employee_id, т.к. view не содержит team_id)
     if (effectiveFilters?.team_id) {
+      let teamUuid: string | undefined
+
       const teamId = Array.isArray(effectiveFilters.team_id)
         ? effectiveFilters.team_id[0]
         : effectiveFilters.team_id
 
       if (isUuid(teamId)) {
-        // Получаем сотрудников команды из view_employee_workloads
-        const { data: teamEmployees } = await supabase
-          .from('view_employee_workloads')
-          .select('user_id')
-          .eq('final_team_id', teamId)
+        teamUuid = teamId
+      } else {
+        // Резолвим название команды в UUID
+        const { data: teams } = await supabase
+          .from('teams')
+          .select('team_id')
+          .ilike('team_name', teamId)
 
-        const employeeIds = teamEmployees?.map(e => e.user_id) || []
-        if (employeeIds.length > 0) {
-          // Убираем дубликаты (т.к. view может вернуть одного employee несколько раз из-за loadings)
-          const uniqueEmployeeIds = Array.from(new Set(employeeIds))
-          query = query.in('employee_id', uniqueEmployeeIds)
+        if (teams && teams.length > 0) {
+          teamUuid = teams[0].team_id
         } else {
-          // Команда пустая - возвращаем пустой результат
+          return { success: true, data: [] }
+        }
+      }
+
+      // Получаем сотрудников команды из view_employee_workloads
+      const { data: teamEmployees } = await supabase
+        .from('view_employee_workloads')
+        .select('user_id')
+        .eq('final_team_id', teamUuid)
+
+      const employeeIds = teamEmployees?.map(e => e.user_id) || []
+      if (employeeIds.length > 0) {
+        const uniqueEmployeeIds = Array.from(new Set(employeeIds))
+        query = query.in('employee_id', uniqueEmployeeIds)
+      } else {
+        return { success: true, data: [] }
+      }
+    }
+
+    // Фильтр по подразделению
+    // Показывает раздел если ответственный или сотрудник с загрузкой из этого подразделения
+    if (effectiveFilters?.subdivision_id) {
+      const subdivisionId = Array.isArray(effectiveFilters.subdivision_id)
+        ? effectiveFilters.subdivision_id[0]
+        : effectiveFilters.subdivision_id
+
+      if (isUuid(subdivisionId)) {
+        query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
+      } else {
+        // Резолвим название в UUID (как в departments-timeline)
+        const { data: subdivisions } = await supabase
+          .from('subdivisions')
+          .select('subdivision_id')
+          .ilike('subdivision_name', subdivisionId)
+
+        if (subdivisions && subdivisions.length > 0) {
+          const subId = subdivisions[0].subdivision_id
+          query = query.or(`subdivision_id.eq.${subId},employee_subdivision_id.eq.${subId}`)
+        } else {
           return { success: true, data: [] }
         }
       }
@@ -110,26 +151,22 @@ export async function getSectionsHierarchy(
         : effectiveFilters.department_id
 
       if (isUuid(departmentId)) {
+        resolvedDeptUuid = departmentId
         query = query.or(`department_id.eq.${departmentId},employee_department_id.eq.${departmentId}`)
       } else {
-        query = query.or(`department_name.ilike.*${departmentId}*,employee_department_name.ilike.*${departmentId}*`)
-      }
-    }
+        // Резолвим название в UUID (как в departments-timeline)
+        const { data: departments } = await supabase
+          .from('departments')
+          .select('department_id')
+          .ilike('department_name', departmentId)
 
-    // Фильтр по подразделению
-    if (effectiveFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(effectiveFilters.subdivision_id)
-        ? effectiveFilters.subdivision_id[0]
-        : effectiveFilters.subdivision_id
-
-      if (isUuid(subdivisionId)) {
-        // Для подразделения показываем разделы если:
-        // 1) Ответственный из отдела этого подразделения ИЛИ
-        // 2) Есть загрузка сотрудника из отдела этого подразделения
-        query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
-      } else {
-        // Фильтрация по названию подразделения (через OR)
-        query = query.or(`subdivision_name.ilike.*${subdivisionId}*,employee_subdivision_name.ilike.*${subdivisionId}*`)
+        if (departments && departments.length > 0) {
+          const deptId = departments[0].department_id
+          resolvedDeptUuid = deptId
+          query = query.or(`department_id.eq.${deptId},employee_department_id.eq.${deptId}`)
+        } else {
+          return { success: true, data: [] }
+        }
       }
     }
 
@@ -173,10 +210,11 @@ export async function getSectionsHierarchy(
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
-    const rawDeptFilter = secureFilters?.department_id
-    const scopedDeptId = rawDeptFilter
-      ? (Array.isArray(rawDeptFilter) ? rawDeptFilter[0] : rawDeptFilter) as string
-      : undefined
+    // Используем разрешённый UUID отдела (resolvedDeptUuid), а не сырое значение из фильтров,
+    // т.к. inline-filter передаёт НАЗВАНИЕ ("Отдел развития"), а не UUID.
+    // Если mandatory-фильтр установил department_id как UUID — resolvedDeptUuid уже содержит его.
+    // Если пользователь ввёл название — resolvedDeptUuid содержит UUID из DB lookup выше.
+    const scopedDeptId = resolvedDeptUuid
 
     for (const row of rows) {
       const responsibleDeptId = row.department_id

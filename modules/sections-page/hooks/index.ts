@@ -15,15 +15,9 @@ import {
   getSectionsHierarchy,
   upsertSectionCapacity,
   deleteSectionCapacityOverride,
-  createSectionLoading,
-  updateSectionLoading,
-  deleteSectionLoading,
 } from '../actions'
 import type {
   Department,
-  CapacityInput,
-  CreateLoadingInput,
-  UpdateLoadingInput,
 } from '../types'
 
 // ============================================================================
@@ -53,8 +47,8 @@ export const useSectionsHierarchy = createCacheQuery<Department[], FilterQueryPa
 export const useUpsertSectionCapacity = createCacheMutation({
   mutationFn: upsertSectionCapacity,
   invalidateKeys: (input) => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.sectionsPage.capacity(input.sectionId),
+    [...queryKeys.sectionsPage.lists()],
+    [...queryKeys.sectionsPage.capacity(input.sectionId)],
   ],
   onSuccess: () => {
     toast.success('Ёмкость обновлена')
@@ -68,60 +62,11 @@ export const useDeleteSectionCapacityOverride = createCacheMutation({
   mutationFn: ({ sectionId, date }: { sectionId: string; date: string }) =>
     deleteSectionCapacityOverride(sectionId, date),
   invalidateKeys: ({ sectionId }) => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.sectionsPage.capacity(sectionId),
+    [...queryKeys.sectionsPage.lists()],
+    [...queryKeys.sectionsPage.capacity(sectionId)],
   ],
   onSuccess: () => {
     toast.success('Ёмкость сброшена к значению по умолчанию')
-  },
-})
-
-// ============================================================================
-// Loading Mutations
-// ============================================================================
-
-/**
- * Создать загрузку
- */
-export const useCreateSectionLoading = createCacheMutation({
-  mutationFn: createSectionLoading,
-  invalidateKeys: (input) => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.resourceGraph.lists(),
-    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка создана')
-  },
-})
-
-/**
- * Обновить загрузку
- */
-export const useUpdateSectionLoading = createCacheMutation({
-  mutationFn: updateSectionLoading,
-  invalidateKeys: () => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.resourceGraph.lists(),
-    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка обновлена')
-  },
-})
-
-/**
- * Удалить загрузку (архивировать)
- */
-export const useDeleteSectionLoading = createCacheMutation({
-  mutationFn: (loadingId: string) => deleteSectionLoading(loadingId),
-  invalidateKeys: () => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.resourceGraph.lists(),
-    queryKeys.departmentsTimeline.all, // Синхронизация с вкладкой отделов
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка удалена')
   },
 })
 
