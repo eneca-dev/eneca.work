@@ -54,6 +54,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.sections.all,
       queryKeys.projects.all, // Структура проекта тоже обновляется
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.sectionsPage.all, // Страница разделов (иерархия отделы → проекты → разделы)
     ],
   },
 
@@ -62,7 +63,11 @@ export const realtimeSubscriptions: TableSubscription[] = [
   // ============================================================================
   {
     table: 'profiles',
-    invalidateKeys: [queryKeys.users.all],
+    invalidateKeys: [
+      queryKeys.users.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (сотрудники в командах)
+      queryKeys.sectionsPage.all, // Страница разделов (сотрудники с загрузками)
+    ],
   },
 
   // ============================================================================
@@ -76,6 +81,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
       // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
       [...queryKeys.resourceGraph.all, 'loadings'],
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
+      queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
     ],
   },
   {
@@ -181,11 +188,18 @@ export const realtimeSubscriptions: TableSubscription[] = [
   },
   {
     table: 'departments',
-    invalidateKeys: [queryKeys.departments.all],
+    invalidateKeys: [
+      queryKeys.departments.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов
+      queryKeys.sectionsPage.all, // Страница разделов (группировка по отделам)
+    ],
   },
   {
     table: 'teams',
-    invalidateKeys: [queryKeys.teams.all],
+    invalidateKeys: [
+      queryKeys.teams.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (команды внутри отделов)
+    ],
   },
   {
     table: 'clients',

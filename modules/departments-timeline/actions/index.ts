@@ -8,6 +8,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { Department, Team, Employee, Loading, TeamFreshness } from '../types'
 import { formatMinskDate } from '@/lib/timezone-utils'
@@ -80,6 +81,9 @@ function aggregateDailyWorkloads(employees: Employee[]): Record<string, number> 
 export async function getDepartmentsData(
   filters?: FilterQueryParams
 ): Promise<ActionResult<Department[]>> {
+  return Sentry.startSpan(
+    { name: 'getDepartmentsData', op: 'db.query' },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -163,6 +167,10 @@ export async function getDepartmentsData(
 
     if (orgError) {
       console.error('[getDepartmentsData] Org structure error:', orgError)
+      Sentry.captureException(new Error(orgError.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'true' },
+        extra: { query: 'view_organizational_structure', appliedFilters: Object.keys(secureFilters || {}) },
+      })
       return { success: false, error: orgError.message }
     }
 
@@ -214,6 +222,10 @@ export async function getDepartmentsData(
 
     if (employeeError) {
       console.error('[getDepartmentsData] Employee data error:', employeeError)
+      Sentry.captureException(new Error(employeeError.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'true' },
+        extra: { query: 'view_employee_workloads', appliedFilters: Object.keys(secureFilters || {}) },
+      })
       return { success: false, error: employeeError.message }
     }
 
@@ -382,8 +394,12 @@ export async function getDepartmentsData(
     return { success: true, data: departments }
   } catch (error) {
     console.error('[getDepartmentsData] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'unexpected_error', user_facing: 'true' },
+    })
     return { success: false, error: String(error) }
   }
+  }) // end Sentry.startSpan
 }
 
 // ============================================================================
@@ -396,6 +412,9 @@ export async function getDepartmentsData(
  * @returns Record<teamId, TeamFreshness>
  */
 export async function getTeamsFreshness(): Promise<ActionResult<Record<string, TeamFreshness>>> {
+  return Sentry.startSpan(
+    { name: 'getTeamsFreshness', op: 'db.query' },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -405,6 +424,9 @@ export async function getTeamsFreshness(): Promise<ActionResult<Record<string, T
 
     if (error) {
       console.error('[getTeamsFreshness] Error:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'departments-timeline', action: 'getTeamsFreshness', error_type: 'db_error', user_facing: 'false' },
+      })
       return { success: false, error: error.message }
     }
 
@@ -427,8 +449,12 @@ export async function getTeamsFreshness(): Promise<ActionResult<Record<string, T
     return { success: true, data: freshnessMap }
   } catch (error) {
     console.error('[getTeamsFreshness] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'getTeamsFreshness', error_type: 'unexpected_error', user_facing: 'false' },
+    })
     return { success: false, error: String(error) }
   }
+  }) // end Sentry.startSpan
 }
 
 /**
@@ -440,6 +466,9 @@ export async function getTeamsFreshness(): Promise<ActionResult<Record<string, T
 export async function confirmTeamActivity(
   teamId: string
 ): Promise<ActionResult<{ teamId: string }>> {
+  return Sentry.startSpan(
+    { name: 'confirmTeamActivity', op: 'db.mutation', attributes: { 'team.id': teamId } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -461,14 +490,23 @@ export async function confirmTeamActivity(
 
     if (error) {
       console.error('[confirmTeamActivity] Error:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'departments-timeline', action: 'confirmTeamActivity', error_type: 'db_error', user_facing: 'true' },
+        extra: { teamId },
+      })
       return { success: false, error: error.message }
     }
 
     return { success: true, data: { teamId } }
   } catch (error) {
     console.error('[confirmTeamActivity] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'confirmTeamActivity', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { teamId },
+    })
     return { success: false, error: String(error) }
   }
+  }) // end Sentry.startSpan
 }
 
 /**
@@ -480,6 +518,9 @@ export async function confirmTeamActivity(
 export async function confirmMultipleTeamsActivity(
   teamIds: string[]
 ): Promise<ActionResult<{ teamIds: string[] }>> {
+  return Sentry.startSpan(
+    { name: 'confirmMultipleTeamsActivity', op: 'db.mutation', attributes: { 'teams.count': teamIds.length } },
+    async () => {
   try {
     const supabase = await createClient()
 
@@ -503,14 +544,23 @@ export async function confirmMultipleTeamsActivity(
 
     if (error) {
       console.error('[confirmMultipleTeamsActivity] Error:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'departments-timeline', action: 'confirmMultipleTeamsActivity', error_type: 'db_error', user_facing: 'true' },
+        extra: { teamIds, count: teamIds.length },
+      })
       return { success: false, error: error.message }
     }
 
     return { success: true, data: { teamIds } }
   } catch (error) {
     console.error('[confirmMultipleTeamsActivity] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'confirmMultipleTeamsActivity', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { teamIds },
+    })
     return { success: false, error: String(error) }
   }
+  }) // end Sentry.startSpan
 }
 
 // ============================================================================
@@ -532,6 +582,9 @@ export async function updateLoadingDates(
   startDate: string,
   finishDate: string
 ): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
+  return Sentry.startSpan(
+    { name: 'updateLoadingDates', op: 'db.mutation', attributes: { 'loading.id': loadingId } },
+    async () => {
   try {
     // Валидация входных данных
     if (!loadingId) {
@@ -566,6 +619,10 @@ export async function updateLoadingDates(
 
     if (error) {
       console.error('[updateLoadingDates] Supabase error:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'departments-timeline', action: 'updateLoadingDates', error_type: 'db_error', user_facing: 'true' },
+        extra: { loadingId, startDate, finishDate },
+      })
       return { success: false, error: error.message }
     }
 
@@ -575,9 +632,14 @@ export async function updateLoadingDates(
     }
   } catch (error) {
     console.error('[updateLoadingDates] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'updateLoadingDates', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { loadingId, startDate, finishDate },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
     }
   }
+  }) // end Sentry.startSpan
 }

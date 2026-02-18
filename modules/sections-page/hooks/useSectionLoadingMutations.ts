@@ -88,6 +88,6 @@ export const useUpdateLoadingDates = createCacheMutation<
     },
   },
 
-  // Инвалидируем все sections page запросы после успешного обновления
-  invalidateKeys: [queryKeys.sectionsPage.all, queryKeys.resourceGraph.all],
+  // Инвалидируем sections page + departments timeline после успешного обновления
+  invalidateKeys: [queryKeys.sectionsPage.all, queryKeys.resourceGraph.all, queryKeys.departmentsTimeline.all],
 })
