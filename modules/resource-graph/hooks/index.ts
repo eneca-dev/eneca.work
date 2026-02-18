@@ -722,8 +722,9 @@ export const useDeleteLoading = createCacheMutation<
     },
   },
 
-  // Инвалидируем sectionsPage и departmentsTimeline для синхронизации вкладок
-  invalidateKeys: [
+  // Инвалидируем loadings кеш + sectionsPage и departmentsTimeline для синхронизации вкладок
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.loadings(input.sectionId),
     queryKeys.sectionsPage.all,
     queryKeys.departmentsTimeline.all,
   ],
