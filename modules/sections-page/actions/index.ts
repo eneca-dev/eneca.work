@@ -58,16 +58,24 @@ export async function getSectionsHierarchy(
     const filterContext = filterContextResult.success ? filterContextResult.data : null
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
 
+    // Для project_manager (scope.level === 'projects') убираем обязательный project_id фильтр,
+    // чтобы менеджер видел все разделы — как на вкладке "Отделы" (там project_id не обрабатывается).
+    // Ручной фильтр пользователя (если выбрал проект в UI) при этом сохраняется.
+    const isProjectManagerScope = filterContext?.scope?.level === 'projects'
+    const effectiveFilters = isProjectManagerScope
+      ? { ...secureFilters, project_id: filters?.project_id }
+      : secureFilters
+
     // Запрос к view
     let query = supabase.from('view_departments_sections_loadings').select('*')
 
     // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
 
     // Фильтр по команде (через employee_id, т.к. view не содержит team_id)
-    if (secureFilters?.team_id) {
-      const teamId = Array.isArray(secureFilters.team_id)
-        ? secureFilters.team_id[0]
-        : secureFilters.team_id
+    if (effectiveFilters?.team_id) {
+      const teamId = Array.isArray(effectiveFilters.team_id)
+        ? effectiveFilters.team_id[0]
+        : effectiveFilters.team_id
 
       if (isUuid(teamId)) {
         // Получаем сотрудников команды из view_employee_workloads
@@ -92,10 +100,10 @@ export async function getSectionsHierarchy(
     // Показывает раздел если:
     // 1) Ответственный раздела из этого отдела ИЛИ
     // 2) Есть загрузка сотрудника из этого отдела
-    if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id)
-        ? secureFilters.department_id[0]
-        : secureFilters.department_id
+    if (effectiveFilters?.department_id) {
+      const departmentId = Array.isArray(effectiveFilters.department_id)
+        ? effectiveFilters.department_id[0]
+        : effectiveFilters.department_id
 
       if (isUuid(departmentId)) {
         query = query.or(`department_id.eq.${departmentId},employee_department_id.eq.${departmentId}`)
@@ -105,10 +113,10 @@ export async function getSectionsHierarchy(
     }
 
     // Фильтр по подразделению
-    if (secureFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(secureFilters.subdivision_id)
-        ? secureFilters.subdivision_id[0]
-        : secureFilters.subdivision_id
+    if (effectiveFilters?.subdivision_id) {
+      const subdivisionId = Array.isArray(effectiveFilters.subdivision_id)
+        ? effectiveFilters.subdivision_id[0]
+        : effectiveFilters.subdivision_id
 
       if (isUuid(subdivisionId)) {
         // Для подразделения показываем разделы если:
@@ -122,10 +130,10 @@ export async function getSectionsHierarchy(
     }
 
     // Фильтр по проекту
-    if (secureFilters?.project_id) {
-      const projectId = Array.isArray(secureFilters.project_id)
-        ? secureFilters.project_id[0]
-        : secureFilters.project_id
+    if (effectiveFilters?.project_id) {
+      const projectId = Array.isArray(effectiveFilters.project_id)
+        ? effectiveFilters.project_id[0]
+        : effectiveFilters.project_id
 
       if (isUuid(projectId)) {
         query = query.eq('project_id', projectId)
@@ -149,10 +157,18 @@ export async function getSectionsHierarchy(
     }
 
     // Трансформация плоских строк в иерархию
-    // Раздел может появиться в нескольких отделах:
-    // 1) В отделе ответственного (всегда)
-    // 2) В отделах сотрудников с загрузками (если отличаются от отдела ответственного)
+    // Логика размещения раздела по отделам зависит от scope пользователя:
+    // - team scope (user/team_lead): только отдел сотрудника с загрузкой
+    // - dept scope (нач. отдела): только свой отдел (через ответственного или сотрудника)
+    // - admin/subdivision scope: полное дублирование (отдел ответственного + отдел сотрудника)
     const departmentsMap = new Map<string, Department>()
+
+    // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
+    const isTeamScoped = !!secureFilters?.team_id
+    const rawDeptFilter = secureFilters?.department_id
+    const scopedDeptId = rawDeptFilter
+      ? (Array.isArray(rawDeptFilter) ? rawDeptFilter[0] : rawDeptFilter) as string
+      : undefined
 
     for (const row of rows) {
       const responsibleDeptId = row.department_id
@@ -164,22 +180,58 @@ export async function getSectionsHierarchy(
       // Определяем в каких отделах должен появиться раздел
       const departmentIds: Array<{ id: string; name: string; subdivisionId: string; subdivisionName: string }> = []
 
-      // 1) Всегда добавляем отдел ответственного
-      departmentIds.push({
-        id: responsibleDeptId,
-        name: row.department_name,
-        subdivisionId: row.subdivision_id,
-        subdivisionName: row.subdivision_name,
-      })
-
-      // 2) Если есть загрузка сотрудника из другого отдела - добавляем и его
-      if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
+      if (isTeamScoped) {
+        // Team scope (user/team_lead): только отдел сотрудника с загрузкой.
+        // Отдел ответственного может быть чужим — не дублируем туда,
+        // чтобы не было фантомных отделов с 0 загрузок.
+        if (loadingId && employeeDeptId) {
+          departmentIds.push({
+            id: employeeDeptId,
+            name: row.employee_department_name || 'Без отдела',
+            subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
+            subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+          })
+        }
+      } else if (scopedDeptId) {
+        // Dept scope (нач. отдела): раздел всегда попадает только в свой отдел.
+        // OR-фильтр в запросе возвращает строки через два пути:
+        // 1) department_id = МОЙ → ответственный из моего отдела
+        // 2) employee_department_id = МОЙ → мой сотрудник грузится на чужом разделе
+        // В обоих случаях дублировать в чужой отдел не нужно.
+        if (responsibleDeptId === scopedDeptId) {
+          departmentIds.push({
+            id: responsibleDeptId,
+            name: row.department_name,
+            subdivisionId: row.subdivision_id,
+            subdivisionName: row.subdivision_name,
+          })
+        } else if (loadingId && employeeDeptId === scopedDeptId) {
+          departmentIds.push({
+            id: employeeDeptId,
+            name: row.employee_department_name || 'Без отдела',
+            subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
+            subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+          })
+        }
+      } else {
+        // Admin / subdivision scope: полное дублирование —
+        // 1) Всегда добавляем отдел ответственного
         departmentIds.push({
-          id: employeeDeptId,
-          name: row.employee_department_name || 'Без отдела',
-          subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
-          subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+          id: responsibleDeptId,
+          name: row.department_name,
+          subdivisionId: row.subdivision_id,
+          subdivisionName: row.subdivision_name,
         })
+
+        // 2) Если есть загрузка сотрудника из другого отдела - добавляем и его
+        if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
+          departmentIds.push({
+            id: employeeDeptId,
+            name: row.employee_department_name || 'Без отдела',
+            subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
+            subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+          })
+        }
       }
 
       // Обрабатываем раздел для КАЖДОГО отдела
