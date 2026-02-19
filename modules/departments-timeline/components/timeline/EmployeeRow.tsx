@@ -32,7 +32,7 @@ import {
 } from '../../utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
 import type { Employee, DayCell, Loading, TimelineRange } from '../../types'
-import type { TimelineUnit } from '@/types/planning'
+import type { TimelineUnit, Loading as PlanningLoading } from '@/types/planning'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
 import { useUpdateLoadingDates } from '../../hooks'
 
@@ -169,8 +169,9 @@ function LoadingBarWithResize({
     // Не открываем модалку если только что закончили drag
     if (wasRecentlyDragging()) return
 
-    // Приводим bar.period к типу Loading (BarPeriod имеет sectionId?: string | null | undefined)
-    onLoadingClick(bar.period as any)
+    // BarPeriod содержит все необходимые поля Loading; startDate/endDate - Date объекты,
+    // модал (useLoadingModal) обрабатывает оба варианта (string и Date)
+    onLoadingClick(bar.period as unknown as Loading)
   }, [bar.period, onLoadingClick, wasRecentlyDragging])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
@@ -601,9 +602,15 @@ export function EmployeeRow({
 
   // Convert loadings to periods
   const allPeriods = useMemo(() => {
-    // Преобразуем loadings из departments-timeline типа (string dates) в planning тип (Date)
-    // loadingsToPeriods сам конвертирует через new Date(), поэтому просто приводим тип
-    return loadingsToPeriods(employee.loadings as any)
+    // Маппим departments-timeline Loading (string dates) → planning Loading (Date)
+    const planningLoadings: PlanningLoading[] = (employee.loadings ?? []).map((l) => ({
+      ...l,
+      startDate: new Date(l.startDate),
+      endDate: new Date(l.endDate),
+      createdAt: l.createdAt ? new Date(l.createdAt) : new Date(0),
+      updatedAt: l.updatedAt ? new Date(l.updatedAt) : new Date(0),
+    }))
+    return loadingsToPeriods(planningLoadings)
   }, [employee.loadings])
 
   // Calculate bar renders
