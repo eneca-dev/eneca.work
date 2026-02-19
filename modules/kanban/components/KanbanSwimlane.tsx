@@ -50,7 +50,8 @@ export function KanbanSwimlane({
   // Локальное состояние для отслеживания наведения на этот swimlane
   const [isOver, setIsOver] = useState(false)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
-  const [modalInitialTab, setModalInitialTab] = useState<'overview' | 'tasks' | 'readiness'>('overview')
+  // REPORTING DISABLED: 'readiness' tab removed from SectionModal
+  const [modalInitialTab, setModalInitialTab] = useState<'overview' | 'tasks'>('overview')
 
   // Для инвалидации кеша после успешного сохранения
   const queryClient = useQueryClient()
@@ -207,11 +208,12 @@ export function KanbanSwimlane({
 
         {/* Stats - Right side */}
         <div className="flex items-center gap-4 flex-shrink-0">
-          {/* Hours */}
+          {/* REPORTING DISABLED: Факт/План hours display */}
+          {/* Показываем только плановые часы */}
           <div className="text-right">
-            <div className="text-[10px] text-muted-foreground/70">Факт/План</div>
+            <div className="text-[10px] text-muted-foreground/70">План</div>
             <div className="text-sm font-medium text-foreground">
-              {section.totalActualHours}/{section.totalPlannedHours} ч
+              {section.totalPlannedHours} ч
             </div>
           </div>
 

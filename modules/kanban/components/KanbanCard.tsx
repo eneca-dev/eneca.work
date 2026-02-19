@@ -16,7 +16,8 @@ import { getColumnById } from '../constants'
 import { StageModal } from '@/modules/modals'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
 import { useKanbanFiltersStore } from '../stores'
-import { TaskItem, getCPIStatus, CompactCircularProgress } from './kanban'
+// REPORTING DISABLED: getCPIStatus import removed
+import { TaskItem, CompactCircularProgress } from './kanban'
 import { convertToDecompositionStage } from '../utils'
 
 interface KanbanCardProps {
@@ -165,43 +166,14 @@ export function KanbanCard({
 
           {/* Hours and Progress */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* CPI Indicator */}
-            {(() => {
-              const cpiStatus = getCPIStatus(stage.cpi)
-              const CPIIcon = cpiStatus.icon
-              return (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className={cn(
-                        'flex items-center justify-center w-6 h-6 rounded-full',
-                        cpiStatus.bgColor
-                      )}>
-                        <CPIIcon className={cn('w-3.5 h-3.5', cpiStatus.color)} />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <div className="text-xs space-y-1">
-                        <div className="font-semibold">{cpiStatus.label}</div>
-                        <div>{cpiStatus.description}</div>
-                        {stage.cpi !== null && (
-                          <div className="text-muted-foreground text-[10px] pt-1 border-t border-border/50">
-                            EV (заработано): {((stage.plannedHours * stage.progress) / 100).toFixed(1)} ч
-                          </div>
-                        )}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )
-            })()}
-
+            {/* REPORTING DISABLED: CPI Indicator and Факт/План display */}
+            {/* Показываем только плановые часы */}
             <div className="text-right">
               <div className="text-[10px] text-muted-foreground leading-tight">
-                Факт/План
+                План
               </div>
               <div className="text-xs font-medium text-foreground">
-                {stage.actualHours}/{stage.plannedHours} ч
+                {stage.plannedHours} ч
               </div>
             </div>
 

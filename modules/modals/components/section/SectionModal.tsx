@@ -13,7 +13,8 @@ import {
   Check,
   FileText,
   ListTodo,
-  Target,
+  // REPORTING DISABLED: Target icon (was used for "План" tab)
+  // Target,
   Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -24,11 +25,13 @@ import type { Section } from '@/modules/resource-graph/types'
 import { getInitials } from '@/modules/resource-graph/utils'
 import type { BaseModalProps } from '../../types'
 import { useUpdateSection } from '../../hooks/useUpdateSection'
-import { SectionMetrics } from './SectionMetrics'
+// REPORTING DISABLED: SectionMetrics (План/Факт/Бюджет)
+// import { SectionMetrics } from './SectionMetrics'
 import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
 import { DateRangeInput } from './DateRangeInput'
-import { OverviewTab, TasksTab, ReadinessTab } from './tabs'
+// REPORTING DISABLED: ReadinessTab (вкладка "План")
+import { OverviewTab, TasksTab /* , ReadinessTab */ } from './tabs'
 import { DeleteSectionModal } from './DeleteSectionModal'
 
 // ============================================================================
@@ -60,7 +63,8 @@ type SectionFormData = z.infer<typeof sectionFormSchema>
 export interface SectionModalProps extends BaseModalProps {
   section: Section
   sectionId: string
-  initialTab?: 'overview' | 'tasks' | 'readiness'
+  // REPORTING DISABLED: 'readiness' tab removed
+  initialTab?: 'overview' | 'tasks'
 }
 
 // ============================================================================
@@ -150,7 +154,8 @@ export function SectionModal({
   const [editingName, setEditingName] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>(initialTab)
+  // REPORTING DISABLED: 'readiness' tab removed
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks'>(initialTab)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
   const originalDescription = useRef<string>('')
@@ -497,10 +502,10 @@ export function SectionModal({
               </div>
             </div>
 
-            {/* Metrics row - компактнее */}
-            <div className="mt-2.5 pt-2.5 border-t border-border/40">
+            {/* REPORTING DISABLED: Metrics row (План/Факт/Бюджет) */}
+            {/* <div className="mt-2.5 pt-2.5 border-t border-border/40">
               <SectionMetrics section={section} compact />
-            </div>
+            </div> */}
           </header>
 
           {/* Error message */}
@@ -516,7 +521,7 @@ export function SectionModal({
           {/* Content with Tabs */}
           <Tabs.Root
             value={activeTab}
-            onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks' | 'readiness')}
+            onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks')}
             className="flex-1 flex flex-col overflow-hidden"
           >
             {/* Tab List - компактный с amber акцентами */}
@@ -543,7 +548,8 @@ export function SectionModal({
                 <ListTodo className="w-3.5 h-3.5" />
                 Задачи
               </Tabs.Trigger>
-              <Tabs.Trigger
+              {/* REPORTING DISABLED: Вкладка "План" (readiness checkpoints) */}
+              {/* <Tabs.Trigger
                 value="readiness"
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-all',
@@ -553,7 +559,7 @@ export function SectionModal({
               >
                 <Target className="w-3.5 h-3.5" />
                 План
-              </Tabs.Trigger>
+              </Tabs.Trigger> */}
             </Tabs.List>
 
             {/* Tab Content */}
@@ -576,9 +582,10 @@ export function SectionModal({
                   <TasksTab sectionId={sectionId} />
                 </Tabs.Content>
 
-                <Tabs.Content value="readiness" className="flex-1 overflow-y-auto">
+                {/* REPORTING DISABLED: ReadinessTab */}
+                {/* <Tabs.Content value="readiness" className="flex-1 overflow-y-auto">
                   <ReadinessTab sectionId={sectionId} />
-                </Tabs.Content>
+                </Tabs.Content> */}
               </>
             )}
           </Tabs.Root>
