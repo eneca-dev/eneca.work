@@ -118,11 +118,10 @@ export function TaskItem({ task, section, stage }: TaskItemProps) {
 
         {/* Hours and Progress */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* REPORTING DISABLED: CPI Indicator, Факт/План hours display, WorkLog click */}
-          {/* Показываем только плановые часы */}
-          <span className="text-[11px] text-muted-foreground font-medium">
+          {/* REPORTING DISABLED: CPI Indicator, Факт/План hours display, плановые часы */}
+          {/* <span className="text-[11px] text-muted-foreground font-medium">
             {task.plannedHours} ч
-          </span>
+          </span> */}
 
           {/* Mini Circular Progress */}
           <CircularProgress

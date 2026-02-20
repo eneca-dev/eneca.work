@@ -684,7 +684,8 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <span>{totalStats.totalStages} эт.</span>
             <span>{totalStats.totalTasks} зад.</span>
-            <span>{totalStats.totalActualHours.toFixed(0)}/{totalStats.totalPlannedHours} ч</span>
+            {/* REPORTING DISABLED: hours plan/fact */}
+            {/* <span>{totalStats.totalActualHours.toFixed(0)}/{totalStats.totalPlannedHours} ч</span> */}
             <span>{totalStats.totalProgress}%</span>
           </div>
 

@@ -105,7 +105,8 @@ export function DecompositionTable({
               <th className="px-1.5 py-1 text-left font-medium text-muted-foreground">Описание</th>
               <th className="w-[110px] px-1.5 py-1 text-left font-medium text-muted-foreground">Тип</th>
               <th className="w-[55px] px-1.5 py-1 text-center font-medium text-muted-foreground">Сл.</th>
-              <th className="w-[70px] px-1.5 py-1 text-center font-medium text-muted-foreground">Часы</th>
+              {/* REPORTING DISABLED: Часы column header */}
+              {/* <th className="w-[70px] px-1.5 py-1 text-center font-medium text-muted-foreground">Часы</th> */}
               <th className="w-[80px] px-1.5 py-1 text-left font-medium text-muted-foreground">%</th>
               <th className="w-8 px-1 py-1" />
             </tr>

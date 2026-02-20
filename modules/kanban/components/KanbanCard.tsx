@@ -166,16 +166,15 @@ export function KanbanCard({
 
           {/* Hours and Progress */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* REPORTING DISABLED: CPI Indicator and Факт/План display */}
-            {/* Показываем только плановые часы */}
-            <div className="text-right">
+            {/* REPORTING DISABLED: CPI Indicator, Факт/План display, плановые часы */}
+            {/* <div className="text-right">
               <div className="text-[10px] text-muted-foreground leading-tight">
                 План
               </div>
               <div className="text-xs font-medium text-foreground">
                 {stage.plannedHours} ч
               </div>
-            </div>
+            </div> */}
 
             {/* Circular Progress */}
             <CompactCircularProgress progress={stage.progress} stage={stage} />

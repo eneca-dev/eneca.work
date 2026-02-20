@@ -23,23 +23,26 @@ export function CompactCircularProgress({
       return <p>Прогресс: {progress}%</p>
     }
 
-    const totalPlannedHours = stage.tasks.reduce((sum, t) => sum + t.plannedHours, 0)
-    const completedHours = stage.tasks.reduce(
-      (sum, t) => sum + (t.plannedHours * t.progress) / 100,
-      0
-    )
+    // REPORTING DISABLED: hours-based progress calculation tooltip
+    // const totalPlannedHours = stage.tasks.reduce((sum, t) => sum + t.plannedHours, 0)
+    // const completedHours = stage.tasks.reduce(
+    //   (sum, t) => sum + (t.plannedHours * t.progress) / 100,
+    //   0
+    // )
 
     return (
       <div className="text-xs space-y-1">
-        <div className="font-semibold">Расчёт прогресса этапа:</div>
-        <div>Выполнено: {completedHours.toFixed(1)} ч</div>
-        <div>Всего плановых: {totalPlannedHours} ч</div>
-        <div className="pt-1 border-t border-border/50">
+        <div className="font-semibold">Прогресс этапа:</div>
+        {/* REPORTING DISABLED: hours breakdown */}
+        {/* <div>Выполнено: {completedHours.toFixed(1)} ч</div> */}
+        {/* <div>Всего плановых: {totalPlannedHours} ч</div> */}
+        <div>
           Прогресс: {progress}%
         </div>
-        <div className="text-muted-foreground text-[10px] pt-1">
+        {/* REPORTING DISABLED: calculation explanation */}
+        {/* <div className="text-muted-foreground text-[10px] pt-1">
           Рассчитывается как сумма произведений плановых часов каждой задачи на её процент готовности
-        </div>
+        </div> */}
       </div>
     )
   }

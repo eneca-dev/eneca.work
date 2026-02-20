@@ -10,7 +10,8 @@ import {
   Edit3,
   Loader2,
   ListTodo,
-  Clock,
+  // REPORTING DISABLED: Clock icon (was used for "Часы" metric)
+  // Clock,
   CheckCircle2,
   Layers,
 } from 'lucide-react'
@@ -197,7 +198,8 @@ export function StageModal({
 
   // Metrics
   const totalTasks = stage.items.length
-  const totalHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
+  // REPORTING DISABLED: totalHours metric
+  // const totalHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
   const completedTasks = stage.items.filter((item) => (item.progress ?? 0) >= 100).length
   const avgProgress = totalTasks > 0
     ? Math.round(stage.items.reduce((sum, item) => sum + (item.progress ?? 0), 0) / totalTasks)
@@ -452,17 +454,18 @@ export function StageModal({
                 </div>
 
                 {/* Metrics Grid */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <MetricCard
                     icon={<ListTodo className="w-3 h-3" />}
                     label="Задачи"
                     value={`${completedTasks}/${totalTasks}`}
                   />
-                  <MetricCard
+                  {/* REPORTING DISABLED: Часы metric */}
+                  {/* <MetricCard
                     icon={<Clock className="w-3 h-3" />}
                     label="Часы"
                     value={`${totalHours}ч`}
-                  />
+                  /> */}
                   <MetricCard
                     icon={<CheckCircle2 className="w-3 h-3" />}
                     label="Готовность"
@@ -557,7 +560,8 @@ function TaskRow({ item }: { item: DecompositionItem }) {
               {item.difficulty.abbr}
             </span>
           )}
-          {item.plannedHours > 0 && <span>{item.plannedHours}ч</span>}
+          {/* REPORTING DISABLED: плановые часы в задаче */}
+          {/* {item.plannedHours > 0 && <span>{item.plannedHours}ч</span>} */}
         </div>
       </div>
 

@@ -208,14 +208,13 @@ export function KanbanSwimlane({
 
         {/* Stats - Right side */}
         <div className="flex items-center gap-4 flex-shrink-0">
-          {/* REPORTING DISABLED: Факт/План hours display */}
-          {/* Показываем только плановые часы */}
-          <div className="text-right">
+          {/* REPORTING DISABLED: Факт/План hours display, плановые часы */}
+          {/* <div className="text-right">
             <div className="text-[10px] text-muted-foreground/70">План</div>
             <div className="text-sm font-medium text-foreground">
               {section.totalPlannedHours} ч
             </div>
-          </div>
+          </div> */}
 
           {/* Circular Progress */}
           <CircularProgress progress={section.overallProgress} variant="swimlane" />
