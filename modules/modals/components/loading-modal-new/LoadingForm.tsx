@@ -37,9 +37,9 @@ export interface LoadingFormProps {
   selectedBreadcrumbs?: BreadcrumbItem[] | null
   /** Класс для кастомизации */
   className?: string
-  /** Режим модалки (для отображения кнопки смены этапа в режиме edit) */
+  /** Режим модалки */
   mode?: 'create' | 'edit'
-  /** Callback для смены этапа (только в режиме edit) */
+  /** Callback для смены раздела */
   onChangeStage?: () => void
   /** Флаг optimistic update (показывает индикатор загрузки в селекторе сотрудника) */
   isUpdating?: boolean
@@ -98,7 +98,7 @@ export function LoadingForm({
                   })}
               </div>
             </div>
-            {mode === 'edit' && onChangeStage && (
+            {onChangeStage && (
               <Button
                 type="button"
                 variant="outline"

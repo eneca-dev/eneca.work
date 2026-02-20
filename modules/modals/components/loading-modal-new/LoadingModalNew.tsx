@@ -201,11 +201,12 @@ export function LoadingModalNew({
   }, [mode, open, hasAutoSelected, effectiveBreadcrumbs, editData, createData, selectSection, setFormField])
 
   // Сброс состояния формы при изменении выбранного раздела (только в режиме создания без предзаполнения)
+  // Не сбрасываем если идёт смена раздела через "Сменить раздел" — форма должна остаться видимой
   useEffect(() => {
-    if (mode === 'create' && !createData?.sectionId) {
+    if (mode === 'create' && !createData?.sectionId && !isChangingStage) {
       setIsFormVisible(false)
     }
-  }, [selectedSectionId, mode, createData?.sectionId])
+  }, [selectedSectionId, mode, createData?.sectionId, isChangingStage])
 
   // Данные для автопереключения режима и фильтрации
   const projectAutoSwitchData = useMemo(() => {
@@ -357,6 +358,10 @@ export function LoadingModalNew({
     !isSaving &&
     hasChanges // Кнопка неактивна если нет изменений
 
+  // Дерево заблокировано когда форма активна, разблокируется через "Сменить раздел"
+  const isFormActive = mode === 'edit' || (mode === 'create' && isFormVisible)
+  const isProjectTreeDisabled = isFormActive && !isChangingStage
+
   return (
     <>
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -381,7 +386,7 @@ export function LoadingModalNew({
               initialProjectId={currentProjectId}
               initialBreadcrumbs={currentBreadcrumbs}
               autoSwitchProject={projectAutoSwitchData}
-              disabled={mode === 'edit' && !isChangingStage}
+              disabled={isProjectTreeDisabled}
               modalMode={mode}
               onClose={onClose}
             />

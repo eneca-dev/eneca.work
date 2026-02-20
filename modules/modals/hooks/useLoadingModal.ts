@@ -84,7 +84,7 @@ export interface UseLoadingModalResult {
   /** Проверка изменений в режиме редактирования */
   hasChanges: boolean
 
-  // Режим смены этапа (только для edit)
+  // Режим смены раздела (edit и create)
   /** Включен ли режим смены этапа */
   isChangingStage: boolean
   /** Начать смену этапа */
@@ -304,14 +304,12 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
 
   // Начать смену этапа
   const startChangingStage = useCallback(() => {
-    if (mode !== 'edit') return
-
     setIsChangingStage(true)
     // Сохраняем текущие значения на случай отмены
     setOriginalSectionId(selectedSectionId)
     setOriginalSectionName(selectedSectionName)
     setOriginalBreadcrumbs(selectedBreadcrumbs)
-  }, [mode, selectedSectionId, selectedSectionName, selectedBreadcrumbs])
+  }, [selectedSectionId, selectedSectionName, selectedBreadcrumbs])
 
   // Отменить смену этапа
   const cancelChangingStage = useCallback(() => {
