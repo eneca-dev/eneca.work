@@ -142,8 +142,9 @@ export default function LoginPage() {
 
           span.setAttribute("auth.success", true)
 
-          router.refresh()
-          router.push(redirectUrl)
+          // router.refresh() УДАЛЁН — он бесполезно перерендерил страницу логина,
+          // задерживая навигацию на 100-300ms (router обрабатывает refresh перед push)
+          router.replace(redirectUrl)
 
         } catch (err) {
           span.setAttribute("auth.success", false)

@@ -10,7 +10,8 @@ import {
   X,
   Edit3,
   Loader2,
-  Clock,
+  // REPORTING DISABLED: Clock icon (was used for "Плановые часы" block)
+  // Clock,
   Target,
   User,
   Tag,
@@ -123,17 +124,19 @@ export function TaskSidebar({
   // ─────────────────────────────────────────────────────────────────────────
 
   const [editingDescription, setEditingDescription] = useState(false)
-  const [editingHours, setEditingHours] = useState(false)
+  // REPORTING DISABLED: editing hours state
+  // const [editingHours, setEditingHours] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const descriptionInputRef = useRef<HTMLInputElement>(null)
-  const hoursInputRef = useRef<HTMLInputElement>(null)
+  // REPORTING DISABLED: hours input ref
+  // const hoursInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isOpen) {
       setEditingDescription(false)
-      setEditingHours(false)
+      // REPORTING DISABLED: setEditingHours(false)
       setSaveError(null)
     }
   }, [isOpen])
@@ -146,12 +149,13 @@ export function TaskSidebar({
     }
   }, [editingDescription])
 
-  useEffect(() => {
-    if (editingHours && hoursInputRef.current) {
-      hoursInputRef.current.focus()
-      hoursInputRef.current.select()
-    }
-  }, [editingHours])
+  // REPORTING DISABLED: focus hours input
+  // useEffect(() => {
+  //   if (editingHours && hoursInputRef.current) {
+  //     hoursInputRef.current.focus()
+  //     hoursInputRef.current.select()
+  //   }
+  // }, [editingHours])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Save handlers
@@ -200,13 +204,14 @@ export function TaskSidebar({
     }
   }, [form, saveField])
 
-  const handleHoursSave = useCallback(async () => {
-    const hours = form.getValues('plannedHours')
-    if (hours >= 0) {
-      const success = await saveField('plannedHours', hours)
-      if (success) setEditingHours(false)
-    }
-  }, [form, saveField])
+  // REPORTING DISABLED: handleHoursSave
+  // const handleHoursSave = useCallback(async () => {
+  //   const hours = form.getValues('plannedHours')
+  //   if (hours >= 0) {
+  //     const success = await saveField('plannedHours', hours)
+  //     if (success) setEditingHours(false)
+  //   }
+  // }, [form, saveField])
 
   const handleProgressChange = useCallback(
     async (value: number[]) => {
@@ -229,9 +234,10 @@ export function TaskSidebar({
         if (editingDescription) {
           setEditingDescription(false)
           setValue('description', task.description)
-        } else if (editingHours) {
-          setEditingHours(false)
-          setValue('plannedHours', task.plannedHours)
+        // REPORTING DISABLED: editingHours escape handler
+        // } else if (editingHours) {
+        //   setEditingHours(false)
+        //   setValue('plannedHours', task.plannedHours)
         } else {
           onClose()
         }
@@ -240,7 +246,7 @@ export function TaskSidebar({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, editingDescription, editingHours, onClose, setValue, task.description, task.plannedHours])
+  }, [isOpen, editingDescription, onClose, setValue, task.description])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -418,8 +424,8 @@ export function TaskSidebar({
                 </Slider.Root>
               </div>
 
-              {/* Planned Hours */}
-              <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
+              {/* REPORTING DISABLED: Planned Hours block */}
+              {/* <div className="bg-muted/50 border border-border/50 rounded-lg p-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
                     <Clock className="w-3 h-3" />
@@ -466,7 +472,7 @@ export function TaskSidebar({
                     </button>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* Responsible */}
               {task.responsible.id && (

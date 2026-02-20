@@ -170,7 +170,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (session?.user) {
           if (currentUserId.current !== session.user.id) {
             currentUserId.current = session.user.id
-            await loadUserProfile(session.user)
+
+            // Если данные пользователя уже в store (восстановлены из localStorage) —
+            // не блокируем инициализацию, обновим профиль в фоне
+            const cachedUser = useUserStore.getState()
+            if (cachedUser.id === session.user.id && cachedUser.isAuthenticated) {
+              loadUserProfile(session.user) // фоновое обновление
+            } else {
+              await loadUserProfile(session.user)
+            }
           }
         }
         setIsInitialized(true)
@@ -181,7 +189,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Пользователь вошёл
         if (session?.user && currentUserId.current !== session.user.id) {
           currentUserId.current = session.user.id
-          await loadUserProfile(session.user)
+
+          const cachedUser = useUserStore.getState()
+          if (cachedUser.id === session.user.id && cachedUser.isAuthenticated) {
+            loadUserProfile(session.user) // фоновое обновление
+          } else {
+            await loadUserProfile(session.user)
+          }
         }
         setIsLoading(false)
         break

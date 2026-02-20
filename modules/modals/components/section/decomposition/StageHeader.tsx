@@ -5,7 +5,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
-import { ChevronDown, ChevronRight, GripVertical, Trash2, Plus, Clock } from 'lucide-react'
+// REPORTING DISABLED: Clock icon (was used for hours metric)
+import { ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import {
@@ -35,8 +36,9 @@ interface StageHeaderProps {
   onDelete: () => void
   onOpenResponsiblesDialog: () => void
   onRemoveResponsible: (userId: string) => void
-  plannedHours: number
-  actualHours: number
+  // REPORTING DISABLED: plannedHours and actualHours props
+  plannedHours?: number
+  actualHours?: number
   progress: number
   tasksCount: number
   dragHandleProps?: {
@@ -79,8 +81,9 @@ export function StageHeader({
   onDelete,
   onOpenResponsiblesDialog,
   onRemoveResponsible,
-  plannedHours,
-  actualHours,
+  // REPORTING DISABLED: plannedHours and actualHours not displayed
+  // plannedHours,
+  // actualHours,
   progress,
   tasksCount,
   dragHandleProps,
@@ -311,8 +314,8 @@ export function StageHeader({
           {/* Tasks */}
           <span className="w-4 text-center">{tasksCount}</span>
 
-          {/* Hours: actual/planned */}
-          <Tooltip delayDuration={200}>
+          {/* REPORTING DISABLED: Hours actual/planned */}
+          {/* <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-0.5 w-[50px] justify-end">
                 <Clock className="h-3 w-3" />
@@ -324,7 +327,7 @@ export function StageHeader({
             <TooltipContent side="top" className="text-[10px]">
               Факт / План часов
             </TooltipContent>
-          </Tooltip>
+          </Tooltip> */}
 
           {/* Progress */}
           <Tooltip delayDuration={200}>

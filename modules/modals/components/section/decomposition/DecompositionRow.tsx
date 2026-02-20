@@ -29,7 +29,8 @@ interface DecompositionRowProps {
   decomposition: Decomposition
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
-  actualHours: number
+  // REPORTING DISABLED: actualHours prop
+  actualHours?: number
   onUpdate: (updates: Partial<Decomposition>) => void
   onDelete: () => void
 }
@@ -42,19 +43,22 @@ export function DecompositionRow({
   decomposition,
   workCategories,
   difficultyLevels,
-  actualHours,
+  // REPORTING DISABLED: actualHours not displayed
+  // actualHours,
   onUpdate,
   onDelete,
 }: DecompositionRowProps) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [localDescription, setLocalDescription] = useState(decomposition.description)
-  const [localPlannedHours, setLocalPlannedHours] = useState(String(decomposition.plannedHours))
+  // REPORTING DISABLED: localPlannedHours state
+  // const [localPlannedHours, setLocalPlannedHours] = useState(String(decomposition.plannedHours))
   const [localProgress, setLocalProgress] = useState(String(decomposition.progress))
 
   // Sync local state with props when decomposition changes
   useEffect(() => {
     setLocalDescription(decomposition.description)
-    setLocalPlannedHours(String(decomposition.plannedHours))
+    // REPORTING DISABLED: setLocalPlannedHours
+    // setLocalPlannedHours(String(decomposition.plannedHours))
     setLocalProgress(String(decomposition.progress))
   }, [decomposition.description, decomposition.plannedHours, decomposition.progress])
 
@@ -87,14 +91,14 @@ export function DecompositionRow({
     }
   }, [localDescription, decomposition.description, onUpdate, onDelete])
 
-  // Handle planned hours blur
-  const handlePlannedHoursBlur = useCallback(() => {
-    setEditingField(null)
-    const hours = parseFloat(localPlannedHours) || 0
-    if (hours !== decomposition.plannedHours) {
-      onUpdate({ plannedHours: hours })
-    }
-  }, [localPlannedHours, decomposition.plannedHours, onUpdate])
+  // REPORTING DISABLED: Handle planned hours blur
+  // const handlePlannedHoursBlur = useCallback(() => {
+  //   setEditingField(null)
+  //   const hours = parseFloat(localPlannedHours) || 0
+  //   if (hours !== decomposition.plannedHours) {
+  //     onUpdate({ plannedHours: hours })
+  //   }
+  // }, [localPlannedHours, decomposition.plannedHours, onUpdate])
 
   // Handle progress blur
   const handleProgressBlur = useCallback(() => {
@@ -223,8 +227,8 @@ export function DecompositionRow({
         </Select>
       </td>
 
-      {/* Hours: Actual/Planned combined */}
-      <td className="w-[70px] px-1.5 py-1">
+      {/* REPORTING DISABLED: Hours (Факт/План) column */}
+      {/* <td className="w-[70px] px-1.5 py-1">
         <TooltipProvider>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
@@ -269,7 +273,7 @@ export function DecompositionRow({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      </td>
+      </td> */}
 
       {/* Progress */}
       <td className="w-[80px] px-1.5 py-1">

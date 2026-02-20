@@ -454,12 +454,11 @@ export function EmployeeRow({
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
 
-    // Открываем модалку создания загрузки с предзаполненными сотрудником и разделом
+    // Открываем модалку создания загрузки с предзаполненным сотрудником
     openLoadingModalNewCreate({
       employeeId: employee.employeeId,
-      sectionId: sectionId,
     })
-  }, [employee.employeeId, sectionId])
+  }, [employee.employeeId])
 
   // Convert dayCells to TimelineUnits for loading bar utils
   const timeUnits = useMemo(() => dayCellsToTimelineUnits(dayCells), [dayCells])
