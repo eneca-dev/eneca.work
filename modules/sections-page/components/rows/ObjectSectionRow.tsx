@@ -101,13 +101,39 @@ export function ObjectSectionRow({
           className="flex transition-colors"
           style={{ height: OBJECT_SECTION_ROW_HEIGHT }}
         >
-          {/* Sidebar */}
+          {/* Sidebar wrapper - sticky, provides positioning context for the tab button */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20 cursor-pointer hover:bg-accent transition-colors"
-            style={{ width: SIDEBAR_WIDTH }}
-            onClick={toggle}
+            className="shrink-0 sticky left-0 z-20 relative"
+            style={{ width: SIDEBAR_WIDTH, height: OBJECT_SECTION_ROW_HEIGHT }}
           >
-            {/* Create loading tab - positioned at right edge of sidebar, extends outside */}
+            {/* Clickable area - hover highlight only here, NOT on the tab button */}
+            <div
+              className="h-full flex items-center justify-between px-3 border-r border-border bg-card cursor-pointer hover:bg-accent transition-colors"
+              onClick={toggle}
+            >
+              <div className="flex items-center gap-2 min-w-0 pl-[40px]">
+                <div className="flex-shrink-0">
+                  {isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-primary" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-primary" />
+                  )}
+                </div>
+                <Box className="h-3.5 w-3.5 text-cyan-600 flex-shrink-0" />
+                <span className="text-xs font-medium truncate">
+                  {objectSection.name}
+                </span>
+              </div>
+
+              {/* Actions + metrics */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                  {employeesWithLoadings.length} чел
+                </span>
+              </div>
+            </div>
+
+            {/* Create loading tab - sibling to clickable area, so hover doesn't highlight the row */}
             <button
               type="button"
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
@@ -117,27 +143,6 @@ export function ObjectSectionRow({
               <UserPlus className="w-3 h-3" />
               <span>Загрузка</span>
             </button>
-
-            <div className="flex items-center gap-2 min-w-0 pl-[40px]">
-              <div className="flex-shrink-0">
-                {isExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-primary" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-primary" />
-                )}
-              </div>
-              <Box className="h-3.5 w-3.5 text-cyan-600 flex-shrink-0" />
-              <span className="text-xs font-medium truncate">
-                {objectSection.name}
-              </span>
-            </div>
-
-            {/* Actions + metrics */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                {employeesWithLoadings.length} чел
-              </span>
-            </div>
           </div>
 
           {/* Timeline cells + aggregation (editable capacity) */}
