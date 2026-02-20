@@ -34,6 +34,7 @@ export interface TaskTab {
   isSystem: boolean // true = нельзя удалить/редактировать
   order: number
   createdAt: string
+  loadAllEnabled?: boolean
 }
 
 // Helper: получить иконку для viewMode
@@ -108,6 +109,7 @@ interface TasksTabsState {
   // Shortcuts for active tab
   updateActiveTabFilters: (filterString: string) => void
   updateActiveTabViewMode: (viewMode: TasksViewMode) => void
+  setActiveTabLoadAll: (value: boolean) => void
 
   // Helpers
   getSystemTabs: () => TaskTab[]
@@ -248,6 +250,15 @@ export const useTasksTabsStore = create<TasksTabsState>()(
           set({
             tabs: tabs.map((t) =>
               t.id === activeTabId ? { ...t, viewMode } : t
+            ),
+          })
+        },
+
+        setActiveTabLoadAll: (value) => {
+          const { tabs, activeTabId } = get()
+          set({
+            tabs: tabs.map((t) =>
+              t.id === activeTabId ? { ...t, loadAllEnabled: value } : t
             ),
           })
         },

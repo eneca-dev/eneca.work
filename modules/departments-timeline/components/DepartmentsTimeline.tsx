@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useState, useEffect } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
@@ -41,6 +41,10 @@ function calculateTimelineRange(): TimelineRange {
 interface DepartmentsTimelineInternalProps {
   /** Parsed query params from parent */
   queryParams: FilterQueryParams
+  /** Whether "load all" is enabled (persisted in tabs store) */
+  loadAllEnabled: boolean
+  /** Called when user clicks "Загрузить всё" */
+  onLoadAll: () => void
 }
 
 /**
@@ -48,22 +52,14 @@ interface DepartmentsTimelineInternalProps {
  *
  * Используется в TasksView для встраивания в общую страницу с табами
  */
-export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimelineInternalProps) {
-  // State: загрузить все данные без фильтров
-  const [loadAll, setLoadAll] = useState(false)
-
+export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoadAll }: DepartmentsTimelineInternalProps) {
   // Проверяем, применены ли фильтры
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
 
   // Определяем, нужно ли загружать данные
-  const shouldFetchData = filtersApplied || loadAll
-
-  // Handle "Load All" button click
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
+  const shouldFetchData = filtersApplied || loadAllEnabled
 
   // Refs for scroll synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null)
@@ -182,7 +178,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
             подразделение:"ОВ" отдел:"Название"
           </p>
           <button
-            onClick={handleLoadAll}
+            onClick={onLoadAll}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Database size={16} />

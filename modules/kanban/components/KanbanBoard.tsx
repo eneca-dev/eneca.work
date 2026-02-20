@@ -20,6 +20,10 @@ interface KanbanBoardInternalProps {
   queryParams: FilterQueryParams
   /** Filter config from parent */
   filterConfig: FilterConfig
+  /** Whether "load all" is enabled (persisted in tabs store) */
+  loadAllEnabled: boolean
+  /** Called when user clicks "Загрузить всё" */
+  onLoadAll: () => void
 }
 
 /**
@@ -27,17 +31,14 @@ interface KanbanBoardInternalProps {
  *
  * Используется в TasksView для встраивания в общую страницу с табами
  */
-export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardInternalProps) {
-  // State: загрузить все данные без фильтров
-  const [loadAll, setLoadAll] = useState(false)
-
+export function KanbanBoardInternal({ filterString, queryParams, loadAllEnabled, onLoadAll }: KanbanBoardInternalProps) {
   // Проверяем, применены ли фильтры
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
 
   // Определяем, нужно ли загружать данные
-  const shouldFetchData = filtersApplied || loadAll
+  const shouldFetchData = filtersApplied || loadAllEnabled
 
   // Infinite query для загрузки данных с пагинацией
   const {
@@ -60,11 +61,6 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
   const { mutate: updateStatus } = useUpdateStageStatusOptimistic(
     filtersApplied ? queryParams : undefined
   )
-
-  // Handle "Load All" button click
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
 
   // UI state из Zustand store (сохраняется между переключениями вкладок)
   const { collapsedSections, showEmptySwimlanes, toggleSectionCollapse } = useKanbanUIStore()
@@ -100,7 +96,7 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
             подразделение:"ОВ" проект:"Название"
           </p>
           <button
-            onClick={handleLoadAll}
+            onClick={onLoadAll}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Database size={16} />
