@@ -354,7 +354,7 @@ export async function getSectionsHierarchy(
             endDate: row.section_end_date,
             defaultCapacity: row.default_capacity != null ? parseFloat(String(row.default_capacity)) : null,
             capacityOverrides: {},
-            dailyWorkloads: {},
+dailyWorkloads: {},
             loadings: [],
             totalLoadings: 0,
           }

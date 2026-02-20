@@ -56,11 +56,11 @@ export function ProjectRow({
       <div className="group/row min-w-full relative border-b border-border/50">
         <div
           className="flex transition-colors"
-          style={{ height: PROJECT_ROW_HEIGHT }}
+          style={{ minHeight: PROJECT_ROW_HEIGHT }}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between pl-8 pr-3 border-r border-border bg-muted sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
+            className="shrink-0 flex items-center justify-between pl-8 pr-3 py-2 border-r border-border bg-muted sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
             onClick={handleToggle}
           >
@@ -75,11 +75,11 @@ export function ProjectRow({
               </div>
               <FolderKanban className="h-4 w-4 text-amber-600 flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-sm truncate">
+                <div className="font-medium text-sm">
                   {project.name}
                 </div>
                 {project.managerName && (
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div className="text-xs text-muted-foreground">
                     РП: {project.managerName}
                   </div>
                 )}
@@ -111,8 +111,8 @@ export function ProjectRow({
             {dayCells.map((cell, i) => (
               <div
                 key={`${project.id}-${cell.dateKey}-${i}`}
-                className={getCellClassNames(cell)}
-                style={{ width: DAY_CELL_WIDTH, height: PROJECT_ROW_HEIGHT }}
+                className={`${getCellClassNames(cell)} self-stretch`}
+                style={{ width: DAY_CELL_WIDTH }}
               />
             ))}
           </div>

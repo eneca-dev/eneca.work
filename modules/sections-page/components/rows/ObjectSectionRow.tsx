@@ -101,16 +101,16 @@ export function ObjectSectionRow({
       <div className="group/row min-w-full relative border-b border-border/50">
         <div
           className="flex transition-colors"
-          style={{ height: OBJECT_SECTION_ROW_HEIGHT }}
+          style={{ minHeight: OBJECT_SECTION_ROW_HEIGHT }}
         >
           {/* Sidebar wrapper - sticky, provides positioning context for the tab button */}
           <div
             className="shrink-0 sticky left-0 z-20 relative"
-            style={{ width: SIDEBAR_WIDTH, height: OBJECT_SECTION_ROW_HEIGHT }}
+            style={{ width: SIDEBAR_WIDTH, minHeight: OBJECT_SECTION_ROW_HEIGHT }}
           >
             {/* Clickable area - hover highlight only here, NOT on the tab button */}
             <div
-              className="h-full flex items-center justify-between px-3 border-r border-border bg-card cursor-pointer hover:bg-accent transition-colors"
+              className="flex items-center justify-between px-3 py-2 h-full border-r border-border bg-card cursor-pointer hover:bg-accent transition-colors"
               onClick={toggle}
             >
               <div className="flex items-center gap-2 min-w-0 pl-[40px]">
@@ -122,7 +122,7 @@ export function ObjectSectionRow({
                   )}
                 </div>
                 <Box className="h-3.5 w-3.5 text-cyan-600 flex-shrink-0" />
-                <span className="text-xs font-medium truncate">
+                <span className="text-xs font-medium">
                   {objectSection.name}
                 </span>
               </div>
@@ -130,7 +130,7 @@ export function ObjectSectionRow({
               {/* Actions + metrics */}
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                  {employeesWithLoadings.length} чел
+                  {employeesWithLoadings.length} сотр
                 </span>
               </div>
             </div>
@@ -161,8 +161,8 @@ export function ObjectSectionRow({
             {dayCells.map((cell, i) => (
               <div
                 key={i}
-                className={getCellClassNames(cell)}
-                style={{ width: DAY_CELL_WIDTH, height: OBJECT_SECTION_ROW_HEIGHT }}
+                className={`${getCellClassNames(cell)} self-stretch`}
+                style={{ width: DAY_CELL_WIDTH }}
               />
             ))}
           </div>
