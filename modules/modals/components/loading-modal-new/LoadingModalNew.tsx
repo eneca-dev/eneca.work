@@ -355,7 +355,8 @@ export function LoadingModalNew({
     !!formData.startDate.trim() &&
     !!formData.endDate.trim() &&
     !isSaving &&
-    hasChanges // Кнопка неактивна если нет изменений
+    hasChanges && // Кнопка неактивна если нет изменений
+    (mode !== 'create' || isFormVisible) // Неактивна пока показывается кнопка "Создать загрузку"
 
   return (
     <>

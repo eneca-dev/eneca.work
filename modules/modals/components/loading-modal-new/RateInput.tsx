@@ -92,11 +92,7 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
             size="sm"
             disabled={disabled}
             onClick={() => handleQuickSelect(rate)}
-            className={cn(
-              'flex-1',
-              isQuickRateSelected(rate) &&
-                'bg-teal-500 text-white hover:bg-teal-600 dark:bg-teal-600 dark:hover:bg-teal-700'
-            )}
+            className="flex-1"
           >
             {rate}
           </Button>
