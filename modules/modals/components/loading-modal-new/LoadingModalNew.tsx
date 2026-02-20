@@ -260,6 +260,7 @@ export function LoadingModalNew({
       // Создание новой загрузки
       await createLoading.mutateAsync({
         stageId,
+        sectionId: selectedSectionId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
