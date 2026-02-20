@@ -41,6 +41,9 @@ export function TeamRow({
     }, 0)
   }, [team.employees])
 
+  const formatWorkload = (value: number) =>
+    parseFloat(value.toFixed(2)).toString()
+
   // Sort employees: team lead first, then alphabetically
   const sortedEmployees = useMemo(() => {
     const employees = [...team.employees]
@@ -92,8 +95,16 @@ export function TeamRow({
               </div>
             </div>
 
-            {/* Right: freshness indicator */}
+            {/* Right: capacity + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              {totalTeamCapacity > 0 && (
+                <span
+                  className="text-xs font-medium text-muted-foreground tabular-nums"
+                  title="Сумма ставок сотрудников команды"
+                >
+                  {formatWorkload(totalTeamCapacity)}
+                </span>
+              )}
               <FreshnessIndicator
                 teamId={team.id}
                 teamName={team.name}
@@ -145,7 +156,7 @@ export function TeamRow({
                     >
                       <div
                         className={cn(
-                          'w-full rounded-sm border',
+                          'w-full rounded-sm border relative overflow-hidden',
                           loadPercentage > 100
                             ? 'border-red-500'
                             : loadPercentage >= 90
@@ -168,6 +179,20 @@ export function TeamRow({
                             opacity: 0.6,
                           }}
                         />
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                          <span
+                            className={cn(
+                              'text-[8px] font-semibold leading-none',
+                              loadPercentage > 100
+                                ? 'text-red-700 dark:text-red-300'
+                                : loadPercentage >= 90
+                                  ? 'text-primary'
+                                  : 'text-amber-700 dark:text-amber-400'
+                            )}
+                          >
+                            {formatWorkload(teamWorkload)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
