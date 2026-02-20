@@ -152,7 +152,8 @@ function LoadingBarWithResize({
       {/* Main bar */}
       <div
         className={cn(
-          'absolute transition-all duration-200 pointer-events-auto flex items-center',
+          'absolute pointer-events-auto flex items-center',
+          !isResizing && 'transition-all duration-200',
           bar.period.type === 'loading' && 'cursor-pointer hover:brightness-110',
           isResizing && 'ring-2 ring-primary/50 z-50'
         )}
@@ -281,45 +282,40 @@ function LoadingBarWithResize({
         </div>
 
         {/* Non-working days overlay */}
-        {(() => {
-          const nonWorkingSegments = splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits)
-          const HORIZONTAL_GAP = 6
+        {splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits).map((segment, segmentIdx) => {
+          const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
+          // Позиция относительно текущего displayLeft, чтобы штриховка не съезжала во время resize
+          const overlayLeft = segmentStartLeft - displayLeft
 
-          return nonWorkingSegments.map((segment, segmentIdx) => {
-            const barStartLeft = timeUnits[bar.startIdx]?.left ?? 0
-            const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
-            const overlayLeft = segmentStartLeft - barStartLeft - HORIZONTAL_GAP / 2
+          let overlayWidth = 0
+          for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+            overlayWidth += timeUnits[idx]?.width ?? DAY_CELL_WIDTH
+          }
+          overlayWidth -= 3
 
-            let overlayWidth = 0
-            for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
-              overlayWidth += timeUnits[idx]?.width ?? DAY_CELL_WIDTH
-            }
-            overlayWidth -= 3
-
-            return (
-              <div
-                key={`non-working-${segmentIdx}`}
-                className="absolute pointer-events-none"
-                style={{
-                  left: overlayLeft,
-                  width: overlayWidth,
-                  top: -3,
-                  bottom: -3,
-                  backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
-                  borderTop: `3px dashed ${bar.color}`,
-                  borderBottom: `3px dashed ${bar.color}`,
-                  zIndex: 1,
-                }}
-              />
-            )
-          })
-        })()}
+          return (
+            <div
+              key={`non-working-${segmentIdx}`}
+              className="absolute pointer-events-none"
+              style={{
+                left: overlayLeft,
+                width: overlayWidth,
+                top: -3,
+                bottom: -3,
+                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
+                borderTop: `3px dashed ${bar.color}`,
+                borderBottom: `3px dashed ${bar.color}`,
+                zIndex: 1,
+              }}
+            />
+          )
+        })}
       </div>
 
       {/* Comment below bar */}
       {bar.period.type === 'loading' && bar.period.comment && (
         <div
-          className="absolute pointer-events-none transition-all duration-200"
+          className={cn('absolute pointer-events-none', !isResizing && 'transition-all duration-200')}
           style={{
             top: top + BASE_BAR_HEIGHT,
             left: displayLeft,

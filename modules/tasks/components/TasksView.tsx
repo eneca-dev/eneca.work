@@ -34,6 +34,7 @@ export function TasksView() {
   const tabs = useTasksTabsStore((s) => s.tabs)
   const activeTabId = useTasksTabsStore((s) => s.activeTabId)
   const updateActiveTabFilters = useTasksTabsStore((s) => s.updateActiveTabFilters)
+  const setActiveTabLoadAll = useTasksTabsStore((s) => s.setActiveTabLoadAll)
 
   // Find active tab from tabs array
   const activeTab = useMemo(
@@ -44,6 +45,7 @@ export function TasksView() {
   // Current filter and view mode from active tab
   const filterString = activeTab?.filterString ?? ''
   const viewMode = activeTab?.viewMode ?? 'kanban'
+  const loadAllEnabled = activeTab?.loadAllEnabled ?? false
 
   // Filter options for autocomplete + locked filters
   const { options: filterOptions, lockedFilters } = useTasksFilterOptions()
@@ -129,6 +131,8 @@ export function TasksView() {
             filterString={filterString}
             queryParams={queryParams}
             filterConfig={TASKS_FILTER_CONFIG}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
         {tabs.length > 0 && viewMode === 'timeline' && (
@@ -141,11 +145,15 @@ export function TasksView() {
         {tabs.length > 0 && viewMode === 'departments' && (
           <DepartmentsTimelineInternal
             queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
         {tabs.length > 0 && viewMode === 'sections' && (
           <SectionsPageInternal
             queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
         {tabs.length > 0 && viewMode === 'budgets' && (

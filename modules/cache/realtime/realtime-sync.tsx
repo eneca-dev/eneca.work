@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
+import * as Sentry from '@sentry/nextjs'
+import { toast } from 'sonner'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import {
   realtimeSubscriptions,
@@ -155,6 +157,13 @@ export function RealtimeSync() {
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.warn('[RealtimeSync] Channel error/timeout, attempting reconnect...')
 
+          Sentry.addBreadcrumb({
+            message: `Realtime ${status}`,
+            category: 'realtime',
+            level: 'warning',
+            data: { status, error: err?.message, attempt: reconnectAttempts + 1, maxAttempts: MAX_RECONNECT_ATTEMPTS },
+          })
+
           // Удаляем старый канал
           if (channelRef.current) {
             supabase.removeChannel(channelRef.current)
@@ -168,15 +177,36 @@ export function RealtimeSync() {
             setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS * reconnectAttempts)
           } else {
             console.error('[RealtimeSync] Max reconnect attempts reached')
+            Sentry.captureMessage('Realtime connection failed after max retries', {
+              level: 'error',
+              tags: { module: 'realtime', error_type: 'connection_failure', user_facing: 'true' },
+              extra: { channel: REALTIME_CHANNEL_NAME, maxAttempts: MAX_RECONNECT_ATTEMPTS, lastStatus: status, lastError: err?.message },
+            })
+            toast.warning('Обновление данных в реальном времени временно недоступно. Перезагрузите страницу.', { duration: 10000 })
           }
         } else if (status === 'CLOSED') {
           // Канал закрыт - пробуем переподключиться
           if (channelRef.current) {
             channelRef.current = null
+
+            Sentry.addBreadcrumb({
+              message: 'Realtime CLOSED',
+              category: 'realtime',
+              level: 'warning',
+              data: { attempt: reconnectAttempts + 1, maxAttempts: MAX_RECONNECT_ATTEMPTS },
+            })
+
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
               reconnectAttempts++
               console.log(`[RealtimeSync] Channel closed, reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
               setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS)
+            } else {
+              Sentry.captureMessage('Realtime channel closed, max retries exhausted', {
+                level: 'error',
+                tags: { module: 'realtime', error_type: 'connection_failure', user_facing: 'true' },
+                extra: { channel: REALTIME_CHANNEL_NAME, maxAttempts: MAX_RECONNECT_ATTEMPTS },
+              })
+              toast.warning('Обновление данных в реальном времени временно недоступно. Перезагрузите страницу.', { duration: 10000 })
             }
           }
         }

@@ -15,15 +15,9 @@ import {
   getSectionsHierarchy,
   upsertSectionCapacity,
   deleteSectionCapacityOverride,
-  createSectionLoading,
-  updateSectionLoading,
-  deleteSectionLoading,
 } from '../actions'
 import type {
   Department,
-  CapacityInput,
-  CreateLoadingInput,
-  UpdateLoadingInput,
 } from '../types'
 
 // ============================================================================
@@ -33,13 +27,13 @@ import type {
 /**
  * Получить иерархию отделов → проектов → разделов → загрузок
  *
- * TODO: Добавить Realtime подписку для автоматического обновления
- * при изменении loadings/section_capacity
+ * Данные обновляются через Realtime подписки (loadings, sections, departments, profiles),
+ * поэтому staleTime = Infinity — refetch происходит только при инвалидации кеша.
  */
 export const useSectionsHierarchy = createCacheQuery<Department[], FilterQueryParams>({
   queryKey: (filters) => queryKeys.sectionsPage.list(filters),
   queryFn: getSectionsHierarchy,
-  staleTime: 5 * 60 * 1000, // 5 минут - пока нет Realtime
+  staleTime: Infinity, // Обновляется через Realtime
   // enabled опция передаётся через второй параметр хука
 })
 
@@ -53,8 +47,8 @@ export const useSectionsHierarchy = createCacheQuery<Department[], FilterQueryPa
 export const useUpsertSectionCapacity = createCacheMutation({
   mutationFn: upsertSectionCapacity,
   invalidateKeys: (input) => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.sectionsPage.capacity(input.sectionId),
+    [...queryKeys.sectionsPage.lists()],
+    [...queryKeys.sectionsPage.capacity(input.sectionId)],
   ],
   onSuccess: () => {
     toast.success('Ёмкость обновлена')
@@ -68,58 +62,11 @@ export const useDeleteSectionCapacityOverride = createCacheMutation({
   mutationFn: ({ sectionId, date }: { sectionId: string; date: string }) =>
     deleteSectionCapacityOverride(sectionId, date),
   invalidateKeys: ({ sectionId }) => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.sectionsPage.capacity(sectionId),
+    [...queryKeys.sectionsPage.lists()],
+    [...queryKeys.sectionsPage.capacity(sectionId)],
   ],
   onSuccess: () => {
     toast.success('Ёмкость сброшена к значению по умолчанию')
-  },
-})
-
-// ============================================================================
-// Loading Mutations
-// ============================================================================
-
-/**
- * Создать загрузку
- */
-export const useCreateSectionLoading = createCacheMutation({
-  mutationFn: createSectionLoading,
-  invalidateKeys: (input) => [
-    queryKeys.sectionsPage.lists(),
-    // Также инвалидируем resource-graph если есть
-    queryKeys.resourceGraph.lists(),
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка создана')
-  },
-})
-
-/**
- * Обновить загрузку
- */
-export const useUpdateSectionLoading = createCacheMutation({
-  mutationFn: updateSectionLoading,
-  invalidateKeys: () => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.resourceGraph.lists(),
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка обновлена')
-  },
-})
-
-/**
- * Удалить загрузку (архивировать)
- */
-export const useDeleteSectionLoading = createCacheMutation({
-  mutationFn: (loadingId: string) => deleteSectionLoading(loadingId),
-  invalidateKeys: () => [
-    queryKeys.sectionsPage.lists(),
-    queryKeys.resourceGraph.lists(),
-  ],
-  onSuccess: () => {
-    toast.success('Загрузка удалена')
   },
 })
 

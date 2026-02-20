@@ -7,12 +7,13 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import { ProjectRow } from './ProjectRow'
-import type { Department, DayCell } from '../../types'
+import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
+import { getCellClassNames } from '../../utils/cell-utils'
+import type { Department, DayCell, SectionLoading } from '../../types'
 
 interface DepartmentRowProps {
   department: Department
@@ -33,6 +34,20 @@ export function DepartmentRow({
   }
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+
+  // X: агрегация всех загрузок из всех проектов и разделов отдела
+  const allDepartmentLoadings = useMemo((): SectionLoading[] => {
+    return department.projects.flatMap(p =>
+      p.objectSections.flatMap(os => os.loadings)
+    )
+  }, [department.projects])
+
+  // Y: суммарная ёмкость всех разделов всех проектов отдела
+  const totalDepartmentCapacity = useMemo(() => {
+    return department.projects.reduce((sum, p) =>
+      sum + p.objectSections.reduce((s, os) => s + (os.defaultCapacity ?? 0), 0)
+    , 0)
+  }, [department.projects])
 
   return (
     <>
@@ -78,26 +93,25 @@ export function DepartmentRow({
             </div>
           </div>
 
-          {/* Timeline cells - empty for department level */}
+          {/* Timeline cells with department-level capacity aggregation */}
           <div className="flex relative z-0" style={{ width: timelineWidth }}>
-            {dayCells.map((cell, i) => {
-              const isWeekend = cell.isWeekend && !cell.isWorkday
-              const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
-
-              return (
-                <div
-                  key={`${department.id}-${cell.dateKey}-${i}`}
-                  className={cn(
-                    'border-r border-border/30 relative',
-                    !cell.isToday && isWeekend && 'bg-muted/20',
-                    !cell.isToday && isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10',
-                    // Сегодня - применяется последним, но за загрузками
-                    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25'
-                  )}
-                  style={{ width: DAY_CELL_WIDTH, height: DEPARTMENT_ROW_HEIGHT }}
-                />
-              )
-            })}
+            {allDepartmentLoadings.length > 0 && (
+              <AggregatedBarsOverlay
+                loadings={allDepartmentLoadings}
+                defaultCapacity={totalDepartmentCapacity}
+                dateCapacityOverrides={{}}
+                dayCells={dayCells}
+                rowHeight={DEPARTMENT_ROW_HEIGHT}
+                editable={false}
+              />
+            )}
+            {dayCells.map((cell, i) => (
+              <div
+                key={`${department.id}-${cell.dateKey}-${i}`}
+                className={getCellClassNames(cell)}
+                style={{ width: DAY_CELL_WIDTH, height: DEPARTMENT_ROW_HEIGHT }}
+              />
+            ))}
           </div>
         </div>
       </div>

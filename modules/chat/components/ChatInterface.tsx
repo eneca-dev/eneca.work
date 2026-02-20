@@ -88,18 +88,6 @@ export function ChatInterface() {
         </div>
       )}
 
-      {!isOpen && (
-        <button
-          onClick={toggleChat}
-          className="w-14 h-14 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 hover:scale-105 hover:shadow-xl"
-          title="Открыть чат"
-        >
-          <MessageCircle size={22} className="text-white" />
-          <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-green-400 to-green-500 rounded-full border-2 border-white">
-            <div className="w-full h-full bg-green-300 rounded-full animate-pulse"></div>
-          </div>
-        </button>
-      )}
     </div>
   )
 }
