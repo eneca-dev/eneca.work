@@ -380,7 +380,7 @@ export function EmployeeRow({
   dayCells,
   isTeamLead,
 }: EmployeeRowProps) {
-  const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
 
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
@@ -546,12 +546,12 @@ export function EmployeeRow({
           {/* Left: avatar + name (indented more) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
             <TooltipProvider>
-              <Tooltip open={hoveredAvatar}>
+              <Tooltip open={isHoveredAvatar}>
                 <TooltipTrigger asChild>
                   <Avatar
                     className="h-8 w-8 flex-shrink-0 cursor-pointer"
-                    onMouseEnter={() => setHoveredAvatar(true)}
-                    onMouseLeave={() => setHoveredAvatar(false)}
+                    onMouseEnter={() => setIsHoveredAvatar(true)}
+                    onMouseLeave={() => setIsHoveredAvatar(false)}
                   >
                     <AvatarImage src={employee.avatarUrl} />
                     <AvatarFallback className="text-xs">
