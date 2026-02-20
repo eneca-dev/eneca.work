@@ -98,7 +98,7 @@ function isValidDate(dateString: string): boolean {
  * Валидация ставки загрузки (0.0 - 1.0)
  */
 function isValidRate(rate: number): boolean {
-  return rate >= 0.01 && rate <= 1.0
+  return rate >= 0.01 && rate <= 2.0
 }
 
 /**

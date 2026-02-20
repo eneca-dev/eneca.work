@@ -46,6 +46,7 @@ interface EmployeeRowProps {
     employeeDepartmentName: string | null
     employeePosition: string | null
     employeeCategory: string | null
+    employeeEmploymentRate: number | null
     loadings: SectionLoading[]
   }
   sectionId: string
@@ -495,14 +496,7 @@ export function EmployeeRow({
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
 
-  // Calculate employment rate (sum of max concurrent loadings, capped at highest rate)
-  const employmentRate = useMemo(() => {
-    if (employee.loadings.length === 0) return 1
-
-    // For display purposes, show the max rate among all loadings
-    const maxRate = Math.max(...employee.loadings.map(l => l.rate))
-    return maxRate
-  }, [employee.loadings])
+  const employmentRate = employee.employeeEmploymentRate ?? 1
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">

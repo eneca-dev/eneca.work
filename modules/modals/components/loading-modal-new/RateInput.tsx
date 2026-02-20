@@ -119,11 +119,6 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
             Ставка должна быть от 0.01 до 2.0
           </p>
         )}
-        {/* {!error && !isInvalidRange && (
-          <p className="text-xs text-muted-foreground">
-            Введите значение от 0.01 до 2.0
-          </p>
-        )} */}
       </div>
     </div>
   )
