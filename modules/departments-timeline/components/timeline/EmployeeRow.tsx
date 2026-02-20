@@ -125,91 +125,26 @@ function LoadingBarWithResize({
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : startDateString
   const displayEndDate = isResizing && previewDates ? previewDates.endDate : endDateString
 
-  // Smooth text scroll effect: text moves when bar goes under sidebar
+  // Unified scroll effect: single listener updates text, comment, and rate badge
   useEffect(() => {
-    const textElement = textRef.current
-    if (!textElement) return
+    const container = textRef.current?.closest('.overflow-auto')
+    if (!container) return
 
-    const scrollContainer = textElement.closest('.overflow-auto')
-    if (!scrollContainer) return
+    const update = () => {
+      const scrollLeft = container.scrollLeft
+      const overlap = Math.max(0, scrollLeft - displayLeft)
 
-    const updateTextPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Text should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow text to move fully off-screen (no limit)
-      // Text will be hidden by parent overflow-hidden
-      textElement.style.transform = `translateX(${offset}px)`
+      if (textRef.current) textRef.current.style.transform = `translateX(${overlap}px)`
+      if (commentRef.current) commentRef.current.style.transform = `translateX(${overlap}px)`
+      if (rateBadgeRef.current) {
+        const clampedOffset = Math.min(overlap, Math.max(0, displayWidth - 48))
+        rateBadgeRef.current.style.transform = `translateX(${clampedOffset}px)`
+      }
     }
 
-    updateTextPosition()
-    scrollContainer.addEventListener('scroll', updateTextPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateTextPosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Sticky rate badge effect: moves opposite direction to stay visible
-  useEffect(() => {
-    const badgeElement = rateBadgeRef.current
-    if (!badgeElement) return
-
-    const scrollContainer = badgeElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateBadgePosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Badge should move right to compensate scroll and stay visible
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Limit offset so ENTIRE badge stays within bar
-      // Badge: 0.5px (left-0.5) + 36px (w-[36px]) + 6px (padding) = 42.5px ≈ 48px
-      const maxOffset = Math.max(0, displayWidth - 48)
-      const clampedOffset = Math.min(offset, maxOffset)
-
-      badgeElement.style.transform = `translateX(${clampedOffset}px)`
-    }
-
-    updateBadgePosition()
-    scrollContainer.addEventListener('scroll', updateBadgePosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateBadgePosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Smooth comment scroll effect: comment moves when bar goes under sidebar
-  useEffect(() => {
-    const commentElement = commentRef.current
-    if (!commentElement) return
-
-    const scrollContainer = commentElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateCommentPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Comment should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow comment to move fully off-screen (no limit)
-      // Comment will be hidden by parent overflow-hidden
-      commentElement.style.transform = `translateX(${offset}px)`
-    }
-
-    updateCommentPosition()
-    scrollContainer.addEventListener('scroll', updateCommentPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateCommentPosition)
-    }
+    update()
+    container.addEventListener('scroll', update, { passive: true })
+    return () => container.removeEventListener('scroll', update)
   }, [displayLeft, displayWidth])
 
   return (
