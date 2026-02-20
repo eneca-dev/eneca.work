@@ -24,6 +24,14 @@ import { DateRangePicker } from './DateRangePicker'
 import { DecompositionStageSelector } from './DecompositionStageSelector'
 import type { LoadingFormData, BreadcrumbItem } from '../../hooks/useLoadingModal'
 
+function formatLocalDate(date: Date | null): string {
+  if (!date) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export interface LoadingFormProps {
   /** Данные формы */
   formData: LoadingFormData
@@ -163,17 +171,8 @@ export function LoadingForm({
                 to: formData.endDate ? new Date(formData.endDate) : null,
               }}
               onChange={(range) => {
-                // Форматируем даты в локальный формат YYYY-MM-DD без учёта часового пояса
-                const formatDate = (date: Date | null) => {
-                  if (!date) return ''
-                  const year = date.getFullYear()
-                  const month = String(date.getMonth() + 1).padStart(2, '0')
-                  const day = String(date.getDate()).padStart(2, '0')
-                  return `${year}-${month}-${day}`
-                }
-
-                const start = formatDate(range?.from ?? null)
-                const end = formatDate(range?.to ?? null)
+                const start = formatLocalDate(range?.from ?? null)
+                const end = formatLocalDate(range?.to ?? null)
                 onFieldChange('startDate', start)
                 onFieldChange('endDate', end)
               }}
