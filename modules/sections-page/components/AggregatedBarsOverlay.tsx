@@ -93,6 +93,8 @@ interface AggregatedBarsOverlayProps {
   editable?: boolean
   /** ID ObjectSection для сохранения ёмкости в store */
   osId?: string
+  /** Подсказка в тултипе (например, где можно ввести ёмкость) */
+  capacityHint?: string
 }
 
 /** Format rate for display: 2.25 → "2.25", 1 → "1", 0.5 → "0.5" */
@@ -108,11 +110,21 @@ export function AggregatedBarsOverlay({
   rowHeight,
   editable = false,
   osId,
+  capacityHint,
 }: AggregatedBarsOverlayProps) {
   // State for inline editing with range support
   const [editRange, setEditRange] = useState<{ start: number; end: number } | null>(null)
   const [editValue, setEditValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Shared hint popup state (only one at a time)
+  const [hintCellIndex, setHintCellIndex] = useState<number | null>(null)
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleHintShow = useCallback((cellIndex: number) => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+    setHintCellIndex(cellIndex)
+    hintTimerRef.current = setTimeout(() => setHintCellIndex(null), 2500)
+  }, [])
 
   // Store methods
   const setCapacity = useSectionsPageUIStore((s) => s.setCapacity)
@@ -212,6 +224,8 @@ export function AggregatedBarsOverlay({
             rowHeight={rowHeight}
             editable={editable}
             onCellClick={handleCellClick}
+            capacityHint={capacityHint}
+            onHintShow={handleHintShow}
           />
         )
       })}
@@ -272,7 +286,7 @@ export function AggregatedBarsOverlay({
                   ref={inputRef}
                   type="text"
                   value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
+                  onChange={(e) => setEditValue(e.target.value.replace(',', '.'))}
                   onBlur={handleSave}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSave()
@@ -304,6 +318,39 @@ export function AggregatedBarsOverlay({
         </>
       )}
 
+      {hintCellIndex !== null && capacityHint && (
+        <div
+          className="absolute z-[9999] pointer-events-none"
+          style={{
+            left: hintCellIndex * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2,
+            bottom: rowHeight + 4,
+            transform: 'translateX(-50%)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <div
+            className="text-[10px] leading-tight px-2 py-1 rounded-md shadow-md"
+            style={{
+              background: 'rgba(15, 23, 42, 0.92)',
+              color: 'rgba(203, 213, 225, 0.95)',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+            }}
+          >
+            {capacityHint}
+          </div>
+          <div
+            className="absolute left-1/2 -translate-x-1/2"
+            style={{
+              top: '100%',
+              width: 0,
+              height: 0,
+              borderLeft: '4px solid transparent',
+              borderRight: '4px solid transparent',
+              borderTop: '4px solid rgba(15, 23, 42, 0.92)',
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -318,9 +365,17 @@ interface BarCellProps {
   rowHeight: number
   editable?: boolean
   onCellClick?: (index: number) => void
+  capacityHint?: string
+  onHintShow?: (cellIndex: number) => void
 }
 
-function BarCell({ day, index, rowHeight, editable, onCellClick }: BarCellProps) {
+function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, onHintShow }: BarCellProps) {
+  const handleHintClick = (e: React.MouseEvent) => {
+    if (!capacityHint) return
+    e.stopPropagation()
+    onHintShow?.(index)
+  }
+
   const isEmpty = day.rateSum === 0
   const hasNoCapacity = day.capacity === 0
   const hasLoadingWithoutCapacity = hasNoCapacity && !isEmpty
@@ -367,22 +422,26 @@ function BarCell({ day, index, rowHeight, editable, onCellClick }: BarCellProps)
 
   const handleClick = editable
     ? (e: React.MouseEvent) => { e.stopPropagation(); onCellClick?.(index) }
+    : capacityHint
+    ? handleHintClick
     : undefined
 
   // Если capacity = 0 И нет загрузки → пустая ячейка (но кликабельная)
   if (hasNoCapacity && isEmpty) {
     return (
       <div
+
         className="absolute z-10"
         style={{
           left: index * DAY_CELL_WIDTH,
           width: DAY_CELL_WIDTH,
           height: rowHeight,
-          cursor: editable ? 'pointer' : undefined,
+          cursor: editable || capacityHint ? 'pointer' : undefined,
         }}
-        title={editable ? 'Нажмите для установки ёмкости' : 'Ёмкость не установлена'}
+        title={editable ? 'Нажмите для установки ёмкости' : ['Ёмкость не установлена', capacityHint].filter(Boolean).join('\n')}
         onClick={handleClick}
-      />
+      >
+      </div>
     )
   }
 
@@ -393,14 +452,14 @@ function BarCell({ day, index, rowHeight, editable, onCellClick }: BarCellProps)
         left: index * DAY_CELL_WIDTH,
         width: DAY_CELL_WIDTH,
         height: rowHeight,
-        cursor: editable ? 'pointer' : undefined,
+        cursor: editable || capacityHint ? 'pointer' : undefined,
       }}
       title={
         isEmpty
-          ? `Capacity: ${day.capacity}${editable ? '\nНажмите для изменения ёмкости' : ''}`
+          ? [`Capacity: ${day.capacity}`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
           : hasLoadingWithoutCapacity
-          ? `Загрузка: ${formatRate(day.rateSum)} (ёмкость не установлена)${editable ? '\nНажмите для установки ёмкости' : ''}`
-          : `Загрузка: ${formatRate(day.rateSum)} / ${day.capacity} (${Math.round(percentage)}%)${editable ? '\nНажмите для изменения ёмкости' : ''}`
+          ? [`Загрузка: ${formatRate(day.rateSum)} (ёмкость не установлена)`, editable ? 'Нажмите для установки ёмкости' : capacityHint].filter(Boolean).join('\n')
+          : [`Загрузка: ${formatRate(day.rateSum)} / ${day.capacity} (${Math.round(percentage)}%)`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
       }
       onClick={handleClick}
     >
@@ -446,6 +505,8 @@ function BarCell({ day, index, rowHeight, editable, onCellClick }: BarCellProps)
           }}
         />
       )}
+
     </div>
   )
 }
+

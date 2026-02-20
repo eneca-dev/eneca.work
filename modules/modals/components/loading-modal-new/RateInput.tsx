@@ -26,7 +26,10 @@ export interface RateInputProps {
 const QUICK_RATES = [0.2, 0.25, 0.5, 0.75, 1.0]
 
 export function RateInput({ value, onChange, error, disabled = false }: RateInputProps) {
-  const [customValue, setCustomValue] = useState('')
+  const [customValue, setCustomValue] = useState(() => {
+    const isQuickRate = QUICK_RATES.some((rate) => Math.abs(value - rate) < 0.001)
+    return isQuickRate ? '' : String(value)
+  })
 
   const handleQuickSelect = (rate: number) => {
     onChange(rate)
@@ -89,11 +92,7 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
             size="sm"
             disabled={disabled}
             onClick={() => handleQuickSelect(rate)}
-            className={cn(
-              'flex-1',
-              isQuickRateSelected(rate) &&
-                'bg-teal-500 text-white hover:bg-teal-600 dark:bg-teal-600 dark:hover:bg-teal-700'
-            )}
+            className="flex-1"
           >
             {rate}
           </Button>
@@ -102,7 +101,7 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
 
       {/* Кастомный ввод */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">Или введите своё значение:</label>
+        <label className="text-xs text-muted-foreground">Или введите своё значение от 0.01 до 2.0:</label>
         <Input
           type="text"
           placeholder="1.25"
@@ -118,11 +117,6 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
         {!error && isInvalidRange && (
           <p className="text-sm text-red-500">
             Ставка должна быть от 0.01 до 2.0
-          </p>
-        )}
-        {!error && !isInvalidRange && (
-          <p className="text-xs text-muted-foreground">
-            Введите значение от 0.01 до 2.0
           </p>
         )}
       </div>

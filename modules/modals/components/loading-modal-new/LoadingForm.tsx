@@ -24,6 +24,14 @@ import { DateRangePicker } from './DateRangePicker'
 import { DecompositionStageSelector } from './DecompositionStageSelector'
 import type { LoadingFormData, BreadcrumbItem } from '../../hooks/useLoadingModal'
 
+function formatLocalDate(date: Date | null): string {
+  if (!date) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export interface LoadingFormProps {
   /** Данные формы */
   formData: LoadingFormData
@@ -72,6 +80,14 @@ export function LoadingForm({
 
   // Извлекаем sectionId из breadcrumbs для загрузки этапов декомпозиции
   const sectionId = selectedBreadcrumbs?.find(b => b.type === 'section')?.id ?? null
+
+  const periodStart = formData.startDate ? new Date(formData.startDate) : undefined
+  const periodEnd = formData.endDate ? new Date(formData.endDate) : undefined
+  const businessDays =
+    periodStart && periodEnd && !isNaN(periodStart.getTime()) && !isNaN(periodEnd.getTime())
+      ? differenceInBusinessDays(periodEnd, periodStart) + 1
+      : 0
+  const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -132,7 +148,7 @@ export function LoadingForm({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Сотрудник */}
         <div>
-          <label className="block text-sm font-medium mb-2">Сотрудник</label>
+          <label className="block text-sm font-medium mb-2">Сотрудник <span className="text-muted-foreground">*</span></label>
           <EmployeeSelector
             value={formData.employeeId}
             onChange={(value) => onFieldChange('employeeId', value)}
@@ -144,7 +160,7 @@ export function LoadingForm({
 
         {/* Ставка загрузки */}
         <div>
-          <label className="block text-sm font-medium mb-2">Ставка загрузки</label>
+          <label className="block text-sm font-medium mb-2">Ставка загрузки <span className="text-muted-foreground">*</span></label>
           <RateInput
             value={formData.rate}
             onChange={(value) => onFieldChange('rate', value)}
@@ -155,7 +171,7 @@ export function LoadingForm({
 
         {/* Даты */}
         <div>
-          <label className="block text-sm font-medium mb-2">Период загрузки</label>
+          <label className="block text-sm font-medium mb-2">Период загрузки <span className="text-muted-foreground">*</span></label>
           <div className="space-y-2">
             <DateRangePicker
               value={{
@@ -163,17 +179,8 @@ export function LoadingForm({
                 to: formData.endDate ? new Date(formData.endDate) : null,
               }}
               onChange={(range) => {
-                // Форматируем даты в локальный формат YYYY-MM-DD без учёта часового пояса
-                const formatDate = (date: Date | null) => {
-                  if (!date) return ''
-                  const year = date.getFullYear()
-                  const month = String(date.getMonth() + 1).padStart(2, '0')
-                  const day = String(date.getDate()).padStart(2, '0')
-                  return `${year}-${month}-${day}`
-                }
-
-                const start = formatDate(range?.from ?? null)
-                const end = formatDate(range?.to ?? null)
+                const start = formatLocalDate(range?.from ?? null)
+                const end = formatLocalDate(range?.to ?? null)
                 onFieldChange('startDate', start)
                 onFieldChange('endDate', end)
               }}
@@ -182,24 +189,12 @@ export function LoadingForm({
             />
 
             {/* Информация о периоде */}
-            {(() => {
-              const start = formData.startDate ? new Date(formData.startDate) : undefined
-              const end = formData.endDate ? new Date(formData.endDate) : undefined
-              const businessDays =
-                start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())
-                  ? differenceInBusinessDays(end, start) + 1
-                  : 0
-              const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
-
-              return businessDays > 0 ? (
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Количество рабочих дней: {businessDays}</p>
-                  <p>
-                    Количество рабочих часов с учётом ставки: {totalHours} ч
-                  </p>
-                </div>
-              ) : null
-            })()}
+            {businessDays > 0 && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Количество рабочих дней: {businessDays}</p>
+                <p>Количество рабочих часов с учётом ставки: {totalHours} ч</p>
+              </div>
+            )}
 
             {(errors.startDate || errors.endDate) && (
               <p className="text-sm text-red-500">{errors.startDate || errors.endDate}</p>
@@ -210,7 +205,7 @@ export function LoadingForm({
         {/* Этап декомпозиции (опционально) */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Этап декомпозиции <span className="text-muted-foreground font-normal">(необязательно)</span>
+            Этап декомпозиции
           </label>
           <DecompositionStageSelector
             sectionId={sectionId}
@@ -224,7 +219,7 @@ export function LoadingForm({
         {/* Комментарий */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Комментарий <span className="text-muted-foreground font-normal">(необязательно)</span>
+            Комментарий
           </label>
           <Textarea
             value={formData.comment}

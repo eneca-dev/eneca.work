@@ -27,6 +27,8 @@ type LoadingUpdate = Database['public']['Tables']['loadings']['Update']
 export interface CreateLoadingInput {
   /** ID этапа декомпозиции */
   stageId: string
+  /** ID раздела */
+  sectionId: string
   /** ID сотрудника */
   employeeId: string
   /** Дата начала */
@@ -98,7 +100,7 @@ function isValidDate(dateString: string): boolean {
  * Валидация ставки загрузки (0.0 - 1.0)
  */
 function isValidRate(rate: number): boolean {
-  return rate >= 0.01 && rate <= 1.0
+  return rate >= 0.01 && rate <= 2.0
 }
 
 /**
@@ -107,7 +109,7 @@ function isValidRate(rate: number): boolean {
 function mapLoadingToResult(row: LoadingRow): LoadingResult {
   return {
     id: row.loading_id,
-    stageId: row.loading_stage,
+    stageId: row.loading_stage || '',
     employeeId: row.loading_responsible || '',
     startDate: row.loading_start,
     endDate: row.loading_finish,
@@ -159,13 +161,14 @@ export async function createLoading(
     if (!isValidRate(input.rate)) {
       return {
         success: false,
-        error: 'Ставка загрузки должна быть от 0.01 до 1.0',
+        error: 'Ставка загрузки должна быть от 0.01 до 2.0',
       }
     }
 
     // Подготовка данных для вставки
     const insertData: LoadingInsert = {
       loading_stage: input.stageId,
+      loading_section: input.sectionId,
       loading_responsible: input.employeeId,
       loading_start: input.startDate,
       loading_finish: input.endDate,
@@ -259,7 +262,7 @@ export async function updateLoading(
       if (!isValidRate(input.rate)) {
         return {
           success: false,
-          error: 'Ставка загрузки должна быть от 0.01 до 1.0',
+          error: 'Ставка загрузки должна быть от 0.01 до 2.0',
         }
       }
       updateData.loading_rate = input.rate
@@ -442,8 +445,11 @@ export async function getDepartmentLoadings(
     }
 
     // Получаем загрузки через JOIN с profiles и sections
-    const { data, error } = await supabase
-      .from('loadings')
+    // Каст через any нужен из-за ts(2589): Supabase не справляется с выводом типа
+    // при 4 уровнях вложенных JOIN — TypeScript превышает лимит глубины рекурсии
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const from = supabase.from('loadings') as any
+    const { data, error } = await from
       .select(`
         loading_id,
         loading_responsible,

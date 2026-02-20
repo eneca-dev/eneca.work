@@ -9,7 +9,8 @@
 import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Building2, MessageSquare, UserPlus } from 'lucide-react'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
+import { dayCellsToTimelineUnits, hexToRgba, calculateTimelineRange } from '@/modules/resource-graph/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
@@ -32,7 +33,7 @@ import {
 } from '../../utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
 import type { Employee, DayCell, Loading, TimelineRange } from '../../types'
-import type { TimelineUnit } from '@/types/planning'
+import type { TimelineUnit, Loading as PlanningLoading } from '@/types/planning'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
 import { useUpdateLoadingDates } from '../../hooks'
 
@@ -41,66 +42,6 @@ interface EmployeeRowProps {
   employeeIndex: number
   dayCells: DayCell[]
   isTeamLead: boolean
-}
-
-// Convert DayCell to TimelineUnit for compatibility with loading-bars-utils
-function dayCellsToTimelineUnits(dayCells: DayCell[]): TimelineUnit[] {
-  const today = getTodayMinsk()
-
-  return dayCells.map((cell, index) => {
-    // Determine if it's a working day
-    // Working day = not a weekend AND not a holiday AND not a transferred day off
-    // OR it's a transferred workday (weekend that became working)
-    const isDefaultWeekend = cell.isWeekend
-    const isWorking = cell.isTransferredWorkday ||
-      (!isDefaultWeekend && !cell.isHoliday && !cell.isTransferredDayOff)
-
-    return {
-      date: cell.date,
-      label: cell.dayOfMonth.toString(),
-      dateKey: formatMinskDate(cell.date),
-      dayOfMonth: cell.dayOfMonth,
-      dayOfWeek: cell.dayOfWeek,
-      isWeekend: cell.isWeekend,
-      isWorkingDay: isWorking,
-      isHoliday: cell.isHoliday,
-      holidayName: cell.holidayName || undefined,
-      isToday: cell.isToday,
-      isMonthStart: cell.isMonthStart,
-      monthName: cell.monthName,
-      left: index * DAY_CELL_WIDTH,
-      width: DAY_CELL_WIDTH,
-    }
-  })
-}
-
-// Helper to convert color to rgba
-function hexToRgba(color: string, alpha: number): string {
-  if (color.startsWith('rgb')) {
-    const match = color.match(/\d+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
-    }
-  }
-  let hex = color.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-// Helper to calculate TimelineRange from DayCells
-function calculateTimelineRange(dayCells: DayCell[]): TimelineRange {
-  if (dayCells.length === 0) {
-    const today = new Date()
-    return { start: today, end: today, totalDays: 0 }
-  }
-
-  return {
-    start: dayCells[0].date,
-    end: dayCells[dayCells.length - 1].date,
-    totalDays: dayCells.length,
-  }
 }
 
 /**
@@ -159,6 +100,9 @@ function LoadingBarWithResize({
     disabled: !canResize,
   })
 
+  const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
+  const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
+
   // Обработчик клика с проверкой wasRecentlyDragging
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
@@ -166,8 +110,9 @@ function LoadingBarWithResize({
     // Не открываем модалку если только что закончили drag
     if (wasRecentlyDragging()) return
 
-    // Приводим bar.period к типу Loading (BarPeriod имеет sectionId?: string | null | undefined)
-    onLoadingClick(bar.period as any)
+    // BarPeriod содержит все необходимые поля Loading; startDate/endDate - Date объекты,
+    // модал (useLoadingModal) обрабатывает оба варианта (string и Date)
+    onLoadingClick(bar.period as unknown as Loading)
   }, [bar.period, onLoadingClick, wasRecentlyDragging])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
@@ -180,91 +125,26 @@ function LoadingBarWithResize({
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : startDateString
   const displayEndDate = isResizing && previewDates ? previewDates.endDate : endDateString
 
-  // Smooth text scroll effect: text moves when bar goes under sidebar
+  // Unified scroll effect: single listener updates text, comment, and rate badge
   useEffect(() => {
-    const textElement = textRef.current
-    if (!textElement) return
+    const container = textRef.current?.closest('.overflow-auto')
+    if (!container) return
 
-    const scrollContainer = textElement.closest('.overflow-auto')
-    if (!scrollContainer) return
+    const update = () => {
+      const scrollLeft = container.scrollLeft
+      const overlap = Math.max(0, scrollLeft - displayLeft)
 
-    const updateTextPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Text should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow text to move fully off-screen (no limit)
-      // Text will be hidden by parent overflow-hidden
-      textElement.style.transform = `translateX(${offset}px)`
+      if (textRef.current) textRef.current.style.transform = `translateX(${overlap}px)`
+      if (commentRef.current) commentRef.current.style.transform = `translateX(${overlap}px)`
+      if (rateBadgeRef.current) {
+        const clampedOffset = Math.min(overlap, Math.max(0, displayWidth - 48))
+        rateBadgeRef.current.style.transform = `translateX(${clampedOffset}px)`
+      }
     }
 
-    updateTextPosition()
-    scrollContainer.addEventListener('scroll', updateTextPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateTextPosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Sticky rate badge effect: moves opposite direction to stay visible
-  useEffect(() => {
-    const badgeElement = rateBadgeRef.current
-    if (!badgeElement) return
-
-    const scrollContainer = badgeElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateBadgePosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Badge should move right to compensate scroll and stay visible
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Limit offset so ENTIRE badge stays within bar
-      // Badge: 0.5px (left-0.5) + 36px (w-[36px]) + 6px (padding) = 42.5px ≈ 48px
-      const maxOffset = Math.max(0, displayWidth - 48)
-      const clampedOffset = Math.min(offset, maxOffset)
-
-      badgeElement.style.transform = `translateX(${clampedOffset}px)`
-    }
-
-    updateBadgePosition()
-    scrollContainer.addEventListener('scroll', updateBadgePosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateBadgePosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Smooth comment scroll effect: comment moves when bar goes under sidebar
-  useEffect(() => {
-    const commentElement = commentRef.current
-    if (!commentElement) return
-
-    const scrollContainer = commentElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateCommentPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Comment should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow comment to move fully off-screen (no limit)
-      // Comment will be hidden by parent overflow-hidden
-      commentElement.style.transform = `translateX(${offset}px)`
-    }
-
-    updateCommentPosition()
-    scrollContainer.addEventListener('scroll', updateCommentPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateCommentPosition)
-    }
+    update()
+    container.addEventListener('scroll', update, { passive: true })
+    return () => container.removeEventListener('scroll', update)
   }, [displayLeft, displayWidth])
 
   return (
@@ -301,17 +181,21 @@ function LoadingBarWithResize({
         {canResize && (
           <>
             {/* Left handle */}
-            <div
-              {...leftHandleProps}
-              className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-              style={{ zIndex: 20 }}
-            />
+            {!isClippedLeft && (
+              <div
+                {...leftHandleProps}
+                className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+                style={{ zIndex: 20 }}
+              />
+            )}
             {/* Right handle */}
-            <div
-              {...rightHandleProps}
-              className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-              style={{ zIndex: 20 }}
-            />
+            {!isClippedRight && (
+              <div
+                {...rightHandleProps}
+                className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+                style={{ zIndex: 20 }}
+              />
+            )}
           </>
         )}
 
@@ -492,7 +376,7 @@ export function EmployeeRow({
   dayCells,
   isTeamLead,
 }: EmployeeRowProps) {
-  const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
 
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
@@ -590,9 +474,15 @@ export function EmployeeRow({
 
   // Convert loadings to periods
   const allPeriods = useMemo(() => {
-    // Преобразуем loadings из departments-timeline типа (string dates) в planning тип (Date)
-    // loadingsToPeriods сам конвертирует через new Date(), поэтому просто приводим тип
-    return loadingsToPeriods(employee.loadings as any)
+    // Маппим departments-timeline Loading (string dates) → planning Loading (Date)
+    const planningLoadings: PlanningLoading[] = (employee.loadings ?? []).map((l) => ({
+      ...l,
+      startDate: new Date(l.startDate),
+      endDate: new Date(l.endDate),
+      createdAt: l.createdAt ? new Date(l.createdAt) : new Date(0),
+      updatedAt: l.updatedAt ? new Date(l.updatedAt) : new Date(0),
+    }))
+    return loadingsToPeriods(planningLoadings)
   }, [employee.loadings])
 
   // Calculate bar renders
@@ -652,12 +542,12 @@ export function EmployeeRow({
           {/* Left: avatar + name (indented more) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
             <TooltipProvider>
-              <Tooltip open={hoveredAvatar}>
+              <Tooltip open={isHoveredAvatar}>
                 <TooltipTrigger asChild>
                   <Avatar
                     className="h-8 w-8 flex-shrink-0 cursor-pointer"
-                    onMouseEnter={() => setHoveredAvatar(true)}
-                    onMouseLeave={() => setHoveredAvatar(false)}
+                    onMouseEnter={() => setIsHoveredAvatar(true)}
+                    onMouseLeave={() => setIsHoveredAvatar(false)}
                   >
                     <AvatarImage src={employee.avatarUrl} />
                     <AvatarFallback className="text-xs">

@@ -9,7 +9,8 @@
 import { useMemo, useState, Fragment, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Box, Layers, MessageSquare, UserPlus } from 'lucide-react'
-import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
+import { dayCellsToTimelineUnits, hexToRgba, calculateTimelineRange } from '@/modules/resource-graph/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
@@ -45,6 +46,7 @@ interface EmployeeRowProps {
     employeeDepartmentName: string | null
     employeePosition: string | null
     employeeCategory: string | null
+    employeeEmploymentRate: number | null
     loadings: SectionLoading[]
   }
   sectionId: string
@@ -57,48 +59,6 @@ interface EmployeeRowProps {
   stages?: Array<{ id: string; name: string; order: number | null }>
 }
 
-// Convert DayCell to TimelineUnit for compatibility with loading-bars-utils
-function dayCellsToTimelineUnits(dayCells: DayCell[]): TimelineUnit[] {
-  return dayCells.map((cell, index) => {
-    return {
-      date: cell.date,
-      label: cell.dayOfMonth.toString(),
-      dateKey: formatMinskDate(cell.date),
-      dayOfMonth: cell.dayOfMonth,
-      dayOfWeek: cell.dayOfWeek,
-      isWeekend: cell.isWeekend,
-      isWorkingDay: cell.isWorkday, // Используем готовое поле из DayCell
-      isHoliday: cell.isHoliday,
-      holidayName: cell.holidayName || undefined,
-      isToday: cell.isToday,
-      isMonthStart: cell.isMonthStart,
-      monthName: cell.monthName,
-      left: index * DAY_CELL_WIDTH,
-      width: DAY_CELL_WIDTH,
-    }
-  })
-}
-
-// Helper to convert color to rgba
-function hexToRgba(color: string, alpha: number): string {
-  if (color.startsWith('rgba')) {
-    const match = color.match(/[\d.]+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
-    }
-  }
-  if (color.startsWith('rgb')) {
-    const match = color.match(/\d+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
-    }
-  }
-  let hex = color.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
 
 // Get initials for avatar
 function getInitials(name?: string): string {
@@ -112,19 +72,6 @@ function getInitials(name?: string): string {
   return trimmed.substring(0, 2).toUpperCase()
 }
 
-// Helper to calculate TimelineRange from DayCells
-function calculateTimelineRange(dayCells: DayCell[]): TimelineRange {
-  if (dayCells.length === 0) {
-    const today = new Date()
-    return { start: today, end: today, totalDays: 0 }
-  }
-
-  return {
-    start: dayCells[0].date,
-    end: dayCells[dayCells.length - 1].date,
-    totalDays: dayCells.length,
-  }
-}
 
 /**
  * Loading Bar Component with drag-to-resize
@@ -177,6 +124,9 @@ function LoadingBar({
     disabled: false,
   })
 
+  const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
+  const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
+
   // Handle click with wasRecentlyDragging check
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
@@ -191,91 +141,26 @@ function LoadingBar({
   const displayLeft = previewPosition?.left ?? bar.left
   const displayWidth = previewPosition?.width ?? bar.width
 
-  // Sticky rate badge effect: moves opposite direction to stay visible
+  // Unified scroll effect: single listener updates text, comment, and rate badge
   useEffect(() => {
-    const badgeElement = rateBadgeRef.current
-    if (!badgeElement) return
+    const container = textRef.current?.closest('.overflow-auto')
+    if (!container) return
 
-    const scrollContainer = badgeElement.closest('.overflow-auto')
-    if (!scrollContainer) return
+    const update = () => {
+      const scrollLeft = container.scrollLeft
+      const overlap = Math.max(0, scrollLeft - displayLeft)
 
-    const updateBadgePosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Badge should move right to compensate scroll and stay visible
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Limit offset so ENTIRE badge stays within bar
-      // Badge: 6px (left-1.5) + 32px (min-w) + 8px (px-1 both sides) + 2px (safety) = 48px
-      const maxOffset = Math.max(0, displayWidth - 48)
-      const clampedOffset = Math.min(offset, maxOffset)
-
-            badgeElement.style.transform = `translateX(${clampedOffset}px)`
+      if (textRef.current) textRef.current.style.transform = `translateX(${overlap}px)`
+      if (commentRef.current) commentRef.current.style.transform = `translateX(${overlap}px)`
+      if (rateBadgeRef.current) {
+        const clampedOffset = Math.min(overlap, Math.max(0, displayWidth - 48))
+        rateBadgeRef.current.style.transform = `translateX(${clampedOffset}px)`
+      }
     }
 
-    updateBadgePosition()
-    scrollContainer.addEventListener('scroll', updateBadgePosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateBadgePosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Smooth text scroll effect: text moves when bar goes under sidebar
-  useEffect(() => {
-    const textElement = textRef.current
-    if (!textElement) return
-
-    const scrollContainer = textElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateTextPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Text should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow text to move fully off-screen (no limit)
-      // Text will be hidden by parent overflow-hidden
-      textElement.style.transform = `translateX(${offset}px)`
-    }
-
-    updateTextPosition()
-    scrollContainer.addEventListener('scroll', updateTextPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateTextPosition)
-    }
-  }, [displayLeft, displayWidth])
-
-  // Smooth comment scroll effect: comment moves when bar goes under sidebar
-  useEffect(() => {
-    const commentElement = commentRef.current
-    if (!commentElement) return
-
-    const scrollContainer = commentElement.closest('.overflow-auto')
-    if (!scrollContainer) return
-
-    const updateCommentPosition = () => {
-      const scrollLeft = scrollContainer.scrollLeft
-
-      // Comment should move only when bar goes under sidebar
-      const overlap = scrollLeft - displayLeft
-      const offset = Math.max(0, overlap)
-
-      // Allow comment to move fully off-screen (no limit)
-      // Comment will be hidden by parent overflow-hidden
-      commentElement.style.transform = `translateX(${offset}px)`
-    }
-
-    updateCommentPosition()
-    scrollContainer.addEventListener('scroll', updateCommentPosition, { passive: true })
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', updateCommentPosition)
-    }
+    update()
+    container.addEventListener('scroll', update, { passive: true })
+    return () => container.removeEventListener('scroll', update)
   }, [displayLeft, displayWidth])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
@@ -363,17 +248,21 @@ function LoadingBar({
         {/* Resize handles */}
         <>
           {/* Left handle */}
-          <div
-            {...leftHandleProps}
-            className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-            style={{ zIndex: 20 }}
-          />
+          {!isClippedLeft && (
+            <div
+              {...leftHandleProps}
+              className="absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+              style={{ zIndex: 20 }}
+            />
+          )}
           {/* Right handle */}
-          <div
-            {...rightHandleProps}
-            className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
-            style={{ zIndex: 20 }}
-          />
+          {!isClippedRight && (
+            <div
+              {...rightHandleProps}
+              className="absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize hover:bg-white/20 transition-colors"
+              style={{ zIndex: 20 }}
+            />
+          )}
         </>
 
         {/* Sticky rate badge (always visible, vertically centered) */}
@@ -514,7 +403,7 @@ export function EmployeeRow({
   dayCells,
   stages,
 }: EmployeeRowProps) {
-  const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const { onEditLoading } = useSectionsPageActions()
 
   // Mutation hook для обновления дат загрузки
@@ -604,14 +493,7 @@ export function EmployeeRow({
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
 
-  // Calculate employment rate (sum of max concurrent loadings, capped at highest rate)
-  const employmentRate = useMemo(() => {
-    if (employee.loadings.length === 0) return 1
-
-    // For display purposes, show the max rate among all loadings
-    const maxRate = Math.max(...employee.loadings.map(l => l.rate))
-    return maxRate
-  }, [employee.loadings])
+  const employmentRate = employee.employeeEmploymentRate ?? 1
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">
@@ -636,12 +518,12 @@ export function EmployeeRow({
           {/* Left: avatar + name (indented) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
             <TooltipProvider>
-              <Tooltip open={hoveredAvatar}>
+              <Tooltip open={isHoveredAvatar}>
                 <TooltipTrigger asChild>
                   <Avatar
                     className="h-8 w-8 flex-shrink-0 cursor-pointer"
-                    onMouseEnter={() => setHoveredAvatar(true)}
-                    onMouseLeave={() => setHoveredAvatar(false)}
+                    onMouseEnter={() => setIsHoveredAvatar(true)}
+                    onMouseLeave={() => setIsHoveredAvatar(false)}
                   >
                     <AvatarImage src={employee.employeeAvatarUrl || undefined} />
                     <AvatarFallback className="text-xs">

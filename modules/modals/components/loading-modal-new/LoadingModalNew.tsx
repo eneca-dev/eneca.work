@@ -260,6 +260,7 @@ export function LoadingModalNew({
       // Создание новой загрузки
       await createLoading.mutateAsync({
         stageId,
+        sectionId: selectedSectionId,
         employeeId: formData.employeeId,
         rate: formData.rate,
         startDate: formData.startDate,
@@ -355,7 +356,8 @@ export function LoadingModalNew({
     !!formData.startDate.trim() &&
     !!formData.endDate.trim() &&
     !isSaving &&
-    hasChanges // Кнопка неактивна если нет изменений
+    hasChanges && // Кнопка неактивна если нет изменений
+    (mode !== 'create' || isFormVisible) // Неактивна пока показывается кнопка "Создать загрузку"
 
   return (
     <>

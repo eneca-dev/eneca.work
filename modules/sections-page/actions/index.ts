@@ -392,6 +392,7 @@ export async function getSectionsHierarchy(
             employeeAvatarUrl: row.employee_avatar_url,
             employeeCategory: row.employee_category,
             employeePosition: row.employee_position,
+            employeeEmploymentRate: row.employee_employment_rate ?? null,
             employeeDepartmentId: employeeDeptId || deptId,
             employeeDepartmentName: row.employee_department_name || row.department_name,
             startDate: row.loading_start,
