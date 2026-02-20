@@ -7,7 +7,7 @@
 'use client'
 
 import { useMemo, useCallback } from 'react'
-import { Box, ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { Box, ChevronDown, ChevronRight, UserPlus } from 'lucide-react'
 import { useHasPermission } from '@/modules/permissions'
 import { useRowExpanded, useDateCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { useSectionsPageActions } from '../../context'
@@ -107,6 +107,17 @@ export function ObjectSectionRow({
             style={{ width: SIDEBAR_WIDTH }}
             onClick={toggle}
           >
+            {/* Create loading tab - positioned at right edge of sidebar, extends outside */}
+            <button
+              type="button"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+              onClick={handleCreateLoading}
+              title="Создать загрузку"
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>Загрузка</span>
+            </button>
+
             <div className="flex items-center gap-2 min-w-0 pl-[40px]">
               <div className="flex-shrink-0">
                 {isExpanded ? (
@@ -123,14 +134,6 @@ export function ObjectSectionRow({
 
             {/* Actions + metrics */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                type="button"
-                className="h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-primary/10"
-                onClick={handleCreateLoading}
-                title="Создать загрузку"
-              >
-                <Plus className="h-3 w-3 text-primary" />
-              </button>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
                 {employeesWithLoadings.length} чел
               </span>
