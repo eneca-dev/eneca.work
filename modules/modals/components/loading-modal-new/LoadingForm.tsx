@@ -81,6 +81,14 @@ export function LoadingForm({
   // Извлекаем sectionId из breadcrumbs для загрузки этапов декомпозиции
   const sectionId = selectedBreadcrumbs?.find(b => b.type === 'section')?.id ?? null
 
+  const periodStart = formData.startDate ? new Date(formData.startDate) : undefined
+  const periodEnd = formData.endDate ? new Date(formData.endDate) : undefined
+  const businessDays =
+    periodStart && periodEnd && !isNaN(periodStart.getTime()) && !isNaN(periodEnd.getTime())
+      ? differenceInBusinessDays(periodEnd, periodStart) + 1
+      : 0
+  const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
+
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Breadcrumbs с полным путем */}
@@ -181,22 +189,12 @@ export function LoadingForm({
             />
 
             {/* Информация о периоде */}
-            {(() => {
-              const start = formData.startDate ? new Date(formData.startDate) : undefined
-              const end = formData.endDate ? new Date(formData.endDate) : undefined
-              const businessDays =
-                start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())
-                  ? differenceInBusinessDays(end, start) + 1
-                  : 0
-              const totalHours = businessDays > 0 ? Math.round(businessDays * 8 * formData.rate) : 0
-
-              return businessDays > 0 ? (
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>Количество рабочих дней: {businessDays}</p>
-                  <p>Количество рабочих часов с учётом ставки: {totalHours} ч</p>
-                </div>
-              ) : null
-            })()}
+            {businessDays > 0 && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Количество рабочих дней: {businessDays}</p>
+                <p>Количество рабочих часов с учётом ставки: {totalHours} ч</p>
+              </div>
+            )}
 
             {(errors.startDate || errors.endDate) && (
               <p className="text-sm text-red-500">{errors.startDate || errors.endDate}</p>
