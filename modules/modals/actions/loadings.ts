@@ -159,7 +159,7 @@ export async function createLoading(
     if (!isValidRate(input.rate)) {
       return {
         success: false,
-        error: 'Ставка загрузки должна быть от 0.01 до 1.0',
+        error: 'Ставка загрузки должна быть от 0.01 до 2.0',
       }
     }
 
@@ -259,7 +259,7 @@ export async function updateLoading(
       if (!isValidRate(input.rate)) {
         return {
           success: false,
-          error: 'Ставка загрузки должна быть от 0.01 до 1.0',
+          error: 'Ставка загрузки должна быть от 0.01 до 2.0',
         }
       }
       updateData.loading_rate = input.rate
@@ -476,7 +476,10 @@ export async function getDepartmentLoadings(
       `)
       .eq('profiles.department_id', departmentId)
       .eq('loading_status', 'active')
-      .order('loading_start', { ascending: false })
+      .order('loading_start', { ascending: false }) as unknown as Promise<{
+        data: any[] | null
+        error: { message: string } | null
+      }>
 
     if (error) {
       console.error('[getDepartmentLoadings] Supabase error:', error)
