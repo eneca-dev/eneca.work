@@ -459,7 +459,7 @@ export function EmployeeRow({
       employeeId: employee.employeeId,
       sectionId: sectionId,
     })
-  }, [employee.employeeId])
+  }, [employee.employeeId, sectionId])
 
   // Convert dayCells to TimelineUnits for loading bar utils
   const timeUnits = useMemo(() => dayCellsToTimelineUnits(dayCells), [dayCells])

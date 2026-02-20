@@ -459,7 +459,7 @@ export function EmployeeRow({
       breadcrumbs: (loading.sectionId && breadcrumbs.length > 0) ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
-  }, [])
+  }, [employee.id])
 
   // Обработчик создания новой загрузки для сотрудника
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
