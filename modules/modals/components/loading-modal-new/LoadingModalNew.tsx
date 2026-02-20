@@ -98,10 +98,17 @@ export function LoadingModalNew({
     initialLoading: mode === 'edit' ? editData?.loading : undefined,
   })
 
-  // Загрузка breadcrumbs для режима редактирования или создания с sectionId
-  // Пропускаем загрузку, если breadcrumbs уже переданы (для режима edit)
+  // Загрузка breadcrumbs для режима редактирования или создания с sectionId.
+  // Переданные breadcrumbs считаются полными если:
+  //   1. содержат узел типа 'section'
+  //   2. loading.section_id (stageId в БД) совпадает с одним из ID в breadcrumbs
+  //      (если не совпадает — значит это decomposition_stage_id, которого нет в breadcrumbs)
+  const providedBreadcrumbsHaveSection = editData?.breadcrumbs?.some(b => b.type === 'section') ?? false
+  const loadingNodeInBreadcrumbs = editData?.breadcrumbs?.some(b => b.id === editData?.loading?.section_id) ?? false
+  const providedBreadcrumbsAreComplete = providedBreadcrumbsHaveSection && loadingNodeInBreadcrumbs
+
   const shouldLoadBreadcrumbs =
-    (mode === 'edit' && editData?.loading && !editData.breadcrumbs) ||
+    (mode === 'edit' && editData?.loading && (!editData.breadcrumbs || !providedBreadcrumbsAreComplete)) ||
     (mode === 'create' && createData?.sectionId)
 
   const breadcrumbsNodeId = mode === 'edit' && editData?.loading
@@ -113,8 +120,8 @@ export function LoadingModalNew({
     enabled: !!(shouldLoadBreadcrumbs && open),
   })
 
-  // Используем переданные breadcrumbs если они есть, иначе загруженные из API
-  const effectiveBreadcrumbs = (mode === 'edit' && editData?.breadcrumbs)
+  // Используем переданные breadcrumbs только если они полные, иначе загруженные из API
+  const effectiveBreadcrumbs = (mode === 'edit' && editData?.breadcrumbs && providedBreadcrumbsAreComplete)
     ? editData.breadcrumbs
     : loadedBreadcrumbs
 

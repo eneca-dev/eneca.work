@@ -452,9 +452,11 @@ export function EmployeeRow({
         end_date: loading.endDate,
         rate: loading.rate,
         comment: loading.comment || null,
-        section_id: loading.stageId, // stageId - это loading_stage в БД
+        section_id: loading.stageId || loading.sectionId, // stageId для этапов, sectionId как fallback для прямых загрузок на раздел
       },
-      breadcrumbs: breadcrumbs.length > 0 ? breadcrumbs : undefined,
+      // Передаём breadcrumbs только если они полные (содержат section).
+      // Если sectionId отсутствует — модалка сама загрузит breadcrumbs через API по stageId.
+      breadcrumbs: (loading.sectionId && breadcrumbs.length > 0) ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
   }, [])

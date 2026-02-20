@@ -454,9 +454,10 @@ export function EmployeeRow({
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
 
-    // Открываем модалку создания загрузки с предзаполненным сотрудником
+    // Открываем модалку создания загрузки с предзаполненным сотрудником и разделом
     openLoadingModalNewCreate({
       employeeId: employee.employeeId,
+      sectionId: sectionId,
     })
   }, [employee.employeeId])
 
