@@ -467,7 +467,7 @@ modules/resource-graph/components/timeline/
 ### 🔴 Блокеры
 - [x] Убрать `as any` × 2 в `departments-timeline/EmployeeRow.tsx`
 - [x] Удалить дублированный `PeriodBackground` из `TimelineRow.tsx` (lines 932–1073)
-- [ ] Вынести `dayCellsToTimelineUnits`, `hexToRgba`, `calculateTimelineRange` в общий модуль
+- [x] Вынести `dayCellsToTimelineUnits`, `hexToRgba`, `calculateTimelineRange` в общий модуль
 
 ### 🟡 Желательно
 - [ ] Объединить 3 scroll-useEffect → 1 в обоих `EmployeeRow`

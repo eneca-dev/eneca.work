@@ -573,6 +573,16 @@ export function mapBatchCheckpointToCheckpoint(batch: BatchCheckpoint): Checkpoi
 }
 
 // ============================================================================
+// Re-exports from timeline-cell-utils.ts
+// ============================================================================
+
+export {
+  dayCellsToTimelineUnits,
+  hexToRgba,
+  calculateTimelineRange,
+} from './timeline-cell-utils'
+
+// ============================================================================
 // Re-exports from format.ts
 // ============================================================================
 

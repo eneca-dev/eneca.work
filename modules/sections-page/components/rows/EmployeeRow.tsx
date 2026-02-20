@@ -9,7 +9,8 @@
 import { useMemo, useState, Fragment, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Box, Layers, MessageSquare, UserPlus } from 'lucide-react'
-import { formatMinskDate, getTodayMinsk, parseMinskDate } from '@/lib/timezone-utils'
+import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
+import { dayCellsToTimelineUnits, hexToRgba, calculateTimelineRange } from '@/modules/resource-graph/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
@@ -57,48 +58,6 @@ interface EmployeeRowProps {
   stages?: Array<{ id: string; name: string; order: number | null }>
 }
 
-// Convert DayCell to TimelineUnit for compatibility with loading-bars-utils
-function dayCellsToTimelineUnits(dayCells: DayCell[]): TimelineUnit[] {
-  return dayCells.map((cell, index) => {
-    return {
-      date: cell.date,
-      label: cell.dayOfMonth.toString(),
-      dateKey: formatMinskDate(cell.date),
-      dayOfMonth: cell.dayOfMonth,
-      dayOfWeek: cell.dayOfWeek,
-      isWeekend: cell.isWeekend,
-      isWorkingDay: cell.isWorkday, // Используем готовое поле из DayCell
-      isHoliday: cell.isHoliday,
-      holidayName: cell.holidayName || undefined,
-      isToday: cell.isToday,
-      isMonthStart: cell.isMonthStart,
-      monthName: cell.monthName,
-      left: index * DAY_CELL_WIDTH,
-      width: DAY_CELL_WIDTH,
-    }
-  })
-}
-
-// Helper to convert color to rgba
-function hexToRgba(color: string, alpha: number): string {
-  if (color.startsWith('rgba')) {
-    const match = color.match(/[\d.]+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
-    }
-  }
-  if (color.startsWith('rgb')) {
-    const match = color.match(/\d+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
-    }
-  }
-  let hex = color.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
 
 // Get initials for avatar
 function getInitials(name?: string): string {
@@ -112,19 +71,6 @@ function getInitials(name?: string): string {
   return trimmed.substring(0, 2).toUpperCase()
 }
 
-// Helper to calculate TimelineRange from DayCells
-function calculateTimelineRange(dayCells: DayCell[]): TimelineRange {
-  if (dayCells.length === 0) {
-    const today = new Date()
-    return { start: today, end: today, totalDays: 0 }
-  }
-
-  return {
-    start: dayCells[0].date,
-    end: dayCells[dayCells.length - 1].date,
-    totalDays: dayCells.length,
-  }
-}
 
 /**
  * Loading Bar Component with drag-to-resize
