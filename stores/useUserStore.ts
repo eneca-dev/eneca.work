@@ -71,11 +71,11 @@ export const useUserStore = create<UserState>()(
             return
           }
 
-          console.log("💾 useUserStore.setUser:", {
-            id: user.id,
-            name: user.name,
-            hasProfile: !!user.profile
-          })
+          // console.log("💾 useUserStore.setUser:", {
+          //   id: user.id,
+          //   name: user.name,
+          //   hasProfile: !!user.profile
+          // })
 
           set({
             id: user.id,
@@ -87,7 +87,7 @@ export const useUserStore = create<UserState>()(
         },
 
         clearUser: () => {
-          console.log("🧹 useUserStore.clearUser")
+          // console.log("🧹 useUserStore.clearUser")
           set(initialState)
         },
 

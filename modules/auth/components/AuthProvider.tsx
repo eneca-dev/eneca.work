@@ -47,7 +47,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadUserProfile = useCallback(async (user: User) => {
     // Защита от параллельных загрузок
     if (isLoadingProfile.current) {
-      console.log("⏭️ Пропускаем: загрузка профиля уже в процессе")
+      // console.log("⏭️ Пропускаем: загрузка профиля уже в процессе")
       return
     }
 
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         username: fullName
       })
 
-      console.log("✅ Профиль загружен:", { userId: user.id, name: fullName })
+      // console.log("✅ Профиль загружен:", { userId: user.id, name: fullName })
     } catch (error) {
       console.error("Критическая ошибка загрузки профиля:", error)
       Sentry.captureException(error)
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * Полная очистка состояния приложения при logout
    */
   const clearAllState = useCallback(() => {
-    console.log("🧹 Очистка всего состояния приложения")
+    // console.log("🧹 Очистка всего состояния приложения")
 
     // Очищаем Zustand stores
     useUserStore.getState().clearUser()
@@ -162,7 +162,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     event: AuthChangeEvent,
     session: Session | null
   ) => {
-    console.log("🔐 Auth event:", event, { userId: session?.user?.id })
+    // console.log("🔐 Auth event:", event, { userId: session?.user?.id })
 
     switch (event) {
       case "INITIAL_SESSION":
@@ -212,7 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       case "TOKEN_REFRESHED":
         // Токен обновлён — сессия продолжается
-        console.log("🔄 Токен обновлён")
+        // console.log("🔄 Токен обновлён")
         break
 
       case "USER_UPDATED":

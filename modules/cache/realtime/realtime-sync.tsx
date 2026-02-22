@@ -173,7 +173,7 @@ export function RealtimeSync() {
           // Пробуем переподключиться
           if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++
-            console.log(`[RealtimeSync] Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
+            // console.log(`[RealtimeSync] Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
             setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS * reconnectAttempts)
           } else {
             console.error('[RealtimeSync] Max reconnect attempts reached')
@@ -198,7 +198,7 @@ export function RealtimeSync() {
 
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
               reconnectAttempts++
-              console.log(`[RealtimeSync] Channel closed, reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
+              // console.log(`[RealtimeSync] Channel closed, reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
               setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS)
             } else {
               Sentry.captureMessage('Realtime channel closed, max retries exhausted', {
