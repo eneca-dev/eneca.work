@@ -115,7 +115,7 @@ export function LoadingModalNew({
     ? editData.loading.section_id
     : createData?.sectionId ?? null
 
-  const { breadcrumbs: loadedBreadcrumbs, projectId: loadedProjectId } = useBreadcrumbs({
+  const { breadcrumbs: loadedBreadcrumbs, projectId: loadedProjectId, isLoading: isLoadingBreadcrumbs } = useBreadcrumbs({
     nodeId: breadcrumbsNodeId,
     enabled: !!(shouldLoadBreadcrumbs && open),
   })
@@ -368,8 +368,9 @@ export function LoadingModalNew({
     (mode !== 'create' || isFormVisible) // Неактивна пока показывается кнопка "Создать загрузку"
 
   // Дерево заблокировано когда форма активна, разблокируется через "Сменить раздел"
+  // Также блокируем пока грузятся breadcrumbs (чтобы не дать кликнуть по "Мои проекты" до автонавигации)
   const isFormActive = mode === 'edit' || (mode === 'create' && isFormVisible)
-  const isProjectTreeDisabled = isFormActive && !isChangingStage
+  const isProjectTreeDisabled = (isFormActive && !isChangingStage) || (!!shouldLoadBreadcrumbs && isLoadingBreadcrumbs)
 
   return (
     <>
@@ -386,19 +387,26 @@ export function LoadingModalNew({
         <div className="flex-1 flex overflow-hidden">
           {/* Левая панель: Дерево проектов */}
           <div className="w-1/2 border-r">
-            <ProjectTree
-              mode={projectMode}
-              onModeChange={setProjectMode}
-              selectedSectionId={selectedSectionId}
-              onSectionSelect={selectSection}
-              userId={userId}
-              initialProjectId={currentProjectId}
-              initialBreadcrumbs={currentBreadcrumbs}
-              autoSwitchProject={projectAutoSwitchData}
-              disabled={isProjectTreeDisabled}
-              modalMode={mode}
-              onClose={onClose}
-            />
+            {shouldLoadBreadcrumbs && isLoadingBreadcrumbs ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+              </div>
+            ) : (
+              <ProjectTree
+                mode={projectMode}
+                onModeChange={setProjectMode}
+                selectedSectionId={selectedSectionId}
+                onSectionSelect={selectSection}
+                userId={userId}
+                initialProjectId={currentProjectId}
+                initialBreadcrumbs={currentBreadcrumbs}
+                autoSwitchProject={projectAutoSwitchData}
+                disabled={isProjectTreeDisabled}
+                modalMode={mode}
+                onClose={onClose}
+              />
+            )}
           </div>
 
           {/* Правая панель: Форма */}

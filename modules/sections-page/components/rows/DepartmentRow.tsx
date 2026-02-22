@@ -49,6 +49,25 @@ export function DepartmentRow({
     , 0)
   }, [department.projects])
 
+  // Read capacity overrides from store to account for per-date section overrides
+  const capacityOverrides = useSectionsPageUIStore((s) => s.capacityOverrides)
+
+  // Compute per-date aggregated capacity across all sections of all projects
+  const departmentDateCapacityOverrides = useMemo(() => {
+    const allSections = department.projects.flatMap((p) => p.objectSections)
+    const allDates = new Set(
+      allSections.flatMap((os) => Object.keys(capacityOverrides[os.sectionId] ?? {}))
+    )
+    if (allDates.size === 0) return {}
+    const result: Record<string, number> = {}
+    for (const dateStr of allDates) {
+      result[dateStr] = allSections.reduce((sum, os) => {
+        return sum + (capacityOverrides[os.sectionId]?.[dateStr] ?? (os.defaultCapacity ?? 0))
+      }, 0)
+    }
+    return result
+  }, [department.projects, capacityOverrides])
+
   return (
     <>
       {/* Department header row */}
@@ -99,7 +118,7 @@ export function DepartmentRow({
               <AggregatedBarsOverlay
                 loadings={allDepartmentLoadings}
                 defaultCapacity={totalDepartmentCapacity}
-                dateCapacityOverrides={{}}
+                dateCapacityOverrides={departmentDateCapacityOverrides}
                 dayCells={dayCells}
                 rowHeight={DEPARTMENT_ROW_HEIGHT}
                 editable={false}

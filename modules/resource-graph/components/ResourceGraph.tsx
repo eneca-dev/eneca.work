@@ -141,6 +141,17 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
     })
   }, []) // Один раз при монтировании
 
+  const scrollToToday = useCallback(() => {
+    const containerWidth = headerScrollRef.current?.clientWidth ?? 0
+    const todayScrollPosition = SIDEBAR_WIDTH + DAYS_BEFORE_TODAY * DAY_CELL_WIDTH - containerWidth / 2 + DAY_CELL_WIDTH / 2
+    if (headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = todayScrollPosition
+    }
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollLeft = todayScrollPosition
+    }
+  }, [])
+
   // UI state
   const { collapseAll, expandAll, expandToSections } = useUIStateStore()
 
@@ -291,7 +302,7 @@ export function ResourceGraphInternal({ queryParams }: ResourceGraphInternalProp
                 </TooltipProvider>
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader dayCells={dayCells} />
+              <TimelineHeader dayCells={dayCells} onScrollToToday={scrollToToday} />
             </div>
           </div>
         </header>
@@ -401,6 +412,17 @@ export function ResourceGraph() {
       }
     })
   }, []) // Один раз при монтировании
+
+  const scrollToToday = useCallback(() => {
+    const containerWidth = headerScrollRef.current?.clientWidth ?? 0
+    const todayScrollPosition = SIDEBAR_WIDTH + DAYS_BEFORE_TODAY * DAY_CELL_WIDTH - containerWidth / 2 + DAY_CELL_WIDTH / 2
+    if (headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = todayScrollPosition
+    }
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollLeft = todayScrollPosition
+    }
+  }, [])
 
   // Filters store
   const { filterString, setFilterString } = useFiltersStore()
@@ -562,7 +584,7 @@ export function ResourceGraph() {
                 </TooltipProvider>
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader dayCells={dayCells} />
+              <TimelineHeader dayCells={dayCells} onScrollToToday={scrollToToday} />
             </div>
           </div>
         )}

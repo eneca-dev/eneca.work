@@ -50,6 +50,25 @@ export function ProjectRow({
     }, 0)
   }, [project.objectSections])
 
+  // Read capacity overrides from store to account for per-date section overrides
+  const capacityOverrides = useSectionsPageUIStore((s) => s.capacityOverrides)
+
+  // Compute per-date aggregated capacity: for each date where any section has an override,
+  // sum effective capacity across all sections (override ?? defaultCapacity)
+  const projectDateCapacityOverrides = useMemo(() => {
+    const allDates = new Set(
+      project.objectSections.flatMap((os) => Object.keys(capacityOverrides[os.sectionId] ?? {}))
+    )
+    if (allDates.size === 0) return {}
+    const result: Record<string, number> = {}
+    for (const dateStr of allDates) {
+      result[dateStr] = project.objectSections.reduce((sum, os) => {
+        return sum + (capacityOverrides[os.sectionId]?.[dateStr] ?? (os.defaultCapacity ?? 0))
+      }, 0)
+    }
+    return result
+  }, [project.objectSections, capacityOverrides])
+
   return (
     <>
       {/* Project header row */}
@@ -101,7 +120,7 @@ export function ProjectRow({
               <AggregatedBarsOverlay
                 loadings={allProjectLoadings}
                 defaultCapacity={totalCapacity}
-                dateCapacityOverrides={{}}
+                dateCapacityOverrides={projectDateCapacityOverrides}
                 dayCells={dayCells}
                 rowHeight={PROJECT_ROW_HEIGHT}
                 editable={false}
