@@ -115,7 +115,7 @@ export function LoadingModalNew({
     ? editData.loading.section_id
     : createData?.sectionId ?? null
 
-  const { breadcrumbs: loadedBreadcrumbs, projectId: loadedProjectId } = useBreadcrumbs({
+  const { breadcrumbs: loadedBreadcrumbs, projectId: loadedProjectId, isLoading: isLoadingBreadcrumbs } = useBreadcrumbs({
     nodeId: breadcrumbsNodeId,
     enabled: !!(shouldLoadBreadcrumbs && open),
   })
@@ -368,8 +368,9 @@ export function LoadingModalNew({
     (mode !== 'create' || isFormVisible) // Неактивна пока показывается кнопка "Создать загрузку"
 
   // Дерево заблокировано когда форма активна, разблокируется через "Сменить раздел"
+  // Также блокируем пока грузятся breadcrumbs (чтобы не дать кликнуть по "Мои проекты" до автонавигации)
   const isFormActive = mode === 'edit' || (mode === 'create' && isFormVisible)
-  const isProjectTreeDisabled = isFormActive && !isChangingStage
+  const isProjectTreeDisabled = (isFormActive && !isChangingStage) || (!!shouldLoadBreadcrumbs && isLoadingBreadcrumbs)
 
   return (
     <>
