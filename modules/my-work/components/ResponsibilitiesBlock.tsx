@@ -23,7 +23,7 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
   isCompact = false
 }) => {
   const router = useRouter()
-  const { focusSection, focusProject } = useProjectsStore()
+  const { focusSection } = useProjectsStore()
   // Группируем ответственности по типам
   const groupResponsibilities = (): ResponsibilityGroup[] => {
     const groups: ResponsibilityGroup[] = [
@@ -101,18 +101,14 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                 <div className={`text-xs font-medium text-foreground ${isCompact ? 'mb-0.5' : 'mb-1'}`}>{group.title}</div>
                 <div className={`flex flex-wrap ${isCompact ? 'gap-1' : 'gap-2'}`}>
                   {group.items.map((item, index) => (
-                    (item.type === 'section_responsible' || item.type === 'project_manager' || item.type === 'lead_engineer') ? (
+                    item.type === 'section_responsible' ? (
                       <a
                         key={index}
                         data-keep-notifications-open
                         href="/dashboard/projects"
                         onClick={(e) => {
                           e.preventDefault()
-                          if (item.type === 'section_responsible') {
-                            focusSection(item.entity_id)
-                          } else {
-                            focusProject(item.entity_id)
-                          }
+                          focusSection(item.entity_id)
                           router.push('/dashboard/projects')
                         }}
                         className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-primary hover:text-primary/80 hover:underline truncate max-w-full cursor-pointer`}
@@ -120,8 +116,12 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                       >
                         {item.entity_name}
                       </a>
+                    ) : (item.type === 'project_manager' || item.type === 'lead_engineer') ? (
+                      <div key={index} className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-foreground truncate max-w-full`} title={item.entity_name}>
+                        {item.entity_name}
+                      </div>
                     ) : (
-                      <div key={index} className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-muted-foreground truncate max-w-full` } title={item.entity_name}>
+                      <div key={index} className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-accent/70 border-border text-muted-foreground truncate max-w-full`} title={item.entity_name}>
                         {item.entity_name}
                       </div>
                     )

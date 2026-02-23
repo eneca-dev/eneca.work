@@ -7,7 +7,11 @@ import { useKanbanFiltersStore, useKanbanUIStore, KANBAN_FILTER_CONFIG } from '.
 import { useKanbanFilterOptions } from '../filters/useFilterOptions'
 import { useKanbanSectionsInfinite, useUpdateStageStatusOptimistic, useDragHandlers } from '../hooks'
 import type { KanbanBoard as KanbanBoardType } from '../types'
+import { KANBAN_COLUMNS, COLUMN_MIN_WIDTH } from '../constants'
 import { KanbanSwimlane } from './KanbanSwimlane'
+
+// Минимальная ширина доски: все колонки + padding контейнера колонок (p-2 = 16px)
+const BOARD_MIN_WIDTH = KANBAN_COLUMNS.length * COLUMN_MIN_WIDTH + 16
 
 // ============================================================================
 // Internal Props (for embedding in TasksView)
@@ -152,8 +156,8 @@ export function KanbanBoardInternal({ filterString, queryParams, loadAllEnabled,
   return (
     <div className="flex flex-col h-full">
       {/* Swimlanes */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        <div className="min-w-fit">
+      <div className="flex-1 scrollbar-h-only">
+        <div style={{ minWidth: BOARD_MIN_WIDTH }}>
           {sectionsToShow.map((section) => (
             <KanbanSwimlane
               key={section.id}
@@ -168,28 +172,28 @@ export function KanbanBoardInternal({ filterString, queryParams, loadAllEnabled,
             />
           ))}
 
-        {/* Load More Button */}
-        {hasNextPage && (
-          <div className="flex justify-center py-4 border-t bg-card/50">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Загрузка...
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Загрузить ещё
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          {/* Load More Button */}
+          {hasNextPage && (
+            <div className="flex justify-center py-4 border-t bg-card/50">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Загрузить ещё
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -398,8 +402,8 @@ export function KanbanBoard() {
       />
 
       {/* Swimlanes */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        <div className="min-w-fit">
+      <div className="flex-1 scrollbar-h-only">
+        <div style={{ minWidth: BOARD_MIN_WIDTH }}>
           {sectionsToShow.map((section) => (
             <KanbanSwimlane
               key={section.id}

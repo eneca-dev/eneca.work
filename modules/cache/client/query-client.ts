@@ -106,7 +106,7 @@ export function resetQueryClient(): void {
     browserQueryClient.clear()
     // Сбрасываем singleton для пересоздания
     browserQueryClient = undefined
-    console.log("🗑️ QueryClient сброшен")
+    // console.log("🗑️ QueryClient сброшен")
   }
 }
 
@@ -117,6 +117,6 @@ export function resetQueryClient(): void {
 export function invalidateAllQueries(): void {
   if (browserQueryClient) {
     browserQueryClient.invalidateQueries()
-    console.log("🔄 Все запросы инвалидированы")
+    // console.log("🔄 Все запросы инвалидированы")
   }
 }

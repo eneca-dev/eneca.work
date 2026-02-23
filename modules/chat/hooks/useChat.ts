@@ -88,7 +88,7 @@ export function useChat() {
   useEffect(() => {
     if (!conversationId || !userId) return
 
-    console.log('[Realtime] Creating subscription for conversation:', conversationId)
+    // console.log('[Realtime] Creating subscription for conversation:', conversationId)
 
     const channel = supabase
       .channel(`chat:${conversationId}`)
@@ -102,21 +102,21 @@ export function useChat() {
         },
         (payload) => {
           const newMessage = payload.new as ChatMessage
-          console.log('[Realtime] Received message:', newMessage)
+          // console.log('[Realtime] Received message:', newMessage)
 
           setMessages(prev => {
-            console.log('[Realtime] Current messages count:', prev.length)
+            // console.log('[Realtime] Current messages count:', prev.length)
 
             // Если это сообщение уже есть (по реальному ID) - пропускаем
             if (prev.some(m => m.id === newMessage.id)) {
-              console.log('[Realtime] Message already exists, skipping')
+              // console.log('[Realtime] Message already exists, skipping')
               return prev
             }
 
             // Если это сообщение от пользователя, ищем и заменяем временное
             if (newMessage.role === 'user') {
-              const tempMessages = prev.filter(m => m.id.startsWith('temp-'))
-              console.log('[Realtime] Temp messages:', tempMessages)
+              // const tempMessages = prev.filter(m => m.id.startsWith('temp-'))
+              // console.log('[Realtime] Temp messages:', tempMessages)
 
               const tempIndex = prev.findIndex(m =>
                 m.id.startsWith('temp-') &&
@@ -126,7 +126,7 @@ export function useChat() {
 
               if (tempIndex !== -1) {
                 // Заменяем временное на реальное
-                console.log('[Realtime] Replacing temp message at index:', tempIndex)
+                // console.log('[Realtime] Replacing temp message at index:', tempIndex)
                 const updated = [...prev]
                 updated[tempIndex] = {
                   ...newMessage,
@@ -134,12 +134,12 @@ export function useChat() {
                 }
                 return updated
               } else {
-                console.log('[Realtime] No temp message found to replace')
+                // console.log('[Realtime] No temp message found to replace')
               }
             }
 
             // Добавляем новое сообщение
-            console.log('[Realtime] Adding new message')
+            // console.log('[Realtime] Adding new message')
             return [...prev, {
               ...newMessage,
               created_at: new Date(newMessage.created_at)
@@ -159,11 +159,11 @@ export function useChat() {
         }
       )
       .subscribe((status) => {
-        console.log('[Realtime] Subscription status:', status)
+        // console.log('[Realtime] Subscription status:', status)
       })
 
     return () => {
-      console.log('[Realtime] Unsubscribing')
+      // console.log('[Realtime] Unsubscribing')
       channel.unsubscribe()
       // Очищаем таймаут при размонтировании
       if (typingTimeoutRef.current) {
@@ -233,7 +233,7 @@ export function useChat() {
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading || !userId || !conversationId) return
 
-    console.log('[sendMessage] Starting...', { userId, conversationId, content })
+    // console.log('[sendMessage] Starting...', { userId, conversationId, content })
 
     setIsLoading(true)
     setIsTyping(true)
@@ -274,7 +274,7 @@ export function useChat() {
         throw error
       }
 
-      console.log('[sendMessage] Insert success:', data)
+      // console.log('[sendMessage] Insert success:', data)
 
       // Realtime автоматически заменит временное сообщение на реальное
       // isLoading сбросится когда придёт ответ от бота через Realtime
@@ -330,7 +330,7 @@ export function useChat() {
       setIsTyping(false)
       setIsLoading(false)
 
-      console.log('[clearMessages] Messages deleted for conversation:', conversationId)
+      // console.log('[clearMessages] Messages deleted for conversation:', conversationId)
     } catch (error) {
       console.error('[clearMessages] Error:', error)
     }

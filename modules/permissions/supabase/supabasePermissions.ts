@@ -19,7 +19,7 @@ export async function getUserPermissions(userId: string): Promise<{
   const supabase = createClient()
   
   try {
-    console.log('🔐 Загрузка разрешений для пользователя:', userId)
+    // console.log('🔐 Загрузка разрешений для пользователя:', userId)
 
     // Используем оптимизированную функцию БД для получения разрешений
     const { data: permissions, error: permissionsError } = await supabase
@@ -66,9 +66,9 @@ export async function getUserPermissions(userId: string): Promise<{
 
     const primaryRole = computePrimaryRole(permissions || [], roles)
 
-    console.log('✅ Загружено разрешений в supabasePermissions:', permissions?.length || 0)
-    console.log('👤 Роли пользователя в supabasePermissions:', roles)
-    console.log('⭐ Основная роль в supabasePermissions:', primaryRole)
+    // console.log('✅ Загружено разрешений в supabasePermissions:', permissions?.length || 0)
+    // console.log('👤 Роли пользователя в supabasePermissions:', roles)
+    // console.log('⭐ Основная роль в supabasePermissions:', primaryRole)
     
     return {
       permissions: permissions || [],

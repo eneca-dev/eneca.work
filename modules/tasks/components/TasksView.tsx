@@ -50,15 +50,14 @@ export function TasksView() {
   // Filter options for autocomplete + locked filters
   const { options: filterOptions, lockedFilters } = useTasksFilterOptions()
 
-  // Log URL params for debugging
-  useEffect(() => {
-    const projectId = searchParams.get('projectId')
-    const sectionId = searchParams.get('sectionId')
-    const highlight = searchParams.get('highlight')
-
-    console.log('[TasksView] URL params:', { projectId, sectionId, highlight })
-    console.log('[TasksView] Current viewMode:', viewMode)
-  }, [searchParams, viewMode])
+  // // Log URL params for debugging
+  // useEffect(() => {
+  //   const projectId = searchParams.get('projectId')
+  //   const sectionId = searchParams.get('sectionId')
+  //   const highlight = searchParams.get('highlight')
+  //   console.log('[TasksView] URL params:', { projectId, sectionId, highlight })
+  //   console.log('[TasksView] Current viewMode:', viewMode)
+  // }, [searchParams, viewMode])
 
   // Parse filter string to query params (shared between views)
   const queryParams = useMemo(() => {

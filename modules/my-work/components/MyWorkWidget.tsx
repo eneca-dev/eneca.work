@@ -264,7 +264,7 @@ export const MyWorkWidget: React.FC = () => {
             </div>
 
                          {/* Правая колонка - всегда видна */}
-            <div className="flex flex-col space-y-6 overflow-hidden h-full">
+            <div className="flex flex-col space-y-6 overflow-hidden h-full pt-[16px]">
               {/* График задач всегда в правой колонке */}
               <WorkTasksChart 
                 workLogs={data.workLogs}
