@@ -107,7 +107,7 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                     {formatDate(loading.loading_start)} — {formatDate(loading.loading_finish)}
                   </span>
                 </div>
-                <a
+                {/* <a
                   href="#section"
                   title="Открыть окно раздела"
                   onClick={(e) => {
@@ -124,7 +124,7 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                 >
                   <ExternalLink className="h-3 w-3" />
                   к разделу
-                </a>
+                </a> */}
               </div>
             </div>
 
