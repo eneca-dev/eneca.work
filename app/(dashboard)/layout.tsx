@@ -8,6 +8,7 @@ import { NotificationsProvider } from "@/modules/notifications/components/Notifi
 import { useSidebarState } from "@/hooks/useSidebarState"
 import { useAuthContext } from "@/modules/auth"
 import { TopNavbar } from "@/modules/layout"
+import { OnboardingProvider } from "@/components/onboarding/OnboardingProvider"
 
 /**
  * Мемоизированная обёртка для контента
@@ -112,6 +113,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Chat Interface */}
       <ChatInterface />
+
+      {/* Onboarding */}
+      <OnboardingProvider />
     </div>
   )
 }
