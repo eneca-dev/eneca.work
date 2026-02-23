@@ -2,46 +2,76 @@
 
 import { useCallback } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Modal } from "@/components/modals/base/Modal"
 import { useOnboardingStore, TOTAL_PAGES } from "@/stores/useOnboardingStore"
 
-const YOUTUBE_VIDEO_ID = "OWbtxdq5rvQ"
+interface PageConfig {
+  title: string
+  description: string
+  // ID видео с YouTube (если есть)
+  videoId?: string
+  // Путь к скриншоту из папки public/ (если есть)
+  imageSrc?: string
+  imageAlt?: string
+}
 
-const PAGES = [
+const PAGES: PageConfig[] = [
   {
-    title: "Добро пожаловать в eneca.work 2.0",
-    description: "Мы полностью переработали платформу. Это короткое руководство покажет вам всё самое важное.",
+    title: "Как отправить баг или предложение",
+    description: "Нашли проблему или есть идея? Покажем, как быстро сообщить об этом команде прямо из приложения.",
+    videoId: "vZ4IxHk2mHQ",
   },
   {
-    title: "Задачи",
-    description: "Управляйте задачами, назначайте исполнителей, отслеживайте статусы и дедлайны в одном месте.",
+    title: "Как пользоваться канбаном",
+    description: "Канбан-доска помогает визуально управлять задачами. Создавайте карточки, меняйте статусы перетаскиванием, настраивайте колонки.",
+    videoId: "zSMcTr9ZmrA",
+    imageSrc: "/onboarding/page-2-kanban.png",
+    imageAlt: "Канбан-доска",
   },
   {
-    title: "Заметки",
-    description: "Создавайте и структурируйте заметки, привязывайте их к проектам и задачам.",
+    title: "Как создать загрузку в отделах",
+    description: "Загрузка позволяет распределить объём работы между сотрудниками. Узнайте, как создать новую загрузку в разделе отделов.",
+    videoId: "aaNHHonGDlg",
+    imageSrc: "/onboarding/page-3-department-upload.png",
+    imageAlt: "Создание загрузки в отделах",
   },
   {
-    title: "Календарь",
-    description: "Планируйте рабочую неделю, видите события команды и личный график одновременно.",
+    title: "Как перетащить загрузку в отделах",
+    description: "Загрузки можно перераспределять перетаскиванием между сотрудниками и временными слотами. Это быстро и наглядно.",
+    videoId: "VmxAq0YEZuY",
   },
   {
-    title: "Документация",
-    description: "Вся проектная документация в одном месте. Быстрый поиск и удобная навигация.",
+    title: "Загрузка в отделах",
+    description: "",
+    imageSrc: "/onboarding/page-5-screenshot.png",
+    imageAlt: "Загрузка в отделах",
   },
   {
-    title: "Уведомления",
-    description: "Следите за обновлениями в реальном времени — вас не пропустят ни одного важного события.",
+    title: "Как поставить ёмкость на раздел",
+    description: "Ёмкость раздела определяет, сколько работы может взять на себя команда. Узнайте, как её настроить.",
+    videoId: "n_lCFeD_JWQ",
   },
   {
-    title: "Совместная работа",
-    description: "Приглашайте коллег, распределяйте роли и работайте над проектами вместе.",
+    title: "",
+    description: "",
+    imageSrc: "/onboarding/page-7-screenshot.png",
+    imageAlt: "Скриншот",
   },
   {
-    title: "Всё готово!",
-    description: "Вы можете вернуться к этому руководству в любой момент через кнопку в боковом меню.",
+    title: "Как создать загрузку на сотрудника или раздел",
+    description: "Назначайте загрузку конкретному сотруднику или целому разделу — прямо из карточки в разделах.",
+    videoId: "2b7HidyJmFc",
+    imageSrc: "/onboarding/page-8-section-upload.png",
+    imageAlt: "Загрузка на сотрудника или раздел",
   },
-] as const
+  {
+    title: "Как настроить вкладки и пользоваться фильтром",
+    description: "Персонализируйте интерфейс под себя: скрывайте ненужные вкладки и применяйте фильтры для быстрого поиска нужного.",
+    videoId: "Chx8Vc35Thc",
+  },
+]
 
 export function OnboardingModal() {
   const { isOpen, currentPage, close, nextPage, prevPage, goToPage } = useOnboardingStore()
@@ -54,6 +84,11 @@ export function OnboardingModal() {
     close()
   }, [close])
 
+  const hasVideo = !!page.videoId
+  const hasImage = !!page.imageSrc
+  const hasTitle = !!page.title
+  const hasDescription = !!page.description
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="xl" closeOnOverlayClick={false}>
       {/* Header */}
@@ -62,7 +97,9 @@ export function OnboardingModal() {
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
             Шаг {currentPage + 1} из {TOTAL_PAGES}
           </p>
-          <h2 className="text-lg font-semibold text-foreground leading-tight">{page.title}</h2>
+          {hasTitle && (
+            <h2 className="text-lg font-semibold text-foreground leading-tight">{page.title}</h2>
+          )}
         </div>
         <Button
           variant="ghost"
@@ -76,20 +113,40 @@ export function OnboardingModal() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-        {/* Video embed */}
-        <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
-          <iframe
-            key={currentPage} // перемонтировать при смене страницы
-            src={`https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?rel=0&modestbranding=1`}
-            title={page.title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            className="absolute inset-0 w-full h-full"
-          />
-        </div>
 
-        {/* Description */}
-        <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
+        {/* Видео */}
+        {hasVideo && (
+          <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+            <iframe
+              key={`video-${currentPage}`}
+              src={`https://www.youtube.com/embed/${page.videoId}?rel=0&modestbranding=1`}
+              title={page.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 w-full h-full"
+            />
+          </div>
+        )}
+
+        {/* Скриншот / фото */}
+        {hasImage && (
+          <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
+            <Image
+              key={`image-${currentPage}`}
+              src={page.imageSrc!}
+              alt={page.imageAlt || page.title}
+              width={800}
+              height={450}
+              className="w-full h-auto object-contain"
+              priority
+            />
+          </div>
+        )}
+
+        {/* Описание */}
+        {hasDescription && (
+          <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
+        )}
       </div>
 
       {/* Footer */}
@@ -124,7 +181,7 @@ export function OnboardingModal() {
           </Button>
 
           {isLast ? (
-            <Button size="sm" onClick={handleClose} className="gap-1">
+            <Button size="sm" onClick={handleClose}>
               Завершить
             </Button>
           ) : (

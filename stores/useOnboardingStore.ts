@@ -16,7 +16,7 @@ interface OnboardingState {
   markAsSeen: () => void
 }
 
-const TOTAL_PAGES = 8
+const TOTAL_PAGES = 9
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
