@@ -470,6 +470,32 @@
   scrollbar-color: #e5e7eb transparent;
 }
 
+/* Скроллбар: только горизонтальный (для канбана) */
+.scrollbar-h-only {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+.scrollbar-h-only::-webkit-scrollbar:vertical {
+  display: none;
+}
+.scrollbar-h-only::-webkit-scrollbar:horizontal {
+  height: 8px;
+}
+.scrollbar-h-only::-webkit-scrollbar-thumb:horizontal {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+}
+.scrollbar-h-only::-webkit-scrollbar-track:horizontal {
+  background: transparent;
+}
+/* Firefox: нет способа скрыть только вертикальный, делаем оба тонкими */
+@supports (scrollbar-width: thin) {
+  .scrollbar-h-only {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
 /* Единая система типографики */
 @layer components {
   /* Заголовки страниц */

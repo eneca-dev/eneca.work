@@ -36,7 +36,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
       setIsLoading(true)
       try {
-        console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
+        // console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
         
         const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: userState.id } }, async () =>
           supabase
@@ -57,7 +57,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
         }
 
         if (userData) {
-          console.log("CurrentUserCard: Получены данные из view_users:", userData)
+          // console.log("CurrentUserCard: Получены данные из view_users:", userData)
           
           // Формируем объект пользователя из данных view_users
           const formattedUser: User = {
@@ -91,7 +91,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
             isHourly: userData.is_hourly || false
           }
           
-          console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
+          // console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
           setCurrentUser(formattedUser)
         }
 
@@ -139,15 +139,15 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
     fetchUserData()
   }, [userState.isAuthenticated, userState.id, supabase])
 
-  // Отладочный вывод для понимания, что содержится в хранилище
-  useEffect(() => {
-    console.log("CurrentUserCard: Состояние из Zustand:", userState)
-  }, [userState])
+  // // Отладочный вывод для понимания, что содержится в хранилище
+  // useEffect(() => {
+  //   console.log("CurrentUserCard: Состояние из Zustand:", userState)
+  // }, [userState])
 
   // Fallback к переданному пользователю, если нет данных
   useEffect(() => {
     if (!currentUser && !isLoading && fallbackUser) {
-      console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
+      // console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
       setCurrentUser(fallbackUser)
     }
   }, [currentUser, isLoading, fallbackUser])
@@ -205,7 +205,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
   // Если данных нет, показываем пустую карточку или индикатор загрузки
   if (isLoading || !currentUser) {
-    console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
+    // console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
     return (
       <Card>
         <CardContent className="p-4">

@@ -193,13 +193,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
           getAllRoles()
         ]))
 
-        console.log("=== UserDialog: Загружены справочные данные ===")
-        console.log("subdivisions:", subdivisionsData)
-        console.log("departments:", departmentsData)
-        console.log("teams:", teamsData)
-        console.log("positions:", positionsData)
-        console.log("categories:", categoriesData)
-        console.log("roles:", rolesData)
+        // console.log("=== UserDialog: Загружены справочные данные ===")
+        // console.log("subdivisions:", subdivisionsData)
+        // console.log("departments:", departmentsData)
+        // console.log("teams:", teamsData)
+        // console.log("positions:", positionsData)
+        // console.log("categories:", categoriesData)
+        // console.log("roles:", rolesData)
 
         setSubdivisions(subdivisionsData)
         setDepartments(departmentsData)
@@ -246,13 +246,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         return
       }
       
-      console.log("UserDialog: Загружены роли пользователя:", result.roles)
+      // console.log("UserDialog: Загружены роли пользователя:", result.roles)
       setUserRoles(result.roles)
-      
+
       // Устанавливаем выбранные роли для управления
       const roleIds = result.roles.map(r => r.roleId)
       setSelectedRoles(roleIds)
-      console.log("UserDialog: Установлены selectedRoles:", roleIds)
+      // console.log("UserDialog: Установлены selectedRoles:", roleIds)
     } catch (error) {
       console.error("Ошибка загрузки ролей пользователя:", error)
     }
@@ -342,12 +342,12 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   // Загрузка данных пользователя при открытии диалога
   useEffect(() => {
     if (open && user) {
-      console.log("=== UserDialog: Загрузка данных пользователя ===")
-      console.log("user:", user)
-      console.log("user.team:", user.team)
-      console.log("user.team type:", typeof user.team)
-      console.log("user.department:", user.department)
-      console.log("user.department type:", typeof user.department)
+      // console.log("=== UserDialog: Загрузка данных пользователя ===")
+      // console.log("user:", user)
+      // console.log("user.team:", user.team)
+      // console.log("user.team type:", typeof user.team)
+      // console.log("user.department:", user.department)
+      // console.log("user.department type:", typeof user.department)
       
       // Загружаем роли пользователя
       loadUserRoles(user.id)
@@ -373,9 +373,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         employmentRate: user.employmentRate || 1,
       })
       
-      console.log("=== UserDialog: Установлены данные формы ===")
-      console.log("formData.team:", user.team || "")
-      console.log("formData.department:", user.department || "")
+      // console.log("=== UserDialog: Установлены данные формы ===")
+      // console.log("formData.team:", user.team || "")
+      // console.log("formData.department:", user.department || "")
       
       // Устанавливаем страну
       if (user.country) {
@@ -425,14 +425,14 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
   // Фильтрация отделов по выбранному подразделению
   useEffect(() => {
-    console.log("=== UserDialog: Фильтрация отделов ===")
-    console.log("formData.subdivision:", formData.subdivision)
-    console.log("subdivisions:", subdivisions)
-    console.log("departments:", departments)
+    // console.log("=== UserDialog: Фильтрация отделов ===")
+    // console.log("formData.subdivision:", formData.subdivision)
+    // console.log("subdivisions:", subdivisions)
+    // console.log("departments:", departments)
 
     if (formData.subdivision && formData.subdivision !== "") {
       const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
-      console.log("Найденный subdivisionId:", subdivisionId)
+      // console.log("Найденный subdivisionId:", subdivisionId)
 
       // Фильтруем отделы по подразделению, исключая "Не назначен"
       const filtered = departments.filter((d) => {
@@ -440,54 +440,54 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         const deptSubdivisionId = (d as any).subdivisionId
         return deptSubdivisionId === subdivisionId && d.name !== "Не назначен"
       })
-      console.log("Отфильтрованные отделы:", filtered)
+      // console.log("Отфильтрованные отделы:", filtered)
       setFilteredDepartments(filtered)
 
       // Если выбранный отдел не принадлежит выбранному подразделению, сбрасываем его и команду
       if (formData.department && formData.department !== "") {
         const departmentExists = filtered.some((d) => d.name === formData.department)
-        console.log("Отдел найден в подразделении:", departmentExists)
+        // console.log("Отдел найден в подразделении:", departmentExists)
 
         if (!departmentExists) {
-          console.log("Сбрасываем отдел и команду, так как отдел не принадлежит подразделению")
+          // console.log("Сбрасываем отдел и команду, так как отдел не принадлежит подразделению")
           setFormData((prev) => ({ ...prev, department: "", team: "" }))
         }
       }
     } else {
-      console.log("Подразделение не выбрано, показываем все отделы")
+      // console.log("Подразделение не выбрано, показываем все отделы")
       setFilteredDepartments(departments.filter((d) => d.name !== "Не назначен"))
     }
   }, [formData.subdivision, subdivisions, departments])
 
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
-    console.log("=== UserDialog: Фильтрация команд ===")
-    console.log("formData.department:", formData.department)
-    console.log("formData.team:", formData.team)
-    console.log("departments:", departments)
-    console.log("teams:", teams)
+    // console.log("=== UserDialog: Фильтрация команд ===")
+    // console.log("formData.department:", formData.department)
+    // console.log("formData.team:", formData.team)
+    // console.log("departments:", departments)
+    // console.log("teams:", teams)
 
     if (formData.department && formData.department !== "") {
       const departmentId = departments.find((d) => d.name === formData.department)?.id
-      console.log("Найденный departmentId:", departmentId)
+      // console.log("Найденный departmentId:", departmentId)
 
       const filtered = teams
         .filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
-      console.log("Отфильтрованные команды:", filtered)
+      // console.log("Отфильтрованные команды:", filtered)
       setFilteredTeams(filtered)
 
       // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
       if (formData.team && formData.team !== "") {
         const teamExists = filtered.some((t) => t.name === formData.team)
-        console.log("Команда найдена по имени:", teamExists)
+        // console.log("Команда найдена по имени:", teamExists)
 
         if (!teamExists) {
-          console.log("Сбрасываем команду, так как она не принадлежит отделу")
+          // console.log("Сбрасываем команду, так как она не принадлежит отделу")
           setFormData((prev) => ({ ...prev, team: "" }))
         }
       }
     } else {
-      console.log("Отдел не выбран, сбрасываем команду и показываем пустой список")
+      // console.log("Отдел не выбран, сбрасываем команду и показываем пустой список")
       setFilteredTeams([])
       // Сбрасываем команду при сбросе отдела
       if (formData.team && formData.team !== "") {
@@ -556,11 +556,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         return
       }
       
-      console.log("=== handleSaveRoles ===")
-      console.log("currentRoleIds:", currentRoleIds)
-      console.log("tempSelectedRoles:", tempSelectedRoles)
-      console.log("rolesToAdd:", rolesToAdd)
-      console.log("rolesToRemove:", rolesToRemove)
+      // console.log("=== handleSaveRoles ===")
+      // console.log("currentRoleIds:", currentRoleIds)
+      // console.log("tempSelectedRoles:", tempSelectedRoles)
+      // console.log("rolesToAdd:", rolesToAdd)
+      // console.log("rolesToRemove:", rolesToRemove)
       
       let success = true
       
@@ -629,13 +629,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
     try {
       if (user) {
-        console.log("=== UserDialog: handleSubmit ===");
-        console.log("isSelfEdit:", isSelfEdit);
-        console.log("canEditAllUsers:", canEditAllUsers);
-        console.log("canEditPositionAndCategory:", canEditPositionAndCategory);
-        console.log("canEditLocationFields:", canEditLocationFields);
-        console.log("isEditingOwnProfile:", isEditingOwnProfile);
-        console.log("Отправляемые данные формы:", formData);
+        // console.log("=== UserDialog: handleSubmit ===");
+        // console.log("isSelfEdit:", isSelfEdit);
+        // console.log("canEditAllUsers:", canEditAllUsers);
+        // console.log("canEditPositionAndCategory:", canEditPositionAndCategory);
+        // console.log("canEditLocationFields:", canEditLocationFields);
+        // console.log("isEditingOwnProfile:", isEditingOwnProfile);
+        // console.log("Отправляемые данные формы:", formData);
         
         // Подготавливаем данные для отправки, исключая проблемные поля
         const updateData: any = {
@@ -739,14 +739,14 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
         // Роли управляются через модальное окно
         
-        console.log("Итоговые данные для updateUser:", updateData);
+        // console.log("Итоговые данные для updateUser:", updateData);
         
         await Sentry.startSpan({ name: 'Users/UserDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, updateData))
-        console.log("updateUser завершен успешно");
+        // console.log("updateUser завершен успешно");
         
         // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
         if (isEditingOwnProfile) {
-          console.log("Обновляем Zustand для собственного профиля");
+          // console.log("Обновляем Zustand для собственного профиля");
           // Получаем свежие данные пользователя из базы
           const freshSupabase = createClient();
           const { data: freshProfile, error: profileError } = await Sentry.startSpan({ name: 'Users/UserDialog loadFreshProfile', op: 'db.read', attributes: { user_id: user.id } }, async () =>
@@ -760,7 +760,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
           if (profileError) {
             console.error("Ошибка получения обновленного профиля:", profileError);
           } else if (freshProfile) {
-            console.log("Полученный обновленный профиль:", freshProfile);
+            // console.log("Полученный обновленный профиль:", freshProfile);
             
             // Обновляем профиль в Zustand
             setUser({
@@ -788,7 +788,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
             // УДАЛЕНО: Legacy обновление разрешений через getUserRoleAndPermissions
           }
         } else {
-          console.log("Не обновляем Zustand, так как редактируем другого пользователя");
+          // console.log("Не обновляем Zustand, так как редактируем другого пользователя");
         }
         
         toast({
@@ -797,10 +797,10 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         })
         onOpenChange(false)
         if (onUserUpdated) {
-          console.log("Вызываем onUserUpdated callback");
+          // console.log("Вызываем onUserUpdated callback");
           onUserUpdated()
         } else {
-          console.log("onUserUpdated callback отсутствует");
+          // console.log("onUserUpdated callback отсутствует");
         }
       }
     } catch (error) {

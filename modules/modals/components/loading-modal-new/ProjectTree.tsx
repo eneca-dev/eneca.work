@@ -275,7 +275,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
             }
           }}
           className={cn(
-            'flex items-center gap-1.5 w-full py-1 text-sm transition-colors',
+            'flex items-start gap-1.5 w-full py-1 text-sm transition-colors',
             isSelected
               ? 'bg-primary text-primary-foreground font-medium'
               : !disabled && 'hover:bg-accent hover:text-accent-foreground',
@@ -286,7 +286,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
           {hasChildren ? (
-            <span className="shrink-0">
+            <span className="shrink-0 mt-0.5">
               {isNodeExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" />
               ) : (
@@ -294,10 +294,10 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
               )}
             </span>
           ) : (
-            <span className="w-3.5" />
+            <span className="w-3.5 mt-0.5" />
           )}
-          <Icon className={cn('h-3.5 w-3.5 shrink-0', nodeColor)} />
-          <span className={cn('truncate text-xs', nodeColor)}>{node.name}</span>
+          <Icon className={cn('h-3.5 w-3.5 shrink-0 mt-0.5', nodeColor)} />
+          <span className={cn('text-xs text-left break-words min-w-0', nodeColor)}>{node.name}</span>
         </button>
 
         {/* Рекурсивно рендерим детей (уже отфильтрованных) */}
@@ -353,21 +353,21 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
         onClick={toggleProject}
         disabled={disabled}
         className={cn(
-          'flex items-center gap-1.5 w-full py-1 text-sm transition-colors',
+          'flex items-start gap-1.5 w-full py-1 text-sm transition-colors',
           !disabled && 'hover:bg-accent hover:text-accent-foreground',
           disabled && 'opacity-60 cursor-default'
         )}
         style={{ paddingLeft: '4px' }}
       >
-        <span className="shrink-0">
+        <span className="shrink-0 mt-0.5">
           {isProjectExpanded ? (
             <ChevronDown className="h-3.5 w-3.5" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
         </span>
-        <Folder className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate text-xs font-medium">{project.name}</span>
+        <Folder className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+        <span className="text-xs font-medium text-left break-words min-w-0">{project.name}</span>
         {project.stage_type && (
           <span className={cn(
             'px-1.5 py-0.5 text-[10px] font-medium rounded border whitespace-nowrap',
