@@ -133,7 +133,7 @@ export function AuthInput({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id} className="text-sm font-medium dark:text-gray-200">
+      <Label htmlFor={id} className="text-sm font-medium">
         {label}
       </Label>
       <div className="relative">
@@ -144,10 +144,10 @@ export function AuthInput({
           onChange={handleChange}
           onBlur={handleBlur}
           className={cn(
-            "transition-all duration-200 dark:bg-gray-800/50 dark:border-gray-700",
+            "transition-all duration-200",
             showPasswordToggle && "pr-10",
-            displayError && "border-red-500 focus-visible:ring-red-500",
-            !displayError && touched && validationRules && "border-green-500 focus-visible:ring-green-500",
+            displayError && "border-destructive focus-visible:ring-destructive",
+            !displayError && touched && validationRules && "border-primary focus-visible:ring-primary",
             className,
           )}
           {...props}
@@ -157,7 +157,7 @@ export function AuthInput({
             type="button"
             variant="ghost"
             size="sm"
-            className="absolute right-0 top-0 h-full px-3 py-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            className="absolute right-0 top-0 h-full px-3 py-2 text-muted-foreground hover:text-foreground"
             onClick={togglePasswordVisibility}
             tabIndex={-1}
           >
@@ -166,7 +166,7 @@ export function AuthInput({
           </Button>
         )}
       </div>
-      {displayError && <p className="text-xs text-red-500 animate-fade-in">{displayError}</p>}
+      {displayError && <p className="text-xs text-destructive animate-fade-in">{displayError}</p>}
     </div>
   )
 }

@@ -86,7 +86,7 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
               selectedLoadingId === loading.loading_id
                 ? 'bg-emerald-500/10 border-emerald-500/20 shadow-lg'
                 : highlightedLoadingId === loading.loading_id
-                  ? 'bg-blue-500/10 border-blue-500/20 shadow-md'
+                  ? 'bg-accent/50 border-border shadow-md'
                   : 'bg-muted border-border hover:bg-muted/80 hover:border-border'
             }`}
             onClick={() => onLoadingClick(loading)}

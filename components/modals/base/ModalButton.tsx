@@ -37,52 +37,44 @@ export function ModalButton({
   
   const variantClasses = {
     primary: `
-      bg-blue-600 hover:bg-blue-700 
-      text-white 
+      bg-blue-600 hover:bg-blue-700
+      text-white
       shadow-sm hover:shadow-md
       focus:ring-blue-500
-      disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none
       dark:bg-blue-500 dark:hover:bg-blue-600
-      dark:disabled:bg-slate-600 dark:disabled:text-slate-400
+      disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none
     `,
     secondary: `
-      bg-gray-600 hover:bg-gray-700 
-      text-white 
+      bg-gray-600 hover:bg-gray-700
+      text-white
       shadow-sm hover:shadow-md
       focus:ring-gray-500
-      disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none
       dark:bg-slate-600 dark:hover:bg-slate-500
-      dark:disabled:bg-slate-600 dark:disabled:text-slate-400
+      disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none
     `,
     success: `
-      bg-green-600 hover:bg-green-700 
-      text-white 
+      bg-green-600 hover:bg-green-700
+      text-white dark:text-white
       shadow-sm hover:shadow-md
       focus:ring-green-500
-      disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none
-      dark:bg-green-500 dark:hover:bg-green-600
-      dark:disabled:bg-slate-600 dark:disabled:text-slate-400
+      dark:bg-green-700 dark:hover:bg-green-800
+      disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none
     `,
     danger: `
-      bg-red-600 hover:bg-red-700 
-      text-white 
+      bg-red-600 hover:bg-red-700
+      text-white
       shadow-sm hover:shadow-md
       focus:ring-red-500
-      disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none
       dark:bg-red-500 dark:hover:bg-red-600
-      dark:disabled:bg-slate-600 dark:disabled:text-slate-400
+      disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none
     `,
     cancel: `
-      text-gray-700 hover:text-gray-900 
-      bg-white hover:bg-gray-50 
-      border border-gray-300 hover:border-gray-400
+      text-foreground hover:text-foreground
+      bg-background hover:bg-accent
+      border border-border hover:border-border
       shadow-sm hover:shadow-md
-      focus:ring-gray-500
-      dark:text-slate-300 dark:hover:text-slate-100
-      dark:bg-slate-700 dark:hover:bg-slate-600 
-      dark:border-slate-500 dark:hover:border-slate-400
-      disabled:text-gray-400 disabled:bg-gray-100 disabled:border-gray-200 disabled:shadow-none
-      dark:disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:border-slate-600
+      focus:ring-ring
+      disabled:text-muted-foreground disabled:bg-muted disabled:border-border disabled:shadow-none
     `
   }
 
