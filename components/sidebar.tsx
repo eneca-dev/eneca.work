@@ -113,7 +113,14 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   ]
 
   const isUsersActiveInternal = isUsersActive ?? pathname === "/users"
-  const openOnboarding = useOnboardingStore((state) => state.open)
+  const { open: openOnboarding, highlightTutorialButton, clearHighlight } = useOnboardingStore()
+
+  // Автоматически убираем подсветку через 4 секунды
+  useEffect(() => {
+    if (!highlightTutorialButton) return
+    const timer = setTimeout(clearHighlight, 4000)
+    return () => clearTimeout(timer)
+  }, [highlightTutorialButton, clearHighlight])
 
   return (
     <div
@@ -240,11 +247,12 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
         {/* Обучение */}
         <div className="px-2 mt-2">
           <button
-            onClick={openOnboarding}
+            onClick={() => { clearHighlight(); openOnboarding() }}
             className={cn(
-              "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+              "flex items-center rounded-md px-3 py-2 nav-item transition-all duration-300 w-full",
               "text-slate-400 hover:bg-white/5 hover:text-slate-200",
-              collapsed && "justify-center px-0"
+              collapsed && "justify-center px-0",
+              highlightTutorialButton && "text-primary ring-1 ring-primary/60 bg-primary/10 animate-pulse"
             )}
           >
             <GraduationCap className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />

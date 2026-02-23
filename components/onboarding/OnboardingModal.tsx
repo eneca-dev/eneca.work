@@ -10,11 +10,11 @@ import { useOnboardingStore, TOTAL_PAGES } from "@/stores/useOnboardingStore"
 interface PageConfig {
   title: string
   description: string
-  // ID видео с YouTube (если есть)
   videoId?: string
-  // Путь к скриншоту из папки public/ (если есть)
   imageSrc?: string
   imageAlt?: string
+  // true — сначала скриншот, потом видео (по умолчанию: сначала видео)
+  imageFirst?: boolean
 }
 
 const PAGES: PageConfig[] = [
@@ -25,53 +25,92 @@ const PAGES: PageConfig[] = [
   },
   {
     title: "Как пользоваться канбаном",
-    description: "Канбан-доска помогает визуально управлять задачами. Создавайте карточки, меняйте статусы перетаскиванием, настраивайте колонки.",
+    description: "Канбан-доска помогает визуально управлять задачами. Меняйте статусы перетаскиванием.",
     videoId: "zSMcTr9ZmrA",
-    imageSrc: "/onboarding/page-2-kanban.png",
+    imageSrc: "/onboarding/kanban.png",
     imageAlt: "Канбан-доска",
+    imageFirst: true,
   },
   {
     title: "Как создать загрузку в отделах",
-    description: "Загрузка позволяет распределить объём работы между сотрудниками. Узнайте, как создать новую загрузку в разделе отделов.",
+    description: "Загрузка позволяет распределить объём работы между сотрудниками. Узнайте, как создать новую загрузку на вкладке отделы.",
     videoId: "aaNHHonGDlg",
-    imageSrc: "/onboarding/page-3-department-upload.png",
+    imageSrc: "/onboarding/departments.png",
     imageAlt: "Создание загрузки в отделах",
+    imageFirst: true,
   },
   {
     title: "Как перетащить загрузку в отделах",
-    description: "Загрузки можно перераспределять перетаскиванием между сотрудниками и временными слотами. Это быстро и наглядно.",
+    description: "Можно изменять сроки загрузок перетаскиванием краев загрузки. Это быстро и наглядно.",
     videoId: "VmxAq0YEZuY",
   },
   {
     title: "Загрузка в отделах",
     description: "",
-    imageSrc: "/onboarding/page-5-screenshot.png",
+    imageSrc: "/onboarding/departments sum loadings and rate.png",
     imageAlt: "Загрузка в отделах",
   },
   {
     title: "Как поставить ёмкость на раздел",
-    description: "Ёмкость раздела определяет, сколько работы может взять на себя команда. Узнайте, как её настроить.",
+    description: "Ёмкость раздела определяет, сколько ставок специалистов требует раздел. Узнайте, как её настроить.",
     videoId: "n_lCFeD_JWQ",
+    imageSrc: "/onboarding/sections.png",
+    imageAlt: "Ёмкость раздела",
+    imageFirst: true,
   },
   {
     title: "",
     description: "",
-    imageSrc: "/onboarding/page-7-screenshot.png",
-    imageAlt: "Скриншот",
+    imageSrc: "/onboarding/sections - sum of loadings and capacity.png",
+    imageAlt: "Разделы — сумма загрузок и ёмкость",
   },
   {
     title: "Как создать загрузку на сотрудника или раздел",
-    description: "Назначайте загрузку конкретному сотруднику или целому разделу — прямо из карточки в разделах.",
+    description: "Назначайте загрузку конкретному сотруднику.",
     videoId: "2b7HidyJmFc",
-    imageSrc: "/onboarding/page-8-section-upload.png",
-    imageAlt: "Загрузка на сотрудника или раздел",
   },
   {
     title: "Как настроить вкладки и пользоваться фильтром",
     description: "Персонализируйте интерфейс под себя: скрывайте ненужные вкладки и применяйте фильтры для быстрого поиска нужного.",
     videoId: "Chx8Vc35Thc",
   },
+  {
+    title: "Перетаскивание дат в календаре",
+    description: "Можно зажать дату и перетащить её на новую — тем самым вы не выбираете новый диапазон, а сдвигаете уже существующий.",
+    videoId: "2CfUxkwi4B0",
+  },
 ]
+
+function VideoBlock({ videoId, title, pageIndex }: { videoId: string; title: string; pageIndex: number }) {
+  return (
+    <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+      <iframe
+        key={`video-${pageIndex}`}
+        src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`}
+        title={title}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="absolute inset-0 w-full h-full"
+      />
+    </div>
+  )
+}
+
+function ImageBlock({ imageSrc, imageAlt, pageIndex }: { imageSrc: string; imageAlt: string; pageIndex: number }) {
+  return (
+    <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
+      <Image
+        key={`image-${pageIndex}`}
+        src={imageSrc}
+        alt={imageAlt}
+        width={800}
+        height={450}
+        className="w-full h-auto object-contain"
+        priority
+      />
+    </div>
+  )
+}
 
 export function OnboardingModal() {
   const { isOpen, currentPage, close, nextPage, prevPage, goToPage } = useOnboardingStore()
@@ -86,8 +125,13 @@ export function OnboardingModal() {
 
   const hasVideo = !!page.videoId
   const hasImage = !!page.imageSrc
-  const hasTitle = !!page.title
-  const hasDescription = !!page.description
+
+  const videoBlock = hasVideo && (
+    <VideoBlock videoId={page.videoId!} title={page.title} pageIndex={currentPage} />
+  )
+  const imageBlock = hasImage && (
+    <ImageBlock imageSrc={page.imageSrc!} imageAlt={page.imageAlt || page.title} pageIndex={currentPage} />
+  )
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="xl" closeOnOverlayClick={false}>
@@ -97,7 +141,7 @@ export function OnboardingModal() {
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
             Шаг {currentPage + 1} из {TOTAL_PAGES}
           </p>
-          {hasTitle && (
+          {page.title && (
             <h2 className="text-lg font-semibold text-foreground leading-tight">{page.title}</h2>
           )}
         </div>
@@ -111,42 +155,45 @@ export function OnboardingModal() {
         </Button>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+      {/* Body с боковыми стрелками */}
+      <div className="flex flex-1 min-h-0">
+        {/* Стрелка назад */}
+        <button
+          onClick={prevPage}
+          disabled={isFirst}
+          className="flex-shrink-0 w-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-20 disabled:cursor-default"
+          aria-label="Предыдущая страница"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
 
-        {/* Видео */}
-        {hasVideo && (
-          <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
-            <iframe
-              key={`video-${currentPage}`}
-              src={`https://www.youtube.com/embed/${page.videoId}?rel=0&modestbranding=1`}
-              title={page.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="absolute inset-0 w-full h-full"
-            />
-          </div>
-        )}
+        {/* Контент */}
+        <div className="flex-1 overflow-y-auto py-5 space-y-4 min-w-0">
+          {page.imageFirst ? (
+            <>
+              {imageBlock}
+              {videoBlock}
+            </>
+          ) : (
+            <>
+              {videoBlock}
+              {imageBlock}
+            </>
+          )}
 
-        {/* Скриншот / фото */}
-        {hasImage && (
-          <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
-            <Image
-              key={`image-${currentPage}`}
-              src={page.imageSrc!}
-              alt={page.imageAlt || page.title}
-              width={800}
-              height={450}
-              className="w-full h-auto object-contain"
-              priority
-            />
-          </div>
-        )}
+          {page.description && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
+          )}
+        </div>
 
-        {/* Описание */}
-        {hasDescription && (
-          <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
-        )}
+        {/* Стрелка вперёд */}
+        <button
+          onClick={isLast ? handleClose : nextPage}
+          className="flex-shrink-0 w-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          aria-label={isLast ? "Завершить" : "Следующая страница"}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Footer */}

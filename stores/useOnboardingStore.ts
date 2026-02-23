@@ -4,9 +4,11 @@ import { persist } from 'zustand/middleware'
 interface OnboardingState {
   // Персистентное: видел ли пользователь туториал v2
   hasSeenV2Tutorial: boolean
-  // Эфемерное: открыта ли модалка прямо сейчас
+  // Эфемерное UI-состояние
   isOpen: boolean
   currentPage: number
+  // Подсветить кнопку в sidebar после закрытия
+  highlightTutorialButton: boolean
 
   open: () => void
   close: () => void
@@ -14,9 +16,10 @@ interface OnboardingState {
   nextPage: () => void
   prevPage: () => void
   markAsSeen: () => void
+  clearHighlight: () => void
 }
 
-const TOTAL_PAGES = 9
+const TOTAL_PAGES = 10
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
@@ -24,10 +27,11 @@ export const useOnboardingStore = create<OnboardingState>()(
       hasSeenV2Tutorial: false,
       isOpen: false,
       currentPage: 0,
+      highlightTutorialButton: false,
 
-      open: () => set({ isOpen: true, currentPage: 0 }),
+      open: () => set({ isOpen: true, currentPage: 0, highlightTutorialButton: false }),
       close: () => {
-        set({ isOpen: false })
+        set({ isOpen: false, highlightTutorialButton: true })
         get().markAsSeen()
       },
       goToPage: (page) => set({ currentPage: Math.max(0, Math.min(page, TOTAL_PAGES - 1)) }),
@@ -44,10 +48,10 @@ export const useOnboardingStore = create<OnboardingState>()(
         }
       },
       markAsSeen: () => set({ hasSeenV2Tutorial: true }),
+      clearHighlight: () => set({ highlightTutorialButton: false }),
     }),
     {
       name: 'onboarding-v2',
-      // Сохраняем только флаг "видел" — остальное эфемерное UI-состояние
       partialize: (state) => ({ hasSeenV2Tutorial: state.hasSeenV2Tutorial }),
     }
   )
