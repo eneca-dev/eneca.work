@@ -303,26 +303,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       }
     );
     
-    // Если это уведомление о комментарии, подсвечиваем раздел
-    if (notification.entityType === 'section_comment') {
-      const sectionId = notification.payload?.section_comment?.section_id
 
-      if (sectionId) {
-        // Подсвечиваем раздел (всегда открывает комментарии)
-        highlightSection(sectionId)
-
-        // Закрываем панель уведомлений
-        if (onClosePanel) {
-          onClosePanel()
-        }
-
-        // Переходим на страницу проектов только если мы не на ней
-        // Это предотвращает ненужную перезагрузку компонентов
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
-          router.push('/dashboard/projects')
-        }
-      }
-    }
   }, [notification, highlightAnnouncement, router, highlightSection, onClosePanel])
 
   return (
