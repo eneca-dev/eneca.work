@@ -74,8 +74,9 @@ export async function getSectionsHierarchy(
     let query = supabase.from('view_departments_sections_loadings').select('*')
 
     // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
-    // Переменная для хранения разрешённого UUID отдела (для трансформации иерархии ниже)
+    // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже)
     let resolvedDeptUuid: string | undefined
+    let resolvedSubdivisionUuid: string | undefined
 
     // Фильтр по команде (через employee_id, т.к. view не содержит team_id)
     if (effectiveFilters?.team_id) {
@@ -124,6 +125,7 @@ export async function getSectionsHierarchy(
         : effectiveFilters.subdivision_id
 
       if (isUuid(subdivisionId)) {
+        resolvedSubdivisionUuid = subdivisionId
         query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
       } else {
         // Резолвим название в UUID (как в departments-timeline)
@@ -134,6 +136,7 @@ export async function getSectionsHierarchy(
 
         if (subdivisions && subdivisions.length > 0) {
           const subId = subdivisions[0].subdivision_id
+          resolvedSubdivisionUuid = subId
           query = query.or(`subdivision_id.eq.${subId},employee_subdivision_id.eq.${subId}`)
         } else {
           return { success: true, data: [] }
@@ -261,22 +264,29 @@ export async function getSectionsHierarchy(
         }
       } else {
         // Admin / subdivision scope: полное дублирование —
-        // 1) Всегда добавляем отдел ответственного
-        departmentIds.push({
-          id: responsibleDeptId,
-          name: row.department_name,
-          subdivisionId: row.subdivision_id,
-          subdivisionName: row.subdivision_name,
-        })
+        // Если активен фильтр по подразделению, добавляем отдел только если
+        // он принадлежит отфильтрованному подразделению (иначе появляются "лишние" отделы).
 
-        // 2) Если есть загрузка сотрудника из другого отдела - добавляем и его
-        if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
+        // 1) Отдел ответственного — только если подразделение совпадает с фильтром
+        if (!resolvedSubdivisionUuid || row.subdivision_id === resolvedSubdivisionUuid) {
           departmentIds.push({
-            id: employeeDeptId,
-            name: row.employee_department_name || 'Без отдела',
-            subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
-            subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+            id: responsibleDeptId,
+            name: row.department_name,
+            subdivisionId: row.subdivision_id,
+            subdivisionName: row.subdivision_name,
           })
+        }
+
+        // 2) Отдел сотрудника (если другой) — только если подразделение совпадает с фильтром
+        if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
+          if (!resolvedSubdivisionUuid || row.employee_subdivision_id === resolvedSubdivisionUuid) {
+            departmentIds.push({
+              id: employeeDeptId,
+              name: row.employee_department_name || 'Без отдела',
+              subdivisionId: row.employee_subdivision_id || '00000000-0000-0000-0000-000000000000',
+              subdivisionName: row.employee_subdivision_name || 'Без подразделения',
+            })
+          }
         }
       }
 
