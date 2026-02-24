@@ -3,7 +3,6 @@
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import * as Sentry from "@sentry/nextjs"
-import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
@@ -17,7 +16,6 @@ import {
   useMarkAsUnread,
   useArchiveNotification,
 } from "../hooks/use-notifications"
-import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
@@ -56,7 +54,6 @@ function getNotificationTag(entityType?: string) {
 
 export function NotificationItem({ notification, isVisible = false, onEditAnnouncement, onClosePanel }: NotificationItemProps) {
   const notificationTag = getNotificationTag(notification.entityType)
-  const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
   
   // Получаем имя пользователя из payload для объявлений
@@ -86,7 +83,6 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   // Подписываемся на координаты курсора из стора, чтобы реактивно восстанавливать hover
   const lastPointerPosition = useNotificationsUiStore((s) => s.lastPointerPosition)
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
-  const { highlightSection } = useProjectsStore()
   // canManage permission allows full management of announcements (create, edit, delete, etc.)
   const { canManage: canManageAnnouncements } = useAnnouncementsPermissions()
 
@@ -304,7 +300,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     );
     
 
-  }, [notification, highlightAnnouncement, router, highlightSection, onClosePanel])
+  }, [notification, highlightAnnouncement, onClosePanel])
 
   return (
     <div
