@@ -266,7 +266,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по отделам */}
             <Collapsible open={openDepartments} onOpenChange={setOpenDepartments}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Отделы</h4>
                 {openDepartments ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
@@ -302,7 +302,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по командам */}
             <Collapsible open={openTeams} onOpenChange={setOpenTeams}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Команды</h4>
                 {openTeams ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
@@ -336,7 +336,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по должностям */}
             <Collapsible open={openPositions} onOpenChange={setOpenPositions}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Должности</h4>
                 {openPositions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
@@ -372,7 +372,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по категориям */}
             <Collapsible open={openCategories} onOpenChange={setOpenCategories}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Категории</h4>
                 {openCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
@@ -408,7 +408,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по ролям */}
             <Collapsible open={openRoles} onOpenChange={setOpenRoles}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Роли</h4>
                 {openRoles ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
@@ -444,7 +444,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
             {/* Фильтр по расположению */}
             <Collapsible open={openWorkLocations} onOpenChange={setOpenWorkLocations}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded">
                 <h4 className="list-item-title">Расположение</h4>
                 {openWorkLocations ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>

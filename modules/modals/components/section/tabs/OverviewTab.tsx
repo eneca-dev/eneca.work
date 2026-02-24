@@ -62,7 +62,7 @@ export function OverviewTab({
         <div className="flex items-center justify-between">
           <label
             htmlFor="section-description"
-            className="text-[10px] font-medium text-slate-400 uppercase tracking-wider"
+            className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider"
           >
             Описание
           </label>
@@ -85,14 +85,14 @@ export function OverviewTab({
             className={cn(
               'w-full px-4 py-3',
               'text-sm leading-relaxed',
-              'bg-slate-800/30 rounded-xl',
+              'bg-muted/30 rounded-xl',
               'border transition-all duration-200',
               'resize-none',
               'h-[140px]',
-              'placeholder:text-slate-600',
-              !isDescriptionFocused && 'border-slate-800/50 text-slate-300',
+              'placeholder:text-muted-foreground',
+              !isDescriptionFocused && 'border-border/50 text-foreground',
               isDescriptionFocused &&
-                'border-amber-500/50 ring-2 ring-amber-500/15 text-slate-200 bg-slate-800/50',
+                'border-primary/50 ring-2 ring-primary/15 text-foreground bg-muted',
               savingField === 'description' && 'opacity-60 cursor-wait'
             )}
             style={{
@@ -101,7 +101,7 @@ export function OverviewTab({
             }}
           />
           {isDescriptionFocused && (
-            <div className="absolute bottom-2.5 right-3 text-[10px] text-slate-600">
+            <div className="absolute bottom-2.5 right-3 text-[10px] text-muted-foreground">
               Esc для отмены
             </div>
           )}
@@ -109,20 +109,20 @@ export function OverviewTab({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-slate-800/50" aria-hidden="true" />
+      <div className="border-t border-border/50" aria-hidden="true" />
 
       {/* Comments */}
       <section aria-labelledby="comments-heading">
         <div className="flex items-center gap-2 mb-3">
-          <MessageSquare className="w-4 h-4 text-slate-500" aria-hidden="true" />
+          <MessageSquare className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
           <h3
             id="comments-heading"
-            className="text-[10px] font-medium text-slate-400 uppercase tracking-wider"
+            className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider"
           >
             Комментарии
           </h3>
         </div>
-        <div className="bg-slate-800/20 rounded-xl border border-slate-800/40 overflow-hidden">
+        <div className="bg-muted/20 rounded-xl border border-border/40 overflow-hidden">
           <CommentsPanel
             sectionId={sectionId}
             autoScrollOnMount={false}

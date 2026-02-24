@@ -17,12 +17,12 @@ export function FeedbackStats({ stats, isLoading }: FeedbackStatsProps) {
           <Card key={i}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-4 bg-muted rounded animate-pulse" />
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-2" />
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+              <div className="h-8 bg-muted rounded animate-pulse mb-2" />
+              <div className="h-2 bg-muted rounded animate-pulse" />
             </CardContent>
           </Card>
         ))}
@@ -35,14 +35,14 @@ export function FeedbackStats({ stats, isLoading }: FeedbackStatsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Общая оценка */}
-      <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+      <Card className="rounded-sm bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Общая оценка
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-foreground dark:text-white">
+          <div className="text-3xl font-bold text-foreground">
             {stats.averageScore.toFixed(1)}
           </div>
           <Progress value={stats.averageScore * 10} className="mt-2" />
@@ -50,21 +50,21 @@ export function FeedbackStats({ stats, isLoading }: FeedbackStatsProps) {
       </Card>
 
       {/* Всего ответов */}
-      <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+      <Card className="rounded-sm bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Всего ответов
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-foreground dark:text-white">
+          <div className="text-3xl font-bold text-foreground">
             {stats.totalResponses}
           </div>
         </CardContent>
       </Card>
 
       {/* Без проблем */}
-      <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+      <Card className="rounded-sm bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Без проблем
@@ -82,7 +82,7 @@ export function FeedbackStats({ stats, isLoading }: FeedbackStatsProps) {
       </Card>
 
       {/* С проблемами */}
-      <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+      <Card className="rounded-sm bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             С проблемами

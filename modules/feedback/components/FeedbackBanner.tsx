@@ -69,8 +69,8 @@ export function FeedbackBanner({ userId, firstName, lastName, hasDbRecord, onClo
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex justify-center p-2">
-      <Card className="w-full max-w-xl shadow-lg border bg-background dark:bg-[rgb(31_41_55)]">
-        <div className="p-3 sm:p-4 flex flex-col gap-2 leading-tight max-h-[calc(100vh-32px)] overflow-auto dark:text-white">
+      <Card className="w-full max-w-xl shadow-lg border bg-card">
+        <div className="p-3 sm:p-4 flex flex-col gap-2 leading-tight max-h-[calc(100vh-32px)] overflow-auto text-foreground">
           <div className="text-base sm:text-lg font-semibold">
             Пожалуйста оцените работу приложения.
           </div>

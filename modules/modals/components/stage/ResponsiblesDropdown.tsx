@@ -143,7 +143,7 @@ export function ResponsiblesDropdown({
         aria-label={`Ответственные: ${value.length > 0 ? value.map((u) => u.full_name).join(', ') : 'не назначены'}`}
         className={cn(
           'flex items-center gap-2 text-sm',
-          'text-slate-400 hover:text-slate-200',
+          'text-muted-foreground hover:text-foreground',
           'transition-colors',
           (disabled || isLoading) && 'opacity-60 cursor-not-allowed'
         )}
@@ -158,7 +158,7 @@ export function ResponsiblesDropdown({
             ? 'Ответственные не назначены'
             : `Ответственные (${value.length})`}
         </span>
-        <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
       </button>
 
       {/* Selected users chips */}
@@ -167,15 +167,15 @@ export function ResponsiblesDropdown({
           {value.map((user) => (
             <div
               key={user.user_id}
-              className="flex items-center gap-1.5 px-2 py-1 bg-slate-800/60 rounded-full text-xs"
+              className="flex items-center gap-1.5 px-2 py-1 bg-muted/60 rounded-full text-xs"
             >
               <Avatar className="h-4 w-4">
                 {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                <AvatarFallback className="text-[8px] bg-slate-700">
+                <AvatarFallback className="text-[8px] bg-muted">
                   {getInitials(user.first_name, user.last_name)}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-slate-300 max-w-[100px] truncate">
+              <span className="text-foreground max-w-[100px] truncate">
                 {user.full_name}
               </span>
               <button
@@ -185,7 +185,7 @@ export function ResponsiblesDropdown({
                   handleRemove(user.user_id)
                 }}
                 disabled={isLoading}
-                className="text-slate-500 hover:text-slate-300 transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={`Удалить ${user.full_name}`}
               >
                 <X className="w-3 h-3" />
@@ -202,7 +202,7 @@ export function ResponsiblesDropdown({
           role="listbox"
           aria-label="Выберите ответственных"
           aria-multiselectable="true"
-          className="fixed z-[9999] bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-xl shadow-2xl shadow-black/40 overflow-hidden"
+          className="fixed z-[9999] bg-card/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden"
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,
@@ -210,7 +210,7 @@ export function ResponsiblesDropdown({
           }}
         >
           {/* Search input */}
-          <div className="p-2 border-b border-slate-700/50">
+          <div className="p-2 border-b border-border/50">
             <input
               ref={searchInputRef}
               type="text"
@@ -220,9 +220,9 @@ export function ResponsiblesDropdown({
               aria-label="Поиск пользователей"
               className={cn(
                 'w-full px-3 py-2 text-sm',
-                'bg-slate-900/50 border border-slate-600/50',
-                'rounded-lg text-slate-200 placeholder:text-slate-500',
-                'focus:outline-none focus:border-amber-500/50'
+                'bg-muted border border-border/50',
+                'rounded-lg text-foreground placeholder:text-muted-foreground',
+                'focus:outline-none focus:border-primary/50'
               )}
             />
           </div>
@@ -240,33 +240,33 @@ export function ResponsiblesDropdown({
                   onClick={() => handleToggle(user.user_id)}
                   className={cn(
                     'w-full px-3 py-2.5 text-left text-sm',
-                    'hover:bg-slate-700/50 flex items-center gap-2.5 transition-colors',
-                    isSelected && 'bg-amber-500/10'
+                    'hover:bg-muted/50 flex items-center gap-2.5 transition-colors',
+                    isSelected && 'bg-primary/10'
                   )}
                 >
                   <div
                     className={cn(
                       'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
                       isSelected
-                        ? 'bg-amber-500 border-amber-500'
-                        : 'border-slate-600'
+                        ? 'bg-primary border-primary'
+                        : 'border-border'
                     )}
                   >
                     {isSelected && (
-                      <Check className="w-3 h-3 text-slate-900" />
+                      <Check className="w-3 h-3 text-black" />
                     )}
                   </div>
                   <Avatar className="h-6 w-6">
                     {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                    <AvatarFallback className="text-[10px] bg-slate-700">
+                    <AvatarFallback className="text-[10px] bg-muted">
                       {getInitials(user.first_name, user.last_name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <div className="text-slate-200 truncate">
+                    <div className="text-foreground truncate">
                       {user.full_name}
                     </div>
-                    <div className="text-slate-500 text-xs truncate">
+                    <div className="text-muted-foreground text-xs truncate">
                       {user.email}
                     </div>
                   </div>
@@ -275,7 +275,7 @@ export function ResponsiblesDropdown({
             })}
 
             {filteredUsers.length === 0 && (
-              <div className="px-3 py-4 text-center text-sm text-slate-500">
+              <div className="px-3 py-4 text-center text-sm text-muted-foreground">
                 Ничего не найдено
               </div>
             )}

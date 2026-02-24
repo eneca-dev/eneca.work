@@ -113,8 +113,8 @@ export function HoursInput({
         onKeyDown={handleKeyDown}
         className={cn(
           'w-14 h-5 px-1 text-[12px] tabular-nums text-right',
-          'bg-slate-800 border border-slate-600 rounded outline-none',
-          'focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30',
+          'bg-muted border border-border rounded outline-none',
+          'focus:border-primary focus:ring-1 focus:ring-primary/30',
           className
         )}
       />
@@ -126,11 +126,11 @@ export function HoursInput({
       onClick={handleClick}
       className={cn(
         'text-[12px] tabular-nums cursor-default',
-        isZero && dimIfZero && 'text-slate-600',
-        !isZero && !highlighted && 'text-slate-400',
-        !isZero && highlighted && 'text-slate-100',
-        bold && !isZero && 'font-medium text-slate-200',
-        !readOnly && onChange && 'cursor-pointer hover:text-cyan-400',
+        isZero && dimIfZero && 'text-muted-foreground/50',
+        !isZero && !highlighted && 'text-muted-foreground',
+        !isZero && highlighted && 'text-foreground',
+        bold && !isZero && 'font-medium text-foreground',
+        !readOnly && onChange && 'cursor-pointer hover:text-primary',
         isPending && 'opacity-50',
         className
       )}

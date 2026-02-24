@@ -31,14 +31,14 @@ export function BudgetRowExpander({
       onClick={onToggle}
       className={cn(
         'w-4 h-4 flex items-center justify-center rounded transition-colors shrink-0',
-        hasChildren ? 'hover:bg-slate-700 cursor-pointer' : 'opacity-0'
+        hasChildren ? 'hover:bg-muted cursor-pointer' : 'opacity-0'
       )}
       disabled={!hasChildren}
     >
       {hasChildren && (
         <ChevronRight
           className={cn(
-            'h-3 w-3 text-slate-500 transition-transform duration-200',
+            'h-3 w-3 text-muted-foreground transition-transform duration-200',
             isExpanded && 'rotate-90'
           )}
         />

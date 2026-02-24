@@ -42,7 +42,7 @@ export const COMMENT_GAP = 4
 // ============================================================================
 
 /** Дней назад от сегодня */
-export const DAYS_BEFORE_TODAY = 30
+export const DAYS_BEFORE_TODAY = 150
 
 /** Дней вперёд от сегодня */
 export const DAYS_AFTER_TODAY = 150

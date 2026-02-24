@@ -133,19 +133,19 @@ export function ItemCategorySelect({
         disabled={isUpdating}
         className={cn(
           'flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-all cursor-pointer',
-          'hover:bg-slate-700/50',
-          displayName ? 'text-slate-400' : 'text-slate-600',
+          'hover:bg-muted',
+          displayName ? 'text-muted-foreground' : 'text-muted-foreground/50',
           isUpdating && 'opacity-50 cursor-wait'
         )}
         title={displayName || 'Выбрать категорию'}
       >
         <span className="truncate max-w-[80px]">{shortName}</span>
-        <ChevronDown className="h-3 w-3 text-slate-600 shrink-0" />
+        <ChevronDown className="h-3 w-3 text-muted-foreground/50 shrink-0" />
       </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 top-full left-0 mt-1 min-w-[160px] max-h-[240px] overflow-y-auto bg-slate-800 border border-slate-700 rounded-md shadow-lg py-1">
+        <div className="absolute z-50 top-full left-0 mt-1 min-w-[160px] max-h-[240px] overflow-y-auto bg-popover border border-border rounded-md shadow-lg py-1">
           {categories.map((c: any, index) => {
             // Handle both mapped format (id/name) and raw DB format
             const optionId = c.id || c.work_category_id
@@ -155,8 +155,8 @@ export function ItemCategorySelect({
                 key={optionId || `cat-${index}`}
                 onClick={() => handleSelect(optionId)}
                 className={cn(
-                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors',
-                  displayId === optionId && 'text-cyan-400 bg-slate-700/30'
+                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-muted transition-colors',
+                  displayId === optionId && 'text-primary bg-muted/30'
                 )}
               >
                 {optionName}

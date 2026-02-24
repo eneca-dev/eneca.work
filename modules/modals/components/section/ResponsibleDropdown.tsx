@@ -111,7 +111,7 @@ export function ResponsibleDropdown({
         aria-label={`Ответственный: ${displayName}`}
         className={cn(
           'flex items-center gap-2 text-sm',
-          'text-slate-400 hover:text-slate-200',
+          'text-muted-foreground hover:text-foreground',
           'transition-colors',
           (disabled || isLoading) && 'opacity-60 cursor-not-allowed'
         )}
@@ -122,17 +122,17 @@ export function ResponsibleDropdown({
           <User className="w-3.5 h-3.5" />
         )}
         <span>{displayName}</span>
-        <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
       </button>
 
       {isOpen && (
         <div
           role="listbox"
           aria-label="Выберите ответственного"
-          className="absolute top-full left-0 mt-2 z-20 w-64 bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+          className="absolute top-full left-0 mt-2 z-20 w-64 bg-popover backdrop-blur-sm border border-border rounded-xl shadow-2xl overflow-hidden"
         >
           {/* Search input */}
-          <div className="p-2 border-b border-slate-700/50">
+          <div className="p-2 border-b border-border">
             <input
               ref={searchInputRef}
               type="text"
@@ -142,9 +142,9 @@ export function ResponsibleDropdown({
               aria-label="Поиск пользователей"
               className={cn(
                 'w-full px-3 py-2 text-sm',
-                'bg-slate-900/50 border border-slate-600/50',
-                'rounded-lg text-slate-200 placeholder:text-slate-500',
-                'focus:outline-none focus:border-amber-500/50'
+                'bg-background border border-input',
+                'rounded-lg text-popover-foreground placeholder:text-muted-foreground',
+                'focus:outline-none focus:border-primary/50'
               )}
             />
           </div>
@@ -158,9 +158,9 @@ export function ResponsibleDropdown({
               aria-selected={!value}
               onClick={() => handleSelect(null)}
               className={cn(
-                'w-full px-3 py-2.5 text-left text-sm text-slate-400',
-                'hover:bg-slate-700/50 flex items-center gap-2.5 transition-colors',
-                !value && 'bg-amber-500/10'
+                'w-full px-3 py-2.5 text-left text-sm text-muted-foreground',
+                'hover:bg-accent flex items-center gap-2.5 transition-colors',
+                !value && 'bg-primary/10'
               )}
             >
               <User className="w-4 h-4" />
@@ -177,25 +177,25 @@ export function ResponsibleDropdown({
                 onClick={() => handleSelect(user.user_id)}
                 className={cn(
                   'w-full px-3 py-2.5 text-left text-sm',
-                  'hover:bg-slate-700/50 flex items-center gap-2.5 transition-colors',
-                  value?.user_id === user.user_id && 'bg-amber-500/10'
+                  'hover:bg-accent flex items-center gap-2.5 transition-colors',
+                  value?.user_id === user.user_id && 'bg-primary/10'
                 )}
               >
                 <Avatar className="h-6 w-6">
                   {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                  <AvatarFallback className="text-[10px] bg-slate-700">
+                  <AvatarFallback className="text-[10px] bg-muted">
                     {getInitials(user.first_name, user.last_name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <div className="text-slate-200 truncate">{user.full_name}</div>
-                  <div className="text-slate-500 text-xs truncate">{user.email}</div>
+                  <div className="text-popover-foreground truncate">{user.full_name}</div>
+                  <div className="text-muted-foreground text-xs truncate">{user.email}</div>
                 </div>
               </button>
             ))}
 
             {filteredUsers.length === 0 && (
-              <div className="px-3 py-4 text-center text-sm text-slate-500">
+              <div className="px-3 py-4 text-center text-sm text-muted-foreground">
                 Ничего не найдено
               </div>
             )}

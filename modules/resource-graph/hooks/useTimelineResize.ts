@@ -264,8 +264,12 @@ export function useTimelineResize({
         const start = parseMinskDate(previewDates.startDate)
         const end = parseMinskDate(previewDates.endDate)
 
-        const dayFromStart = differenceInDays(start, range.start)
-        const duration = differenceInDays(end, start) + 1
+        // Клипируем по видимому диапазону (как в calculateBarPosition)
+        const visibleStart = start < range.start ? range.start : start
+        const visibleEnd = end > range.end ? range.end : end
+
+        const dayFromStart = differenceInDays(visibleStart, range.start)
+        const duration = differenceInDays(visibleEnd, visibleStart) + 1
 
         return {
           left: dayFromStart * DAY_CELL_WIDTH,

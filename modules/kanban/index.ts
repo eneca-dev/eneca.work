@@ -15,7 +15,6 @@ export { KanbanBoard } from './components'
 // ============================================================================
 
 export {
-  useKanbanStore,
   useKanbanFiltersStore,
   KANBAN_FILTER_CONFIG,
 } from './stores'
@@ -52,7 +51,6 @@ export type {
   KanbanViewSettings,
   StageStatus,
   SectionStatus,
-  DragResult,
 } from './types'
 
 // ============================================================================

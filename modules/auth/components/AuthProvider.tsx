@@ -47,7 +47,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadUserProfile = useCallback(async (user: User) => {
     // Защита от параллельных загрузок
     if (isLoadingProfile.current) {
-      console.log("⏭️ Пропускаем: загрузка профиля уже в процессе")
+      // console.log("⏭️ Пропускаем: загрузка профиля уже в процессе")
       return
     }
 
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         username: fullName
       })
 
-      console.log("✅ Профиль загружен:", { userId: user.id, name: fullName })
+      // console.log("✅ Профиль загружен:", { userId: user.id, name: fullName })
     } catch (error) {
       console.error("Критическая ошибка загрузки профиля:", error)
       Sentry.captureException(error)
@@ -100,21 +100,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * Полная очистка состояния приложения при logout
    */
   const clearAllState = useCallback(() => {
-    console.log("🧹 Очистка всего состояния приложения")
+    // console.log("🧹 Очистка всего состояния приложения")
 
     // Очищаем Zustand stores
     useUserStore.getState().clearUser()
 
-    // Очищаем permissions store
-    const permissionsStore = usePermissionsStore.getState()
-    if (typeof permissionsStore.clearPermissions === 'function') {
-      permissionsStore.clearPermissions()
-    } else {
-      // Fallback если метод ещё не добавлен
-      permissionsStore.setPermissions([])
-      permissionsStore.setLoading(false)
-      permissionsStore.clearError()
-    }
+    // Очищаем permissions store (включая localStorage persist)
+    usePermissionsStore.getState().clearPermissions()
 
     // Очищаем TanStack Query cache
     resetQueryClient()
@@ -156,92 +148,74 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [supabase, clearAllState, router])
 
   /**
+   * Синхронизация профиля пользователя при входе/инициализации.
+   * Если данные уже в store (из localStorage) — обновляет в фоне, иначе блокирует.
+   */
+  const syncUserSession = useCallback(async (user: User) => {
+    if (currentUserId.current === user.id) return
+
+    currentUserId.current = user.id
+
+    const cachedUser = useUserStore.getState()
+    if (cachedUser.id === user.id && cachedUser.isAuthenticated) {
+      loadUserProfile(user) // фоновое обновление
+    } else {
+      await loadUserProfile(user)
+    }
+  }, [loadUserProfile])
+
+  /**
    * Обработчик изменений состояния авторизации
    */
   const handleAuthStateChange = useCallback(async (
     event: AuthChangeEvent,
     session: Session | null
   ) => {
-    console.log("🔐 Auth event:", event, { userId: session?.user?.id })
-
     switch (event) {
       case "INITIAL_SESSION":
-        // Начальная загрузка сессии при старте приложения
         if (session?.user) {
-          if (currentUserId.current !== session.user.id) {
-            currentUserId.current = session.user.id
-            await loadUserProfile(session.user)
-          }
+          await syncUserSession(session.user)
         }
         setIsInitialized(true)
         setIsLoading(false)
         break
 
       case "SIGNED_IN":
-        // Пользователь вошёл
-        if (session?.user && currentUserId.current !== session.user.id) {
-          currentUserId.current = session.user.id
-          await loadUserProfile(session.user)
+        if (session?.user) {
+          await syncUserSession(session.user)
         }
         setIsLoading(false)
         break
 
       case "SIGNED_OUT":
-        // Пользователь вышел — очистка (редирект уже сделан в signOut)
         clearAllState()
         setIsLoading(false)
-        // Редирект только если мы ещё на защищённой странице
         if (window.location.pathname.startsWith("/dashboard")) {
           router.push("/auth/login")
         }
         break
 
       case "TOKEN_REFRESHED":
-        // Токен обновлён — сессия продолжается
-        console.log("🔄 Токен обновлён")
         break
 
       case "USER_UPDATED":
-        // Данные пользователя изменены — перезагружаем профиль
         if (session?.user) {
           await loadUserProfile(session.user)
         }
         break
 
       case "PASSWORD_RECOVERY":
-        // Восстановление пароля
         router.push("/auth/reset-password")
         break
     }
-  }, [loadUserProfile, clearAllState, router])
+  }, [syncUserSession, loadUserProfile, clearAllState, router])
 
   // Инициализация при монтировании
+  // onAuthStateChange автоматически стреляет INITIAL_SESSION при подписке,
+  // что заменяет отдельный getSession() — убираем лишний сетевой запрос.
   useEffect(() => {
     let mounted = true
 
-    const initialize = async () => {
-      try {
-        // Получаем текущую сессию
-        const { data: { session } } = await supabase.auth.getSession()
-
-        if (mounted && session?.user) {
-          await handleAuthStateChange("INITIAL_SESSION", session)
-        } else if (mounted) {
-          setIsInitialized(true)
-          setIsLoading(false)
-        }
-      } catch (error) {
-        console.error("Ошибка инициализации auth:", error)
-        if (mounted) {
-          setIsInitialized(true)
-          setIsLoading(false)
-        }
-      }
-    }
-
-    initialize()
-
-    // Подписываемся на изменения состояния авторизации
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (mounted) {

@@ -278,9 +278,9 @@ export function NotesBlock() {
         .navigation-link,
         [href="/dashboard/planning"],
         [href="/dashboard/projects"],
-        [href="/dashboard/users"],
+        [href="/users"],
         [href="/dashboard/settings"],
-        [href="/dashboard/calendar"],
+        [href="/calendar"],
         [href*="/dashboard"],
         .weekly-calendar,
         [title*="календарю"],
@@ -403,7 +403,7 @@ export function NotesBlock() {
               variant="ghost"
               size="sm"
               onClick={handleCloseFullView}
-              className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="gap-2 hover:bg-accent"
             >
               <ArrowLeft className="h-4 w-4" />
               Назад к списку
@@ -441,14 +441,14 @@ export function NotesBlock() {
   }
 
   return (
-    <div className="px-3 md:px-6 py-4 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
+    <div className="px-3 md:px-6 py-4 h-full flex flex-col max-h-full bg-card">
       {/* Заголовок блока */}
       <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Заметки</h2>
+          <h2 className="text-xl font-semibold text-foreground">Заметки</h2>
           {totalCount > 0 && (
-            <Badge variant="secondary" className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-              {totalCount} {totalCount === 1 ? 'заметка' : 
+            <Badge variant="secondary" className="bg-muted text-muted-foreground">
+              {totalCount} {totalCount === 1 ? 'заметка' :
                           totalCount <= 4 ? 'заметки' : 'заметок'}
               {completedCount > 0 && (
                 <span className="ml-1 text-green-600 dark:text-green-400">
@@ -480,17 +480,17 @@ export function NotesBlock() {
           {/* Панель управления */}
           <div className="flex items-center gap-3 mb-3 md:mb-4 flex-shrink-0">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Поиск по заметкам..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                className="pl-10 pr-10"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
                   type="button"
                   aria-label="Очистить поиск"
                   title="Очистить поиск"
@@ -505,7 +505,7 @@ export function NotesBlock() {
                   variant="outline"
                   size="sm"
                   onClick={handleSelectAll}
-                  className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="gap-2 border-border text-foreground hover:bg-accent"
                 >
                   {selectedNotions.length === notions.length ? <Square className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
                   {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
@@ -514,7 +514,7 @@ export function NotesBlock() {
                   variant="outline"
                   size="sm"
                   onClick={shouldShowMarkAsUndone ? handleMarkAsUndone : handleMarkAsDone}
-                  className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="gap-2 border-border text-foreground hover:bg-accent"
                 >
                   <Check className="h-4 w-4" />
                   {shouldShowMarkAsUndone ? 'Разархивировать' : 'Архивировать'}
@@ -537,11 +537,11 @@ export function NotesBlock() {
             <div className="space-y-3 pr-2">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
-                  <span className="ml-2 text-gray-500 dark:text-gray-400">Загрузка заметок...</span>
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Загрузка заметок...</span>
                 </div>
               ) : notions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="text-center py-8 text-muted-foreground">
                   {searchQuery ? (
                     <div>
                       <p>Заметки не найдены</p>
@@ -584,7 +584,7 @@ export function NotesBlock() {
                 <div className="flex-1 min-h-0 flex flex-col">
                   <div className="flex items-center justify-between mb-3 flex-shrink-0">
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Редактор</span>
+                      <span className="text-sm text-muted-foreground">Редактор</span>
                     </div>
                                           <div className="flex items-center gap-2">
                         <ToggleDoneButton
@@ -593,7 +593,7 @@ export function NotesBlock() {
                           disabled={isToggling}
                           loading={isToggling}
                         />
-                        <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
+                        <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-accent">Закрыть</Button>
                       </div>
                   </div>
                   <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">

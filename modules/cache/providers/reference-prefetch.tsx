@@ -19,6 +19,7 @@ import { getWorkCategories } from '@/modules/modals/actions/getWorkCategories'
 import { getDifficultyLevels } from '@/modules/modals/actions/getDifficultyLevels'
 import { getStageStatuses } from '@/modules/modals/actions/getStageStatuses'
 import { getCheckpointTypes } from '@/modules/checkpoints/actions/checkpoint-types'
+import { getUsers } from '../actions/users'
 
 export function ReferencePrefetch() {
   const queryClient = useQueryClient()
@@ -79,6 +80,20 @@ export function ReferencePrefetch() {
             return result.data
           },
           staleTime: staleTimePresets.static, // 10 минут - типы меняются очень редко
+        })
+      }
+
+      // Users - нужны для модалок с выбором сотрудников
+      const usersKey = queryKeys.users.lists()
+      if (!queryClient.getQueryData(usersKey)) {
+        queryClient.prefetchQuery({
+          queryKey: usersKey,
+          queryFn: async () => {
+            const result = await getUsers()
+            if (!result.success) throw new Error(result.error)
+            return result.data
+          },
+          staleTime: staleTimePresets.static, // 10 минут - пользователи редко меняются
         })
       }
     }

@@ -73,8 +73,8 @@ export default function DeleteConfirmModal({
       />
       
       <Modal.Body>
-        <p className="text-gray-600 dark:text-slate-400">
-          Вы уверены, что хотите удалить "{entityName}"? 
+        <p className="text-muted-foreground">
+          Вы уверены, что хотите удалить "{entityName}"?
           Это действие нельзя отменить.
         </p>
       </Modal.Body>

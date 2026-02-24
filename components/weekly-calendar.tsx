@@ -121,7 +121,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
 
   const handleCalendarClick = () => {
     setSelectedDate(calendarDate)
-    router.push('/dashboard/calendar')
+    router.push('/calendar')
   }
 
   // Проверяем, является ли день рабочим с учетом событий пользователя
@@ -216,7 +216,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
     
     // Если сегодня (но рабочий день)
     if (isToday) {
-      return "text-gray-900 dark:text-gray-100 font-semibold bg-gray-50 dark:bg-gray-800/100"
+      return "text-foreground font-semibold bg-accent/60"
     }
     
     // Обычный рабочий день

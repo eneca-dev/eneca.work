@@ -15,7 +15,7 @@ import type { Loading, TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { getEmployeeColor, getInitials } from '../../utils'
 import { useTimelineResize } from '../../hooks'
-import { LoadingModal } from '@/modules/modals'
+import { openLoadingEdit } from '@/modules/modals'
 
 // Константы для расчёта высоты
 const CHIP_HEIGHT = 18
@@ -128,8 +128,6 @@ function LoadingChip({
   sectionId,
   onResize,
 }: LoadingChipProps) {
-  // State for modal
-  const [isModalOpen, setIsModalOpen] = useState(false)
   // State for dragging
   const [isDragging, setIsDragging] = useState(false)
 
@@ -184,7 +182,7 @@ function LoadingChip({
   // Handle click - open modal only if not recently dragging
   const handleChipClick = useCallback((e: React.MouseEvent) => {
     // Prevent if not editable
-    if (!sectionId) return
+    if (!sectionId || !loading.employee.id) return
 
     // Check if this was a drag operation
     if (wasRecentlyDragging()) {
@@ -192,8 +190,24 @@ function LoadingChip({
       return
     }
 
-    setIsModalOpen(true)
-  }, [sectionId, wasRecentlyDragging])
+    // Открываем модалку через global store
+    openLoadingEdit(
+      loading.id,
+      sectionId,
+      {
+        id: loading.id,
+        employee: {
+          id: loading.employee.id,
+          name: loading.employee.name || `${loading.employee.firstName || ''} ${loading.employee.lastName || ''}`.trim(),
+          avatarUrl: loading.employee.avatarUrl,
+        },
+        startDate: loading.startDate,
+        finishDate: loading.finishDate,
+        rate: loading.rate,
+        comment: loading.comment,
+      }
+    )
+  }, [sectionId, loading, wasRecentlyDragging])
 
   const position = calculateBarPosition(loading.startDate, loading.finishDate, range)
 
@@ -201,6 +215,11 @@ function LoadingChip({
 
   // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
   const displayPosition = previewPosition ?? position
+
+  // Если бар клипован слева/справа — не показываем соответствующий handle,
+  // т.к. реальный край находится за пределами видимого календаря
+  const isClippedLeft = parseMinskDate(loading.startDate) < range.start
+  const isClippedRight = parseMinskDate(loading.finishDate) > range.end
 
   // Применяем отступы от краёв столбцов
   const paddedLeft = displayPosition.left + EDGE_PADDING
@@ -246,7 +265,7 @@ function LoadingChip({
       }}
     >
       {/* Left resize handle */}
-      {onResize && (
+      {onResize && !isClippedLeft && (
         <div
           {...leftHandleProps}
           className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
@@ -316,7 +335,7 @@ function LoadingChip({
       )}
 
       {/* Right resize handle */}
-      {onResize && (
+      {onResize && !isClippedRight && (
         <div
           {...rightHandleProps}
           className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
@@ -406,25 +425,12 @@ function LoadingChip({
     </TooltipContent>
   )
 
-  // Рендерим tooltip с чипом + модалку отдельно
+  // Рендерим только tooltip с чипом
   return (
-    <>
-      <Tooltip>
-        <TooltipTrigger asChild>{chipElement}</TooltipTrigger>
-        {tooltipContent}
-      </Tooltip>
-
-      {/* Модалка редактирования (только если sectionId) */}
-      {sectionId && (
-        <LoadingModal
-          mode="edit"
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          loading={loading}
-          sectionId={sectionId}
-        />
-      )}
-    </>
+    <Tooltip>
+      <TooltipTrigger asChild>{chipElement}</TooltipTrigger>
+      {tooltipContent}
+    </Tooltip>
   )
 }
 

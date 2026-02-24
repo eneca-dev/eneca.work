@@ -70,3 +70,29 @@ export {
   type CreateWorkLogInput,
   type WorkLogResult,
 } from './workLogs'
+
+// Loadings (loading-modal-new)
+export {
+  createLoading,
+  updateLoading,
+  archiveLoading,
+  deleteLoading,
+  type CreateLoadingInput,
+  type UpdateLoadingInput,
+  type ArchiveLoadingInput,
+  type DeleteLoadingInput,
+  type LoadingResult,
+} from './loadings'
+
+// Projects Tree (loading-modal-new)
+export {
+  fetchProjectsList,
+  fetchProjectTree,
+  createDecompositionStage as createDecompositionStageFromModal,
+  type ProjectListItem,
+  type ProjectTreeNode,
+  type FetchProjectsListInput,
+  type FetchProjectTreeInput,
+  type CreateDecompositionStageInput as CreateDecompositionStageFromModalInput,
+  type DecompositionStageResult,
+} from './projects-tree'

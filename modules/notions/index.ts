@@ -2,6 +2,8 @@
 export { NotesBlock } from '@/modules/notions/components/NotesBlock'
 export { NoteCard } from '@/modules/notions/components/NoteCard'
 export { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
+export { NotesSidebar } from '@/modules/notions/components/NotesSidebar'
+export { NotesTabButton } from '@/modules/notions/components/NotesTabButton'
 
 // Store, хуки, типы и утилиты
 export { useNotionsStore } from '@/modules/notions/store'

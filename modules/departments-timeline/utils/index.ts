@@ -53,9 +53,10 @@ export function getCellClassNames(cell: DayCell, additionalClasses?: string) {
 
   return cn(
     'border-r border-border/50 relative',
-    cell.isToday && 'bg-primary/10',
     !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
     !cell.isToday && isWeekend && 'bg-muted/50',
+    // Сегодня - применяется последним, но за загрузками
+    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25',
     additionalClasses
   )
 }

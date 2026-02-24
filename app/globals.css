@@ -47,7 +47,7 @@
 
   .dark {
     /* Новая нейтральная dark схема */
-    --background: 0 0% 4%;           /* #0a0a0a */
+    --background: 0 0% 7%;           /* #121212 */
     --foreground: 0 0% 98%;          /* #fafafa */
 
     --card: 0 0% 10%;                /* #191919 */
@@ -95,6 +95,17 @@
   body {
     @apply bg-background text-foreground;
     min-width: 768px;
+  }
+
+  /* Переопределение браузерного autofill — убираем синий фон */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0px 1000px hsl(var(--background)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    caret-color: hsl(var(--foreground));
+    transition: background-color 5000s ease-in-out 0s;
   }
 }
 
@@ -468,6 +479,32 @@
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: #e5e7eb transparent;
+}
+
+/* Скроллбар: только горизонтальный (для канбана) */
+.scrollbar-h-only {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+.scrollbar-h-only::-webkit-scrollbar:vertical {
+  display: none;
+}
+.scrollbar-h-only::-webkit-scrollbar:horizontal {
+  height: 8px;
+}
+.scrollbar-h-only::-webkit-scrollbar-thumb:horizontal {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+}
+.scrollbar-h-only::-webkit-scrollbar-track:horizontal {
+  background: transparent;
+}
+/* Firefox: нет способа скрыть только вертикальный, делаем оба тонкими */
+@supports (scrollbar-width: thin) {
+  .scrollbar-h-only {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
 }
 
 /* Единая система типографики */

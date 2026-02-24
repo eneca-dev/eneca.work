@@ -126,8 +126,8 @@ export function TemplateSaveModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-sm',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -135,18 +135,18 @@ export function TemplateSaveModal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               <Save className="w-4 h-4 text-teal-500" />
-              <span className="text-xs font-medium text-slate-300">Сохранить как шаблон</span>
-              <span className="text-[10px] text-slate-500">·</span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-xs font-medium text-foreground">Сохранить как шаблон</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
+              <span className="text-[10px] text-muted-foreground">
                 {stagesCount} эт. · {itemsCount} зад.
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -156,13 +156,13 @@ export function TemplateSaveModal({
           <div className="px-4 py-3 space-y-4">
             {isDepsLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <>
                 {/* Template Name */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Название шаблона
                   </label>
                   <input
@@ -172,9 +172,9 @@ export function TemplateSaveModal({
                     placeholder="Например: Стандартная задача"
                     className={cn(
                       'w-full px-2.5 py-2 text-xs',
-                      'bg-slate-800/50 border border-slate-700',
-                      'rounded text-slate-200',
-                      'placeholder:text-slate-600',
+                      'bg-muted border border-border',
+                      'rounded text-foreground',
+                      'placeholder:text-muted-foreground',
                       'focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
                       'transition-colors'
                     )}
@@ -185,7 +185,7 @@ export function TemplateSaveModal({
 
                 {/* Department chips */}
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                  <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                     Отдел
                   </label>
                   <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
@@ -202,7 +202,7 @@ export function TemplateSaveModal({
                             'border transition-all duration-150',
                             isSelected
                               ? 'border-teal-500/50 bg-teal-500/10 text-teal-400'
-                              : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600',
+                              : 'border-border bg-muted text-muted-foreground hover:border-border',
                             'disabled:opacity-50 disabled:cursor-not-allowed'
                           )}
                         >
@@ -226,15 +226,15 @@ export function TemplateSaveModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border/50">
             <button
               onClick={onClose}
               disabled={isSaving}
               className={cn(
                 'px-3 py-1.5 text-[11px] font-medium rounded',
-                'text-slate-400 hover:text-slate-300',
-                'border border-slate-700 hover:border-slate-600',
-                'bg-slate-800/50 hover:bg-slate-800',
+                'text-muted-foreground hover:text-foreground',
+                'border border-border hover:border-border',
+                'bg-muted hover:bg-muted',
                 'transition-colors',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
@@ -248,7 +248,7 @@ export function TemplateSaveModal({
                 'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
                 'text-slate-900 bg-teal-500 hover:bg-teal-400',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
               )}
             >
               {isSaving ? (

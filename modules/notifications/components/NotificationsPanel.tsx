@@ -472,19 +472,19 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       ref={panelRef}
       className={cn(
         // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
-        "fixed inset-y-0 border-r border-slate-700/50 shadow-2xl z-[9999]",
+        "fixed inset-y-0 bg-card border-r border-border shadow-2xl z-[9999]",
       )}
       // Панель без дебаг-колонки
-      style={{ width: panelWidthPx, left: collapsed ? 80 : 256, backgroundColor: '#0a0e13' }}
+      style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
       onMouseMove={(e) => throttledSetPointerPosition({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => clearPointerPosition()}
     >
       {/* Контент панели: header + scrollable list, full height */}
       <div className="flex h-full flex-col">
         {/* Заголовок + компактные фильтры */}
-        <div className="p-4 border-b border-slate-700/50">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-100">
+            <h3 className="text-lg font-semibold text-foreground">
               {(isRefreshingOnOpen || isManualRefreshing) ? "Обновление уведомлений..." : "Уведомления"}
             </h3>
             <div className="flex items-center gap-2">
@@ -537,7 +537,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={cn("justify-start gap-2", readFilter === 'all' && "bg-gray-100 dark:bg-gray-800")}
+                    className={cn("justify-start gap-2", readFilter === 'all' && "bg-accent")}
                     onClick={() => { setReadFilter('all'); setIsReadFilterOpen(false) }}
                   >
                     {readFilter === 'all' && <Check className="h-4 w-4" />} Все
@@ -545,7 +545,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={cn("justify-start gap-2", readFilter === 'unread' && "bg-gray-100 dark:bg-gray-800")}
+                    className={cn("justify-start gap-2", readFilter === 'unread' && "bg-accent")}
                     onClick={() => { setReadFilter('unread'); setIsReadFilterOpen(false) }}
                   >
                     {readFilter === 'unread' && <Check className="h-4 w-4" />} Непрочитанное
@@ -553,7 +553,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={cn("justify-start gap-2", readFilter === 'archived' && "bg-gray-100 dark:bg-gray-800")}
+                    className={cn("justify-start gap-2", readFilter === 'archived' && "bg-accent")}
                     onClick={() => { setReadFilter('archived'); setIsReadFilterOpen(false) }}
                   >
                     {readFilter === 'archived' && <Check className="h-4 w-4" />} Архив
@@ -586,7 +586,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 <div className="p-3">
                   {/* Заголовок с кнопкой сброса */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <span className="text-sm font-medium text-foreground">
                       Типы уведомлений
                     </span>
                     {hasActiveFilters && (
@@ -641,13 +641,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           <div ref={scrollRef} className="flex-1 overflow-y-auto">
             {(isLoading || isManualRefreshing) ? (
               <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-                <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Загрузка...</span>
               </div>
             ) : error ? (
-              <div className="p-8 text-center text-red-500 dark:text-red-400">
+              <div className="p-8 text-center text-destructive">
                 <p className="text-sm">Ошибка загрузки уведомлений</p>
-                <p className="text-xs mt-1 text-gray-500">{error}</p>
+                <p className="text-xs mt-1 text-muted-foreground">{error}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -658,7 +658,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 </Button>
               </div>
             ) : filteredNotifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              <div className="p-8 text-center text-muted-foreground">
                 <p className="mb-4">
                   {hasActiveFilters ? "Уведомления по заданным фильтрам не найдены" : "Нет уведомлений"}
                 </p>
@@ -689,14 +689,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 {/* Индикатор загрузки дополнительных уведомлений */}
                 {isLoadingMore && (
                   <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-                    <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Загрузка...</span>
                   </div>
                 )}
-                
+
                 {/* Сообщение о том, что все уведомления загружены */}
                 {!hasMore && filteredNotifications.length > 0 && (
-                  <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-4 text-sm text-muted-foreground">
                     Все уведомления загружены
                   </div>
                 )}

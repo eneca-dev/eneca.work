@@ -41,6 +41,9 @@ export function TeamRow({
     }, 0)
   }, [team.employees])
 
+  const formatWorkload = (value: number) =>
+    parseFloat(value.toFixed(2)).toString()
+
   // Sort employees: team lead first, then alphabetically
   const sortedEmployees = useMemo(() => {
     const employees = [...team.employees]
@@ -61,13 +64,13 @@ export function TeamRow({
       {/* Team header row */}
       <div className="group/row min-w-full relative border-b border-border">
         <div
-          className="flex transition-colors cursor-pointer hover:bg-muted/30"
+          className="flex transition-colors cursor-pointer"
           style={{ height: TEAM_ROW_HEIGHT }}
           onClick={toggle}
         >
           {/* Sidebar - sticky left */}
           <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-muted sticky left-0 z-20 group-hover/row:bg-accent"
+            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-muted sticky left-0 z-20 hover:bg-accent transition-colors"
             style={{ width: SIDEBAR_WIDTH }}
           >
             {/* Left: expand icon + team name (indented) */}
@@ -92,8 +95,16 @@ export function TeamRow({
               </div>
             </div>
 
-            {/* Right: freshness indicator */}
+            {/* Right: capacity + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              {totalTeamCapacity > 0 && (
+                <span
+                  className="text-xs font-medium text-muted-foreground tabular-nums"
+                  title="Сумма ставок сотрудников команды"
+                >
+                  {formatWorkload(totalTeamCapacity)}
+                </span>
+              )}
               <FreshnessIndicator
                 teamId={team.id}
                 teamName={team.name}
@@ -127,9 +138,10 @@ export function TeamRow({
                   key={i}
                   className={cn(
                     'border-r border-border/50 relative',
-                    cell.isToday && 'bg-primary/10',
                     !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
                     !cell.isToday && isWeekend && 'bg-muted/50',
+                    // Сегодня - применяется последним, но за загрузками
+                    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25',
                   )}
                   style={{
                     width: DAY_CELL_WIDTH,
@@ -144,7 +156,7 @@ export function TeamRow({
                     >
                       <div
                         className={cn(
-                          'w-full rounded-sm border',
+                          'w-full rounded-sm border relative overflow-hidden',
                           loadPercentage > 100
                             ? 'border-red-500'
                             : loadPercentage >= 90
@@ -167,6 +179,20 @@ export function TeamRow({
                             opacity: 0.6,
                           }}
                         />
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                          <span
+                            className={cn(
+                              'text-[8px] font-semibold leading-none',
+                              loadPercentage > 100
+                                ? 'text-red-700 dark:text-red-300'
+                                : loadPercentage >= 90
+                                  ? 'text-primary'
+                                  : 'text-amber-700 dark:text-amber-400'
+                            )}
+                          >
+                            {formatWorkload(teamWorkload)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}

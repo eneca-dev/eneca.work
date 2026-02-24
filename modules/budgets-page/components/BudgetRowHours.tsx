@@ -43,7 +43,7 @@ export function BudgetRowHours({
   const isTopLevel = nodeType === 'project' || nodeType === 'object'
 
   return (
-    <div className="flex items-center shrink-0 border-l border-slate-700/30">
+    <div className="flex items-center shrink-0 border-l border-border/30">
       {/* Плановые часы */}
       <div className="w-[72px] px-2 text-right">
         {isItem ? (
@@ -67,23 +67,23 @@ export function BudgetRowHours({
         {adjustedHours > 0 ? (
           <span className={cn(
             'text-[12px] tabular-nums',
-            isSection || isTopLevel ? 'text-slate-300 font-medium' : 'text-slate-400'
+            isSection || isTopLevel ? 'text-foreground/80 font-medium' : 'text-muted-foreground'
           )}>
             {formatNumber(Math.round(adjustedHours))}
           </span>
         ) : (
-          <span className="text-[12px] text-slate-600 tabular-nums">0</span>
+          <span className="text-[12px] text-muted-foreground/50 tabular-nums">0</span>
         )}
       </div>
 
       {/* % от родителя (доля часов от родительских) */}
       <div className="w-[52px] px-1 text-right">
         {percentOfParentHours !== null ? (
-          <span className="text-[11px] tabular-nums text-slate-500">
+          <span className="text-[11px] tabular-nums text-muted-foreground">
             {percentOfParentHours}%
           </span>
         ) : (
-          <span className="text-[11px] text-slate-700">—</span>
+          <span className="text-[11px] text-muted-foreground/30">—</span>
         )}
       </div>
     </div>

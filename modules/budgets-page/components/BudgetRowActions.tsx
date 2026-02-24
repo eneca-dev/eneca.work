@@ -88,8 +88,8 @@ export function BudgetRowActions({
                   'p-1 rounded transition-all',
                   isSyncing && 'text-blue-400 cursor-wait',
                   isSuccess && 'text-green-400',
-                  isError && 'text-red-400',
-                  !isSyncing && !isSuccess && !isError && 'hover:bg-blue-500/20 text-slate-500 hover:text-blue-400'
+                  isError && 'text-destructive',
+                  !isSyncing && !isSuccess && !isError && 'hover:bg-blue-500/20 text-muted-foreground hover:text-blue-400'
                 )}
                 title={
                   isSyncing
@@ -116,7 +116,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onProjectEdit?.()
             }}
-            className="p-1 rounded hover:bg-slate-600/50 text-slate-500 hover:text-slate-300 transition-all"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
             title="Редактировать проект"
           >
             <Settings2 className="h-3.5 w-3.5" />
@@ -126,7 +126,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onObjectCreate?.()
             }}
-            className="p-1 rounded hover:bg-amber-500/20 text-slate-500 hover:text-amber-400 transition-all"
+            className="p-1 rounded hover:bg-amber-500/20 text-muted-foreground hover:text-amber-400 transition-all"
             title="Добавить объект"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -142,7 +142,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onSectionCreate?.()
             }}
-            className="p-1 rounded hover:bg-teal-500/20 text-slate-500 hover:text-teal-400 transition-all"
+            className="p-1 rounded hover:bg-teal-500/20 text-muted-foreground hover:text-teal-400 transition-all"
             title="Добавить раздел"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -152,7 +152,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onObjectDelete?.()
             }}
-            className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-all"
+            className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all"
             title="Удалить объект"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -168,7 +168,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onStageCreate?.()
             }}
-            className="p-1 rounded hover:bg-slate-600/50 text-slate-500 hover:text-slate-300 transition-all"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
             title="Добавить этап"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -178,7 +178,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onSectionDelete?.()
             }}
-            className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-all"
+            className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all"
             title="Удалить раздел"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -194,7 +194,7 @@ export function BudgetRowActions({
               e.stopPropagation()
               onItemCreate?.()
             }}
-            className="p-1 rounded hover:bg-slate-600/50 text-slate-500 hover:text-slate-300 transition-all"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
             title="Добавить задачу"
           >
             <Plus className="h-3.5 w-3.5" />

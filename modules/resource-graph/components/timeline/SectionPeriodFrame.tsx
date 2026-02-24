@@ -3,6 +3,7 @@
 import type { TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { useTimelineResize } from '../../hooks'
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 interface SectionPeriodFrameProps {
   startDate: string | null
@@ -115,6 +116,10 @@ function ResizableSectionPeriodFrame({
   // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
   const displayPosition = previewPosition ?? position
 
+  // Если бар клипован — не показываем handle на клипованном крае
+  const isClippedLeft = parseMinskDate(startDate) < range.start
+  const isClippedRight = parseMinskDate(endDate) > range.end
+
   const frameColor = color || '#3b82f6'
   const borderWidth = 2
 
@@ -137,19 +142,21 @@ function ResizableSectionPeriodFrame({
           backgroundColor: isResizing ? frameColor : `${frameColor}60`,
         }}
       />
-      <div
-        {...leftHandleProps}
-        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
-        style={{
-          left: -SECTION_RESIZE_HANDLE_WIDTH / 2,
-          width: SECTION_RESIZE_HANDLE_WIDTH,
-          zIndex: 20,
-        }}
-      >
+      {!isClippedLeft && (
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
-        />
-      </div>
+          {...leftHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+          style={{
+            left: -SECTION_RESIZE_HANDLE_WIDTH / 2,
+            width: SECTION_RESIZE_HANDLE_WIDTH,
+            zIndex: 20,
+          }}
+        >
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+          />
+        </div>
+      )}
 
       {/* Правая вертикальная линия + resize handle */}
       <div
@@ -159,19 +166,21 @@ function ResizableSectionPeriodFrame({
           backgroundColor: isResizing ? frameColor : `${frameColor}60`,
         }}
       />
-      <div
-        {...rightHandleProps}
-        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
-        style={{
-          right: -SECTION_RESIZE_HANDLE_WIDTH / 2,
-          width: SECTION_RESIZE_HANDLE_WIDTH,
-          zIndex: 20,
-        }}
-      >
+      {!isClippedRight && (
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
-        />
-      </div>
+          {...rightHandleProps}
+          className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+          style={{
+            right: -SECTION_RESIZE_HANDLE_WIDTH / 2,
+            width: SECTION_RESIZE_HANDLE_WIDTH,
+            zIndex: 20,
+          }}
+        >
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+          />
+        </div>
+      )}
     </div>
   )
 }

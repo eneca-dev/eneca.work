@@ -13,7 +13,7 @@ import { nanoid } from 'nanoid'
 // Types
 // ============================================================================
 
-export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments'
+export type TasksViewMode = 'kanban' | 'timeline' | 'budgets' | 'departments' | 'sections'
 
 // Маппинг viewMode → иконка (lucide-react)
 export const VIEW_MODE_ICONS = {
@@ -21,6 +21,7 @@ export const VIEW_MODE_ICONS = {
   timeline: 'GanttChart',
   departments: 'Users',
   budgets: 'Wallet',
+  sections: 'FolderTree',
 } as const
 
 export type TabIconName = (typeof VIEW_MODE_ICONS)[TasksViewMode]
@@ -33,6 +34,7 @@ export interface TaskTab {
   isSystem: boolean // true = нельзя удалить/редактировать
   order: number
   createdAt: string
+  loadAllEnabled?: boolean
 }
 
 // Helper: получить иконку для viewMode
@@ -64,30 +66,21 @@ const SYSTEM_TABS: TaskTab[] = [
     createdAt: '2024-01-01T00:00:00.000Z',
   },
   {
-    id: 'timeline',
-    name: 'График',
-    viewMode: 'timeline',
+    id: 'departments',
+    name: 'Отделы',
+    viewMode: 'departments',
     filterString: '',
     isSystem: true,
     order: 1,
     createdAt: '2024-01-01T00:00:00.000Z',
   },
   {
-    id: 'departments',
-    name: 'Отделы',
-    viewMode: 'departments',
+    id: 'sections',
+    name: 'Разделы',
+    viewMode: 'sections',
     filterString: '',
     isSystem: true,
-    order: 2,
-    createdAt: '2024-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'budgets',
-    name: 'Бюджеты',
-    viewMode: 'budgets',
-    filterString: '',
-    isSystem: true,
-    order: 3,
+    order: 4,
     createdAt: '2024-01-01T00:00:00.000Z',
   },
 ]
@@ -116,6 +109,7 @@ interface TasksTabsState {
   // Shortcuts for active tab
   updateActiveTabFilters: (filterString: string) => void
   updateActiveTabViewMode: (viewMode: TasksViewMode) => void
+  setActiveTabLoadAll: (value: boolean) => void
 
   // Helpers
   getSystemTabs: () => TaskTab[]
@@ -260,6 +254,15 @@ export const useTasksTabsStore = create<TasksTabsState>()(
           })
         },
 
+        setActiveTabLoadAll: (value) => {
+          const { tabs, activeTabId } = get()
+          set({
+            tabs: tabs.map((t) =>
+              t.id === activeTabId ? { ...t, loadAllEnabled: value } : t
+            ),
+          })
+        },
+
         // ─────────────────────────────────────────────────────────────────
         // Helpers
         // ─────────────────────────────────────────────────────────────────
@@ -323,16 +326,42 @@ export const useTasksTabsStore = create<TasksTabsState>()(
       }),
       {
         name: 'tasks-tabs',
-        version: 1,
+        version: 2,
         // Мигрируем старые данные если нужно
         migrate: (persisted, version) => {
-          if (version === 0 || !persisted) {
+          if (!persisted) {
             return {
               tabs: [...SYSTEM_TABS],
               activeTabId: 'kanban',
             }
           }
-          return persisted as TasksTabsState
+
+          const state = persisted as TasksTabsState
+
+          // v1 → v2: убраны системные вкладки timeline и budgets
+          if (version <= 1) {
+            const hiddenSystemIds = ['timeline', 'budgets']
+            const filteredTabs = state.tabs.filter(
+              (t) => !(t.isSystem && hiddenSystemIds.includes(t.id))
+            )
+
+            // Ensure system tabs exist with correct data
+            const systemIds = SYSTEM_TABS.map((t) => t.id)
+            const userTabs = filteredTabs.filter((t) => !systemIds.includes(t.id))
+            const mergedTabs = [...SYSTEM_TABS, ...userTabs].map((t, i) => ({
+              ...t,
+              order: i,
+            }))
+
+            return {
+              tabs: mergedTabs,
+              activeTabId: hiddenSystemIds.includes(state.activeTabId)
+                ? 'kanban'
+                : state.activeTabId,
+            }
+          }
+
+          return state
         },
       }
     ),

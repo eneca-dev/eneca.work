@@ -30,7 +30,7 @@ const NODE_LABEL_COLORS: Record<HierarchyNodeType, string> = {
   project: 'bg-amber-500/20 text-amber-400',
   object: 'bg-violet-500/20 text-violet-400',
   section: 'bg-teal-500/20 text-teal-400',
-  decomposition_stage: 'bg-slate-600/30 text-slate-400',
+  decomposition_stage: 'bg-muted text-muted-foreground',
   decomposition_item: '',
 }
 

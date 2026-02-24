@@ -74,6 +74,59 @@ export {
 } from './useWorkLogs'
 
 // ============================================================================
+// Loading Modal New Hooks
+// ============================================================================
+
+export {
+  useProjectsList,
+  type UseProjectsListOptions,
+  type ProjectListItem,
+} from './useProjectsList'
+
+export {
+  useProjectTree,
+  type UseProjectTreeOptions,
+  type ProjectTreeNode,
+} from './useProjectTree'
+
+export {
+  useLoadingMutations,
+  type UseLoadingMutationsOptions,
+  type CreateLoadingInput,
+  type UpdateLoadingInput,
+  type ArchiveLoadingInput,
+  type DeleteLoadingInput,
+  type LoadingResult,
+} from './useLoadingMutations'
+
+export {
+  useDecompositionStageMutations,
+  type UseDecompositionStageMutationsOptions,
+  type CreateDecompositionStageFromModalInput,
+  type DecompositionStageResult,
+} from './useDecompositionStageMutations'
+
+export {
+  useLoadingModal,
+  type UseLoadingModalOptions,
+  type UseLoadingModalResult,
+  type LoadingFormData,
+  type BreadcrumbItem,
+} from './useLoadingModal'
+
+export {
+  useDecompositionStages,
+  type UseDecompositionStagesOptions,
+  type DecompositionStage,
+} from './useDecompositionStages'
+
+export {
+  useBreadcrumbs,
+  type UseBreadcrumbsOptions,
+  type UseBreadcrumbsResult,
+} from './useBreadcrumbs'
+
+// ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================
 

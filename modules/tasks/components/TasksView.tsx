@@ -7,7 +7,8 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
@@ -17,6 +18,7 @@ import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { ResourceGraphInternal } from '@/modules/resource-graph/components/ResourceGraph'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
+import { SectionsPageInternal } from '@/modules/sections-page'
 import { TasksTabs } from './TasksTabs'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 
@@ -25,10 +27,14 @@ import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 // ============================================================================
 
 export function TasksView() {
+  // URL search params
+  const searchParams = useSearchParams()
+
   // Get active tab data from tabs store (proper selectors for reactivity)
   const tabs = useTasksTabsStore((s) => s.tabs)
   const activeTabId = useTasksTabsStore((s) => s.activeTabId)
   const updateActiveTabFilters = useTasksTabsStore((s) => s.updateActiveTabFilters)
+  const setActiveTabLoadAll = useTasksTabsStore((s) => s.setActiveTabLoadAll)
 
   // Find active tab from tabs array
   const activeTab = useMemo(
@@ -39,9 +45,19 @@ export function TasksView() {
   // Current filter and view mode from active tab
   const filterString = activeTab?.filterString ?? ''
   const viewMode = activeTab?.viewMode ?? 'kanban'
+  const loadAllEnabled = activeTab?.loadAllEnabled ?? false
 
   // Filter options for autocomplete + locked filters
   const { options: filterOptions, lockedFilters } = useTasksFilterOptions()
+
+  // // Log URL params for debugging
+  // useEffect(() => {
+  //   const projectId = searchParams.get('projectId')
+  //   const sectionId = searchParams.get('sectionId')
+  //   const highlight = searchParams.get('highlight')
+  //   console.log('[TasksView] URL params:', { projectId, sectionId, highlight })
+  //   console.log('[TasksView] Current viewMode:', viewMode)
+  // }, [searchParams, viewMode])
 
   // Parse filter string to query params (shared between views)
   const queryParams = useMemo(() => {
@@ -55,7 +71,7 @@ export function TasksView() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-card">
       {/* Header with tabs and filter */}
       <header className="shrink-0 sticky top-0 z-50 bg-card border-b">
         {/* Tabs row */}
@@ -114,6 +130,8 @@ export function TasksView() {
             filterString={filterString}
             queryParams={queryParams}
             filterConfig={TASKS_FILTER_CONFIG}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
         {tabs.length > 0 && viewMode === 'timeline' && (
@@ -126,6 +144,15 @@ export function TasksView() {
         {tabs.length > 0 && viewMode === 'departments' && (
           <DepartmentsTimelineInternal
             queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
+          />
+        )}
+        {tabs.length > 0 && viewMode === 'sections' && (
+          <SectionsPageInternal
+            queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
         {tabs.length > 0 && viewMode === 'budgets' && (

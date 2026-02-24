@@ -46,10 +46,10 @@ export function parseAmount(value: string): number {
 }
 
 /**
- * Форматирует число с разделителями тысяч (без дробной части по умолчанию)
+ * Форматирует число с разделителями тысяч
+ * По умолчанию 2 знака после запятой для денежных сумм
  */
-export function formatNumber(value: number, decimals: number = 0): string {
-  if (value === 0) return '0'
+export function formatNumber(value: number, decimals: number = 2): string {
   return new Intl.NumberFormat('ru-RU', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -65,9 +65,9 @@ export function calculatePercentage(amount: number, parentAmount: number): numbe
 }
 
 /**
- * Рассчитывает сумму от процента
+ * Рассчитывает сумму от процента (с округлением до 2 знаков)
  */
 export function calculateAmount(percentage: number, parentAmount: number): number {
   if (parentAmount <= 0) return 0
-  return Math.round((percentage / 100) * parentAmount)
+  return Math.round((percentage / 100) * parentAmount * 100) / 100
 }

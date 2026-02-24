@@ -125,10 +125,10 @@ export function ItemDifficultySelect({
         disabled={isUpdating}
         className={cn(
           'px-1.5 py-0.5 rounded text-[9px] font-medium transition-all cursor-pointer',
-          'hover:ring-1 hover:ring-offset-1 hover:ring-offset-slate-900',
+          'hover:ring-1 hover:ring-offset-1 hover:ring-offset-background',
           displayValue?.abbr
             ? 'bg-orange-500/20 text-orange-400 hover:ring-orange-500/50'
-            : 'bg-slate-700/50 text-slate-500 hover:ring-slate-500/50',
+            : 'bg-muted text-muted-foreground hover:ring-muted-foreground/50',
           isUpdating && 'opacity-50 cursor-wait'
         )}
         title={displayValue?.name || 'Выбрать сложность'}
@@ -138,13 +138,13 @@ export function ItemDifficultySelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 top-full left-0 mt-1 min-w-[120px] bg-slate-800 border border-slate-700 rounded-md shadow-lg py-1">
+        <div className="absolute z-50 top-full left-0 mt-1 min-w-[120px] bg-popover border border-border rounded-md shadow-lg py-1">
           {/* Clear option */}
           <button
             onClick={() => handleSelect(null)}
             className={cn(
-              'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors',
-              !displayValue?.id && 'text-cyan-400'
+              'w-full px-3 py-1.5 text-left text-[11px] hover:bg-muted transition-colors',
+              !displayValue?.id && 'text-primary'
             )}
           >
             — Не указано
@@ -160,12 +160,12 @@ export function ItemDifficultySelect({
                 key={optionId || `diff-${index}`}
                 onClick={() => handleSelect(optionId)}
                 className={cn(
-                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-slate-700/50 transition-colors flex items-center gap-2',
-                  displayValue?.id === optionId && 'text-cyan-400'
+                  'w-full px-3 py-1.5 text-left text-[11px] hover:bg-muted transition-colors flex items-center gap-2',
+                  displayValue?.id === optionId && 'text-primary'
                 )}
               >
                 <span className="w-6 text-center font-medium text-orange-400">{optionAbbr}</span>
-                <span className="text-slate-300">{optionName}</span>
+                <span className="text-foreground">{optionName}</span>
               </button>
             )
           })}

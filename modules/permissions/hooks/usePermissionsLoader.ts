@@ -17,8 +17,10 @@ let globalLoadInFlight: Promise<void> | null = null
  * Загружает permissions, filterScope и orgContext одним запросом через getFilterContext.
  * Автоматически загружает при авторизации и очищает при выходе.
  *
- * Идемпотентность:
- * - Если для того же userId загрузка уже выполнялась или идёт — повторная не запускается
+ * Оптимизации:
+ * - Если permissions уже закешированы (persist в localStorage) для того же userId,
+ *   загрузка идёт в фоне (не блокирует UI). Пользователь видит дашборд сразу.
+ * - Идемпотентность: если для того же userId загрузка уже выполнялась или идёт — повторная не запускается
  * - reloadPermissions выполняет принудительную перезагрузку
  */
 export function usePermissionsLoader() {
@@ -28,24 +30,26 @@ export function usePermissionsLoader() {
   const setPermissions = usePermissionsStore((s) => s.setPermissions)
   const setFilterScope = usePermissionsStore((s) => s.setFilterScope)
   const setOrgContext = usePermissionsStore((s) => s.setOrgContext)
+  const setUserId = usePermissionsStore((s) => s.setUserId)
   const setLoading = usePermissionsStore((s) => s.setLoading)
   const setError = usePermissionsStore((s) => s.setError)
   const clearError = usePermissionsStore((s) => s.clearError)
   const reset = usePermissionsStore((s) => s.reset)
-  const permissions = usePermissionsStore((s) => s.permissions)
   const isLoading = usePermissionsStore((s) => s.isLoading)
   const error = usePermissionsStore((s) => s.error)
+  const permissions = usePermissionsStore((s) => s.permissions)
 
   const loadingRef = useRef(false)
   const lastUserIdRef = useRef<string | null>(null)
   const forceNextRef = useRef(false)
 
   // Функция загрузки разрешений
-  const loadPermissions = useCallback(async () => {
-    const isForce = forceNextRef.current === true
+  // isBackground=true означает, что UI уже работает с кешированными данными
+  const loadPermissions = useCallback(async (isBackground = false) => {
+    const isForce = forceNextRef.current
 
-    // Защита от дублирования запросов
-    if (loadingRef.current) {
+    // Защита от дублирования запросов (force пробивает защиту)
+    if (loadingRef.current && !isForce) {
       return
     }
 
@@ -55,7 +59,10 @@ export function usePermissionsLoader() {
     }
 
     loadingRef.current = true
-    setLoading(true)
+    // Не показываем loading если это фоновое обновление кешированных данных
+    if (!isBackground) {
+      setLoading(true)
+    }
     clearError()
 
     try {
@@ -64,12 +71,11 @@ export function usePermissionsLoader() {
       const taskPromise = Sentry.startSpan(
         { name: 'loadUnifiedPermissions' },
         async () => {
-          // Единый вызов getFilterContext
           const result = await getFilterContext()
 
           if (!result.success) {
             const errorMsg = result.error || 'Ошибка загрузки контекста'
-            console.error('❌ Ошибка загрузки permissions:', errorMsg)
+            console.error('Ошибка загрузки permissions:', errorMsg)
             setError(errorMsg)
             Sentry.captureMessage(`Ошибка загрузки permissions: ${errorMsg}`)
             return
@@ -77,29 +83,26 @@ export function usePermissionsLoader() {
 
           if (!result.data) {
             const errorMsg = 'Контекст пользователя не найден'
-            console.warn('⚠️', errorMsg)
+            console.warn(errorMsg)
             setError(errorMsg)
             return
           }
 
           const { data } = result
 
-          // Проверяем что есть permissions
           if (!data.permissions || data.permissions.length === 0) {
             const errorMsg = 'У пользователя нет разрешений'
-            console.warn('⚠️', errorMsg)
+            console.warn(errorMsg)
             setError(errorMsg)
             Sentry.captureMessage(errorMsg)
             return
           }
 
-          // Устанавливаем permissions
+          // Устанавливаем все данные
           setPermissions(data.permissions)
-
-          // Устанавливаем filter scope
           setFilterScope(data.scope)
+          setUserId(data.userId)
 
-          // Формируем и устанавливаем org context
           const orgContext: OrgContext = {
             ownTeamId: data.ownTeamId || null,
             ownDepartmentId: data.ownDepartmentId || null,
@@ -113,34 +116,33 @@ export function usePermissionsLoader() {
         }
       )
 
-      if (!isForce) {
-        globalLoadInFlight = taskPromise
-      }
-
+      globalLoadInFlight = taskPromise ?? null
       await taskPromise
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Неизвестная ошибка'
-      console.error('💥 Критическая ошибка загрузки permissions:', errorMsg)
+      console.error('Критическая ошибка загрузки permissions:', errorMsg)
       setError(`Критическая ошибка: ${errorMsg}`)
       Sentry.captureException(error)
     } finally {
       setLoading(false)
       loadingRef.current = false
       forceNextRef.current = false
-      if (!forceNextRef.current) globalLoadInFlight = null
+      globalLoadInFlight = null
     }
   }, [
     userId,
     setPermissions,
     setFilterScope,
     setOrgContext,
+    setUserId,
     setLoading,
     setError,
     clearError,
   ])
 
   // Эффект для автоматической загрузки при авторизации
+  // Используем getState() для snapshot вместо реактивных deps — избегаем double-fire при reset()
   useEffect(() => {
     if (isAuthenticated && userId) {
       // При смене пользователя очищаем store
@@ -148,15 +150,28 @@ export function usePermissionsLoader() {
         reset()
       }
 
-      // Проверяем нужно ли загружать
+      // Snapshot из store (не реактивный) — избегаем проблемы с устаревшим значением в closure
+      const { permissions: cachedPerms, userId: storedUserId } =
+        usePermissionsStore.getState()
+
+      const hasCachedPermissions =
+        cachedPerms.length > 0 && storedUserId === userId
+
       const alreadyLoaded =
-        permissions.length > 0 && lastUserIdRef.current === userId
+        cachedPerms.length > 0 && lastUserIdRef.current === userId
       const loadingForSameUser =
         globalLoadInFlight && globalLastUserId === userId
 
       if (!alreadyLoaded && !loadingForSameUser && !loadingRef.current) {
         lastUserIdRef.current = userId
-        loadPermissions()
+
+        if (hasCachedPermissions) {
+          // Кеш валиден — обновляем в фоне, UI не блокируется
+          loadPermissions(true)
+        } else {
+          // Нет кеша — блокирующая загрузка
+          loadPermissions(false)
+        }
       } else if (lastUserIdRef.current !== userId) {
         lastUserIdRef.current = userId
       }
@@ -166,13 +181,13 @@ export function usePermissionsLoader() {
       globalLastUserId = null
       reset()
     }
-  }, [isAuthenticated, userId, loadPermissions, reset, permissions.length])
+  }, [isAuthenticated, userId, loadPermissions, reset])
 
   // Функция принудительной перезагрузки
   const reloadPermissions = useCallback(() => {
     if (userId) {
       forceNextRef.current = true
-      loadPermissions()
+      loadPermissions(false)
     }
   }, [userId, loadPermissions])
 
@@ -184,4 +199,3 @@ export function usePermissionsLoader() {
     hasPermissions: permissions.length > 0,
   }
 }
-

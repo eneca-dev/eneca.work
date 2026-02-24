@@ -153,8 +153,8 @@ export function SectionRateEdit({
         onKeyDown={handleKeyDown}
         className={cn(
           'w-14 h-5 px-1 text-[11px] tabular-nums text-right',
-          'bg-slate-800 border border-slate-600 rounded outline-none',
-          'focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30'
+          'bg-muted border border-border rounded outline-none',
+          'focus:border-primary focus:ring-1 focus:ring-primary/30'
         )}
       />
     )
@@ -164,8 +164,8 @@ export function SectionRateEdit({
     <span
       onClick={handleClick}
       className={cn(
-        'text-[11px] tabular-nums cursor-pointer hover:text-cyan-400',
-        isDefault ? 'text-slate-600' : 'text-slate-400'
+        'text-[11px] tabular-nums cursor-pointer hover:text-primary',
+        isDefault ? 'text-muted-foreground/50' : 'text-muted-foreground'
       )}
       title={isDefault ? 'Ставка по умолчанию. Нажмите для изменения.' : 'Нажмите для изменения'}
     >

@@ -1,13 +1,17 @@
 'use client'
 
-import { useCallback, useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Loader2, LayoutGrid, SearchX, AlertCircle, Database, ChevronDown } from 'lucide-react'
 import { InlineFilter, type FilterOption, type FilterConfig, type FilterQueryParams } from '@/modules/inline-filter'
 import { useKanbanFiltersStore, useKanbanUIStore, KANBAN_FILTER_CONFIG } from '../stores'
 import { useKanbanFilterOptions } from '../filters/useFilterOptions'
-import { useKanbanSectionsInfinite, useUpdateStageStatusOptimistic } from '../hooks'
-import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
+import { useKanbanSectionsInfinite, useUpdateStageStatusOptimistic, useDragHandlers } from '../hooks'
+import type { KanbanBoard as KanbanBoardType } from '../types'
+import { KANBAN_COLUMNS, COLUMN_MIN_WIDTH } from '../constants'
 import { KanbanSwimlane } from './KanbanSwimlane'
+
+// Минимальная ширина доски: все колонки + padding контейнера колонок (p-2 = 16px)
+const BOARD_MIN_WIDTH = KANBAN_COLUMNS.length * COLUMN_MIN_WIDTH + 16
 
 // ============================================================================
 // Internal Props (for embedding in TasksView)
@@ -20,6 +24,10 @@ interface KanbanBoardInternalProps {
   queryParams: FilterQueryParams
   /** Filter config from parent */
   filterConfig: FilterConfig
+  /** Whether "load all" is enabled (persisted in tabs store) */
+  loadAllEnabled: boolean
+  /** Called when user clicks "Загрузить всё" */
+  onLoadAll: () => void
 }
 
 /**
@@ -27,17 +35,14 @@ interface KanbanBoardInternalProps {
  *
  * Используется в TasksView для встраивания в общую страницу с табами
  */
-export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardInternalProps) {
-  // State: загрузить все данные без фильтров
-  const [loadAll, setLoadAll] = useState(false)
-
+export function KanbanBoardInternal({ filterString, queryParams, loadAllEnabled, onLoadAll }: KanbanBoardInternalProps) {
   // Проверяем, применены ли фильтры
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
 
   // Определяем, нужно ли загружать данные
-  const shouldFetchData = filtersApplied || loadAll
+  const shouldFetchData = filtersApplied || loadAllEnabled
 
   // Infinite query для загрузки данных с пагинацией
   const {
@@ -61,19 +66,13 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
     filtersApplied ? queryParams : undefined
   )
 
-  // Handle "Load All" button click
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
-
   // UI state из Zustand store (сохраняется между переключениями вкладок)
   const { collapsedSections, showEmptySwimlanes, toggleSectionCollapse } = useKanbanUIStore()
 
-  // HTML5 Drag and Drop state
-  const [draggedCard, setDraggedCard] = useState<{
-    stageId: string
-    sectionId: string
-  } | null>(null)
+  // HTML5 Drag and Drop handlers
+  const { draggedCard, handleDragStart, handleDragOver, handleDrop, handleDragEnd } = useDragHandlers({
+    onUpdateStatus: updateStatus,
+  })
 
   // Build board from sections
   const board: KanbanBoardType | null = useMemo(() => {
@@ -84,48 +83,6 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
       sections,
     }
   }, [sections])
-
-  // HTML5 Drag and Drop Handlers
-  const handleDragStart = useCallback((stageId: string, sectionId: string, e: React.DragEvent) => {
-    setDraggedCard({ stageId, sectionId })
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', JSON.stringify({ stageId, sectionId }))
-    if (e.currentTarget instanceof HTMLElement) {
-      e.dataTransfer.setDragImage(e.currentTarget, 0, 0)
-    }
-  }, [])
-
-  const handleDragOver = useCallback((targetSectionId: string, e: React.DragEvent) => {
-    e.preventDefault()
-    if (!draggedCard) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-    if (draggedCard.sectionId !== targetSectionId) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-    e.dataTransfer.dropEffect = 'move'
-  }, [draggedCard])
-
-  const handleDrop = useCallback((targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => {
-    e.preventDefault()
-    if (!draggedCard) return
-    if (draggedCard.sectionId !== targetSectionId) {
-      setDraggedCard(null)
-      return
-    }
-    updateStatus({
-      stageId: draggedCard.stageId,
-      sectionId: draggedCard.sectionId,
-      newStatus: targetStatus,
-    })
-    setDraggedCard(null)
-  }, [draggedCard, updateStatus])
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedCard(null)
-  }, [])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -143,7 +100,7 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
             подразделение:"ОВ" проект:"Название"
           </p>
           <button
-            onClick={handleLoadAll}
+            onClick={onLoadAll}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Database size={16} />
@@ -199,43 +156,45 @@ export function KanbanBoardInternal({ filterString, queryParams }: KanbanBoardIn
   return (
     <div className="flex flex-col h-full">
       {/* Swimlanes */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        {sectionsToShow.map((section) => (
-          <KanbanSwimlane
-            key={section.id}
-            section={section}
-            isCollapsed={collapsedSections.includes(section.id)}
-            onToggleCollapse={() => toggleSectionCollapse(section.id)}
-            draggedCard={draggedCard}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-          />
-        ))}
+      <div className="flex-1 scrollbar-h-only">
+        <div style={{ minWidth: BOARD_MIN_WIDTH }}>
+          {sectionsToShow.map((section) => (
+            <KanbanSwimlane
+              key={section.id}
+              section={section}
+              isCollapsed={collapsedSections.includes(section.id)}
+              onToggleCollapse={() => toggleSectionCollapse(section.id)}
+              draggedCard={draggedCard}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+            />
+          ))}
 
-        {/* Load More Button */}
-        {hasNextPage && (
-          <div className="flex justify-center py-4 border-t bg-card/50">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Загрузка...
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Загрузить ещё
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          {/* Load More Button */}
+          {hasNextPage && (
+            <div className="flex justify-center py-4 border-t bg-card/50">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Загрузить ещё
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -301,11 +260,10 @@ export function KanbanBoard() {
     collapsedSections: [],
   })
 
-  // HTML5 Drag and Drop state
-  const [draggedCard, setDraggedCard] = useState<{
-    stageId: string
-    sectionId: string
-  } | null>(null)
+  // HTML5 Drag and Drop handlers
+  const { draggedCard, handleDragStart, handleDragOver, handleDrop, handleDragEnd } = useDragHandlers({
+    onUpdateStatus: updateStatus,
+  })
 
   // Build board from sections
   const board: KanbanBoardType | null = useMemo(() => {
@@ -330,73 +288,6 @@ export function KanbanBoard() {
         ? prev.collapsedSections.filter((id) => id !== sectionId)
         : [...prev.collapsedSections, sectionId],
     }))
-  }, [])
-
-  // ============================================================================
-  // HTML5 Drag and Drop Handlers
-  // ============================================================================
-
-  // Handle drag start - сохраняем информацию о перетаскиваемой карточке
-  const handleDragStart = useCallback((stageId: string, sectionId: string, e: React.DragEvent) => {
-    setDraggedCard({ stageId, sectionId })
-
-    // Настраиваем нативное drag событие
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', JSON.stringify({ stageId, sectionId }))
-
-    // Устанавливаем прозрачность для ghost image
-    if (e.currentTarget instanceof HTMLElement) {
-      e.dataTransfer.setDragImage(e.currentTarget, 0, 0)
-    }
-  }, [])
-
-  // Handle drag over - разрешаем drop только в пределах того же section
-  const handleDragOver = useCallback((targetSectionId: string, e: React.DragEvent) => {
-    e.preventDefault()
-
-    if (!draggedCard) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-
-    // Запрещаем drop в другой section
-    if (draggedCard.sectionId !== targetSectionId) {
-      e.dataTransfer.dropEffect = 'none'
-      return
-    }
-
-    e.dataTransfer.dropEffect = 'move'
-  }, [draggedCard])
-
-  // Handle drop - обновляем статус карточки
-  const handleDrop = useCallback((targetSectionId: string, targetStatus: StageStatus, e: React.DragEvent) => {
-    e.preventDefault()
-
-    if (!draggedCard) return
-
-    // Проверяем, что drop в том же section
-    if (draggedCard.sectionId !== targetSectionId) {
-      setDraggedCard(null)
-      return
-    }
-
-    // Оптимистичное обновление статуса:
-    // 1. updateStatus вызывает onMutate с flushSync - кеш обновляется синхронно
-    // 2. React ререндерит компоненты с новым состоянием
-    // 3. Карточка моментально появляется в новой колонке
-    // 4. Запрос идёт на сервер в фоне, при ошибке - автоматический откат
-    updateStatus({
-      stageId: draggedCard.stageId,
-      sectionId: draggedCard.sectionId,
-      newStatus: targetStatus,
-    })
-
-    setDraggedCard(null)
-  }, [draggedCard, updateStatus])
-
-  // Handle drag end - очищаем состояние если drop не произошёл
-  const handleDragEnd = useCallback(() => {
-    setDraggedCard(null)
   }, [])
 
   // Empty state - before data fetch (no filters, no loadAll)
@@ -511,43 +402,45 @@ export function KanbanBoard() {
       />
 
       {/* Swimlanes */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
-        {sectionsToShow.map((section) => (
-          <KanbanSwimlane
-            key={section.id}
-            section={section}
-            isCollapsed={viewSettings.collapsedSections.includes(section.id)}
-            onToggleCollapse={() => toggleSectionCollapse(section.id)}
-            draggedCard={draggedCard}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-          />
-        ))}
+      <div className="flex-1 scrollbar-h-only">
+        <div style={{ minWidth: BOARD_MIN_WIDTH }}>
+          {sectionsToShow.map((section) => (
+            <KanbanSwimlane
+              key={section.id}
+              section={section}
+              isCollapsed={viewSettings.collapsedSections.includes(section.id)}
+              onToggleCollapse={() => toggleSectionCollapse(section.id)}
+              draggedCard={draggedCard}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+            />
+          ))}
 
-        {/* Load More Button */}
-        {hasNextPage && (
-          <div className="flex justify-center py-4 border-t bg-card/50">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Загрузка...
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Загрузить ещё
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          {/* Load More Button */}
+          {hasNextPage && (
+            <div className="flex justify-center py-4 border-t bg-card/50">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Загрузить ещё
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

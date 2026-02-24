@@ -3,7 +3,9 @@
 import { useMemo } from 'react'
 import { format, getDay, getWeek, addDays } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
@@ -77,12 +79,13 @@ export function generateDayCells(
 
 interface TimelineHeaderProps {
   dayCells: DayCell[]
+  onScrollToToday?: () => void
 }
 
 /**
  * Заголовок timeline с неделями и днями
  */
-export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
+export function TimelineHeader({ dayCells, onScrollToToday }: TimelineHeaderProps) {
   // Группировка по неделям (с нумерацией от начала года)
   const weeks = useMemo(() => {
     const result: { weekNum: number; startIdx: number; daysCount: number }[] = []
@@ -154,7 +157,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
   return (
     <div className="flex flex-col bg-card border-b border-border" style={{ width: totalWidth }}>
       {/* Месяцы */}
-      <div className="flex h-7 border-b border-border/50">
+      <div className="flex h-7 border-b border-border/50 relative">
         {months.map((month, i) => (
           <div
             key={i}
@@ -164,6 +167,20 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
             {month.daysCount >= MIN_DAYS_FOR_MONTH_NAME && month.name}
           </div>
         ))}
+        {/* Кнопка "Перейти к сегодня" */}
+        {onScrollToToday && (
+          <div className="sticky right-0 ml-auto flex items-center pr-2 bg-card z-10 border-l border-border/50">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={onScrollToToday}
+              title="Перейти к сегодняшней дате"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Недели */}
@@ -197,7 +214,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               className={cn(
                 'flex flex-col items-center justify-center text-[10px]',
                 // Сегодня - высший приоритет
-                cell.isToday && 'bg-primary/10',
+                cell.isToday && 'bg-green-50 dark:bg-green-700/40',
                 // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
                 !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/10',
                 // Стандартные выходные (Сб/Вс) - нейтральный серый фон

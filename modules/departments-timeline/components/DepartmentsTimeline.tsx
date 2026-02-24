@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useState } from 'react'
+import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
@@ -41,6 +41,10 @@ function calculateTimelineRange(): TimelineRange {
 interface DepartmentsTimelineInternalProps {
   /** Parsed query params from parent */
   queryParams: FilterQueryParams
+  /** Whether "load all" is enabled (persisted in tabs store) */
+  loadAllEnabled: boolean
+  /** Called when user clicks "Загрузить всё" */
+  onLoadAll: () => void
 }
 
 /**
@@ -48,22 +52,14 @@ interface DepartmentsTimelineInternalProps {
  *
  * Используется в TasksView для встраивания в общую страницу с табами
  */
-export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimelineInternalProps) {
-  // State: загрузить все данные без фильтров
-  const [loadAll, setLoadAll] = useState(false)
-
+export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoadAll }: DepartmentsTimelineInternalProps) {
   // Проверяем, применены ли фильтры
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
 
   // Определяем, нужно ли загружать данные
-  const shouldFetchData = filtersApplied || loadAll
-
-  // Handle "Load All" button click
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
+  const shouldFetchData = filtersApplied || loadAllEnabled
 
   // Refs for scroll synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null)
@@ -145,6 +141,27 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
     collapseAll()
   }, [collapseAll])
 
+  // Scroll to show today with 30 days before it
+  const handleScrollToToday = useCallback(() => {
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    contentScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+    headerScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
+  }, [])
+
+  // Scroll header to today-30 as soon as it renders (fires when shouldFetchData becomes true)
+  useEffect(() => {
+    if (!shouldFetchData || !headerScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    headerScrollRef.current.scrollLeft = scrollLeft
+  }, [shouldFetchData])
+
+  // Scroll content to today-30 when data finishes loading
+  useEffect(() => {
+    if (isLoading || !contentScrollRef.current) return
+    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    contentScrollRef.current.scrollLeft = scrollLeft
+  }, [isLoading])
+
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
     return (
@@ -161,7 +178,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
             подразделение:"ОВ" отдел:"Название"
           </p>
           <button
-            onClick={handleLoadAll}
+            onClick={onLoadAll}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Database size={16} />
@@ -192,6 +209,7 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Отделы / Команды
                 </span>
+                {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                 <TooltipProvider>
                   <div className="flex items-center gap-1">
                     <Tooltip>
@@ -222,9 +240,10 @@ export function DepartmentsTimelineInternal({ queryParams }: DepartmentsTimeline
                     </Tooltip>
                   </div>
                 </TooltipProvider>
+                */}
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader dayCells={dayCells} />
+              <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />
             </div>
           </div>
         </header>

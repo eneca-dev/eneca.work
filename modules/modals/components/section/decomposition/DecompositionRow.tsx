@@ -29,7 +29,8 @@ interface DecompositionRowProps {
   decomposition: Decomposition
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
-  actualHours: number
+  // REPORTING DISABLED: actualHours prop
+  actualHours?: number
   onUpdate: (updates: Partial<Decomposition>) => void
   onDelete: () => void
 }
@@ -42,19 +43,22 @@ export function DecompositionRow({
   decomposition,
   workCategories,
   difficultyLevels,
-  actualHours,
+  // REPORTING DISABLED: actualHours not displayed
+  // actualHours,
   onUpdate,
   onDelete,
 }: DecompositionRowProps) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [localDescription, setLocalDescription] = useState(decomposition.description)
-  const [localPlannedHours, setLocalPlannedHours] = useState(String(decomposition.plannedHours))
+  // REPORTING DISABLED: localPlannedHours state
+  // const [localPlannedHours, setLocalPlannedHours] = useState(String(decomposition.plannedHours))
   const [localProgress, setLocalProgress] = useState(String(decomposition.progress))
 
   // Sync local state with props when decomposition changes
   useEffect(() => {
     setLocalDescription(decomposition.description)
-    setLocalPlannedHours(String(decomposition.plannedHours))
+    // REPORTING DISABLED: setLocalPlannedHours
+    // setLocalPlannedHours(String(decomposition.plannedHours))
     setLocalProgress(String(decomposition.progress))
   }, [decomposition.description, decomposition.plannedHours, decomposition.progress])
 
@@ -87,14 +91,14 @@ export function DecompositionRow({
     }
   }, [localDescription, decomposition.description, onUpdate, onDelete])
 
-  // Handle planned hours blur
-  const handlePlannedHoursBlur = useCallback(() => {
-    setEditingField(null)
-    const hours = parseFloat(localPlannedHours) || 0
-    if (hours !== decomposition.plannedHours) {
-      onUpdate({ plannedHours: hours })
-    }
-  }, [localPlannedHours, decomposition.plannedHours, onUpdate])
+  // REPORTING DISABLED: Handle planned hours blur
+  // const handlePlannedHoursBlur = useCallback(() => {
+  //   setEditingField(null)
+  //   const hours = parseFloat(localPlannedHours) || 0
+  //   if (hours !== decomposition.plannedHours) {
+  //     onUpdate({ plannedHours: hours })
+  //   }
+  // }, [localPlannedHours, decomposition.plannedHours, onUpdate])
 
   // Handle progress blur
   const handleProgressBlur = useCallback(() => {
@@ -120,7 +124,7 @@ export function DecompositionRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors',
+        'group border-b border-border/30 hover:bg-muted/20 transition-colors',
         isDragging && 'shadow-lg'
       )}
     >
@@ -129,9 +133,9 @@ export function DecompositionRow({
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-slate-700/50 rounded"
+          className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-muted rounded"
         >
-          <GripVertical className="h-3 w-3 text-slate-600" />
+          <GripVertical className="h-3 w-3 text-muted-foreground" />
         </button>
       </td>
 
@@ -149,16 +153,16 @@ export function DecompositionRow({
                 setEditingField(null)
               }
             }}
-            className="h-5 text-[11px] px-1 bg-slate-800/80"
+            className="h-5 text-[11px] px-1 bg-muted"
             autoFocus
           />
         ) : (
           <div
             onClick={() => setEditingField('description')}
-            className="text-[11px] cursor-text hover:bg-slate-700/30 px-1 py-0.5 rounded min-h-[20px] truncate"
+            className="text-[11px] cursor-text hover:bg-muted/30 px-1 py-0.5 rounded min-h-[20px] truncate"
           >
             {decomposition.description || (
-              <span className="text-slate-600 italic">Описание...</span>
+              <span className="text-muted-foreground italic">Описание...</span>
             )}
           </div>
         )}
@@ -175,7 +179,7 @@ export function DecompositionRow({
             }
           }}
         >
-          <SelectTrigger className="h-5 text-[10px] px-1.5 bg-transparent border-slate-700/50">
+          <SelectTrigger className="h-5 text-[10px] px-1.5 bg-transparent border-border/50">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
@@ -200,7 +204,7 @@ export function DecompositionRow({
           }}
         >
           <SelectTrigger
-            className="h-5 text-[10px] px-1 bg-transparent border-slate-700/50 justify-center"
+            className="h-5 text-[10px] px-1 bg-transparent border-border/50 justify-center"
           >
             <SelectValue placeholder="—" />
           </SelectTrigger>
@@ -223,16 +227,16 @@ export function DecompositionRow({
         </Select>
       </td>
 
-      {/* Hours: Actual/Planned combined */}
-      <td className="w-[70px] px-1.5 py-1">
+      {/* REPORTING DISABLED: Hours (Факт/План) column */}
+      {/* <td className="w-[70px] px-1.5 py-1">
         <TooltipProvider>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <div className="flex items-center justify-center gap-0.5">
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-muted-foreground">
                   {actualHours > 0 ? actualHours.toFixed(0) : '—'}
                 </span>
-                <span className="text-[10px] text-slate-700">/</span>
+                <span className="text-[10px] text-muted-foreground">/</span>
                 {editingField === 'plannedHours' ? (
                   <Input
                     type="number"
@@ -246,7 +250,7 @@ export function DecompositionRow({
                         setEditingField(null)
                       }
                     }}
-                    className="w-8 h-4 text-[10px] text-center p-0 bg-slate-800"
+                    className="w-8 h-4 text-[10px] text-center p-0 bg-muted"
                     autoFocus
                     min={0}
                     step={0.5}
@@ -257,7 +261,7 @@ export function DecompositionRow({
                       setLocalPlannedHours(String(decomposition.plannedHours))
                       setEditingField('plannedHours')
                     }}
-                    className="text-[10px] cursor-text hover:bg-slate-700/40 px-0.5 rounded"
+                    className="text-[10px] cursor-text hover:bg-muted/40 px-0.5 rounded"
                   >
                     {decomposition.plannedHours}
                   </span>
@@ -269,12 +273,12 @@ export function DecompositionRow({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      </td>
+      </td> */}
 
       {/* Progress */}
       <td className="w-[80px] px-1.5 py-1">
         <div className="flex items-center gap-1">
-          <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
+          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
             <div
               className={cn('h-full transition-all', getProgressBarColor(decomposition.progress))}
               style={{ width: `${decomposition.progress}%` }}
@@ -293,7 +297,7 @@ export function DecompositionRow({
                   setEditingField(null)
                 }
               }}
-              className="w-8 h-4 text-[10px] text-right p-0.5 bg-slate-800"
+              className="w-8 h-4 text-[10px] text-right p-0.5 bg-muted"
               autoFocus
               min={0}
               max={100}
@@ -304,7 +308,7 @@ export function DecompositionRow({
                 setLocalProgress(String(decomposition.progress))
                 setEditingField('progress')
               }}
-              className="text-[10px] cursor-text px-0.5 rounded hover:bg-slate-700/40 w-6 text-right"
+              className="text-[10px] cursor-text px-0.5 rounded hover:bg-muted/40 w-6 text-right"
             >
               {decomposition.progress}%
             </span>

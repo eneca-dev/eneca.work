@@ -142,8 +142,9 @@ export default function LoginPage() {
 
           span.setAttribute("auth.success", true)
 
-          router.refresh()
-          router.push(redirectUrl)
+          // router.refresh() УДАЛЁН — он бесполезно перерендерил страницу логина,
+          // задерживая навигацию на 100-300ms (router обрабатывает refresh перед push)
+          router.replace(redirectUrl)
 
         } catch (err) {
           span.setAttribute("auth.success", false)
@@ -175,12 +176,12 @@ export default function LoginPage() {
     <>
       <div className="space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-gray-100">Вход в систему</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Вход в систему</h1>
           <p className="text-sm text-muted-foreground">Введите ваши данные для входа</p>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-100 border border-red-200 text-red-600 text-sm rounded-md dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
+          <div className="p-3 bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-md">
             {error}
           </div>
         )}
@@ -235,10 +236,10 @@ export default function LoginPage() {
         {/* Регистрация отключена */}
         {/* <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t dark:border-gray-700" />
+            <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white dark:bg-gray-800 px-2 text-muted-foreground">Или</span>
+            <span className="bg-card px-2 text-muted-foreground">Или</span>
           </div>
         </div>
 

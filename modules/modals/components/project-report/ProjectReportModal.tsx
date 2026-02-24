@@ -170,8 +170,8 @@ export function ProjectReportModal({
           aria-labelledby="modal-title"
           className={cn(
             'pointer-events-auto w-full max-w-xl',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -179,21 +179,21 @@ export function ProjectReportModal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               <MessageSquareText className="w-4 h-4 text-blue-500" />
-              <span id="modal-title" className="text-xs font-medium text-slate-300">
+              <span id="modal-title" className="text-xs font-medium text-foreground">
                 {mode === 'create' ? 'Создать отчет' : 'Редактировать отчет'}
               </span>
-              <span className="text-[10px] text-slate-500">·</span>
-              <span className="text-[10px] text-slate-400 truncate max-w-[300px]" title={projectName}>
+              <span className="text-[10px] text-muted-foreground">·</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[300px]" title={projectName}>
                 Проект: {projectName}
               </span>
             </div>
             <button
               onClick={onClose}
               aria-label="Закрыть"
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -207,20 +207,20 @@ export function ProjectReportModal({
                 <>
                   {/* Автор (left) */}
                   <div className="pb-2">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
                       Автор
                     </div>
-                    <div className="text-xs text-slate-300 font-medium mt-0.5">
+                    <div className="text-xs text-foreground font-medium mt-0.5">
                       {editData.authorName}
                     </div>
                   </div>
 
                   {/* Создан (right) */}
                   <div className="pb-2">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
                       Создан
                     </div>
-                    <div className="text-xs text-slate-300 font-medium mt-0.5">
+                    <div className="text-xs text-foreground font-medium mt-0.5">
                       {new Date(editData.createdAt).toLocaleString('ru-RU', {
                         day: '2-digit',
                         month: '2-digit',
@@ -235,7 +235,7 @@ export function ProjectReportModal({
 
               {/* Left column - Textarea */}
               <div className="flex flex-col">
-                <label htmlFor="report-comment" className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                <label htmlFor="report-comment" className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                   Текст отчета
                 </label>
                 <textarea
@@ -245,10 +245,10 @@ export function ProjectReportModal({
                   placeholder="Введите текст отчета..."
                   className={cn(
                     'w-full h-full px-2.5 py-2 text-xs',
-                    'bg-slate-800/50 border border-slate-700',
-                    'rounded text-slate-200 resize-none',
-                    'placeholder:text-slate-600',
-                    'focus:outline-none focus:border-slate-500/50 focus:ring-1 focus:ring-slate-500/30',
+                    'bg-muted/50 border border-border',
+                    'rounded text-foreground resize-none',
+                    'placeholder:text-muted-foreground',
+                    'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/30',
                     'transition-colors'
                   )}
                   autoFocus
@@ -258,21 +258,21 @@ export function ProjectReportModal({
 
               {/* Right column - Metrics */}
               <div className="flex flex-col">
-                <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                   {mode === 'create' ? 'Показатели проекта (текущие)' : 'Показатели проекта'}
                 </label>
 
                 {metricsLoading && mode === 'create' ? (
                   <div className="flex items-center justify-center flex-1">
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {/* Actual Readiness */}
-                    <div className="flex flex-col gap-1 p-2 rounded bg-slate-800/30 border border-blue-500/20">
+                    <div className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-blue-500/20">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span className="text-[10px] text-slate-400">Фактическая готовность</span>
+                        <span className="text-[10px] text-muted-foreground">Фактическая готовность</span>
                       </div>
                       <div className="text-lg font-semibold text-blue-400 tabular-nums">
                         {displayMetrics?.actualReadiness !== null &&
@@ -283,10 +283,10 @@ export function ProjectReportModal({
                     </div>
 
                     {/* Planned Readiness */}
-                    <div className="flex flex-col gap-1 p-2 rounded bg-slate-800/30 border border-green-500/20">
+                    <div className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-green-500/20">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-green-500" />
-                        <span className="text-[10px] text-slate-400">Плановая готовность</span>
+                        <span className="text-[10px] text-muted-foreground">Плановая готовность</span>
                       </div>
                       <div className="text-lg font-semibold text-green-400 tabular-nums">
                         {displayMetrics?.plannedReadiness !== null &&
@@ -297,10 +297,10 @@ export function ProjectReportModal({
                     </div>
 
                     {/* Budget Spent */}
-                    <div className="flex flex-col gap-1 p-2 rounded bg-slate-800/30 border border-amber-500/20">
+                    <div className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-amber-500/20">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full bg-amber-500" />
-                        <span className="text-[10px] text-slate-400">Расход бюджета</span>
+                        <span className="text-[10px] text-muted-foreground">Расход бюджета</span>
                       </div>
                       <div className="text-lg font-semibold text-amber-400 tabular-nums">
                         {displayMetrics?.budgetSpent !== null && displayMetrics?.budgetSpent !== undefined
@@ -320,7 +320,7 @@ export function ProjectReportModal({
                   <AlertCircle className="w-3.5 h-3.5" />
                   <span className="font-medium">Удалить отчет?</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mb-3">
+                <p className="text-[11px] text-muted-foreground mb-3">
                   Это действие нельзя отменить.
                 </p>
                 <div className="flex gap-2">
@@ -330,9 +330,9 @@ export function ProjectReportModal({
                     disabled={isPending}
                     className={cn(
                       'flex-1 px-2 py-1 text-[11px] font-medium rounded',
-                      'text-slate-400 hover:text-slate-300',
-                      'border border-slate-700 hover:border-slate-600',
-                      'bg-slate-800/50 hover:bg-slate-800',
+                      'text-muted-foreground hover:text-foreground',
+                      'border border-border hover:border-border',
+                      'bg-muted/50 hover:bg-muted',
                       'transition-colors',
                       'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
@@ -365,7 +365,7 @@ export function ProjectReportModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-700/50">
+          <div className="border-t border-border/50">
             {/* Error message */}
             {saveError && (
               <div role="alert" className="px-4 py-2 bg-red-900/20 border-b border-red-500/30">
@@ -403,9 +403,9 @@ export function ProjectReportModal({
                   disabled={isPending}
                   className={cn(
                     'px-3 py-1.5 text-[11px] font-medium rounded',
-                    'text-slate-400 hover:text-slate-300',
-                    'border border-slate-700 hover:border-slate-600',
-                    'bg-slate-800/50 hover:bg-slate-800',
+                    'text-muted-foreground hover:text-foreground',
+                    'border border-border hover:border-border',
+                    'bg-muted/50 hover:bg-muted',
                     'transition-colors',
                     'disabled:opacity-50 disabled:cursor-not-allowed'
                   )}
@@ -420,7 +420,7 @@ export function ProjectReportModal({
                     'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
                     'text-white bg-green-600 hover:bg-green-500',
                     'transition-colors',
-                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
                   )}
                 >
                   {isSaving ? (

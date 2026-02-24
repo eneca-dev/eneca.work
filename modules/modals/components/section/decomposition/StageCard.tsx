@@ -88,8 +88,8 @@ export function StageCard({
       style={style}
       className={cn(
         'mb-2 rounded-lg overflow-hidden',
-        'border border-slate-800/60',
-        'bg-slate-900/40',
+        'border border-border/60',
+        'bg-muted/40',
         isDragging && 'shadow-lg ring-1 ring-primary/50'
       )}
     >

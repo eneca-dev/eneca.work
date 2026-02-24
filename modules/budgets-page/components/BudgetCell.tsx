@@ -74,7 +74,7 @@ export function BudgetCell({
           ))}
         </div>
       ) : (
-        <span className="text-[11px] text-slate-600">—</span>
+        <span className="text-[11px] text-muted-foreground/50">—</span>
       )}
 
       {/* Add button - скрываем если showOnlyMain */}
@@ -88,7 +88,7 @@ export function BudgetCell({
             <button
               className={cn(
                 'w-5 h-5 flex items-center justify-center rounded shrink-0',
-                'text-slate-600 hover:text-slate-400 hover:bg-slate-800',
+                'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted',
                 'transition-colors opacity-0 group-hover:opacity-100'
               )}
               title="Добавить бюджет"

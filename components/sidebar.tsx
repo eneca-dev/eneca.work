@@ -8,11 +8,12 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, List, FileText, LineChart } from "lucide-react"
+import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, List, FileText, LineChart, GraduationCap } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
 import { useAuthContext } from "@/modules/auth"
+import { useOnboardingStore } from "@/stores/useOnboardingStore"
 
 interface SidebarProps {
   user: {
@@ -112,6 +113,14 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   ]
 
   const isUsersActiveInternal = isUsersActive ?? pathname === "/users"
+  const { open: openOnboarding, highlightTutorialButton, clearHighlight } = useOnboardingStore()
+
+  // Автоматически убираем подсветку через 4 секунды
+  useEffect(() => {
+    if (!highlightTutorialButton) return
+    const timer = setTimeout(clearHighlight, 4000)
+    return () => clearTimeout(timer)
+  }, [highlightTutorialButton, clearHighlight])
 
   return (
     <div
@@ -233,6 +242,22 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             <MessageSquare className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
             {!collapsed && <span>Сообщить о проблеме</span>}
           </Link>
+        </div>
+
+        {/* Обучение */}
+        <div className="px-2 mt-2">
+          <button
+            onClick={() => { clearHighlight(); openOnboarding() }}
+            className={cn(
+              "flex items-center rounded-md px-3 py-2 nav-item transition-all duration-300 w-full",
+              "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+              collapsed && "justify-center px-0",
+              highlightTutorialButton && "text-primary ring-1 ring-primary/60 bg-primary/10 animate-pulse"
+            )}
+          >
+            <GraduationCap className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+            {!collapsed && <span>Обучение</span>}
+          </button>
         </div>
 
         {/* Weekly Calendar */}

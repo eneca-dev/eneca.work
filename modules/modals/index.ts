@@ -47,6 +47,9 @@ export type {
   // Loading
   LoadingCreateData,
   LoadingEditData,
+  // Loading Modal New
+  LoadingModalNewCreateData,
+  LoadingModalNewEditData,
   // Employee
   EmployeeViewData,
   // Progress
@@ -113,6 +116,8 @@ export {
   openItemEdit,
   openLoadingCreate,
   openLoadingEdit,
+  openLoadingModalNewCreate,
+  openLoadingModalNewEdit,
   openEmployeeView,
   closeModal,
   openCheckpointCreate,
@@ -150,7 +155,10 @@ export { TaskSidebar, type TaskSidebarProps } from './components/task'
 export { TaskCreateModal, type TaskCreateModalProps } from './components/task'
 
 // Loading
-export { LoadingModal, type LoadingModalProps } from './components/loading'
+export { LoadingModal, type LoadingModalProps, LoadingModalContainer } from './components/loading'
+
+// Loading Modal New
+export { LoadingModalNewContainer, LoadingModalNew, type LoadingModalNewProps } from './components/loading-modal-new'
 
 // Employee
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'

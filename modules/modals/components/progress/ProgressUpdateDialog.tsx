@@ -119,8 +119,8 @@ export function ProgressUpdateDialog({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-xs',
-            'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-200 dark:border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/20 dark:shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -128,16 +128,16 @@ export function ProgressUpdateDialog({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-700/50">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-xs font-medium text-foreground">
                 Обновить готовность?
               </span>
             </div>
             <button
               onClick={handleSkip}
-              className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -146,7 +146,7 @@ export function ProgressUpdateDialog({
           {/* Content */}
           <div className="px-3 py-3 space-y-3">
             {/* Task name */}
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+            <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
               {itemName}
             </p>
 
@@ -164,9 +164,9 @@ export function ProgressUpdateDialog({
                   }}
                   className={cn(
                     'w-14 text-2xl font-bold tabular-nums text-center',
-                    'text-slate-800 dark:text-slate-100',
+                    'text-foreground',
                     'bg-transparent border-b-2 border-transparent',
-                    'hover:border-slate-300 dark:hover:border-slate-600',
+                    'hover:border-border',
                     'focus:border-emerald-500 dark:focus:border-emerald-500',
                     'focus:outline-none transition-colors',
                     '[appearance:textfield]',
@@ -174,13 +174,13 @@ export function ProgressUpdateDialog({
                     '[&::-webkit-inner-spin-button]:appearance-none'
                   )}
                 />
-                <span className="text-sm text-slate-400 dark:text-slate-500 ml-0.5">%</span>
+                <span className="text-sm text-muted-foreground ml-0.5">%</span>
               </div>
               {/* Фиксированная высота чтобы не скакало */}
               <p className={cn(
                 'text-[10px] mt-0.5 h-4',
                 currentProgress !== progress
-                  ? 'text-slate-400 dark:text-slate-500'
+                  ? 'text-muted-foreground'
                   : 'text-transparent'
               )}>
                 было: {currentProgress}%
@@ -198,7 +198,7 @@ export function ProgressUpdateDialog({
                 onChange={(e) => setProgress(Number(e.target.value))}
                 className={cn(
                   'w-full h-1.5 rounded-full appearance-none cursor-pointer',
-                  'bg-slate-200 dark:bg-slate-700',
+                  'bg-muted',
                   '[&::-webkit-slider-thumb]:appearance-none',
                   '[&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4',
                   '[&::-webkit-slider-thumb]:rounded-full',
@@ -209,7 +209,7 @@ export function ProgressUpdateDialog({
                   '[&::-webkit-slider-thumb]:hover:scale-110',
                   '[&::-webkit-slider-thumb]:border-2',
                   '[&::-webkit-slider-thumb]:border-white',
-                  '[&::-webkit-slider-thumb]:dark:border-slate-800'
+                  '[&::-webkit-slider-thumb]:dark:border-card'
                 )}
               />
 
@@ -223,7 +223,7 @@ export function ProgressUpdateDialog({
                       'flex-1 py-1 text-[10px] font-medium rounded transition-colors',
                       progress === val
                         ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
+                        : 'bg-muted hover:bg-accent text-muted-foreground'
                     )}
                   >
                     {val}%
@@ -241,15 +241,15 @@ export function ProgressUpdateDialog({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-200 dark:border-slate-700/50">
+          <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border/50">
             <button
               onClick={handleSkip}
               disabled={isPending}
               className={cn(
                 'px-2.5 py-1 text-[10px] font-medium rounded',
-                'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
-                'border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                'bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800',
+                'text-muted-foreground hover:text-foreground',
+                'border border-border hover:border-border',
+                'bg-card hover:bg-muted',
                 'transition-colors',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
@@ -263,7 +263,7 @@ export function ProgressUpdateDialog({
                 'flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded',
                 'text-white bg-emerald-500 hover:bg-emerald-400',
                 'transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500'
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
               )}
             >
               {isPending ? (

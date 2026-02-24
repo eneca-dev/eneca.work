@@ -300,7 +300,24 @@ function transformProject(
 // ============================================================================
 
 /**
+ * Собирает все бюджеты из узла и всех потомков рекурсивно
+ */
+function collectAllBudgetsFromNode(node: HierarchyNode): BudgetInfo[] {
+  const result: BudgetInfo[] = [...node.budgets]
+  for (const child of node.children) {
+    result.push(...collectAllBudgetsFromNode(child))
+  }
+  return result
+}
+
+/**
  * Вычисляет аналитику по всем узлам иерархии
+ *
+ * План = сумма planned_amount бюджетов БЕЗ parent_budget_id (корневые/выделенные)
+ * Факт = сумма spent_amount ВСЕХ бюджетов
+ *
+ * Это исключает двойной подсчёт: распределённые бюджеты (с parent) не добавляются к плану,
+ * но их расходы учитываются в факте.
  */
 function calculateAnalytics(nodes: HierarchyNode[]): BudgetsAnalyticsData {
   let totalPlanned = 0
@@ -312,53 +329,56 @@ function calculateAnalytics(nodes: HierarchyNode[]): BudgetsAnalyticsData {
 
   const byTypeMap = new Map<string, AggregatedBudgetsByType>()
 
-  function processNode(node: HierarchyNode) {
-    // Считаем типы узлов
-    switch (node.type) {
-      case 'project':
-        projectsCount++
-        break
-      case 'section':
-        sectionsCount++
-        break
-      case 'decomposition_stage':
-        stagesCount++
-        break
-    }
+  // Собираем все бюджеты из всех проектов
+  for (const node of nodes) {
+    if (node.type === 'project') {
+      projectsCount++
 
-    // Считаем бюджеты этого узла
-    for (const budget of node.budgets) {
-      budgetsCount++
-      totalPlanned += budget.planned_amount
-      totalSpent += budget.spent_amount
+      // Собираем все бюджеты проекта и его потомков
+      const allBudgets = collectAllBudgetsFromNode(node)
 
-      // Группируем по типам
-      if (budget.type_id && budget.type_name) {
-        const existing = byTypeMap.get(budget.type_id)
-        if (existing) {
-          existing.total_planned += budget.planned_amount
-          existing.total_spent += budget.spent_amount
-        } else {
-          byTypeMap.set(budget.type_id, {
-            type_id: budget.type_id,
-            type_name: budget.type_name,
-            type_color: budget.type_color || '#6b7280',
-            total_planned: budget.planned_amount,
-            total_spent: budget.spent_amount,
-            percentage: 0,
-          })
+      for (const budget of allBudgets) {
+        budgetsCount++
+
+        // План = только корневые бюджеты (без parent_budget_id)
+        if (!budget.parent_budget_id) {
+          totalPlanned += budget.planned_amount
+        }
+
+        // Факт = spent всех бюджетов
+        totalSpent += budget.spent_amount
+
+        // Группируем по типам (только корневые для плана)
+        if (budget.type_id && budget.type_name && !budget.parent_budget_id) {
+          const existing = byTypeMap.get(budget.type_id)
+          if (existing) {
+            existing.total_planned += budget.planned_amount
+            existing.total_spent += budget.spent_amount
+          } else {
+            byTypeMap.set(budget.type_id, {
+              type_id: budget.type_id,
+              type_name: budget.type_name,
+              type_color: budget.type_color || '#6b7280',
+              total_planned: budget.planned_amount,
+              total_spent: budget.spent_amount,
+              percentage: 0,
+            })
+          }
         }
       }
     }
-
-    // Рекурсивно обрабатываем детей
-    for (const child of node.children) {
-      processNode(child)
-    }
   }
 
+  // Считаем секции и этапы для статистики
+  function countNodes(node: HierarchyNode) {
+    if (node.type === 'section') sectionsCount++
+    if (node.type === 'decomposition_stage') stagesCount++
+    for (const child of node.children) {
+      countNodes(child)
+    }
+  }
   for (const node of nodes) {
-    processNode(node)
+    countNodes(node)
   }
 
   // Вычисляем проценты

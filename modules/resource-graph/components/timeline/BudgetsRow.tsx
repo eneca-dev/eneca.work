@@ -100,7 +100,7 @@ export function BudgetsRow({
 
   // Форматирование суммы
   const formatAmount = (amount: number) => {
-    return Math.round(amount).toLocaleString('ru-RU')
+    return amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   return (
@@ -277,7 +277,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
   }
 
   const formatAmount = (amount: number) => {
-    return Math.round(amount).toLocaleString('ru-RU')
+    return amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   // Цвет прогресса

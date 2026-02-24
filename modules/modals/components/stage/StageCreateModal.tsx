@@ -75,37 +75,37 @@ function InlineDropdown({
         className={cn(
           'w-full flex items-center justify-between gap-1.5',
           'px-2.5 py-1.5 text-xs',
-          'bg-slate-800/50 border border-slate-700',
+          'bg-muted border border-border',
           'rounded text-left',
-          'hover:border-slate-600',
+          'hover:border-border',
           'focus:outline-none',
           'transition-colors',
           disabled && 'opacity-50 cursor-not-allowed',
-          selectedOption ? 'text-slate-200' : 'text-slate-500'
+          selectedOption ? 'text-foreground' : 'text-muted-foreground'
         )}
       >
         <span className="truncate flex-1">{selectedOption?.label || placeholder}</span>
-        <ChevronDown className={cn('w-3.5 h-3.5 text-slate-500 flex-shrink-0 transition-transform', isOpen && 'rotate-180')} />
+        <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground flex-shrink-0 transition-transform', isOpen && 'rotate-180')} />
       </button>
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-[100] bg-slate-800/95 backdrop-blur-sm border border-slate-700 rounded-lg shadow-xl shadow-black/40 max-h-44 overflow-y-auto py-1">
+        <div className="absolute left-0 right-0 top-full mt-1 z-[100] bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-xl shadow-black/40 max-h-44 overflow-y-auto py-1">
           <button
             type="button"
             onClick={() => { onChange(''); setIsOpen(false) }}
-            className={cn('w-full px-3 py-2 text-xs text-left flex items-center gap-2 hover:bg-slate-700/50 transition-colors', !value && 'bg-slate-700/30')}
+            className={cn('w-full px-3 py-2 text-xs text-left flex items-center gap-2 hover:bg-muted transition-colors', !value && 'bg-muted/60')}
           >
             <span className="w-4 flex-shrink-0">{!value && <Check className="w-3 h-3 text-amber-500" />}</span>
-            <span className="text-slate-500">{placeholder}</span>
+            <span className="text-muted-foreground">{placeholder}</span>
           </button>
           {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
               onClick={() => { onChange(opt.value); setIsOpen(false) }}
-              className={cn('w-full px-3 py-2 text-xs text-left flex items-center gap-2 hover:bg-slate-700/50 transition-colors', value === opt.value && 'bg-slate-700/30')}
+              className={cn('w-full px-3 py-2 text-xs text-left flex items-center gap-2 hover:bg-muted transition-colors', value === opt.value && 'bg-muted/60')}
             >
               <span className="w-4 flex-shrink-0">{value === opt.value && <Check className="w-3 h-3 text-amber-500" />}</span>
-              <span className="text-slate-200 truncate">{opt.label}</span>
+              <span className="text-foreground truncate">{opt.label}</span>
             </button>
           ))}
         </div>
@@ -364,8 +364,8 @@ export function StageCreateModal({
         <div
           className={cn(
             'pointer-events-auto w-full max-w-2xl',
-            'bg-slate-900/95 backdrop-blur-md',
-            'border border-slate-700/50',
+            'bg-card/95 backdrop-blur-md',
+            'border border-border/50',
             'rounded-lg shadow-2xl shadow-black/50',
             'transform transition-all duration-200',
             isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
@@ -373,13 +373,13 @@ export function StageCreateModal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-amber-500" />
-              <span className="text-xs font-medium text-slate-300">Создать этап</span>
-              <span className="text-[10px] text-slate-500">·</span>
+              <span className="text-xs font-medium text-foreground">Создать этап</span>
+              <span className="text-[10px] text-muted-foreground">·</span>
               <span
-                className="text-[10px] text-slate-400 truncate max-w-[200px]"
+                className="text-[10px] text-muted-foreground truncate max-w-[200px]"
                 title={sectionName}
               >
                 Раздел: {sectionName}
@@ -387,17 +387,17 @@ export function StageCreateModal({
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="px-4 py-3 max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent">
+          <div className="px-4 py-3 max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted [&::-webkit-scrollbar-track]:bg-transparent">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="space-y-4">
@@ -407,7 +407,7 @@ export function StageCreateModal({
                   <div className="grid grid-cols-3 gap-3">
                     {/* Name */}
                     <div>
-                      <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                      <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                         Название этапа *
                       </label>
                       <input
@@ -417,10 +417,10 @@ export function StageCreateModal({
                         placeholder="Введите название"
                         className={cn(
                           'w-full px-2.5 py-1.5 text-xs',
-                          'bg-slate-800/50 border border-slate-700',
-                          'rounded text-slate-200',
-                          'placeholder:text-slate-600',
-                          'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                          'bg-muted border border-border',
+                          'rounded text-foreground',
+                          'placeholder:text-muted-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/50',
                           'transition-colors'
                         )}
                         disabled={isCreating}
@@ -429,7 +429,7 @@ export function StageCreateModal({
 
                     {/* Status */}
                     <div>
-                      <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                      <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                         Статус
                       </label>
                       <InlineDropdown
@@ -443,7 +443,7 @@ export function StageCreateModal({
 
                     {/* Description */}
                     <div>
-                      <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                      <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                         Описание
                       </label>
                       <input
@@ -453,10 +453,10 @@ export function StageCreateModal({
                         placeholder="Необязательно"
                         className={cn(
                           'w-full px-2.5 py-1.5 text-xs',
-                          'bg-slate-800/50 border border-slate-700',
-                          'rounded text-slate-200',
-                          'placeholder:text-slate-600',
-                          'focus:outline-none focus:border-slate-600 focus:ring-1 focus:ring-slate-600/50',
+                          'bg-muted border border-border',
+                          'rounded text-foreground',
+                          'placeholder:text-muted-foreground',
+                          'focus:outline-none focus:border-border focus:ring-1 focus:ring-ring/50',
                           'transition-colors'
                         )}
                         disabled={isCreating}
@@ -466,7 +466,7 @@ export function StageCreateModal({
 
                   {/* Row 2: Responsibles */}
                   <div>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    <label className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
                       Ответственные
                     </label>
                     <ResponsiblesDropdown
@@ -485,7 +485,7 @@ export function StageCreateModal({
                 {/* Subtasks section */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                       Задачи
                     </label>
                     <button
@@ -505,7 +505,7 @@ export function StageCreateModal({
                   </div>
 
                   {subtasks.length === 0 ? (
-                    <div className="text-[11px] text-slate-500 text-center py-4 border border-dashed border-slate-700/50 rounded">
+                    <div className="text-[11px] text-muted-foreground text-center py-4 border border-dashed border-border/50 rounded">
                       Задачи можно добавить позже
                     </div>
                   ) : (
@@ -525,11 +525,11 @@ export function StageCreateModal({
                             placeholder={`Задача ${index + 1}`}
                             className={cn(
                               'px-2.5 py-1.5 text-xs',
-                              'bg-slate-800/50 border border-slate-700',
-                              'rounded text-slate-200',
-                              'placeholder:text-slate-600',
-                              'hover:border-slate-600',
-                              'focus:outline-none focus:border-slate-600',
+                              'bg-muted border border-border',
+                              'rounded text-foreground',
+                              'placeholder:text-muted-foreground',
+                              'hover:border-border',
+                              'focus:outline-none focus:border-border',
                               'transition-colors'
                             )}
                             disabled={isCreating}
@@ -570,16 +570,16 @@ export function StageCreateModal({
                               placeholder="0"
                               className={cn(
                                 'w-full px-2 py-1.5 pr-5 text-xs text-right',
-                                'bg-slate-800/50 border border-slate-700',
-                                'rounded text-slate-200 font-mono',
-                                'placeholder:text-slate-600',
-                                'hover:border-slate-600',
-                                'focus:outline-none focus:border-slate-600',
+                                'bg-muted border border-border',
+                                'rounded text-foreground font-mono',
+                                'placeholder:text-muted-foreground',
+                                'hover:border-border',
+                                'focus:outline-none focus:border-border',
                                 'transition-colors'
                               )}
                               disabled={isCreating}
                             />
-                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">
+                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
                               ч
                             </span>
                           </div>
@@ -591,7 +591,7 @@ export function StageCreateModal({
                             disabled={isCreating}
                             className={cn(
                               'p-1.5 rounded mt-0.5',
-                              'text-slate-600 hover:text-red-400',
+                              'text-muted-foreground hover:text-red-400',
                               'hover:bg-red-500/10',
                               'transition-colors',
                               'disabled:opacity-50 disabled:cursor-not-allowed'
@@ -617,8 +617,8 @@ export function StageCreateModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700/50">
-            <div className="text-[10px] text-slate-500">
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/50">
+            <div className="text-[10px] text-muted-foreground">
               {validSubtasks.length > 0 && (
                 <span>
                   {validSubtasks.length} {validSubtasks.length === 1 ? 'задача' : 'задач'} будет создано
@@ -631,9 +631,9 @@ export function StageCreateModal({
                 disabled={isCreating}
                 className={cn(
                   'px-3 py-1.5 text-[11px] font-medium rounded',
-                  'text-slate-400 hover:text-slate-300',
-                  'border border-slate-700 hover:border-slate-600',
-                  'bg-slate-800/50 hover:bg-slate-800',
+                  'text-muted-foreground hover:text-foreground',
+                  'border border-border hover:border-border',
+                  'bg-muted/50 hover:bg-muted',
                   'transition-colors',
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
@@ -645,9 +645,9 @@ export function StageCreateModal({
                 disabled={!isFormValid || isCreating}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
-                  'text-slate-900 bg-amber-500 hover:bg-amber-400',
+                  'text-background bg-amber-500 hover:bg-amber-400',
                   'transition-colors',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500'
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
                 )}
               >
                 {isCreating ? (

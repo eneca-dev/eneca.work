@@ -27,6 +27,7 @@ interface UpdateSectionParams {
  * - sections cache
  * - resource graph cache
  * - projects cache (for tree updates)
+ * - kanban cache (for board updates)
  */
 export const useUpdateSection = createSimpleMutation<UpdateSectionParams, void>({
   mutationFn: async ({ sectionId, data }) => {
@@ -36,5 +37,6 @@ export const useUpdateSection = createSimpleMutation<UpdateSectionParams, void>(
     [...queryKeys.sections.all],
     [...queryKeys.resourceGraph.all],
     [...queryKeys.projects.all],
+    [...queryKeys.kanban.all],
   ],
 })

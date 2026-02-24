@@ -199,8 +199,8 @@ export function CalendarGrid() {
               "min-h-24 p-1 border rounded-md cursor-pointer transition-colors hover:bg-accent/50",
               // Базовые цвета фона и более яркие границы - делаем ячейки светлее и обводку ярче в светлой теме
               isCurrentMonth 
-                ? "bg-card dark:bg-gray-800 border-gray-300 dark:border-border/60 text-card-foreground" 
-                : "bg-card/50 dark:bg-gray-800/50 border-gray-200 dark:border-muted/60 text-muted-foreground",
+                ? "bg-card border-border text-card-foreground" 
+                : "bg-card/50 dark:bg-muted border-border/60 text-muted-foreground",
               // Нерабочие дни
               !isWorkDay && isCurrentMonth && "bg-red-50 dark:bg-red-900/40 border-red-400 dark:border-red-700/70",
               !isWorkDay && !isCurrentMonth && "bg-red-50/50 dark:bg-red-900/20 border-red-300 dark:border-red-700/50",

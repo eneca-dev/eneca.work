@@ -97,13 +97,13 @@ export function NoteCard({
 
 
   return (
-    <Card 
+    <Card
       className={cn(
-        "p-4 transition-all duration-300 hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-gray-500/20 cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600",
-        isActive && "bg-gray-50 dark:bg-gray-600/60",
-        notion.notion_done && "opacity-50 bg-gray-50 dark:bg-gray-800/50",
+        "p-4 transition-all duration-300 hover:shadow-md cursor-pointer bg-card border-border",
+        isActive && "bg-muted",
+        notion.notion_done && "opacity-50 bg-muted/50",
         isSelected && "border-2 border-primary",
-        isExpanded && "shadow-lg dark:shadow-xl"
+        isExpanded && "shadow-lg"
       )}
       onClick={handleCardClick}
     >
@@ -129,8 +129,8 @@ export function NoteCard({
                   {/* Заголовок заметки */}
                   {parsed.title && (
                     <h1 className={cn(
-                      "text-xl font-semibold leading-tight mb-2 line-clamp-2 text-gray-900 dark:text-gray-100",
-                      notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
+                      "text-xl font-semibold leading-tight mb-2 line-clamp-2 text-foreground",
+                      notion.notion_done && "line-through text-muted-foreground"
                     )}>
                       {parsed.title}
                     </h1>
@@ -142,9 +142,9 @@ export function NoteCard({
                       <div
                         ref={contentRef}
                         className={cn(
-                          "max-w-none text-sm leading-relaxed relative text-gray-700 dark:text-gray-300 overflow-hidden",
+                          "max-w-none text-sm leading-relaxed relative text-foreground overflow-hidden",
                           !isExpanded && (parsed.title ? "line-clamp-3" : "line-clamp-4"),
-                          notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
+                          notion.notion_done && "line-through text-muted-foreground"
                         )}
                       >
                         <div
@@ -159,7 +159,7 @@ export function NoteCard({
 
                   {/* Если нет ни заголовка, ни контента */}
                   {!parsed.title && !parsed.content && (
-                    <p className="text-gray-500 dark:text-gray-400 italic">Пустая заметка</p>
+                    <p className="text-muted-foreground italic">Пустая заметка</p>
                   )}
                 </>
               )
@@ -174,11 +174,11 @@ export function NoteCard({
                 variant="ghost"
                 size="sm"
                 onClick={handleToggleExpand}
-                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-600"
+                className="h-8 w-8 p-0 hover:bg-accent"
                 title={isExpanded ? "Свернуть заметку" : "Развернуть заметку"}
               >
                 <ChevronDown className={cn(
-                  "h-4 w-4 text-gray-600 dark:text-gray-400 transition-transform duration-300",
+                  "h-4 w-4 text-muted-foreground transition-transform duration-300",
                   isExpanded && "rotate-180"
                 )} />
               </Button>
@@ -203,7 +203,7 @@ export function NoteCard({
               variant="ghost"
               size="sm"
               onClick={handleDelete}
-              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
               title="Удалить"
             >
               <Trash2 className="h-4 w-4" />
@@ -213,7 +213,7 @@ export function NoteCard({
 
         {/* Дата последнего изменения - вынесена за пределы ограничения высоты */}
         <div className="flex justify-between items-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Последнее изменение: {formatDate(notion.notion_updated_at)}
           </p>
         </div>

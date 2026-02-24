@@ -50,12 +50,13 @@ export interface Employee {
   firstName?: string
   lastName?: string
   email?: string
-  teamId: string
+  teamId?: string
   teamCode?: string
   teamName?: string
   departmentId?: string
   departmentName?: string
   position?: string
+  categoryName?: string
   avatarUrl?: string
   workload: number
   employmentRate?: number

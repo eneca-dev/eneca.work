@@ -47,9 +47,9 @@ export function SingleDeleteConfirm({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md bg-white dark:bg-gray-800 borderborder-gray-200 dark:border-gray-700">
+      <DialogContent className="max-w-md bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <AlertTriangle className="h-5 w-5 text-red-500 dark:text-red-400" />
             {showSecondConfirm ? 'Окончательное подтверждение' : 'Подтверждение удаления'}
           </DialogTitle>
@@ -66,8 +66,8 @@ export function SingleDeleteConfirm({
               </Alert>
 
               <div className="space-y-2">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Заметка:</p>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                <p className="text-sm font-medium text-foreground">Заметка:</p>
+                <div className="p-3 bg-muted rounded text-sm text-foreground border border-border">
                   {getNotionDisplayTitle(notion) || 'Пустая заметка'}
                 </div>
               </div>
@@ -88,7 +88,7 @@ export function SingleDeleteConfirm({
             variant="outline"
             onClick={handleClose}
             disabled={isDeleting}
-            className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="border-border text-foreground hover:bg-accent"
           >
             Отмена
           </Button>
