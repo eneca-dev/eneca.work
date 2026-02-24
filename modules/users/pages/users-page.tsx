@@ -71,7 +71,7 @@ export default function UsersPage() {
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчик изменения вкладки
   const handleTabChange = useCallback((value: string) => {
     setAdminTab(value)
-    router.replace(`/dashboard/users?tab=${value}`)
+    router.replace(`/users?tab=${value}`)
   }, [router])
 
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчик обновления пользователя

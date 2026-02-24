@@ -1,9 +1,21 @@
+'use client'
+
 import { useEffect } from 'react'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '../store/usePermissionsStore'
 import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
 import { getUserPermissions } from '../supabase/supabasePermissions'
+
+/** Тип данных из таблицы user_permissions_cache */
+interface UserPermissionsCacheRow {
+  user_id: string
+  permissions: string[]
+}
+
+/** Тип payload для Realtime события */
+type PermissionsCachePayload = RealtimePostgresChangesPayload<UserPermissionsCacheRow>
 
 // Глобальная подписка на изменения таблицы user_permissions_cache для избежания дубликатов
 let activeUserId: string | null = null
@@ -58,12 +70,13 @@ export function useUserPermissionsSync() {
         schema: 'public',
         table: 'user_permissions_cache',
         filter: `user_id=eq.${userId}`
-      }, (payload: any) => {
+      }, (payload: PermissionsCachePayload) => {
         try {
-          const nextPermissions: string[] = payload?.new?.permissions ?? []
+          const newRecord = payload.new as UserPermissionsCacheRow | null
+          const nextPermissions: string[] = newRecord?.permissions ?? []
           setPermissions(Array.isArray(nextPermissions) ? nextPermissions : [])
-        } catch (e) {
-          console.warn('PERMISSIONS Не удалось применить пермишенны из Realtime события', e)
+        } catch (err) {
+          console.warn('PERMISSIONS Не удалось применить пермишенны из Realtime события', err)
         }
       })
       .subscribe()
@@ -142,8 +155,9 @@ export async function reloadUserPermissions(): Promise<void> {
       return
     }
     setPermissions(result.permissions || [])
-  } catch (e: any) {
-    setError(e?.message || 'Не удалось перезагрузить разрешения')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Не удалось перезагрузить разрешения'
+    setError(message)
   } finally {
     setLoading(false)
   }

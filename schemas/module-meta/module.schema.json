@@ -1,0 +1,587 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eneca.work/schemas/module-meta/module.schema.json",
+  "title": "Module Meta Schema",
+  "description": "Schema for module.meta.json files in eneca.work modules",
+  "type": "object",
+  "required": ["meta", "architecture", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to JSON Schema"
+    },
+    "meta": {
+      "type": "object",
+      "description": "Module metadata",
+      "required": ["name", "displayName", "description", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Module folder name (kebab-case)",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable module name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief module description"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "default": "1.0.0"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["stable", "beta", "alpha", "deprecated", "experimental"],
+          "description": "Module stability status"
+        },
+        "route": {
+          "type": ["string", "null"],
+          "description": "App Router path (e.g., '/dashboard/planning') or null if no page"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "core",
+              "data-layer",
+              "ui",
+              "feature",
+              "utility",
+              "integration",
+              "auth",
+              "admin"
+            ]
+          },
+          "description": "Module categorization tags"
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "description": "Module structure and public API",
+      "required": ["structure", "publicApi"],
+      "additionalProperties": false,
+      "properties": {
+        "structure": {
+          "type": "object",
+          "description": "Directory structure with descriptions",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "entryPoint": {
+          "type": "string",
+          "description": "Main entry file",
+          "default": "index.ts"
+        },
+        "publicApi": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of public exports from index.ts"
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "description": "React hooks provided by module",
+      "items": {
+        "$ref": "#/definitions/hook"
+      },
+      "default": []
+    },
+    "actions": {
+      "type": "array",
+      "description": "Server Actions provided by module",
+      "items": {
+        "$ref": "#/definitions/action"
+      },
+      "default": []
+    },
+    "stores": {
+      "type": "array",
+      "description": "Zustand stores provided by module",
+      "items": {
+        "$ref": "#/definitions/store"
+      },
+      "default": []
+    },
+    "components": {
+      "type": "array",
+      "description": "React components provided by module",
+      "items": {
+        "$ref": "#/definitions/component"
+      },
+      "default": []
+    },
+    "patterns": {
+      "type": "array",
+      "description": "Recommended patterns for using this module",
+      "items": {
+        "$ref": "#/definitions/pattern"
+      },
+      "default": []
+    },
+    "antipatterns": {
+      "type": "array",
+      "description": "Anti-patterns to avoid",
+      "items": {
+        "$ref": "#/definitions/antipattern"
+      },
+      "default": []
+    },
+    "technologies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Technologies and libraries used",
+      "default": []
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Module dependencies",
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Other modules this module depends on",
+          "default": []
+        },
+        "database": {
+          "type": "object",
+          "description": "Database dependencies",
+          "additionalProperties": false,
+          "properties": {
+            "tables": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "views": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "enums": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "functions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
+        }
+      }
+    },
+    "dependents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Modules that depend on this module",
+      "default": []
+    },
+    "cache": {
+      "type": "object",
+      "description": "Caching configuration",
+      "additionalProperties": false,
+      "properties": {
+        "queryKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Query key namespaces used",
+          "default": []
+        },
+        "realtimeChannels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Realtime subscription channels",
+          "default": []
+        },
+        "invalidationRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["trigger", "invalidates"],
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "description": "What triggers invalidation"
+              },
+              "invalidates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Query keys to invalidate"
+              }
+            }
+          },
+          "default": []
+        }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Permissions used by this module",
+      "default": []
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Module tasks and issues",
+      "items": {
+        "$ref": "#/definitions/task"
+      },
+      "default": []
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Module version history",
+      "items": {
+        "$ref": "#/definitions/changelogEntry"
+      },
+      "default": []
+    }
+  },
+  "definitions": {
+    "hook": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Hook name (e.g., useProjects)"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the hook does"
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative file path"
+        },
+        "params": {
+          "type": "string",
+          "description": "Input parameters"
+        },
+        "returns": {
+          "type": "string",
+          "description": "Return type"
+        },
+        "example": {
+          "type": "string",
+          "description": "Usage example"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Action function name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the action does"
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative file path"
+        },
+        "input": {
+          "type": "string",
+          "description": "Input type"
+        },
+        "output": {
+          "type": "string",
+          "description": "Output type (usually ActionResult<T>)"
+        },
+        "mutates": {
+          "type": "boolean",
+          "description": "Whether this action modifies data",
+          "default": false
+        }
+      }
+    },
+    "store": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Store hook name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Store purpose"
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative file path"
+        },
+        "persistence": {
+          "type": ["string", "null"],
+          "description": "localStorage key if persisted, null otherwise"
+        },
+        "state": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Main state properties"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Store actions/methods"
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Component name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Component purpose"
+        },
+        "file": {
+          "type": "string",
+          "description": "Relative file path"
+        },
+        "props": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Main props"
+        },
+        "example": {
+          "type": "string",
+          "description": "Usage example"
+        }
+      }
+    },
+    "pattern": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Pattern name"
+        },
+        "description": {
+          "type": "string",
+          "description": "When and why to use this pattern"
+        },
+        "example": {
+          "type": "string",
+          "description": "Code example"
+        }
+      }
+    },
+    "antipattern": {
+      "type": "object",
+      "required": ["name", "description", "instead"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Anti-pattern name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What NOT to do"
+        },
+        "instead": {
+          "type": "string",
+          "description": "What to do instead"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "title", "category", "priority", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task ID (MODULE-NNN format)",
+          "pattern": "^[A-Z]+-\\d{3}$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Task title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief task description (1-2 sentences)"
+        },
+        "details": {
+          "type": "string",
+          "description": "Detailed task description with implementation notes, context, examples (markdown supported)"
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of acceptance criteria that must be met for task completion",
+          "default": []
+        },
+        "technicalNotes": {
+          "type": "string",
+          "description": "Technical implementation notes, constraints, gotchas"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "feature",
+            "bug",
+            "refactor",
+            "performance",
+            "security",
+            "docs",
+            "tech-debt",
+            "migration"
+          ],
+          "description": "Task category"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Task priority"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "backlog",
+            "todo",
+            "in-progress",
+            "review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "description": "Task status"
+        },
+        "assignee": {
+          "type": ["string", "null"],
+          "description": "Assigned developer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date",
+          "description": "Creation date (YYYY-MM-DD)"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date",
+          "description": "Last update date (YYYY-MM-DD)"
+        },
+        "completedAt": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "Completion date (YYYY-MM-DD)"
+        },
+        "blockedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Task IDs that block this task",
+          "default": []
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Task IDs blocked by this task",
+          "default": []
+        },
+        "affectedFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns of files this task will modify (e.g., 'modules/X/components/**', 'types/*.ts')",
+          "default": []
+        },
+        "estimatedHours": {
+          "type": "number",
+          "description": "Estimated hours to complete",
+          "minimum": 0.5
+        }
+      }
+    },
+    "changelogEntry": {
+      "type": "object",
+      "required": ["version", "date", "changes"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Semantic version",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Release date (YYYY-MM-DD)"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of changes"
+        }
+      }
+    }
+  }
+}

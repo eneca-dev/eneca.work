@@ -1,0 +1,182 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "permissions",
+    "displayName": "Permissions",
+    "description": "Система управления разрешениями и областью видимости данных",
+    "version": "2.1.0",
+    "status": "stable",
+    "route": null,
+    "tags": ["core", "security", "utility"]
+  },
+
+  "architecture": {
+    "structure": {
+      "components/": "React компоненты (PermissionGuard, RoleGuard, LockedFiltersBadge)",
+      "hooks/": "Хуки для работы с разрешениями и фильтрами",
+      "server/": "Server Actions (getFilterContext)",
+      "store/": "Zustand store для permissions",
+      "utils/": "Утилиты (scope-resolver, mandatory-filters)",
+      "types/": "TypeScript типы"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "PermissionGuard",
+      "RoleGuard",
+      "LockedFiltersBadge",
+      "usePermissions",
+      "useHasPermission",
+      "useFilterContext",
+      "useFilteredOptions",
+      "getLockedFilters",
+      "applyMandatoryFilters",
+      "getFilterContext"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "usePermissions",
+      "description": "Хук для проверки разрешений пользователя",
+      "file": "hooks/usePermissions.ts",
+      "returns": "{ hasPermission, hasAnyPermission, hasAllPermissions, permissions }"
+    },
+    {
+      "name": "useFilterContext",
+      "description": "Загружает контекст фильтрации пользователя (роли, scope, org structure)",
+      "file": "hooks/use-filter-context.ts",
+      "returns": "UseQueryResult<UserFilterContext>"
+    },
+    {
+      "name": "useFilteredOptions",
+      "description": "Фильтрует опции автокомплита на основе scope пользователя",
+      "file": "hooks/use-filtered-options.ts",
+      "returns": "FilterOption[]"
+    }
+  ],
+
+  "actions": [
+    {
+      "name": "getFilterContext",
+      "description": "Server Action для загрузки контекста фильтрации",
+      "file": "server/get-filter-context.ts",
+      "input": "void",
+      "output": "ActionResult<UserFilterContext>"
+    }
+  ],
+
+  "stores": [
+    {
+      "name": "usePermissionsStore",
+      "description": "Zustand store для хранения permissions и filter scope",
+      "file": "store/usePermissionsStore.ts",
+      "selectors": ["useFilterScope", "useOrgContext", "useIsAdmin"]
+    }
+  ],
+
+  "components": [
+    {
+      "name": "PermissionGuard",
+      "description": "Guard компонент для условного рендера по разрешению",
+      "file": "components/PermissionGuard.tsx",
+      "props": ["permission", "alternativePermissions?", "fallback?", "inverse?"],
+      "example": "<PermissionGuard permission=\"users.admin\"><AdminPanel /></PermissionGuard>"
+    },
+    {
+      "name": "LockedFiltersBadge",
+      "description": "Badge показывающий заблокированные фильтры пользователя",
+      "file": "components/LockedFiltersBadge.tsx",
+      "props": ["filters", "scopeLevel?", "roleName?", "className?"],
+      "example": "<LockedFiltersBadge filters={lockedFilters} scopeLevel={filterContext?.scope.level} />"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Two-Layer Security Pattern",
+      "description": "Защита данных на двух уровнях: UI (фильтрация опций) + Server (mandatory filters)",
+      "example": "Client: useFilteredOptions + getLockedFilters | Server: applyMandatoryFilters"
+    },
+    {
+      "name": "Filter Context Pattern",
+      "description": "Загружай контекст один раз и передавай в хуки",
+      "example": "const { data: ctx } = useFilterContext(); const options = useFilteredOptions(all, ctx)"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Skip Server Validation",
+      "description": "НЕ полагайся только на UI фильтрацию - всегда используй applyMandatoryFilters на сервере",
+      "instead": "Всегда применяй applyMandatoryFilters в Server Actions"
+    }
+  ],
+
+  "technologies": ["react", "zustand", "tanstack-query", "supabase", "sentry"],
+
+  "dependencies": {
+    "modules": ["cache", "inline-filter"],
+    "database": {
+      "tables": ["profiles", "roles", "user_roles", "role_permissions", "permissions", "teams", "departments", "subdivisions", "projects"],
+      "views": ["view_users"],
+      "enums": [],
+      "functions": ["get_user_permissions"]
+    }
+  },
+
+  "dependents": ["resource-graph", "budgets-page", "kanban", "departments-timeline"],
+
+  "cache": {
+    "queryKeys": ["filterPermissions.all", "filterPermissions.context"],
+    "realtimeChannels": ["user_roles", "role_permissions"],
+    "invalidationRules": [
+      "user_roles change -> invalidate filterPermissions.all",
+      "role_permissions change -> invalidate filterPermissions.all"
+    ]
+  },
+
+  "permissions": [
+    "filters.scope.all",
+    "filters.scope.subdivision",
+    "filters.scope.department",
+    "filters.scope.team",
+    "filters.scope.managed_projects"
+  ],
+
+  "tasks": [],
+
+  "changelog": [
+    {
+      "version": "2.1.0",
+      "date": "2026-01-16",
+      "changes": [
+        "Audit fixes: TypeScript any issues исправлены (5 мест)",
+        "Audit fixes: usePermissions() рефакторинг на атомарные селекторы",
+        "Security: Session validation в getFilterContext (UUID format check, auth error handling)",
+        "Sentry: Добавлен span tracing в getFilterContext",
+        "Integration: LockedFiltersBadge интегрирован в resource-graph",
+        "DB fix: view_employee_workloads name format (last_name + first_name)"
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "date": "2026-01-16",
+      "changes": [
+        "Добавлена система filter permissions (scope-based access)",
+        "LockedFiltersBadge компонент для отображения ограничений",
+        "Security fixes: UUID validation, permission verification, Sentry logging",
+        "Realtime invalidation для user_roles и role_permissions"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": [
+        "Initial release",
+        "PermissionGuard и RoleGuard компоненты",
+        "Zustand store для permissions"
+      ]
+    }
+  ]
+}

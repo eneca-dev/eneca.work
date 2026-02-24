@@ -2,7 +2,7 @@
  * Resource Graph Module - Component Exports
  */
 
-export { ResourceGraph } from './ResourceGraph'
+export { ResourceGraph, ResourceGraphInternal } from './ResourceGraph'
 
 // Timeline components
 export {

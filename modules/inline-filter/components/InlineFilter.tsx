@@ -136,7 +136,7 @@ export function InlineFilter({
       })
     }
 
-    return items.slice(0, 8) // Лимит подсказок
+    return items.slice(0, MAX_SUGGESTIONS)
   }, [inputContext, config, options])
 
   // Обработка выбора подсказки

@@ -256,7 +256,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   // Если у пользователя нет прав, показываем сообщение
   if (!canManageGlobalEvents) {
     return (
-      <div className="p-4 bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 rounded-md">
+      <div className="p-4 bg-muted text-muted-foreground  rounded-md">
         <p className="text-sm">
           У вас нет прав для изменения общего рабочего графика.
           Для получения доступа обратитесь к администратору.
@@ -357,7 +357,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
           */}
 
           <TabsContent value="transfer" className="space-y-4 pt-4">
-                <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
+                <div className="bg-muted text-muted-foreground  p-3 rounded-md mb-4">
                   <p className="text-sm font-medium">Общее изменение рабочего графика</p>
                 </div>
 
@@ -398,7 +398,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
               </TabsContent>
 
               <TabsContent value="holiday" className="space-y-4 pt-4">
-                <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
+                <div className="bg-muted text-muted-foreground  p-3 rounded-md mb-4">
                   <p className="text-sm font-medium">Общее изменение рабочего графика</p>
                 </div>
 

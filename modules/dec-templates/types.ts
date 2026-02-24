@@ -38,6 +38,7 @@ export type Stage = {
   endDate: string | null
   description: string | null
   statusId: string | null
+  responsibles: string[]
   decompositions: Decomposition[]
 }
 

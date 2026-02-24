@@ -107,7 +107,7 @@ export default function RemoveHeadConfirmModal({
       />
 
       <Modal.Body>
-        <p className="text-gray-600 dark:text-slate-400">
+        <p className="text-muted-foreground">
           Вы уверены, что хотите убрать руководителя {getEntityLabel()} <strong>"{entityName}"</strong>?
           Это действие нельзя отменить.
         </p>

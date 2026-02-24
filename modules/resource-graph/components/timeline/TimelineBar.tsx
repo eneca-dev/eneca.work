@@ -1,8 +1,9 @@
 'use client'
 
-import { differenceInDays, parseISO, startOfDay, format } from 'date-fns'
+import { differenceInDays, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import { parseMinskDate } from '@/lib/timezone-utils'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange } from '../../types'
 import {
@@ -31,8 +32,10 @@ export function calculateBarPosition(
 ): BarPosition | null {
   if (!startDate || !endDate) return null
 
-  const start = startOfDay(parseISO(startDate))
-  const end = startOfDay(parseISO(endDate))
+  // Используем parseMinskDate для консистентности с getTodayMinsk() и range.start
+  // parseISO создаёт дату в локальном timezone, что приводит к ошибке ±1 день
+  const start = parseMinskDate(startDate)
+  const end = parseMinskDate(endDate)
 
   // Проверяем что бар в видимом диапазоне
   if (end < range.start || start > range.end) return null
@@ -76,8 +79,8 @@ export function TimelineBar({
   if (!position) return null
 
   const formatDateRange = () => {
-    const start = startDate ? format(parseISO(startDate), 'd MMM yyyy', { locale: ru }) : '—'
-    const end = endDate ? format(parseISO(endDate), 'd MMM yyyy', { locale: ru }) : '—'
+    const start = startDate ? format(parseMinskDate(startDate), 'd MMM yyyy', { locale: ru }) : '—'
+    const end = endDate ? format(parseMinskDate(endDate), 'd MMM yyyy', { locale: ru }) : '—'
     return `${start} — ${end}`
   }
 

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       try {
         const { searchParams } = new URL(request.url)
         const code = searchParams.get("code")
-        const next = searchParams.get("next") || "/dashboard"
+        const next = searchParams.get("next") || "/"
 
         span.setAttribute("auth.code_present", !!code)
         span.setAttribute("auth.redirect_url", next)

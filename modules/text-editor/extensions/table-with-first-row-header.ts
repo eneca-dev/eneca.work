@@ -2,7 +2,7 @@
 
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Node as ProseMirrorNode, Schema } from '@tiptap/pm/model'
 
 // Функция для проверки, является ли узел таблицей
 function isTableNode(node: ProseMirrorNode): boolean {
@@ -37,7 +37,7 @@ function isUnremovableParagraph(node: ProseMirrorNode): boolean {
 }
 
 // Функция для обеспечения того, что первая строка таблицы содержит только заголовочные ячейки
-function ensureFirstRowIsHeader(tableNode: ProseMirrorNode, schema: any) {
+function ensureFirstRowIsHeader(tableNode: ProseMirrorNode, schema: Schema) {
   if (!isTableNode(tableNode) || tableNode.childCount === 0) {
     return tableNode
   }

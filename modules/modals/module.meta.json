@@ -1,0 +1,230 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "modals",
+    "displayName": "Modals",
+    "description": "Централизованные модальные окна для бизнес-сущностей (бюджеты, разделы, этапы, задачи, загрузки)",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": null,
+    "tags": ["core", "ui"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для CRUD операций в модалках",
+      "components/": "React компоненты модалок по категориям",
+      "components/budget/": "Модалки бюджетов (create, edit)",
+      "components/section/": "Модалки разделов (view, edit, create, delete)",
+      "components/stage/": "Модалки этапов (view, edit, create)",
+      "components/task/": "Модалки задач (sidebar, create)",
+      "components/loading/": "Модалка загрузок сотрудников",
+      "components/checkpoint/": "Модалки чекпоинтов (create, edit)",
+      "components/worklog/": "Модалки отчётов о работе",
+      "hooks/": "Хуки для управления состоянием модалок",
+      "stores/": "Zustand store для глобального состояния модалок",
+      "types/": "TypeScript типы для модалок"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "BudgetCreateModal",
+      "WorkLogCreateModal",
+      "SectionModal",
+      "StageModal",
+      "TaskSidebar",
+      "LoadingModal",
+      "CheckpointCreateModal",
+      "CheckpointEditModal",
+      "openBudgetCreate",
+      "openSectionView",
+      "useModalStore"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useModal",
+      "description": "Базовый хук для управления состоянием модалки",
+      "file": "hooks/index.ts",
+      "returns": "{ isOpen, open, close, data }"
+    },
+    {
+      "name": "useBudgetCreateModal",
+      "description": "Хук для модалки создания бюджета",
+      "file": "hooks/index.ts",
+      "returns": "{ isOpen, open, close, data: BudgetCreateData }"
+    },
+    {
+      "name": "useSectionViewModal",
+      "description": "Хук для просмотра раздела",
+      "file": "hooks/index.ts"
+    },
+    {
+      "name": "useCheckpointEditModal",
+      "description": "Хук для редактирования чекпоинта",
+      "file": "hooks/index.ts"
+    }
+  ],
+
+  "actions": [],
+
+  "stores": [
+    {
+      "name": "useModalStore",
+      "description": "Глобальный store для управления модалками",
+      "file": "stores/modal-store.ts",
+      "persistence": null,
+      "state": ["openModals", "modalData"],
+      "actions": ["openModal", "closeModal", "openBudgetCreate", "openSectionView"]
+    }
+  ],
+
+  "components": [
+    {
+      "name": "BudgetCreateModal",
+      "description": "Модалка создания бюджета (Resource Graph стиль)",
+      "file": "components/budget/BudgetCreateModal.tsx",
+      "props": ["isOpen", "onClose", "sectionId", "stageId?", "itemId?"]
+    },
+    {
+      "name": "SectionModal",
+      "description": "Модалка просмотра/редактирования раздела",
+      "file": "components/section/SectionModal.tsx",
+      "props": ["isOpen", "onClose", "sectionId"]
+    },
+    {
+      "name": "LoadingModal",
+      "description": "Модалка создания/редактирования загрузки сотрудника",
+      "file": "components/loading/LoadingModal.tsx",
+      "props": ["isOpen", "onClose", "sectionId", "stageId", "loading?"]
+    },
+    {
+      "name": "CheckpointEditModal",
+      "description": "Модалка редактирования чекпоинта",
+      "file": "components/checkpoint/CheckpointEditModal.tsx",
+      "props": ["isOpen", "onClose", "checkpoint"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Global Modal Pattern",
+      "description": "Используй глобальный store для открытия модалок из любого места приложения",
+      "example": "openBudgetCreate({ sectionId: 'xxx' })"
+    },
+    {
+      "name": "Local Modal Pattern",
+      "description": "Используй локальные хуки когда модалка привязана к конкретному компоненту",
+      "example": "const { isOpen, open, close } = useBudgetCreateModal()"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Modal State in Component",
+      "description": "НЕ храни состояние модалки в useState компонента если она может открываться из разных мест",
+      "instead": "Используй useModalStore для глобальных модалок"
+    }
+  ],
+
+  "technologies": ["react", "zustand", "radix-ui", "tailwindcss"],
+
+  "dependencies": {
+    "modules": ["cache", "budgets", "checkpoints"],
+    "database": {
+      "tables": ["sections", "budgets", "loadings", "checkpoints", "work_logs"],
+      "views": [],
+      "enums": [],
+      "functions": []
+    }
+  },
+
+  "dependents": ["resource-graph", "budgets-page", "kanban", "departments-timeline"],
+
+  "cache": {
+    "queryKeys": [],
+    "realtimeChannels": [],
+    "invalidationRules": []
+  },
+
+  "permissions": [],
+
+  "tasks": [
+    {
+      "id": "MD-AUDIT",
+      "title": "Full Module Audit: Modals",
+      "description": "Полный аудит модуля модальных окон для подтверждения качества.\n\nКак core модуль, используется многими другими модулями. Важно проверить консистентность стилей, корректность работы форм и отсутствие утечек памяти.",
+      "category": "audit",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 6,
+      "checklist": {
+        "database": [
+          "[ ] Все CRUD операции используют Server Actions",
+          "[ ] Нет прямых Supabase вызовов в компонентах модалок",
+          "[ ] Данные форм соответствуют схеме БД"
+        ],
+        "security": [
+          "[ ] Все Server Actions имеют auth check",
+          "[ ] Zod validation на всех inputs",
+          "[ ] Нет XSS уязвимостей в текстовых полях",
+          "[ ] Sensitive данные не логируются"
+        ],
+        "businessLogic": [
+          "[ ] BudgetCreateModal создаёт бюджет корректно",
+          "[ ] SectionModal отображает/редактирует раздел",
+          "[ ] LoadingModal создаёт загрузку с правильными датами",
+          "[ ] CheckpointCreateModal привязывает чекпоинт к разделу",
+          "[ ] TaskSidebar показывает/редактирует задачу",
+          "[ ] WorkLogCreateModal создаёт отчёт о работе",
+          "[ ] Закрытие модалки сбрасывает форму",
+          "[ ] Edge case: открытие модалки с несуществующим ID",
+          "[ ] Edge case: сохранение при сетевой ошибке"
+        ],
+        "performance": [
+          "[ ] Модалки не тормозят при открытии (< 100ms)",
+          "[ ] Формы не ре-рендерятся при каждом onChange",
+          "[ ] Большие списки в селектах виртуализированы",
+          "[ ] useModalStore не вызывает лишние ре-рендеры"
+        ],
+        "codeQuality": [
+          "[ ] Все модалки следуют Resource Graph стилю",
+          "[ ] Zustand store минимален",
+          "[ ] Типы ModalData экспортируются",
+          "[ ] Нет `any` в пропсах модалок",
+          "[ ] Каждая модалка < 300 строк"
+        ],
+        "ux": [
+          "[ ] Escape закрывает модалку",
+          "[ ] Клик вне модалки закрывает её",
+          "[ ] Focus trap работает (Tab не уходит за модалку)",
+          "[ ] Консистентные кнопки (Cancel слева, Save справа)",
+          "[ ] Loading состояние при сохранении",
+          "[ ] Error сообщения понятны пользователю"
+        ]
+      },
+      "auditProcedure": [
+        "1. Проверить каждый тип модалки через UI (создание, редактирование)",
+        "2. Проверить keyboard navigation (Escape, Tab)",
+        "3. Проверить валидацию форм (пустые поля, неверный формат)",
+        "4. Проверить сохранение и отображение данных после рефреша",
+        "5. Проверить Console на ошибки и warnings",
+        "6. Проверить что стили консистентны (цвета, отступы, шрифты)"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": ["Initial release", "Resource Graph стиль модалок", "Глобальный modal store"]
+    }
+  ]
+}

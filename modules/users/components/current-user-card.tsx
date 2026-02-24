@@ -36,7 +36,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
       setIsLoading(true)
       try {
-        console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
+        // console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
         
         const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: userState.id } }, async () =>
           supabase
@@ -57,7 +57,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
         }
 
         if (userData) {
-          console.log("CurrentUserCard: Получены данные из view_users:", userData)
+          // console.log("CurrentUserCard: Получены данные из view_users:", userData)
           
           // Формируем объект пользователя из данных view_users
           const formattedUser: User = {
@@ -91,7 +91,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
             isHourly: userData.is_hourly || false
           }
           
-          console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
+          // console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
           setCurrentUser(formattedUser)
         }
 
@@ -112,8 +112,8 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
       return {
         id: userState.id!,
         email: userState.email || "",
-        name: userState.profile?.firstName && userState.profile?.lastName 
-          ? `${userState.profile.firstName} ${userState.profile.lastName}`
+        name: userState.profile?.first_name && userState.profile?.last_name
+          ? `${userState.profile.first_name} ${userState.profile.last_name}`
           : userState.name || "",
         avatar_url: userState.profile?.avatar_url || "",
         position: "",
@@ -124,30 +124,30 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
         dateJoined: "",
         workLocation:
-          userState.profile?.workFormat === "Гибридный" ? "hybrid" :
-          userState.profile?.workFormat === "В офисе" ? "office" :
-          userState.profile?.workFormat === "Удаленно" ? "remote" :
+          userState.profile?.work_format === "Гибридный" ? "hybrid" :
+          userState.profile?.work_format === "В офисе" ? "office" :
+          userState.profile?.work_format === "Удаленно" ? "remote" :
           "office",
         country: userState.profile?.country || "",
         city: userState.profile?.city || "",
-        employmentRate: userState.profile?.employmentRate || 1,
+        employmentRate: userState.profile?.employment_rate || 1,
         salary: userState.profile?.salary || 0,
-        isHourly: userState.profile?.isHourly || false
+        isHourly: userState.profile?.is_hourly || false
       }
     }
 
     fetchUserData()
   }, [userState.isAuthenticated, userState.id, supabase])
 
-  // Отладочный вывод для понимания, что содержится в хранилище
-  useEffect(() => {
-    console.log("CurrentUserCard: Состояние из Zustand:", userState)
-  }, [userState])
+  // // Отладочный вывод для понимания, что содержится в хранилище
+  // useEffect(() => {
+  //   console.log("CurrentUserCard: Состояние из Zustand:", userState)
+  // }, [userState])
 
   // Fallback к переданному пользователю, если нет данных
   useEffect(() => {
     if (!currentUser && !isLoading && fallbackUser) {
-      console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
+      // console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
       setCurrentUser(fallbackUser)
     }
   }, [currentUser, isLoading, fallbackUser])
@@ -205,12 +205,12 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
   // Если данных нет, показываем пустую карточку или индикатор загрузки
   if (isLoading || !currentUser) {
-    console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
+    // console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
     return (
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-center h-16">
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               {isLoading ? "Загрузка профиля..." : "Профиль недоступен"}
             </p>
           </div>
@@ -234,7 +234,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-medium">{currentUser.name}</h3>
                 {/* Первая строка: Должность • Подразделение • Отдел */}
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   {currentUser.position && <span>{currentUser.position}</span>}
                   {currentUser.position && (currentUser.subdivision || currentUser.department) && <span>•</span>}
                   {currentUser.subdivision && <span className="truncate max-w-[200px]">{currentUser.subdivision}</span>}
@@ -242,7 +242,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                   {currentUser.department && <span className="truncate max-w-[150px]">{currentUser.department}</span>}
                 </div>
                 {/* Вторая строка: Команда • Расположение • Роль */}
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   {currentUser.team && <span className="truncate max-w-[120px]">{currentUser.team}</span>}
                   {currentUser.team && currentUser.workLocation && <span>•</span>}
                   {currentUser.workLocation && (
@@ -271,7 +271,7 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                   )}
                   {currentUser.role && (currentUser.team || currentUser.workLocation) && <span>•</span>}
                   {currentUser.role && (
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                    <span className="text-muted-foreground font-medium">
                       {currentUser.role}
                     </span>
                   )}

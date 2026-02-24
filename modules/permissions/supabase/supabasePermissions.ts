@@ -2,6 +2,11 @@ import { createClient } from "@/utils/supabase/client"
 import * as Sentry from "@sentry/nextjs"
 import type { Permission, Role } from '../types'
 
+/** Тип для результата join-запроса role_permissions → permissions */
+interface RolePermissionWithJoin {
+  permissions: { name: string } | null
+}
+
 /**
  * Система загрузки разрешений пользователя из множественных ролей
  */
@@ -14,7 +19,7 @@ export async function getUserPermissions(userId: string): Promise<{
   const supabase = createClient()
   
   try {
-    console.log('🔐 Загрузка разрешений для пользователя:', userId)
+    // console.log('🔐 Загрузка разрешений для пользователя:', userId)
 
     // Используем оптимизированную функцию БД для получения разрешений
     const { data: permissions, error: permissionsError } = await supabase
@@ -61,9 +66,9 @@ export async function getUserPermissions(userId: string): Promise<{
 
     const primaryRole = computePrimaryRole(permissions || [], roles)
 
-    console.log('✅ Загружено разрешений в supabasePermissions:', permissions?.length || 0)
-    console.log('👤 Роли пользователя в supabasePermissions:', roles)
-    console.log('⭐ Основная роль в supabasePermissions:', primaryRole)
+    // console.log('✅ Загружено разрешений в supabasePermissions:', permissions?.length || 0)
+    // console.log('👤 Роли пользователя в supabasePermissions:', roles)
+    // console.log('⭐ Основная роль в supabasePermissions:', primaryRole)
     
     return {
       permissions: permissions || [],
@@ -105,7 +110,8 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
       return []
     }
 
-    return rolePermissions ? rolePermissions.map(rp => (rp.permissions as any)?.name).filter(Boolean) : []
+    const results = rolePermissions as RolePermissionWithJoin[] | null
+    return results ? results.map(rp => rp.permissions?.name).filter((name): name is string => Boolean(name)) : []
   } catch (error) {
     console.error('Ошибка получения разрешений роли:', error)
     Sentry.captureException(error)

@@ -1,22 +1,27 @@
 import { usePermissionsStore } from '../store/usePermissionsStore'
 import type { UsePermissionsReturn } from '../types'
 
+// Селекторы для оптимизации ре-рендеров
+const selectPermissions = (state: ReturnType<typeof usePermissionsStore.getState>) => state.permissions
+const selectIsLoading = (state: ReturnType<typeof usePermissionsStore.getState>) => state.isLoading
+const selectError = (state: ReturnType<typeof usePermissionsStore.getState>) => state.error
+const selectHasPermission = (state: ReturnType<typeof usePermissionsStore.getState>) => state.hasPermission
+const selectHasAnyPermission = (state: ReturnType<typeof usePermissionsStore.getState>) => state.hasAnyPermission
+const selectHasAllPermissions = (state: ReturnType<typeof usePermissionsStore.getState>) => state.hasAllPermissions
+const selectGetPermissionLevel = (state: ReturnType<typeof usePermissionsStore.getState>) => state.getPermissionLevel
+
 /**
  * Основной хук для работы с разрешениями
+ * Использует атомарные селекторы для минимизации ре-рендеров
  */
 export const usePermissions = (): UsePermissionsReturn => {
-  const {
-    permissions,
-    isLoading,
-    error,
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
-    getPermissionLevel
-  } = usePermissionsStore()
-
-  // УБРАНО: Автозагрузка разрешений - теперь это делает UserPermissionsSyncProvider
-  // Избегаем дублирования запросов к Supabase
+  const permissions = usePermissionsStore(selectPermissions)
+  const isLoading = usePermissionsStore(selectIsLoading)
+  const error = usePermissionsStore(selectError)
+  const hasPermission = usePermissionsStore(selectHasPermission)
+  const hasAnyPermission = usePermissionsStore(selectHasAnyPermission)
+  const hasAllPermissions = usePermissionsStore(selectHasAllPermissions)
+  const getPermissionLevel = usePermissionsStore(selectGetPermissionLevel)
 
   return {
     permissions,

@@ -20,104 +20,93 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
-import { createClient } from "@/utils/supabase/client"
+import { useDepartmentsList } from "../hooks"
 
 interface SaveTemplateDialogProps {
   isOpen: boolean
   onClose: () => void
   onSave: (departmentId: string, name: string) => Promise<void>
-}
-
-type Department = {
-  id: string
-  name: string
-}
-
-type DepartmentRow = {
-  department_id: string
-  department_name: string
+  /** ID отдела пользователя для предвыбора */
+  defaultDepartmentId?: string
 }
 
 export function SaveTemplateDialog({
   isOpen,
   onClose,
   onSave,
+  defaultDepartmentId,
 }: SaveTemplateDialogProps) {
-  const [departments, setDepartments] = useState<Department[]>([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("")
   const [templateName, setTemplateName] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
 
-  // Загрузить список отделов при открытии
+  // TanStack Query для загрузки отделов через cache module
+  const {
+    data: departments = [],
+    isLoading,
+    error: loadError,
+  } = useDepartmentsList({ enabled: isOpen })
+
+  // Показать ошибку загрузки
   useEffect(() => {
-    if (isOpen) {
-      loadDepartments()
-    }
-  }, [isOpen])
-
-  const loadDepartments = async () => {
-    setIsLoading(true)
-    try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('departments')
-        .select('department_id, department_name')
-        .order('department_name')
-
-      if (error) throw error
-
-      setDepartments((data || []).map((d: DepartmentRow) => ({
-        id: d.department_id,
-        name: d.department_name
-      })))
-    } catch (err) {
-      console.error('Ошибка загрузки отделов:', err)
-      setError('Не удалось загрузить список отделов')
+    if (loadError) {
+      console.error('Ошибка загрузки отделов:', loadError)
       toast({
         title: "Ошибка",
         description: "Не удалось загрузить список отделов",
         variant: "destructive"
       })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  }, [loadError])
 
-  const handleSave = async () => {
+  // Предвыбор отдела пользователя при первом открытии
+  useEffect(() => {
+    if (isOpen && !isInitialized && defaultDepartmentId && departments.length > 0) {
+      // Проверяем, что такой отдел существует в списке
+      const departmentExists = departments.some(d => d.id === defaultDepartmentId)
+      if (departmentExists) {
+        setSelectedDepartmentId(defaultDepartmentId)
+      }
+      setIsInitialized(true)
+    }
+  }, [isOpen, defaultDepartmentId, departments, isInitialized])
+
+  const handleSave = async (): Promise<void> => {
     if (!selectedDepartmentId || !templateName.trim()) {
-      setError('Заполните все обязательные поля')
+      setValidationError('Заполните все обязательные поля')
       return
     }
 
     setIsSaving(true)
-    setError(null)
+    setValidationError(null)
 
     try {
       await onSave(selectedDepartmentId, templateName.trim())
       handleClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка сохранения шаблона')
+      setValidationError(err instanceof Error ? err.message : 'Ошибка сохранения шаблона')
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     setSelectedDepartmentId("")
     setTemplateName("")
-    setError(null)
+    setValidationError(null)
+    setIsInitialized(false)
     onClose()
   }
 
-  const canSave = selectedDepartmentId && templateName.trim()
+  const canSave = Boolean(selectedDepartmentId && templateName.trim())
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-md sm:rounded-md">
         <DialogHeader>
-          <DialogTitle>Сохранить шаблон</DialogTitle>
+          <DialogTitle>Сохранить как шаблон</DialogTitle>
           <DialogDescription className="text-sm">
             Сохраните текущую структуру этапов как шаблон
           </DialogDescription>
@@ -163,9 +152,9 @@ export function SaveTemplateDialog({
             />
           </div>
 
-          {/* Ошибка */}
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
+          {/* Ошибка валидации */}
+          {validationError && (
+            <p className="text-sm text-destructive">{validationError}</p>
           )}
         </div>
 

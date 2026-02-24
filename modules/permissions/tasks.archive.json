@@ -1,0 +1,41 @@
+{
+  "$schema": "../../schemas/module-meta/tasks-archive.schema.json",
+  "moduleName": "permissions",
+  "archivedTasks": [
+    {
+      "id": "PERM-001",
+      "title": "Система разрешений для inline-filter",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-16",
+      "completedAt": "2026-01-16",
+      "changelogEntry": "PERM-001: Реализована система filter permissions с двухуровневой защитой (UI + Server). Добавлены security fixes (UUID validation, permission checks, Sentry logging), LockedFiltersBadge компонент, Realtime invalidation для user_roles/role_permissions.",
+      "relatedFiles": [
+        "utils/mandatory-filters.ts",
+        "components/LockedFiltersBadge.tsx",
+        "hooks/use-filter-context.ts",
+        "hooks/use-filtered-options.ts",
+        "server/get-filter-context.ts",
+        "index.ts"
+      ]
+    },
+    {
+      "id": "PERM-002",
+      "title": "Аудит и интеграция модуля permissions",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "createdAt": "2026-01-16",
+      "completedAt": "2026-01-16",
+      "changelogEntry": "PERM-002: Полный аудит модуля (10 агентов). Исправлены TypeScript any issues, рефакторинг usePermissions на атомарные селекторы, добавлена session validation в getFilterContext, интегрирован LockedFiltersBadge в resource-graph, исправлен формат имени в view_employee_workloads.",
+      "relatedFiles": [
+        "hooks/usePermissions.ts",
+        "integration/userStoreSync.ts",
+        "supabase/supabasePermissions.ts",
+        "server/get-filter-context.ts",
+        "types/index.ts"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "$schema": "../../schemas/module-meta/tasks-archive.schema.json",
+  "moduleName": "budgets-page",
+  "archivedTasks": [
+    {
+      "id": "BP-001",
+      "title": "Рефакторинг кеша и Server Actions",
+      "category": "refactor",
+      "priority": "high",
+      "status": "superseded",
+      "createdAt": "2025-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-001: Разбит на конкретные задачи по результатам аудита: BP-005 (Server Actions), BP-006 (Zod валидация), BP-007 (Query Keys)",
+      "supersededBy": ["BP-005", "BP-006", "BP-007"],
+      "relatedFiles": [
+        "hooks/use-reference-data.ts",
+        "components/StageInlineCreate.tsx",
+        "components/StageInlineDelete.tsx",
+        "components/ItemInlineCreate.tsx",
+        "components/ItemInlineDelete.tsx"
+      ]
+    },
+    {
+      "id": "BP-002",
+      "title": "Аудит модуля агентами",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2025-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-002: Проведён полный аудит модуля агентами (Security/Cache/TypeScript/Clean Code Guardians). Выявлено 24 issues, сформирован план исправлений.",
+      "relatedFiles": [
+        "hooks/use-budgets-hierarchy.ts",
+        "hooks/use-reference-data.ts",
+        "components/StageInlineCreate.tsx",
+        "components/StageInlineDelete.tsx",
+        "components/ItemInlineCreate.tsx",
+        "components/ItemInlineDelete.tsx",
+        "components/ItemHoursEdit.tsx",
+        "components/ItemDifficultySelect.tsx",
+        "components/ItemCategorySelect.tsx",
+        "components/BudgetRow.tsx",
+        "components/BudgetInlineEdit.tsx",
+        "components/BudgetAmountEdit.tsx",
+        "utils/index.ts"
+      ]
+    },
+    {
+      "id": "BP-005",
+      "title": "[Security] Server Actions для декомпозиции",
+      "category": "security",
+      "priority": "critical",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-005: Созданы Server Actions для CRUD операций декомпозиции (stages/items) с проверкой аутентификации",
+      "relatedFiles": [
+        "actions/decomposition.ts",
+        "actions/reference-data.ts",
+        "components/StageInlineCreate.tsx",
+        "components/StageInlineDelete.tsx",
+        "components/ItemInlineCreate.tsx",
+        "components/ItemInlineDelete.tsx",
+        "components/ItemHoursEdit.tsx",
+        "components/ItemCategorySelect.tsx",
+        "components/ItemDifficultySelect.tsx"
+      ]
+    },
+    {
+      "id": "BP-006",
+      "title": "[Security] Zod валидация для Server Actions",
+      "category": "security",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-006: Добавлена Zod валидация для всех Server Actions",
+      "relatedFiles": [
+        "actions/decomposition.ts",
+        "actions/reference-data.ts"
+      ]
+    },
+    {
+      "id": "BP-007",
+      "title": "[Cache] Централизованные query keys",
+      "category": "refactor",
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-007: Миграция на централизованные query keys из cache модуля для useDifficultyLevels и useWorkCategories",
+      "relatedFiles": [
+        "hooks/use-reference-data.ts",
+        "actions/reference-data.ts"
+      ]
+    },
+    {
+      "id": "BP-008",
+      "title": "[TypeScript] Исправить cross-module импорты",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-008: Исправлены прямые импорты из @/modules/resource-graph/types и @/modules/budgets/types на public API модулей",
+      "relatedFiles": [
+        "hooks/use-budgets-hierarchy.ts",
+        "types/index.ts",
+        "components/BudgetPartsEditor.tsx"
+      ]
+    },
+    {
+      "id": "BP-009",
+      "title": "[DRY] Извлечь общие utility функции",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-009: Извлечены дублирующиеся utility функции (parseAmount, formatNumber, calculatePercentage, calculateAmount) в utils/index.ts. Удалены локальные дубликаты из компонентов.",
+      "relatedFiles": [
+        "utils/index.ts",
+        "components/BudgetInlineEdit.tsx",
+        "components/BudgetAmountEdit.tsx",
+        "components/BudgetRow.tsx",
+        "components/BudgetCreatePopover.tsx"
+      ]
+    },
+    {
+      "id": "BP-010",
+      "title": "[Clean Code] Разбить BudgetRow на компоненты",
+      "category": "refactor",
+      "priority": "low",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-010: BudgetRow.tsx разбит на отдельные компоненты (BudgetRowExpander, BudgetRowBadges, BudgetRowHours, BudgetRowActions). Размер файла уменьшен с 647 до 434 строк (33%).",
+      "relatedFiles": [
+        "components/BudgetRow.tsx",
+        "components/BudgetRowExpander.tsx",
+        "components/BudgetRowBadges.tsx",
+        "components/BudgetRowHours.tsx",
+        "components/BudgetRowActions.tsx"
+      ]
+    },
+    {
+      "id": "BP-011",
+      "title": "[Clean Code] Убрать hardcoded значения",
+      "category": "refactor",
+      "priority": "low",
+      "status": "done",
+      "createdAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "changelogEntry": "BP-011: Hardcoded константы (MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR, DEFAULT_WORK_CATEGORY_ID) вынесены в config/constants.ts с TODO комментариями для будущей настройки из БД",
+      "relatedFiles": [
+        "config/constants.ts",
+        "components/BudgetRow.tsx",
+        "actions/decomposition.ts"
+      ]
+    }
+  ]
+}

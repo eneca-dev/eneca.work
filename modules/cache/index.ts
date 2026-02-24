@@ -31,13 +31,15 @@ export type {
   ProjectFilters,
   SectionFilters,
   LoadingFilters,
+  CheckpointFilters,
 } from './keys/query-keys'
 
-// Provider
+// Providers
 export { QueryProvider } from './providers/query-provider'
+export { ReferencePrefetch } from './providers/reference-prefetch'
 
 // Client config
-export { getQueryClient, staleTimePresets, resetQueryClient } from './client/query-client'
+export { getQueryClient, staleTimePresets, resetQueryClient, invalidateAllQueries } from './client/query-client'
 
 // Hook Factories
 export {
@@ -50,6 +52,7 @@ export {
   // Mutation factories
   createCacheMutation,
   createSimpleMutation,
+  createCreateMutation,
   createDeleteMutation,
   createUpdateMutation,
 } from './hooks'
@@ -83,6 +86,25 @@ export {
   type ProjectStructure,
   type CacheProjectRow,
 } from './actions/projects'
+
+// Server Actions - Users
+export {
+  getUsers,
+  getCurrentUser,
+  type CachedUser,
+} from './actions/users'
+
+// Server Actions - Work Categories
+export {
+  getWorkCategories,
+  type WorkCategory,
+} from './actions/work-categories'
+
+// User Hooks (pre-built)
+export { useUsers, useCurrentUser } from './hooks/use-users'
+
+// Work Categories Hooks (pre-built)
+export { useWorkCategories } from './hooks/use-work-categories'
 
 // Base action utilities
 export { safeAction } from './actions/base'

@@ -94,9 +94,9 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="border rounded-lg p-4 space-y-2">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/4" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-full" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-3/4" />
+                <div className="h-4 bg-muted rounded animate-pulse w-1/4" />
+                <div className="h-3 bg-muted rounded animate-pulse w-full" />
+                <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
               </div>
             ))}
           </div>
@@ -106,7 +106,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
   }
 
   return (
-    <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+    <Card className="rounded-sm bg-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Ответы пользователей</CardTitle>
@@ -117,13 +117,13 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+                className="bg-popover border-border"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Фильтры
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 rounded-sm bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600" align="end">
+            <PopoverContent className="w-80 rounded-sm bg-popover border-border" align="end">
               <div className="space-y-4">
                 <div className="font-semibold text-sm">Фильтры</div>
 
@@ -196,7 +196,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
             placeholder="Поиск по имени или тексту комментария..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 rounded-sm bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+            className="pl-9 rounded-sm bg-popover border-border"
           />
         </div>
       </CardHeader>
@@ -253,7 +253,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
                         </Badge>
                       )}
                       {isDeclined && (
-                        <Badge variant="outline" className="text-xs border-gray-400 text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                        <Badge variant="outline" className="text-xs border-border text-muted-foreground">
                           Отказался от опроса
                         </Badge>
                       )}
@@ -274,14 +274,14 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
                           })}
                         </>
                       ) : comment.next_survey_at === 'infinity' ? (
-                        <span className="text-gray-500 dark:text-gray-400">Отказался</span>
+                        <span className="text-muted-foreground">Отказался</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </span>
                   </div>
                   {comment.problem_text && (
-                    <p className="text-sm text-foreground dark:text-gray-300 whitespace-pre-wrap">
+                    <p className="text-sm text-foreground whitespace-pre-wrap">
                       {comment.problem_text}
                     </p>
                   )}
@@ -323,7 +323,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
                               </span>
                             </div>
                             {answer.problem_text && (
-                              <p className="text-xs text-foreground dark:text-gray-300 whitespace-pre-wrap mt-2">
+                              <p className="text-xs text-foreground whitespace-pre-wrap mt-2">
                                 {answer.problem_text}
                               </p>
                             )}

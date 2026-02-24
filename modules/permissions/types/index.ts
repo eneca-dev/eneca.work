@@ -1,5 +1,49 @@
 // Основные типы для системы разрешений
 
+// Filter Scope types (перенесены из filter-permissions)
+export type {
+  FilterScopePermission,
+  FilterScopeLevel,
+  FilterScope,
+  UserFilterContext,
+  LockableFilterKey,
+  LockedFilter,
+  FilterLocks,
+  SystemRole,
+} from './filter-scope'
+
+export {
+  PERMISSION_PRIORITY,
+  PERMISSION_TO_SCOPE,
+  ROLE_PRIORITY,
+  getPrimaryRole,
+} from './filter-scope'
+
+// === Org Context (для unified permissions store) ===
+
+/**
+ * Организационный контекст пользователя.
+ * Содержит информацию о позиции в орг. структуре и руководящих ролях.
+ */
+export interface OrgContext {
+  /** ID команды пользователя */
+  ownTeamId: string | null
+  /** ID отдела пользователя */
+  ownDepartmentId: string | null
+  /** ID подразделения пользователя */
+  ownSubdivisionId: string | null
+
+  /** ID команды, которой руководит (team_lead) */
+  leadTeamId: string | null
+  /** ID отдела, которым руководит (department_head) */
+  headDepartmentId: string | null
+  /** ID подразделения, которым руководит (subdivision_head) */
+  headSubdivisionId: string | null
+
+  /** ID управляемых проектов (project_manager / lead_engineer) */
+  managedProjectIds: string[]
+}
+
 export interface Permission {
   id: string
   name: string
@@ -53,10 +97,17 @@ export interface DataScope {
   users: 'all' | 'department' | 'team' | 'self'
 }
 
+/** Опция для фильтра (используется в autocomplete) */
+export interface FilterOptionItem {
+  id: string
+  name: string
+  [key: string]: unknown
+}
+
 export interface FilterConstraint {
   filterType: string
   isLocked: boolean
-  availableOptions: any[]
+  availableOptions: FilterOptionItem[]
   defaultValue?: string
 }
 
@@ -71,12 +122,18 @@ export interface UsePermissionsReturn {
   getPermissionLevel: (module: string) => 'none' | 'view' | 'edit' | 'admin'
 }
 
+/** Базовая сущность с id и названием */
+export interface NamedEntity {
+  id: string
+  name: string
+}
+
 export interface UseDataConstraintsReturn {
   constraints: DataConstraint[]
   dataScope: DataScope
-  getAvailableProjects: () => Promise<any[]>
-  getAvailableDepartments: () => Promise<any[]>
-  getAvailableTeams: () => Promise<any[]>
+  getAvailableProjects: () => Promise<NamedEntity[]>
+  getAvailableDepartments: () => Promise<NamedEntity[]>
+  getAvailableTeams: () => Promise<NamedEntity[]>
   isDataLocked: (dataType: keyof DataScope) => boolean
 }
 

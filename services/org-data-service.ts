@@ -39,7 +39,7 @@ export async function getUsers(): Promise<UserWithRoles[]> {
     },
     async (span: any) => {
       try {
-        console.log("=== getUsers function ===");
+        // console.log("=== getUsers function ===");
         const supabase = createClient();
         
         span.setAttribute("table", "view_users")
@@ -73,19 +73,7 @@ export async function getUsers(): Promise<UserWithRoles[]> {
 
         span.setAttribute("db.success", true)
         span.setAttribute("users.count", users?.length || 0)
-        console.log("Получено пользователей из представления:", users?.length || 0);
-        
-        // ДИАГНОСТИКА: Проверяем структуру данных для Вадима Тихомирова
-        if (users && users.length > 0) {
-          const vadim = users.find(u => u.email === 'ghgjob123@gmail.com');
-          if (vadim) {
-            console.log("=== ДАННЫЕ ВАДИМА ТИХОМИРОВА ===");
-            console.log("Полный объект:", vadim);
-            console.log("roles_display_string:", vadim.roles_display_string);
-            console.log("role_name (старое поле):", vadim.role_name);
-            console.log("Все поля:", Object.keys(vadim));
-          }
-        }
+        // console.log("Получено пользователей из представления:", users?.length || 0);
 
         // Возвращаем данные напрямую из представления
         return users || []
@@ -486,8 +474,8 @@ export async function updateUser(
     },
     async (span: any) => {
       try {
-        console.log("=== updateUser function ===");
-        console.log("updateUser вызван с данными:", { userId, userData });
+        // console.log("=== updateUser function ===");
+        // console.log("updateUser вызван с данными:", { userId, userData });
 
         span.setAttribute("user.id", userId)
         span.setAttribute("table", "profiles")
@@ -502,7 +490,7 @@ export async function updateUser(
           userData.isHourly !== undefined
 
         if (isSalaryFieldsUpdate) {
-          console.log("🔐 Обнаружена попытка изменения полей зарплаты, проверяем разрешения...")
+          // console.log("🔐 Обнаружена попытка изменения полей зарплаты, проверяем разрешения...")
 
           // Получаем текущего пользователя
           const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
@@ -560,7 +548,7 @@ export async function updateUser(
 
           // Если есть только разрешение для отдела, проверяем, что пользователи в одном отделе
           if (!hasEditSalaryAll && hasEditSalaryDepartment) {
-            console.log("🔐 Проверяем, что пользователи в одном отделе...")
+            // console.log("🔐 Проверяем, что пользователи в одном отделе...")
 
             // Получаем отдел текущего пользователя
             const { data: currentUserProfile, error: currentProfileError } = await supabase
@@ -608,10 +596,10 @@ export async function updateUser(
               throw error
             }
 
-            console.log("✅ Пользователи в одном отделе")
+            // console.log("✅ Пользователи в одном отделе")
 
             // Проверяем роль целевого пользователя (руководитель отдела может редактировать только team_lead и user)
-            console.log("🔐 Проверяем роль целевого пользователя...")
+            // console.log("🔐 Проверяем роль целевого пользователя...")
 
             // Получаем основную роль целевого пользователя из view_users
             const { data: targetUserData, error: targetUserError } = await supabase
@@ -649,12 +637,12 @@ export async function updateUser(
               throw error
             }
 
-            console.log(`✅ Роль целевого пользователя (${targetRole}) разрешена для редактирования`)
+            // console.log(`✅ Роль целевого пользователя (${targetRole}) разрешена для редактирования`)
           }
 
           // Если есть только разрешение для подразделения, проверяем, что пользователи в одном подразделении
           if (!hasEditSalaryAll && !hasEditSalaryDepartment && hasEditSalarySubdivision) {
-            console.log("🔐 Проверяем, что пользователи в одном подразделении...")
+            // console.log("🔐 Проверяем, что пользователи в одном подразделении...")
 
             // Получаем подразделение текущего пользователя
             const { data: currentUserProfile, error: currentProfileError } = await supabase
@@ -702,21 +690,21 @@ export async function updateUser(
               throw error
             }
 
-            console.log("✅ Пользователи в одном подразделении, разрешение предоставлено")
+            // console.log("✅ Пользователи в одном подразделении, разрешение предоставлено")
           }
 
-          console.log("✅ Разрешение на редактирование полей зарплаты предоставлено")
+          // console.log("✅ Разрешение на редактирование полей зарплаты предоставлено")
         }
 
         const updates: any = {}
 
   if (userData.firstName !== undefined) {
     updates.first_name = userData.firstName
-    console.log("Добавлено: first_name =", userData.firstName);
+    // console.log("Добавлено: first_name =", userData.firstName);
   }
   if (userData.lastName !== undefined) {
     updates.last_name = userData.lastName
-    console.log("Добавлено: last_name =", userData.lastName);
+    // console.log("Добавлено: last_name =", userData.lastName);
   }
 
   // Блокировка изменения email: игнорируем любые попытки обновить email
@@ -728,7 +716,7 @@ export async function updateUser(
   // Обработка подразделения
   if (userData.subdivision !== undefined) {
     if (userData.subdivision && userData.subdivision.trim() !== "") {
-      console.log("Ищем подразделение:", userData.subdivision);
+      // console.log("Ищем подразделение:", userData.subdivision);
       try {
         const { data: subdivision, error: subdivisionError } = await supabase
           .from("subdivisions")
@@ -760,15 +748,15 @@ export async function updateUser(
 
           // Если подразделение изменилось, сбрасываем отдел и команду
           if (currentProfile && currentProfile.subdivision_id !== subdivision.subdivision_id) {
-            console.log("Подразделение изменилось, сбрасываем отдел и команду");
+            // console.log("Подразделение изменилось, сбрасываем отдел и команду");
             updates.subdivision_id = subdivision.subdivision_id
             updates.department_id = null
             updates.team_id = null
-            console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
-            console.log("Сброшены department_id и team_id");
+            // console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
+            // console.log("Сброшены department_id и team_id");
           } else {
             updates.subdivision_id = subdivision.subdivision_id
-            console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
+            // console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
           }
         } else {
           console.warn("Подразделение не найдено:", userData.subdivision);
@@ -790,14 +778,14 @@ export async function updateUser(
     } else {
       // Устанавливаем subdivision_id в NULL
       updates.subdivision_id = null
-      console.log("Устанавливаем subdivision_id = NULL (без подразделения)");
+      // console.log("Устанавливаем subdivision_id = NULL (без подразделения)");
     }
   }
 
   // Найдем ID для связанных сущностей, если они изменились
   if (userData.department !== undefined) {
     if (userData.department && userData.department.trim() !== "") {
-      console.log("Ищем отдел:", userData.department);
+      // console.log("Ищем отдел:", userData.department);
       try {
         const { data: department, error: deptError } = await supabase
           .from("departments")
@@ -821,7 +809,7 @@ export async function updateUser(
           })
         } else if (department) {
           updates.department_id = department.department_id
-          console.log("Найден отдел, ID =", department.department_id);
+          // console.log("Найден отдел, ID =", department.department_id);
         } else {
           console.warn("Отдел не найден:", userData.department);
         }
@@ -842,13 +830,13 @@ export async function updateUser(
     } else {
       // Устанавливаем department_id в NULL
       updates.department_id = null
-      console.log("Устанавливаем department_id = NULL (без отдела)");
+      // console.log("Устанавливаем department_id = NULL (без отдела)");
     }
   }
 
   if (userData.team !== undefined) {
     if (userData.team && userData.team.trim() !== "") {
-      console.log("Ищем команду:", userData.team);
+      // console.log("Ищем команду:", userData.team);
       try {
         const { data: team, error: teamError } = await supabase
           .from("teams")
@@ -872,7 +860,7 @@ export async function updateUser(
           })
         } else if (team) {
           updates.team_id = team.team_id
-          console.log("Найдена команда, ID =", team.team_id);
+          // console.log("Найдена команда, ID =", team.team_id);
         } else {
           console.warn("Команда не найдена:", userData.team);
         }
@@ -893,12 +881,12 @@ export async function updateUser(
     } else {
       // Устанавливаем team_id в NULL
       updates.team_id = null
-      console.log("Устанавливаем team_id = NULL (без команды)");
+      // console.log("Устанавливаем team_id = NULL (без команды)");
     }
   }
 
   if (userData.position && userData.position.trim() !== "") {
-    console.log("Ищем должность:", userData.position);
+    // console.log("Ищем должность:", userData.position);
     try {
       const { data: position, error: posError } = await supabase
         .from("positions")
@@ -922,7 +910,7 @@ export async function updateUser(
         })
       } else if (position) {
         updates.position_id = position.position_id
-        console.log("Найдена должность, ID =", position.position_id);
+        // console.log("Найдена должность, ID =", position.position_id);
       } else {
         console.warn("Должность не найдена:", userData.position);
       }
@@ -943,7 +931,7 @@ export async function updateUser(
   }
 
   if (userData.category && userData.category.trim() !== "") {
-    console.log("Ищем категорию:", userData.category);
+    // console.log("Ищем категорию:", userData.category);
     try {
       const { data: category, error: catError } = await supabase
         .from("categories")
@@ -967,7 +955,7 @@ export async function updateUser(
         })
       } else if (category) {
         updates.category_id = category.category_id
-        console.log("Найдена категория, ID =", category.category_id);
+        // console.log("Найдена категория, ID =", category.category_id);
       } else {
         console.warn("Категория не найдена:", userData.category);
       }
@@ -989,7 +977,7 @@ export async function updateUser(
 
   if (userData.workLocation) {
     updates.work_format = mapWorkFormatToDb(userData.workLocation)
-    console.log("Добавлено: work_format =", updates.work_format);
+    // console.log("Добавлено: work_format =", updates.work_format);
   }
 
 
@@ -1002,7 +990,7 @@ export async function updateUser(
     if (!countryName && !cityName) {
       // Сброс города
       updates.city_id = null
-      console.log("Добавлено: city_id = null (очистка)");
+      // console.log("Добавлено: city_id = null (очистка)");
     } else if (countryName && cityName) {
       try {
         // Гарантируем наличие country/city и получаем city_id через наш API апсерт
@@ -1014,7 +1002,7 @@ export async function updateUser(
         if (resp.ok) {
           const { cityId } = await resp.json()
           updates.city_id = cityId
-          console.log("Добавлено: city_id =", cityId)
+          // console.log("Добавлено: city_id =", cityId)
         } else {
           console.warn('Не удалось апсертить страну/город через API:', await resp.text())
         }
@@ -1028,33 +1016,33 @@ export async function updateUser(
 
   if (userData.employmentRate !== undefined) {
     updates.employment_rate = userData.employmentRate
-    console.log("Добавлено: employment_rate =", userData.employmentRate);
+    // console.log("Добавлено: employment_rate =", userData.employmentRate);
   }
 
   if (userData.salary !== undefined) {
     updates.salary = userData.salary
-    console.log("Добавлено: salary =", userData.salary);
+    // console.log("Добавлено: salary =", userData.salary);
   }
 
   if (userData.isHourly !== undefined) {
     updates.is_hourly = userData.isHourly
-    console.log("Добавлено: is_hourly =", userData.isHourly);
+    // console.log("Добавлено: is_hourly =", userData.isHourly);
   }
 
 
 
   // Роль больше не хранится в profiles.role_id — управление только через user_roles
 
-  console.log("Итоговые обновления для БД:", updates);
+  // console.log("Итоговые обновления для БД:", updates);
 
   // Проверяем, что есть что обновлять
   if (Object.keys(updates).length === 0) {
-    console.log("Нет данных для обновления");
+    // console.log("Нет данных для обновления");
     return true;
   }
 
         // Обновляем профиль пользователя
-        console.log("Выполняем обновление в БД для пользователя:", userId);
+        // console.log("Выполняем обновление в БД для пользователя:", userId);
         span.setAttribute("updates.count", Object.keys(updates).length)
         
         const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
@@ -1083,7 +1071,7 @@ export async function updateUser(
         }
 
         span.setAttribute("db.success", true)
-        console.log("Пользователь успешно обновлен в БД");
+        // console.log("Пользователь успешно обновлен в БД");
         return true
         
       } catch (error) {
@@ -1132,8 +1120,8 @@ export async function createUser(userData: {
     },
     async (span: any) => {
       try {
-        console.log("=== createUser function ===")
-        console.log("createUser вызван с данными:", userData)
+        // console.log("=== createUser function ===")
+        // console.log("createUser вызван с данными:", userData)
         
         span.setAttribute("user.email", userData.email)
         span.setAttribute("operation", "create_user")
@@ -1171,7 +1159,7 @@ export async function createUser(userData: {
 
         span.setAttribute("auth.success", true)
         span.setAttribute("user.id", authData.user.id)
-        console.log("Пользователь создан в auth.users:", authData.user.id)
+        // console.log("Пользователь создан в auth.users:", authData.user.id)
 
         // 2. Подготавливаем данные для профиля
         const profileData: any = {
@@ -1210,7 +1198,7 @@ export async function createUser(userData: {
               if (resp.ok) {
                 const { cityId } = await resp.json()
                 profileData.city_id = cityId
-                console.log("Добавлено: city_id =", cityId)
+                // console.log("Добавлено: city_id =", cityId)
               } else {
                 console.warn('Не удалось апсертить страну/город через API:', await resp.text())
               }
@@ -1238,7 +1226,7 @@ export async function createUser(userData: {
 
           if (subdivision.data) {
             profileData.subdivision_id = subdivision.data.subdivision_id
-            console.log("Найдено подразделение, ID =", subdivision.data.subdivision_id)
+            // console.log("Найдено подразделение, ID =", subdivision.data.subdivision_id)
           } else {
             console.warn("Подразделение не найдено:", userData.subdivision)
           }
@@ -1389,7 +1377,7 @@ export async function createUser(userData: {
           }
         }
 
-        console.log("Данные профиля для создания:", profileData)
+        // console.log("Данные профиля для создания:", profileData)
 
         // 4. Создаем профиль пользователя
         const { error: profileError } = await supabase
@@ -1404,7 +1392,7 @@ export async function createUser(userData: {
           // Пытаемся удалить созданного пользователя из auth, если профиль не создался
           try {
             await adminClient.auth.admin.deleteUser(authData.user.id)
-            console.log("Пользователь удален из auth после ошибки создания профиля")
+            // console.log("Пользователь удален из auth после ошибки создания профиля")
           } catch (deleteError) {
             console.error("Не удалось удалить пользователя из auth после ошибки:", deleteError)
           }
@@ -1428,7 +1416,7 @@ export async function createUser(userData: {
 
         span.setAttribute("profile.success", true)
         span.setAttribute("db.success", true)
-        console.log("Пользователь и профиль успешно созданы")
+        // console.log("Пользователь и профиль успешно созданы")
 
         return {
           userId: authData.user.id,

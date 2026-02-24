@@ -339,10 +339,10 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
         (notification.entityType === 'announcement')
           ? "cursor-default"
           : "cursor-pointer",
-        "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-500",
+        "bg-card border-border",
         // Мгновенная реакция на hover через CSS, плюс устойчивый hover через стор
-        "hover:bg-gray-100 dark:hover:bg-gray-700/40",
-        hoveredNotificationId === notification.id && "bg-gray-100 dark:bg-gray-700/40"
+        "hover:bg-accent",
+        hoveredNotificationId === notification.id && "bg-accent"
       )}
     >
       <div className="absolute right-2 top-4 z-10 inline-flex items-start gap-2">
@@ -370,7 +370,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
         hoveredNotificationId === notification.id && "opacity-100"
       )}>
         <div
-          className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-1 py-0.5 pointer-events-auto"
+          className="flex items-center gap-1 bg-card border border-border rounded-md shadow-sm px-1 py-0.5 pointer-events-auto"
           onMouseEnter={() => setHoveredNotification(notification.id)}
           onMouseMove={() => setHoveredNotification(notification.id)}
         >
@@ -392,7 +392,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 }}
                 {...createButtonHoverHandlers(readBtnRef, setIsReadButtonHovered)}
                 className={cn(
-                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                  "h-7 w-7 text-muted-foreground hover:text-foreground pointer-events-auto",
                   // Реплика состояния :hover у ghost-кнопки, чтобы не пропадало при статичном курсоре
                   isReadButtonHovered && "bg-accent text-accent-foreground"
                 )}
@@ -423,9 +423,9 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   }}
                   {...createButtonHoverHandlers(editBtnRef, setIsEditButtonHovered)}
                   className={cn(
-                    "h-7 w-7 text-gray-500 hover:text-blue-600 pointer-events-auto",
+                    "h-7 w-7 text-muted-foreground hover:text-primary pointer-events-auto",
                     // Реплика состояния :hover у ghost-кнопки + фирменный цвет текста
-                    isEditButtonHovered && "bg-accent text-blue-600"
+                    isEditButtonHovered && "bg-accent text-primary"
                   )}
                   aria-label="Редактировать объявление"
                   title="Редактировать объявление"
@@ -450,7 +450,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 }}
                 {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
                 className={cn(
-                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                  "h-7 w-7 text-muted-foreground hover:text-foreground pointer-events-auto",
                   // Реплика состояния :hover у ghost-кнопки
                   isArchiveButtonHovered && "bg-accent text-accent-foreground"
                 )}
@@ -477,7 +477,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
               }}
               {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
               className={cn(
-                "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                "h-7 w-7 text-muted-foreground hover:text-foreground pointer-events-auto",
                 // Реплика состояния :hover у ghost-кнопки
                 isArchiveButtonHovered && "bg-accent text-accent-foreground"
               )}
@@ -494,7 +494,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       {/* Второй уровень: заголовок слева, тип уведомления справа */}
       <div className="flex items-start justify-between mb-3">
         <div className={cn("flex-1 min-w-0", notificationTag ? "pr-28" : "pr-3") }>
-          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
+          <h4 className="text-sm font-medium text-card-foreground leading-relaxed">
             {notification.title}
           </h4>
         </div>
@@ -505,14 +505,14 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
         {(notification.entityType === 'announcement') && fullAnnouncementText ? (
           <div
             className={cn(
-              "text-xs text-gray-600 dark:text-gray-400 break-words",
+              "text-xs text-muted-foreground break-words",
               isExpanded ? "whitespace-pre-wrap" : "line-clamp-2"
             )}
             ref={contentRef}
             dangerouslySetInnerHTML={{ __html: formatAnnouncementText(fullAnnouncementText) }}
           />
         ) : (
-          <p className="text-xs line-clamp-2 text-gray-600 dark:text-gray-400 break-words">
+          <p className="text-xs line-clamp-2 text-muted-foreground break-words">
             {notification.message}
           </p>
         )}
@@ -534,8 +534,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
 
       {/* Нижняя строка: время и дополнительная информация */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500 dark:text-gray-500">
-          {shouldShowDateTime 
+        <p className="text-xs text-muted-foreground">
+          {shouldShowDateTime
             ? format(notification.createdAt, "dd.MM.yyyy HH:mm", { locale: ru })
             : formatDistanceToNow(notification.createdAt, {
                 addSuffix: true,
@@ -544,17 +544,17 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           }
         </p>
         {userName && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+          <p className="text-xs text-muted-foreground font-medium">
             {userName}
           </p>
         )}
         {fromSection && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+          <p className="text-xs text-muted-foreground font-medium">
             из {fromSection}
           </p>
         )}
         {commentAuthor && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+          <p className="text-xs text-muted-foreground font-medium">
              {commentAuthor}
           </p>
         )}

@@ -71,4 +71,68 @@ import { PermissionsDebugPanel } from '@/modules/permissions'
 - `projects.view.all` - просмотр всех проектов
 - `analytics.view.advanced` - расширенная аналитика
 
-Система автоматически подхватит новые разрешения! 🎉
+Система автоматически подхватит новые разрешения!
+
+## 🔒 Filter Permissions (область видимости фильтров)
+
+Система ограничения области видимости для inline-фильтров на основе ролей.
+
+### Permissions (в БД)
+- `filters.scope.all` - полный доступ (администратор)
+- `filters.scope.subdivision` - доступ к подразделению
+- `filters.scope.department` - доступ к отделу
+- `filters.scope.team` - доступ к команде
+- `filters.scope.managed_projects` - доступ к управляемым проектам
+
+### Архитектура защиты (2 уровня)
+
+1. **Client-side** - фильтрация опций автокомплита:
+```tsx
+const { data: filterContext } = useFilterContext()
+const filteredOptions = useFilteredOptions(allOptions, filterContext)
+const lockedFilters = getLockedFilters(filterContext)
+```
+
+2. **Server-side** - принудительные фильтры в Server Actions:
+```ts
+const safeFilters = applyMandatoryFilters(userFilters, filterContext)
+```
+
+### LockedFiltersBadge
+
+Badge, показывающий заблокированные фильтры пользователя:
+
+```tsx
+import {
+  useFilterContext,
+  useFilteredOptions,
+  getLockedFilters,
+  LockedFiltersBadge
+} from '@/modules/permissions'
+
+function Filters() {
+  const { data: filterContext } = useFilterContext()
+  const filteredOptions = useFilteredOptions(allOptions, filterContext)
+  const lockedFilters = getLockedFilters(filterContext)
+
+  return (
+    <div className="flex items-center gap-2">
+      <LockedFiltersBadge
+        filters={lockedFilters}
+        scopeLevel={filterContext?.scope.level}
+      />
+      <InlineFilter options={filteredOptions} ... />
+    </div>
+  )
+}
+```
+
+### Отображение по ролям
+
+| Роль | Badge |
+|------|-------|
+| admin | Нет badge |
+| subdivision_head | `Подразделение: ОВ и К` |
+| department_head | `Отдел: Проектирование` |
+| project_manager | `Проект: Солнечный` или `Проекты: 3` |
+| team_lead / user | `Команда: Разработка` |

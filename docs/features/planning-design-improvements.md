@@ -26,8 +26,6 @@
 - `modules/planning/components/timeline/department-row.tsx:846` - рендер полоски
 - `modules/planning/components/timeline/department-row.tsx:890-893` - логика `maxLines` (убрать зависимость от rate)
 - `modules/planning/components/timeline/department-row.tsx:895-1120` - адаптивная логика отображения (упростить, убрать комментарии)
-- `modules/planning/components/timeline/section-loading-bars.tsx:64` - рендер полоски в секции
-- `modules/planning/components/timeline/section-loading-bars.tsx:231` - расчет высоты секции
 
 **Текущая реализация:**
 ```typescript
@@ -91,44 +89,6 @@ return barRenders.map((bar, idx) => {
 return barRenders.map((bar, idx) => {
   const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
   // ...
-})
-```
-
----
-
-#### Шаг 1.4: Убрать умножение на rate в section-loading-bars (рендер)
-**Файл:** `modules/planning/components/timeline/section-loading-bars.tsx:64`
-
-**Было:**
-```typescript
-const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
-```
-
-**Станет:**
-```typescript
-const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
-```
-
----
-
-#### Шаг 1.5: Убрать умножение на rate в section-loading-bars (расчет высоты)
-**Файл:** `modules/planning/components/timeline/section-loading-bars.tsx:231`
-
-**Было:**
-```typescript
-barRenders.forEach(bar => {
-  const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
-  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
-  maxBottom = Math.max(maxBottom, top + barHeight)
-})
-```
-
-**Станет:**
-```typescript
-barRenders.forEach(bar => {
-  const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
-  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
-  maxBottom = Math.max(maxBottom, top + barHeight)
 })
 ```
 

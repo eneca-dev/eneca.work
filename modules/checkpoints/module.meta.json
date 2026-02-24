@@ -1,0 +1,228 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "checkpoints",
+    "displayName": "Checkpoints",
+    "description": "Система чекпоинтов (вех) для разделов с вертикальными связями между секциями",
+    "version": "1.0.0",
+    "status": "stable",
+    "route": null,
+    "tags": ["feature", "ui", "data-layer"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для CRUD чекпоинтов",
+      "components/": "React компоненты (маркеры, вертикальные линии)",
+      "constants/": "Константы (цвета, размеры)",
+      "context/": "React Context для координат связей",
+      "hooks/": "React Query хуки",
+      "types/": "TypeScript типы",
+      "utils/": "Утилиты расчёта позиций"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "CheckpointMarkers",
+      "CheckpointVerticalLinks",
+      "CheckpointLinksProvider",
+      "useCheckpointLinks",
+      "useCheckpoints",
+      "usePrefetchCheckpoints"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useCheckpoints",
+      "description": "Получение чекпоинтов для раздела",
+      "file": "hooks/index.ts",
+      "params": "sectionId: string",
+      "returns": "{ data: Checkpoint[] }"
+    },
+    {
+      "name": "usePrefetchCheckpoints",
+      "description": "Prefetch чекпоинтов для batch загрузки",
+      "file": "hooks/index.ts"
+    },
+    {
+      "name": "useCheckpointLinks",
+      "description": "Получение координат для рисования вертикальных связей",
+      "file": "context/CheckpointLinksContext.tsx",
+      "returns": "{ registerCheckpoint, getLinksData, layoutVersion }"
+    }
+  ],
+
+  "actions": [
+    {
+      "name": "createCheckpoint",
+      "description": "Создать чекпоинт для раздела",
+      "file": "actions/index.ts",
+      "input": "{ sectionId, date, label, linkedCheckpointId? }",
+      "output": "ActionResult<Checkpoint>",
+      "mutates": true
+    },
+    {
+      "name": "updateCheckpoint",
+      "description": "Обновить чекпоинт",
+      "file": "actions/index.ts",
+      "input": "{ checkpointId, updates }",
+      "output": "ActionResult<Checkpoint>",
+      "mutates": true
+    },
+    {
+      "name": "deleteCheckpoint",
+      "description": "Удалить чекпоинт",
+      "file": "actions/index.ts",
+      "input": "checkpointId",
+      "output": "ActionResult<void>",
+      "mutates": true
+    }
+  ],
+
+  "stores": [],
+
+  "components": [
+    {
+      "name": "CheckpointMarkers",
+      "description": "Маркеры чекпоинтов на timeline раздела",
+      "file": "components/CheckpointMarker.tsx",
+      "props": ["checkpoints", "range", "onEdit", "onDelete"]
+    },
+    {
+      "name": "CheckpointVerticalLinks",
+      "description": "SVG вертикальные линии между связанными чекпоинтами",
+      "file": "components/CheckpointVerticalLinks.tsx",
+      "props": []
+    },
+    {
+      "name": "CheckpointLinksProvider",
+      "description": "Provider для координат чекпоинтов (рисование связей)",
+      "file": "context/CheckpointLinksContext.tsx",
+      "props": ["children"]
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Links Registration Pattern",
+      "description": "Каждый CheckpointMarker регистрирует свои координаты через registerCheckpoint",
+      "example": "registerCheckpoint(checkpointId, { x, y, linkedId })"
+    },
+    {
+      "name": "Layout Version Pattern",
+      "description": "При изменении layout (expand/collapse) инкрементируется layoutVersion для пересчёта позиций",
+      "example": "useEffect(() => recalculatePositions(), [layoutVersion])"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Direct DOM Measurement",
+      "description": "НЕ измеряй позиции элементов напрямую в render",
+      "instead": "Используй useLayoutEffect и registerCheckpoint"
+    }
+  ],
+
+  "technologies": ["@tanstack/react-query", "react", "tailwindcss"],
+
+  "dependencies": {
+    "modules": ["cache", "modals"],
+    "database": {
+      "tables": ["checkpoints"],
+      "views": ["view_section_checkpoints"],
+      "enums": [],
+      "functions": []
+    }
+  },
+
+  "dependents": ["resource-graph"],
+
+  "cache": {
+    "queryKeys": ["checkpoints.bySection"],
+    "realtimeChannels": ["checkpoints"],
+    "invalidationRules": [
+      {
+        "trigger": "checkpoints INSERT/UPDATE/DELETE",
+        "invalidates": ["checkpoints.bySection"]
+      }
+    ]
+  },
+
+  "permissions": ["checkpoints.view", "checkpoints.create", "checkpoints.edit", "checkpoints.delete"],
+
+  "tasks": [
+    {
+      "id": "CP-AUDIT",
+      "title": "Full Module Audit: Checkpoints",
+      "description": "Полный аудит модуля чекпоинтов для подтверждения качества.\n\nОсобое внимание на корректность рендеринга вертикальных связей и производительность.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 4,
+      "checklist": {
+        "database": [
+          "[ ] view_section_checkpoints возвращает все нужные поля",
+          "[ ] Индексы на checkpoints(section_id, date)",
+          "[ ] linked_checkpoint_id имеет FK constraint",
+          "[ ] При удалении чекпоинта связи (linked_checkpoint_id) обнуляются"
+        ],
+        "security": [
+          "[ ] createCheckpoint имеет auth check",
+          "[ ] updateCheckpoint имеет auth check",
+          "[ ] deleteCheckpoint имеет auth check",
+          "[ ] RLS policies на checkpoints",
+          "[ ] Zod validation на inputs (date format, label length)"
+        ],
+        "businessLogic": [
+          "[ ] Чекпоинт отображается на правильной дате на timeline",
+          "[ ] Вертикальные связи рисуются между правильными чекпоинтами",
+          "[ ] При expand/collapse строк связи пересчитываются",
+          "[ ] Drag чекпоинта меняет дату корректно",
+          "[ ] Связанные чекпоинты двигаются вместе (если настроено)",
+          "[ ] Edge case: чекпоинт за пределами видимого периода",
+          "[ ] Edge case: удаление чекпоинта со связями",
+          "[ ] Edge case: несколько чекпоинтов на одну дату"
+        ],
+        "performance": [
+          "[ ] Рендеринг 50+ чекпоинтов < 100ms",
+          "[ ] Пересчёт связей при layout change < 50ms",
+          "[ ] Нет лишних ре-рендеров CheckpointVerticalLinks",
+          "[ ] SVG path оптимизирован (не пересоздаётся без нужды)"
+        ],
+        "codeQuality": [
+          "[ ] CheckpointLinksContext не утекает память",
+          "[ ] registerCheckpoint вызывается в useLayoutEffect",
+          "[ ] Типы Checkpoint экспортируются корректно",
+          "[ ] Нет `any` в типах"
+        ],
+        "cache": [
+          "[ ] queryKeys.checkpoints.bySection используется",
+          "[ ] Prefetch работает при hover на expand",
+          "[ ] Invalidation после CRUD операций"
+        ]
+      },
+      "auditProcedure": [
+        "1. Открыть График с несколькими разделами с чекпоинтами",
+        "2. Проверить что чекпоинты на правильных датах",
+        "3. Проверить вертикальные связи (видны, правильные)",
+        "4. Expand/collapse строки — связи должны пересчитаться",
+        "5. Создать/редактировать/удалить чекпоинт",
+        "6. Проверить Console на ошибки"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2025-01-01",
+      "changes": ["Initial release", "Вертикальные связи между секциями", "CheckpointLinksContext"]
+    }
+  ]
+}

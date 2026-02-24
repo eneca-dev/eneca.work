@@ -1,12 +1,15 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, getDay, getWeek, addDays, differenceInDays, startOfDay } from 'date-fns'
+import { format, getDay, getWeek, addDays } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 
 export interface DayCell {
   date: Date
@@ -35,26 +38,32 @@ export function generateDayCells(
   calendarEvents: CompanyCalendarEvent[] = []
 ): DayCell[] {
   const cells: DayCell[] = []
-  const today = startOfDay(new Date())
+  // Используем сегодняшнюю дату в часовом поясе Минска
+  const todayKey = formatMinskDate(getTodayMinsk())
 
   // Build calendar map for fast lookup
   const calendarMap = buildCalendarMap(calendarEvents)
 
   for (let i = 0; i < range.totalDays; i++) {
     const date = addDays(range.start, i)
-    const dayOfWeek = getDay(date)
+    // Используем день недели в часовом поясе Минска
+    const dayOfWeek = getMinskDayOfWeek(date)
     const isDefaultWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
     // Get calendar info for this day
     const dayInfo = getDayInfo(date, calendarMap)
 
+    // Используем день месяца в часовом поясе Минска
+    const dayOfMonth = getMinskDate(date)
+    const dateKey = formatMinskDate(date)
+
     cells.push({
       date,
-      dayOfMonth: date.getDate(),
+      dayOfMonth,
       dayOfWeek: format(date, 'EEEEEE', { locale: ru }),
       isWeekend: isDefaultWeekend,
-      isToday: differenceInDays(date, today) === 0,
-      isMonthStart: date.getDate() === 1,
+      isToday: dateKey === todayKey,
+      isMonthStart: dayOfMonth === 1,
       monthName: format(date, 'LLLL yyyy', { locale: ru }),
       // Calendar info
       isHoliday: dayInfo.isHoliday,
@@ -70,12 +79,13 @@ export function generateDayCells(
 
 interface TimelineHeaderProps {
   dayCells: DayCell[]
+  onScrollToToday?: () => void
 }
 
 /**
  * Заголовок timeline с неделями и днями
  */
-export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
+export function TimelineHeader({ dayCells, onScrollToToday }: TimelineHeaderProps) {
   // Группировка по неделям (с нумерацией от начала года)
   const weeks = useMemo(() => {
     const result: { weekNum: number; startIdx: number; daysCount: number }[] = []
@@ -147,7 +157,7 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
   return (
     <div className="flex flex-col bg-card border-b border-border" style={{ width: totalWidth }}>
       {/* Месяцы */}
-      <div className="flex h-7 border-b border-border/50">
+      <div className="flex h-7 border-b border-border/50 relative">
         {months.map((month, i) => (
           <div
             key={i}
@@ -157,6 +167,20 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
             {month.daysCount >= MIN_DAYS_FOR_MONTH_NAME && month.name}
           </div>
         ))}
+        {/* Кнопка "Перейти к сегодня" */}
+        {onScrollToToday && (
+          <div className="sticky right-0 ml-auto flex items-center pr-2 bg-card z-10 border-l border-border/50">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={onScrollToToday}
+              title="Перейти к сегодняшней дате"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Недели */}
@@ -178,8 +202,11 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
       {/* Дни */}
       <div className="flex h-10">
         {dayCells.map((cell, i) => {
-          // Простая логика: нерабочий день = красный фон
-          const isDayOff = !cell.isWorkday
+          // Логика цветов выходных:
+          // - Праздники и дополнительные выходные (переносы) → желтоватый
+          // - Стандартные выходные (Сб/Вс) → серый
+          const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+          const isRegularWeekend = cell.isWeekend && !cell.isWorkday && !isSpecialDayOff
 
           return (
             <div
@@ -187,9 +214,11 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               className={cn(
                 'flex flex-col items-center justify-center text-[10px]',
                 // Сегодня - высший приоритет
-                cell.isToday && 'bg-primary/10',
-                // Нерабочий день (выходной, праздник, перенос) - красный фон
-                !cell.isToday && isDayOff && 'bg-red-50 dark:bg-red-950/30',
+                cell.isToday && 'bg-green-50 dark:bg-green-700/40',
+                // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
+                !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/10',
+                // Стандартные выходные (Сб/Вс) - нейтральный серый фон
+                !cell.isToday && isRegularWeekend && 'bg-muted/50 dark:bg-muted/30',
                 i < dayCells.length - 1 && 'border-r border-border/20'
               )}
               style={{ width: DAY_CELL_WIDTH }}
@@ -199,7 +228,8 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 className={cn(
                   'font-medium',
                   cell.isToday && 'text-primary',
-                  !cell.isToday && isDayOff && 'text-red-600 dark:text-red-400'
+                  !cell.isToday && isSpecialDayOff && 'text-amber-500 dark:text-amber-400',
+                  !cell.isToday && isRegularWeekend && 'text-muted-foreground/70'
                 )}
               >
                 {cell.dayOfMonth}
@@ -207,7 +237,9 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               <span
                 className={cn(
                   'uppercase',
-                  isDayOff ? 'text-red-400 dark:text-red-500' : 'text-muted-foreground'
+                  isSpecialDayOff ? 'text-amber-500 dark:text-amber-400' :
+                  isRegularWeekend ? 'text-muted-foreground/50' :
+                  'text-muted-foreground'
                 )}
               >
                 {cell.dayOfWeek}

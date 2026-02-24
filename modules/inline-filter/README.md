@@ -2,6 +2,10 @@
 
 GitHub Projects-style inline filter component with autocomplete support.
 
+> **⚠️ ВАЖНО: Этот модуль является общим для всего приложения**
+>
+> Все модули, которым нужна фильтрация (kanban, planning, resource-graph и др.), **ОБЯЗАНЫ** использовать этот модуль для обеспечения единообразия UI и поведения фильтров.
+
 ## Quick Start
 
 ```typescript
@@ -71,7 +75,6 @@ key:"value with \"quotes\""  # Escaped quotes in value
 
 | Export | Description |
 |--------|-------------|
-| `useInlineFilter` | State management hook with parsing utilities |
 | `useFilterContext` | Low-level hook for detecting input context (key/value) |
 
 ### Parser Utilities
@@ -97,8 +100,6 @@ key:"value with \"quotes\""  # Escaped quotes in value
 | `ParsedFilter` | Result of parsing filter string |
 | `FilterQueryParams` | Query parameters for database |
 | `FilterKeyColor` | Available color names |
-| `FilterValueType` | Value types: string, date, number, boolean, select |
-| `FilterOperator` | Comparison operators for future use |
 | `FilterInputContext` | Input context type (empty, key, or value) |
 | `UseFilterContextOptions` | Options for useFilterContext hook |
 
@@ -133,15 +134,6 @@ interface FilterKeyConfig {
 
   /** Color: 'violet' | 'blue' | 'amber' | 'emerald' | 'rose' | 'cyan' | 'gray' */
   color?: FilterKeyColor
-
-  /** Value type (for future validation) */
-  valueType?: 'string' | 'date' | 'number' | 'boolean' | 'select'
-
-  /** Operators for date/number (for future use) */
-  operators?: FilterOperator[]
-
-  /** Enum values for select/boolean types */
-  enumValues?: FilterEnumValue[]
 }
 ```
 
@@ -201,40 +193,7 @@ function MyComponent() {
 }
 ```
 
-### Pattern 2: Using the Hook
-
-```typescript
-import { useInlineFilter } from '@/modules/inline-filter'
-
-function MyComponent() {
-  const {
-    value,           // Current filter string
-    setValue,        // Set filter string
-    parsedTokens,    // Parsed tokens array
-    queryParams,     // Ready-to-use query params
-    hasFilters,      // Boolean: any filters active?
-    clear,           // Clear all filters
-    addToken,        // Add a filter programmatically
-    removeToken,     // Remove a filter programmatically
-  } = useInlineFilter({ config })
-
-  // Add filter programmatically
-  const handleAddProjectFilter = (projectName: string) => {
-    addToken('проект', projectName)
-  }
-
-  return (
-    <InlineFilter
-      config={config}
-      value={value}
-      onChange={setValue}
-      options={options}
-    />
-  )
-}
-```
-
-### Pattern 3: Zustand Store Integration
+### Pattern 2: Zustand Store Integration
 
 ```typescript
 // stores/filters.ts
@@ -267,7 +226,7 @@ export const useFiltersStore = create(
 )
 ```
 
-### Pattern 4: Loading Options from Database
+### Pattern 3: Loading Options from Database
 
 ```typescript
 import { useQuery } from '@tanstack/react-query'
@@ -334,70 +293,6 @@ function useFilterOptions() {
 
 ---
 
-## Future Extensions
-
-The module is prepared for these future features:
-
-### Date/Number Filters with Operators
-
-```typescript
-// Future syntax support
-'дата:>2024-01-01'           // After date
-'загрузка:<100'              // Less than number
-'приоритет:>=5'              // Greater or equal
-```
-
-Configuration ready:
-```typescript
-{
-  'дата': {
-    field: 'created_at',
-    valueType: 'date',
-    operators: ['gt', 'lt', 'gte', 'lte', 'eq'],
-  },
-}
-```
-
-### Boolean Filters
-
-```typescript
-// Future syntax support
-'архив:да'
-'активный:нет'
-```
-
-Configuration ready:
-```typescript
-{
-  'архив': {
-    field: 'is_archived',
-    valueType: 'boolean',
-    enumValues: [
-      { value: 'да', label: 'Да' },
-      { value: 'нет', label: 'Нет' },
-    ],
-  },
-}
-```
-
-### Select Filters
-
-```typescript
-{
-  'статус': {
-    field: 'status',
-    valueType: 'select',
-    enumValues: [
-      { value: 'active', label: 'Активный' },
-      { value: 'paused', label: 'Приостановлен' },
-      { value: 'completed', label: 'Завершён' },
-    ],
-  },
-}
-```
-
----
-
 ## Accessibility (A11y)
 
 The component includes full ARIA support:
@@ -428,9 +323,198 @@ modules/inline-filter/
 │   └── FilterSuggestions.tsx   # Dropdown suggestions component
 └── hooks/
     ├── index.ts
-    ├── useInlineFilter.ts      # State management hook
     └── useFilterContext.ts     # Input context detection hook
 ```
+
+---
+
+## Интеграция в новый модуль (Step-by-Step)
+
+При добавлении фильтрации в новый модуль (например, `kanban`), следуйте этим шагам:
+
+### Шаг 1: Создать конфигурацию фильтра в stores модуля
+
+```typescript
+// modules/kanban/stores/index.ts
+import { Building2, Users, CircleDot } from 'lucide-react'
+import type { FilterConfig, FilterQueryParams } from '@/modules/inline-filter'
+import { parseFilterString, tokensToQueryParams, hasActiveFilters } from '@/modules/inline-filter'
+
+// Определите ключи фильтра для вашего модуля
+export const KANBAN_FILTER_CONFIG: FilterConfig = {
+  keys: {
+    'статус': {
+      field: 'status_id',
+      label: 'Статус',
+      icon: CircleDot,
+      color: 'cyan',
+    },
+    'исполнитель': {
+      field: 'assignee_id',
+      label: 'Исполнитель',
+      icon: Users,
+      color: 'blue',
+    },
+    'подразделение': {
+      field: 'subdivision_id',
+      label: 'Подразделение',
+      icon: Building2,
+      color: 'violet',
+    },
+  },
+  placeholder: 'Фильтр: статус:"В работе" исполнитель:"Иванов"',
+}
+```
+
+### Шаг 2: Создать Zustand store для фильтров
+
+```typescript
+// modules/kanban/stores/index.ts (продолжение)
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+interface FiltersState {
+  filterString: string
+  setFilterString: (value: string) => void
+  clearFilters: () => void
+  getQueryParams: () => FilterQueryParams
+  hasFilters: () => boolean
+}
+
+export const useKanbanFiltersStore = create<FiltersState>()(
+  devtools(
+    persist(
+      (set, get) => ({
+        filterString: '',
+        setFilterString: (value) => set({ filterString: value }),
+        clearFilters: () => set({ filterString: '' }),
+        getQueryParams: () => {
+          const { filterString } = get()
+          const parsed = parseFilterString(filterString, KANBAN_FILTER_CONFIG)
+          return tokensToQueryParams(parsed.tokens, KANBAN_FILTER_CONFIG)
+        },
+        hasFilters: () => hasActiveFilters(get().filterString, KANBAN_FILTER_CONFIG),
+      }),
+      { name: 'kanban-filters' }
+    )
+  )
+)
+```
+
+### Шаг 3: Создать хук для загрузки опций автокомплита
+
+```typescript
+// modules/kanban/filters/useFilterOptions.ts
+'use client'
+
+import { useMemo } from 'react'
+import type { FilterOption } from '@/modules/inline-filter'
+import { useStatuses, useUsers, useSubdivisions } from '../hooks' // Ваши хуки данных
+
+export function useKanbanFilterOptions() {
+  const { data: statuses, isLoading: loadingStatuses } = useStatuses()
+  const { data: users, isLoading: loadingUsers } = useUsers()
+  const { data: subdivisions, isLoading: loadingSubs } = useSubdivisions()
+
+  const options = useMemo<FilterOption[]>(() => {
+    const result: FilterOption[] = []
+
+    statuses?.forEach(status => {
+      result.push({ id: status.id, name: status.name, key: 'статус' })
+    })
+
+    users?.forEach(user => {
+      result.push({ id: user.id, name: user.full_name, key: 'исполнитель' })
+    })
+
+    subdivisions?.forEach(sub => {
+      result.push({ id: sub.id, name: sub.name, key: 'подразделение' })
+    })
+
+    return result
+  }, [statuses, users, subdivisions])
+
+  return {
+    options,
+    isLoading: loadingStatuses || loadingUsers || loadingSubs,
+  }
+}
+```
+
+### Шаг 4: Использовать компонент InlineFilter
+
+```typescript
+// modules/kanban/components/KanbanBoard.tsx
+'use client'
+
+import { InlineFilter } from '@/modules/inline-filter'
+import { useKanbanFiltersStore, KANBAN_FILTER_CONFIG } from '../stores'
+import { useKanbanFilterOptions } from '../filters/useFilterOptions'
+
+export function KanbanBoard() {
+  const { filterString, setFilterString, getQueryParams } = useKanbanFiltersStore()
+  const { options, isLoading: loadingOptions } = useKanbanFilterOptions()
+
+  // Используйте queryParams для фильтрации данных
+  const queryParams = getQueryParams()
+
+  return (
+    <div>
+      <InlineFilter
+        config={KANBAN_FILTER_CONFIG}
+        value={filterString}
+        onChange={setFilterString}
+        options={options}
+      />
+
+      {/* Передайте queryParams в хук загрузки данных */}
+      <KanbanColumns filters={queryParams} />
+    </div>
+  )
+}
+```
+
+### Шаг 5: Применить фильтры к данным
+
+```typescript
+// modules/kanban/actions/index.ts
+'use server'
+
+import type { FilterQueryParams } from '@/modules/inline-filter'
+
+export async function getKanbanCards(filters: FilterQueryParams) {
+  // Используйте filters для построения запроса
+  let query = supabase.from('kanban_cards').select('*')
+
+  if (filters.status_id) {
+    query = query.eq('status_id', filters.status_id)
+  }
+  if (filters.assignee_id) {
+    query = query.eq('assignee_id', filters.assignee_id)
+  }
+  // ... другие фильтры
+
+  return query
+}
+```
+
+---
+
+## Требования к интеграции
+
+При интеграции модуля inline-filter в новый модуль **ОБЯЗАТЕЛЬНО**:
+
+1. **Используйте единый компонент** — `<InlineFilter />` из `@/modules/inline-filter`
+2. **Создайте `FilterConfig`** — в stores вашего модуля с осмысленными ключами на русском языке
+3. **Используйте Zustand** — для хранения строки фильтра (persist для сохранения между сессиями)
+4. **Загружайте опции** — через кастомный хук `useXxxFilterOptions()` в папке `filters/`
+5. **Применяйте фильтры** — через `getQueryParams()` в Server Actions
+
+**НЕ ДЕЛАЙТЕ:**
+
+- ❌ Не создавайте свой компонент фильтров
+- ❌ Не используйте другой синтаксис фильтров
+- ❌ Не храните фильтры в useState (используйте Zustand с persist)
 
 ---
 

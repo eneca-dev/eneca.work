@@ -20,6 +20,7 @@ export {
 export {
   createCacheMutation,
   createSimpleMutation,
+  createCreateMutation,
   createDeleteMutation,
   createUpdateMutation,
   type CreateMutationConfig,

@@ -14,7 +14,7 @@ export interface TableSubscription {
   /** События для подписки (по умолчанию все) */
   events?: RealtimeEvent[]
   /** Query keys для инвалидации при изменении */
-  invalidateKeys: readonly unknown[][]
+  invalidateKeys: readonly (readonly unknown[])[]
   /** Дополнительный фильтр (например, filter: 'user_id=eq.123') */
   filter?: string
 }
@@ -54,6 +54,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.sections.all,
       queryKeys.projects.all, // Структура проекта тоже обновляется
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.sectionsPage.all, // Страница разделов (иерархия отделы → проекты → разделы)
     ],
   },
 
@@ -62,7 +63,11 @@ export const realtimeSubscriptions: TableSubscription[] = [
   // ============================================================================
   {
     table: 'profiles',
-    invalidateKeys: [queryKeys.users.all],
+    invalidateKeys: [
+      queryKeys.users.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (сотрудники в командах)
+      queryKeys.sectionsPage.all, // Страница разделов (сотрудники с загрузками)
+    ],
   },
 
   // ============================================================================
@@ -72,21 +77,101 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'loadings',
     invalidateKeys: [
       queryKeys.loadings.all,
-      queryKeys.sections.all, // Подсчёты в секциях
+      // НЕ инвалидируем sections.all - слишком агрессивно, вызывает лаги
+      // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
+      // Resource graph loadings (lazy-loaded per section)
+      [...queryKeys.resourceGraph.all, 'loadings'],
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
+      queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
     ],
   },
   {
     table: 'decomposition_stages',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Этапы декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска
+      // Ответственные за этапы (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageResponsibles'],
     ],
   },
   {
     table: 'decomposition_items',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Задачи декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска (задачи)
+    ],
+  },
+
+  // ============================================================================
+  // Готовность разделов
+  // ============================================================================
+  {
+    table: 'section_readiness_checkpoints',
+    invalidateKeys: [
+      queryKeys.resourceGraph.all, // Плановая готовность
+    ],
+  },
+  {
+    table: 'section_readiness_snapshots',
+    invalidateKeys: [
+      queryKeys.resourceGraph.all, // Фактическая готовность
+    ],
+  },
+  {
+    table: 'stage_readiness_snapshots',
+    invalidateKeys: [
+      // Инвалидируем stageReadiness кеши (lazy-loaded данные по этапам)
+      [...queryKeys.resourceGraph.all, 'stageReadiness'],
+    ],
+  },
+
+  // ============================================================================
+  // Отчёты о работе (work_logs)
+  // ============================================================================
+  {
+    table: 'work_logs',
+    invalidateKeys: [
+      // Инвалидируем все workLogs кеши (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'workLogs'],
+      // Инвалидируем resourceGraph.all для обновления section_budget_spending во view
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
+  // Отчёты к стадиям (project_reports)
+  // ============================================================================
+  {
+    table: 'project_reports',
+    invalidateKeys: [
+      // Инвалидируем все stageReports кеши (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageReports'],
+      // Инвалидируем resourceGraph.all для обновления timeline
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
+  // Бюджеты
+  // ============================================================================
+  {
+    table: 'budgets',
+    invalidateKeys: [
+      // При изменении бюджета обновляем данные графика ресурсов
+      queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
+    ],
+  },
+  {
+    table: 'budget_parts',
+    invalidateKeys: [
+      // При изменении частей бюджета (сумм) обновляем данные
+      queryKeys.resourceGraph.all,
+      queryKeys.budgets.all,
     ],
   },
 
@@ -94,12 +179,27 @@ export const realtimeSubscriptions: TableSubscription[] = [
   // Справочники
   // ============================================================================
   {
+    table: 'section_statuses',
+    invalidateKeys: [
+      queryKeys.sectionStatuses.all,
+      queryKeys.sections.all, // секции показывают статусы
+      queryKeys.resourceGraph.all, // resource graph показывает статусы
+    ],
+  },
+  {
     table: 'departments',
-    invalidateKeys: [queryKeys.departments.all],
+    invalidateKeys: [
+      queryKeys.departments.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов
+      queryKeys.sectionsPage.all, // Страница разделов (группировка по отделам)
+    ],
   },
   {
     table: 'teams',
-    invalidateKeys: [queryKeys.teams.all],
+    invalidateKeys: [
+      queryKeys.teams.all,
+      queryKeys.departmentsTimeline.all, // Таймлайн отделов (команды внутри отделов)
+    ],
   },
   {
     table: 'clients',
@@ -116,6 +216,55 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'user_notifications',
     invalidateKeys: [queryKeys.notifications.all],
+  },
+
+  // ============================================================================
+  // Checkpoints (чекпоинты/дедлайны разделов)
+  // ============================================================================
+  {
+    table: 'section_checkpoints',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+      queryKeys.sections.all,
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'checkpoint_section_links',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_audit',
+    events: ['INSERT'],
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_types',
+    invalidateKeys: [
+      queryKeys.checkpointTypes.all,
+      queryKeys.checkpoints.all,
+    ],
+  },
+
+  // ============================================================================
+  // Роли и разрешения (для filter permissions)
+  // ============================================================================
+  {
+    table: 'user_roles',
+    invalidateKeys: [
+      queryKeys.filterPermissions.all,
+      queryKeys.users.all, // Роли влияют на пользователя
+    ],
+  },
+  {
+    table: 'role_permissions',
+    invalidateKeys: [
+      queryKeys.filterPermissions.all,
+    ],
   },
 ]
 

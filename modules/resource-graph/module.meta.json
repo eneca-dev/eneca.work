@@ -1,0 +1,1380 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+
+  "meta": {
+    "name": "resource-graph",
+    "displayName": "Resource Graph",
+    "description": "Визуализация иерархии проектов с timeline, загрузками сотрудников, готовностью и бюджетами",
+    "version": "2.0.6",
+    "status": "stable",
+    "route": "/dashboard/resource-graph",
+    "tags": ["feature", "ui", "data-layer"]
+  },
+
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions для работы с Supabase (queries + mutations)",
+      "components/": "React компоненты (главный + timeline визуализация)",
+      "components/timeline/": "Timeline компоненты (header, rows, bars, overlays)",
+      "components/timeline/rows/": "Row компоненты для каждого уровня иерархии",
+      "components/timeline/shared/": "Переиспользуемые компоненты (ProgressCircle, etc)",
+      "constants/": "Константы (ROW_HEIGHT, COLORS, SCALES)",
+      "filters/": "Хуки для автокомплита InlineFilter",
+      "hooks/": "React Query хуки (query + mutation)",
+      "stores/": "Zustand stores (UI state, filters, display settings)",
+      "types/": "TypeScript типы данных",
+      "utils/": "Утилиты (format, hierarchy transform)"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "ResourceGraph",
+      "ResourceGraphInternal",
+      "useResourceGraphData",
+      "useUserWorkload",
+      "useSectionsBatch",
+      "useDisplaySettingsStore",
+      "useFiltersStore",
+      "useUIStateStore",
+      "RESOURCE_GRAPH_FILTER_CONFIG"
+    ]
+  },
+
+  "hooks": [
+    {
+      "name": "useResourceGraphData",
+      "description": "Получение полной иерархии проектов с фильтрацией",
+      "file": "hooks/index.ts",
+      "params": "FilterQueryParams?",
+      "returns": "{ data: Project[], isLoading, error }",
+      "example": "const { data: projects } = useResourceGraphData({ project_id: 'xxx' })"
+    },
+    {
+      "name": "useUserWorkload",
+      "description": "Загрузка конкретного пользователя как ответственного",
+      "file": "hooks/index.ts",
+      "params": "userId: string",
+      "returns": "{ data: Project[], isLoading }",
+      "example": "const { data } = useUserWorkload(userId)"
+    },
+    {
+      "name": "useSectionsBatch",
+      "description": "Batch загрузка всех данных секций объекта одним запросом",
+      "file": "hooks/index.ts",
+      "params": "objectId, sectionIds[], options?",
+      "returns": "{ data: SectionsBatchData }",
+      "example": "const { data } = useSectionsBatch(objectId, sectionIds, { enabled: isExpanded })"
+    },
+    {
+      "name": "useWorkLogs",
+      "description": "Work logs для раздела",
+      "file": "hooks/index.ts",
+      "params": "sectionId: string",
+      "returns": "{ data: WorkLog[] }"
+    },
+    {
+      "name": "useLoadings",
+      "description": "Загрузки сотрудников на этап",
+      "file": "hooks/index.ts",
+      "params": "sectionId: string",
+      "returns": "{ data: Loading[] }"
+    },
+    {
+      "name": "useStageReadiness",
+      "description": "Готовность этапов раздела (снэпшоты)",
+      "file": "hooks/index.ts",
+      "params": "sectionId: string",
+      "returns": "{ data: Record<stageId, ReadinessPoint[]> }"
+    },
+    {
+      "name": "useStageResponsibles",
+      "description": "Ответственные за этапы раздела",
+      "file": "hooks/index.ts",
+      "params": "sectionId: string",
+      "returns": "{ data: Record<stageId, StageResponsible[]> }"
+    },
+    {
+      "name": "useTagOptions",
+      "description": "Все теги проектов (кеш 24ч)",
+      "file": "hooks/index.ts",
+      "returns": "{ data: ProjectTag[] }"
+    },
+    {
+      "name": "useProjectTagsMap",
+      "description": "Map проектов к их тегам (оптимизация)",
+      "file": "hooks/index.ts",
+      "returns": "{ data: Record<projectId, ProjectTag[]> }"
+    },
+    {
+      "name": "useCompanyCalendarEvents",
+      "description": "Праздники и переносы рабочих дней",
+      "file": "hooks/index.ts",
+      "returns": "{ data: CompanyCalendarEvent[] }"
+    },
+    {
+      "name": "useUpdateLoadingDates",
+      "description": "Mutation: Drag-resize загрузки на timeline",
+      "file": "hooks/index.ts",
+      "params": "{ loadingId, sectionId, startDate, finishDate }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useUpdateStageDates",
+      "description": "Mutation: Drag-resize этапа декомпозиции",
+      "file": "hooks/index.ts",
+      "params": "{ stageId, startDate, finishDate }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useUpdateSectionDates",
+      "description": "Mutation: Drag-resize раздела",
+      "file": "hooks/index.ts",
+      "params": "{ sectionId, startDate, endDate }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useCreateLoading",
+      "description": "Mutation: Создать загрузку сотрудника",
+      "file": "hooks/index.ts",
+      "params": "{ sectionId, stageId, responsibleId, startDate, endDate, rate, comment? }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useUpdateLoading",
+      "description": "Mutation: Обновить загрузку",
+      "file": "hooks/index.ts",
+      "params": "{ loadingId, sectionId, updates }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useDeleteLoading",
+      "description": "Mutation: Удалить загрузку",
+      "file": "hooks/index.ts",
+      "params": "{ loadingId, sectionId }",
+      "returns": "UseMutationResult"
+    },
+    {
+      "name": "useTimelineResize",
+      "description": "Управление drag-to-resize элементов на timeline",
+      "file": "hooks/useTimelineResize.ts",
+      "params": "{ startDate, endDate, range, onResize }",
+      "returns": "{ leftHandleProps, rightHandleProps, previewPosition }",
+      "example": "const { leftHandleProps, rightHandleProps } = useTimelineResize({ ... })"
+    }
+  ],
+
+  "actions": [
+    {
+      "name": "getResourceGraphData",
+      "description": "Полная иерархия проектов из v_resource_graph с фильтрацией",
+      "file": "actions/index.ts",
+      "input": "FilterQueryParams?",
+      "output": "ActionResult<Project[]>",
+      "mutates": false
+    },
+    {
+      "name": "getUserWorkload",
+      "description": "Загрузка пользователя как ответственного",
+      "file": "actions/index.ts",
+      "input": "userId, dateRange?",
+      "output": "ActionResult<Project[]>",
+      "mutates": false
+    },
+    {
+      "name": "getSectionsBatchData",
+      "description": "Batch загрузка 8 типов данных для секций",
+      "file": "actions/index.ts",
+      "input": "sectionIds[], options?",
+      "output": "ActionResult<SectionsBatchData>",
+      "mutates": false
+    },
+    {
+      "name": "getWorkLogsForSection",
+      "description": "Work logs раздела",
+      "file": "actions/index.ts",
+      "input": "sectionId",
+      "output": "ActionResult<WorkLog[]>",
+      "mutates": false
+    },
+    {
+      "name": "getLoadingsForSection",
+      "description": "Загрузки раздела",
+      "file": "actions/index.ts",
+      "input": "sectionId",
+      "output": "ActionResult<Loading[]>",
+      "mutates": false
+    },
+    {
+      "name": "getStageReadinessForSection",
+      "description": "Готовность всех этапов раздела",
+      "file": "actions/index.ts",
+      "input": "sectionId",
+      "output": "ActionResult<Record<stageId, ReadinessPoint[]>>",
+      "mutates": false
+    },
+    {
+      "name": "getStageResponsiblesForSection",
+      "description": "Ответственные за этапы раздела",
+      "file": "actions/index.ts",
+      "input": "sectionId",
+      "output": "ActionResult<Record<stageId, StageResponsible[]>>",
+      "mutates": false
+    },
+    {
+      "name": "getProjectTags",
+      "description": "Все теги проектов",
+      "file": "actions/index.ts",
+      "input": "void",
+      "output": "ActionResult<ProjectTag[]>",
+      "mutates": false
+    },
+    {
+      "name": "getCompanyCalendarEvents",
+      "description": "Праздники и переносы",
+      "file": "actions/index.ts",
+      "input": "void",
+      "output": "ActionResult<CompanyCalendarEvent[]>",
+      "mutates": false
+    },
+    {
+      "name": "updateLoadingDates",
+      "description": "Изменить даты загрузки (drag-resize)",
+      "file": "actions/index.ts",
+      "input": "{ loadingId, startDate, finishDate }",
+      "output": "ActionResult<void>",
+      "mutates": true
+    },
+    {
+      "name": "updateStageDates",
+      "description": "Изменить даты этапа декомпозиции",
+      "file": "actions/index.ts",
+      "input": "{ stageId, startDate, finishDate }",
+      "output": "ActionResult<void>",
+      "mutates": true
+    },
+    {
+      "name": "updateSectionDates",
+      "description": "Изменить даты раздела",
+      "file": "actions/index.ts",
+      "input": "{ sectionId, startDate, endDate }",
+      "output": "ActionResult<void>",
+      "mutates": true
+    },
+    {
+      "name": "createLoading",
+      "description": "Создать загрузку сотрудника на этап",
+      "file": "actions/index.ts",
+      "input": "{ sectionId, stageId, responsibleId, startDate, endDate, rate, comment? }",
+      "output": "ActionResult<Loading>",
+      "mutates": true
+    },
+    {
+      "name": "updateLoading",
+      "description": "Обновить загрузку (ставка, комментарий, ответственный)",
+      "file": "actions/index.ts",
+      "input": "{ loadingId, updates }",
+      "output": "ActionResult<Loading>",
+      "mutates": true
+    },
+    {
+      "name": "deleteLoading",
+      "description": "Удалить загрузку",
+      "file": "actions/index.ts",
+      "input": "loadingId",
+      "output": "ActionResult<void>",
+      "mutates": true
+    },
+    {
+      "name": "deleteDecompositionItem",
+      "description": "Удалить задачу и связанные work logs",
+      "file": "actions/index.ts",
+      "input": "itemId",
+      "output": "ActionResult<void>",
+      "mutates": true
+    }
+  ],
+
+  "stores": [
+    {
+      "name": "useDisplaySettingsStore",
+      "description": "Настройки отображения timeline (масштаб, выходные, праздники)",
+      "file": "stores/index.ts",
+      "persistence": "resource-graph-display-settings",
+      "state": ["settings: DisplaySettings"],
+      "actions": ["setScale", "toggleWeekends", "toggleHolidays", "toggleCompactMode", "resetSettings"]
+    },
+    {
+      "name": "useFiltersStore",
+      "description": "Состояние InlineFilter (строка фильтра)",
+      "file": "stores/index.ts",
+      "persistence": "resource-graph-filters",
+      "state": ["filterString: string"],
+      "actions": ["setFilterString", "clearFilters", "getQueryParams", "hasFilters"]
+    },
+    {
+      "name": "useUIStateStore",
+      "description": "UI состояние (развёрнутые узлы, выбранный элемент)",
+      "file": "stores/index.ts",
+      "persistence": "resource-graph-ui-state",
+      "state": ["expandedNodes: Record<TreeNodeType, Set<string>>", "selectedItemId", "selectedItemType"],
+      "actions": ["isExpanded", "toggleNode", "expandNode", "collapseNode", "batchExpand", "batchCollapse", "expandAll", "collapseAll", "setSelectedItem"]
+    }
+  ],
+
+  "components": [
+    {
+      "name": "ResourceGraph",
+      "description": "Полный компонент с InlineFilter header",
+      "file": "components/ResourceGraph.tsx",
+      "props": [],
+      "example": "<ResourceGraph />"
+    },
+    {
+      "name": "ResourceGraphInternal",
+      "description": "Timeline без header (для встраивания)",
+      "file": "components/ResourceGraph.tsx",
+      "props": ["filterString", "queryParams", "filterConfig"]
+    },
+    {
+      "name": "ResourceGraphTimeline",
+      "description": "Основной timeline компонент",
+      "file": "components/timeline/ResourceGraphTimeline.tsx",
+      "props": ["projects", "range", "scale", "calendarEvents"]
+    },
+    {
+      "name": "TimelineHeader",
+      "description": "Header с выбором масштаба, фиксированный при скролле",
+      "file": "components/timeline/TimelineHeader.tsx",
+      "props": ["range", "scale", "calendarEvents"]
+    },
+    {
+      "name": "ProjectRow",
+      "description": "Строка проекта (верхний уровень иерархии)",
+      "file": "components/timeline/rows/ProjectRow.tsx",
+      "props": ["project"]
+    },
+    {
+      "name": "ObjectRow",
+      "description": "Строка объекта",
+      "file": "components/timeline/rows/ObjectRow.tsx",
+      "props": ["object", "projectId"]
+    },
+    {
+      "name": "SectionRow",
+      "description": "Строка раздела (двухстрочная, с чекпоинтами и готовностью)",
+      "file": "components/timeline/rows/SectionRow.tsx",
+      "props": ["section", "sectionId", "batchData"]
+    },
+    {
+      "name": "DecompositionStageRow",
+      "description": "Строка этапа декомпозиции с загрузками сотрудников",
+      "file": "components/timeline/rows/DecompositionStageRow.tsx",
+      "props": ["stage", "sectionId", "batchData"]
+    },
+    {
+      "name": "LoadingBars",
+      "description": "Визуализация загрузок на timeline (цветные блоки)",
+      "file": "components/timeline/LoadingBars.tsx",
+      "props": ["loadings", "range", "onEdit", "onDelete"]
+    },
+    {
+      "name": "LoadingBadges",
+      "description": "Info-чипсы загрузок в sidebar (Glass стиль)",
+      "file": "components/timeline/LoadingBadges.tsx",
+      "props": ["loadings"]
+    },
+    {
+      "name": "WorkLogMarkers",
+      "description": "Маркеры work logs на timeline (Glass pills)",
+      "file": "components/timeline/WorkLogMarkers.tsx",
+      "props": ["workLogs", "range"]
+    },
+    {
+      "name": "ReadinessGraph",
+      "description": "Комбинированный график готовности (плановая + фактическая)",
+      "file": "components/timeline/ReadinessGraph.tsx",
+      "props": ["plannedReadiness", "actualReadiness", "range"]
+    },
+    {
+      "name": "ProgressCircle",
+      "description": "SVG кольцо прогресса (0-100%)",
+      "file": "components/timeline/shared/ProgressCircle.tsx",
+      "props": ["progress", "size?", "strokeWidth?", "color?"],
+      "example": "<ProgressCircle progress={75} size={24} />"
+    }
+  ],
+
+  "patterns": [
+    {
+      "name": "Batch Loading Pattern",
+      "description": "При развороте объекта загружай все данные секций одним запросом через useSectionsBatch вместо N отдельных запросов",
+      "example": "const { data } = useSectionsBatch(objectId, sectionIds, { enabled: isExpanded })"
+    },
+    {
+      "name": "Lazy Expand Pattern",
+      "description": "Загружай детальные данные (loadings, workLogs) только при развороте элемента через enabled: isExpanded",
+      "example": "useLoadings(sectionId, { enabled: isExpanded })"
+    },
+    {
+      "name": "Drag-to-Resize Pattern",
+      "description": "Используй useTimelineResize для drag-resize элементов на timeline с превью позиции",
+      "example": "const { leftHandleProps, rightHandleProps, previewPosition } = useTimelineResize({ startDate, endDate, range, onResize })"
+    },
+    {
+      "name": "Filter Config Pattern",
+      "description": "Используй RESOURCE_GRAPH_FILTER_CONFIG для InlineFilter с типизированными полями фильтрации",
+      "example": "<InlineFilter config={RESOURCE_GRAPH_FILTER_CONFIG} value={filterString} onChange={setFilterString} />"
+    },
+    {
+      "name": "Timeline Range Calculation",
+      "description": "Вычисляй диапазон timeline на основе данных проектов с буфером в 1 месяц по краям",
+      "example": "calculateTimelineRange(projects, { bufferMonths: 1 })"
+    }
+  ],
+
+  "antipatterns": [
+    {
+      "name": "Individual Section Queries",
+      "description": "НЕ делай отдельный запрос для каждой секции при загрузке объекта",
+      "instead": "Используй useSectionsBatch для batch загрузки всех данных"
+    },
+    {
+      "name": "Direct Store Mutation",
+      "description": "НЕ мутируй expandedNodes напрямую как объект",
+      "instead": "Используй методы store: toggleNode, expandNode, collapseNode"
+    },
+    {
+      "name": "Timeline Position Calculation in Render",
+      "description": "НЕ вычисляй позиции элементов на timeline в каждом рендере",
+      "instead": "Используй useMemo с зависимостями от range и scale"
+    },
+    {
+      "name": "Uncontrolled Filter State",
+      "description": "НЕ храни filterString в локальном useState компонента",
+      "instead": "Используй useFiltersStore для синхронизации фильтров"
+    }
+  ],
+
+  "technologies": [
+    "@tanstack/react-query",
+    "zustand",
+    "@supabase/supabase-js",
+    "date-fns",
+    "tailwindcss",
+    "lucide-react"
+  ],
+
+  "dependencies": {
+    "modules": [
+      "cache",
+      "modals",
+      "budgets",
+      "checkpoints",
+      "inline-filter",
+      "permissions",
+      "projects"
+    ],
+    "database": {
+      "tables": [
+        "projects",
+        "objects",
+        "sections",
+        "decomposition_stages",
+        "decomposition_items",
+        "item_progress_history",
+        "loadings",
+        "work_logs",
+        "profiles",
+        "project_tags",
+        "project_tag_links",
+        "calendar_events",
+        "stage_readiness_snapshots"
+      ],
+      "views": [
+        "v_resource_graph",
+        "v_org_structure",
+        "v_project_structure",
+        "view_section_checkpoints",
+        "v_cache_budgets"
+      ],
+      "enums": [
+        "project_status_enum",
+        "work_category_enum"
+      ],
+      "functions": []
+    }
+  },
+
+  "dependents": [
+    "dashboard",
+    "planning",
+    "project-reports"
+  ],
+
+  "cache": {
+    "queryKeys": [
+      "resourceGraph.list",
+      "resourceGraph.user",
+      "resourceGraph.workLogs",
+      "resourceGraph.loadings",
+      "resourceGraph.stageReadiness",
+      "resourceGraph.stageResponsibles",
+      "resourceGraph.sectionsBatch",
+      "projectTags.list",
+      "projectTags.map",
+      "companyCalendar.events",
+      "filterStructure.project"
+    ],
+    "realtimeChannels": [
+      "decomposition_items",
+      "loadings",
+      "work_logs",
+      "sections",
+      "decomposition_stages",
+      "stage_readiness_snapshots"
+    ],
+    "invalidationRules": [
+      {
+        "trigger": "decomposition_items INSERT/UPDATE/DELETE",
+        "invalidates": ["resourceGraph.all"]
+      },
+      {
+        "trigger": "loadings INSERT/UPDATE/DELETE",
+        "invalidates": ["resourceGraph.loadings(sectionId)", "resourceGraph.stageReadiness(sectionId)"]
+      },
+      {
+        "trigger": "work_logs INSERT/UPDATE/DELETE",
+        "invalidates": ["resourceGraph.workLogs(sectionId)"]
+      },
+      {
+        "trigger": "sections UPDATE",
+        "invalidates": ["resourceGraph.all"]
+      },
+      {
+        "trigger": "stage_readiness_snapshots INSERT",
+        "invalidates": ["resourceGraph.stageReadiness(sectionId)"]
+      }
+    ]
+  },
+
+  "permissions": [
+    "resource_graph.view",
+    "resource_graph.edit_loadings",
+    "resource_graph.edit_dates",
+    "resource_graph.delete_items"
+  ],
+
+  "tasks": [
+    {
+      "id": "RG-001",
+      "title": "Исправить рендеринг вертикальных связей чекпоинтов",
+      "description": "Навести порядок с чекпоинтами: вертикальные связи не рендерятся иногда, разваливаются при раскрытии различных строк. Проверить расчёт позиций, учёт высоты строк, z-index слоёв",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": ["RG-003"]
+    },
+    {
+      "id": "RG-002",
+      "title": "Оптимизация запросов в БД",
+      "description": "Пересмотреть и оптимизировать все запросы: объединить где возможно, исправить порядок загрузки, убрать дублирующиеся запросы, проверить индексы",
+      "category": "performance",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": ["RG-003"],
+      "affectedFiles": [
+        "modules/resource-graph/actions/**",
+        "modules/resource-graph/hooks/**"
+      ],
+      "estimatedHours": 4
+    },
+    {
+      "id": "RG-003",
+      "title": "Аудит и тестирование Realtime подписок",
+      "description": "Проверить код realtime подписок, протестировать обновление графика в реальном времени. Увеличить время жизни кеша где это имеет смысл. Убедиться что график живой и реагирует на изменения",
+      "category": "refactor",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": ["RG-001", "RG-002"],
+      "blocks": []
+    },
+    {
+      "id": "RG-004",
+      "title": "Инлайн редактирование параметров раздела",
+      "description": "Добавить возможность редактировать параметры раздела прямо на графике: назначение ответственных, размещение раздела на графике если у него не указаны сроки (drag-and-drop или клик для установки дат). \n\n⚠️ ДЕКОМПОЗИРОВАНО на подзадачи: RG-015 (ответственные), RG-016 (сроки), RG-017 (layout сайдбара)",
+      "category": "feature",
+      "priority": "high",
+      "status": "decomposed",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "decomposedInto": ["RG-015", "RG-016", "RG-017"],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/actions/index.ts"
+      ],
+      "estimatedHours": 6
+    },
+    {
+      "id": "RG-005",
+      "title": "Показатель прироста процента готовности в строке задач",
+      "description": "В строку задач (DecompositionItemRow) добавить отображение прироста процента готовности по дням. При изменении процента готовности показывать маленькую цифру прироста (например +5% или -2%)",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-006",
+      "title": "Фильтры по состоянию бюджета раздела",
+      "description": "Добавить фильтры в InlineFilter: по состоянию бюджета раздела (отсутствует, превышен, в норме, близок к превышению и т.д.)",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/filters/**",
+        "modules/resource-graph/constants/filter-config.ts"
+      ],
+      "estimatedHours": 2
+    },
+    {
+      "id": "RG-007",
+      "title": "Фильтры по срокам раздела",
+      "description": "Добавить фильтры по срокам раздела: просроченные, заканчиваются на этой неделе, без сроков, в работе и т.д.",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/filters/**",
+        "modules/resource-graph/constants/filter-config.ts"
+      ],
+      "estimatedHours": 2
+    },
+    {
+      "id": "RG-008",
+      "title": "График для строки проекта",
+      "description": "Добавить визуализацию графика (готовность, бюджет, сроки) в строку проекта по аналогии с графиками в строках разделов",
+      "category": "feature",
+      "priority": "medium",
+      "status": "backlog",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-009",
+      "title": "Кнопка развернуть всё до разделов",
+      "description": "Добавить возможность развернуть всю иерархию до уровня разделов одной кнопкой (expand all to sections)",
+      "category": "feature",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-010",
+      "title": "Аудит системы разрешений",
+      "description": "Проверить работу системы разрешений в модуле: убедиться что все действия защищены проверками permissions, RLS работает корректно, UI скрывает недоступные действия. Дополнить недостающие проверки",
+      "category": "security",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-011",
+      "title": "Унификация кнопок развернуть/свернуть",
+      "description": "Заменить кнопки развернуть и свернуть на единый с остальными вкладками стиль (как в других модулях)",
+      "category": "refactor",
+      "priority": "low",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-012",
+      "title": "Компактная модалка раздела",
+      "description": "Сделать модалку раздела более компактной и привести её стиль к модалке создания бюджетов (тёмная тема, amber акценты, Resource Graph стиль)",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2026-01-05",
+      "completedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-013",
+      "title": "Вывести статус раздела на график",
+      "description": "Отображать статус раздела (в работе, на паузе, завершён и т.д.) на timeline графике в виде визуального индикатора",
+      "category": "feature",
+      "priority": "medium",
+      "status": "backlog",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-014",
+      "title": "Отображение бюджета в модалке задачи и sidebar",
+      "description": "В модалке задачи (TaskSidebar) и в строке задачи (DecompositionItemRow sidebar) отобразить информацию о бюджете задачи: общая сумма, израсходовано, остаток, процент расхода. Обеспечить корректную работу с БД для этих бюджетов",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2025-01-05",
+      "updatedAt": "2025-01-05",
+      "completedAt": "2025-01-05",
+      "blockedBy": [],
+      "blocks": []
+    },
+    {
+      "id": "RG-015",
+      "title": "Инлайн назначение ответственных за раздел",
+      "description": "Добавить возможность назначать/менять ответственного за раздел прямо в строке SectionRow без открытия модалки.\n\n## Текущее поведение\n- Ответственный отображается в виде Avatar в sidebar строки раздела\n- Для смены ответственного нужно кликнуть по названию → открыть SectionModal → найти ResponsibleDropdown\n- Это занимает 3+ клика и время на загрузку модалки\n\n## Целевое поведение\n- При клике на аватар ответственного открывается компактный dropdown\n- Dropdown содержит: поле поиска + список пользователей с аватарами\n- При выборе пользователя вызывается updateSection action\n- Optimistic update: аватар меняется сразу, затем синхронизируется с сервером\n- При ошибке — возврат к предыдущему значению + toast с ошибкой\n\n## UI/UX требования\n- Dropdown появляется под аватаром (или справа, если не влезает)\n- Стиль dropdown: тёмная тема (slate-800), amber акценты при hover\n- Поиск: фильтрация по имени и email\n- Показывать 'Не назначен' как первую опцию\n- Loading spinner на аватаре во время сохранения\n- Компонент переиспользует логику из ResponsibleDropdown (modules/modals/components/section/ResponsibleDropdown.tsx)\n\n## Технические детали\n- Создать SectionResponsibleInline компонент\n- Использовать useUsers() hook для списка пользователей\n- Использовать updateSection action (modules/modals/hooks/useUpdateSection.ts)\n- Инвалидация: queryKeys.resourceGraph.list при успехе\n- Проверка permission: resource_graph.edit_dates (или новый permission)",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-05",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/shared/SectionResponsibleInline.tsx",
+        "modules/modals/hooks/useUpdateSection.ts"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "Клик по аватару открывает dropdown с поиском пользователей",
+        "Выбор пользователя мгновенно меняет аватар (optimistic update)",
+        "При ошибке сохранения — возврат + toast",
+        "Dropdown закрывается при клике вне или Escape",
+        "Работает permission check"
+      ],
+      "technicalNotes": {
+        "existingComponents": [
+          "ResponsibleDropdown — можно переиспользовать логику",
+          "useUsers() — hook для списка пользователей",
+          "useUpdateSection — mutation hook"
+        ],
+        "newComponents": [
+          "SectionResponsibleInline — компактный inline-редактор"
+        ],
+        "dataFlow": "Click → Open dropdown → Select user → updateSection mutation → Invalidate cache → UI updates"
+      }
+    },
+    {
+      "id": "RG-016",
+      "title": "Инлайн внесение сроков в раздел (кнопка Разместить)",
+      "description": "Для разделов без указанных сроков добавить возможность 'разместить' раздел на timeline прямо из строки.\n\n## Текущее поведение\n- Если у раздела нет startDate/endDate, он отображается без рамки на timeline\n- Для установки сроков нужно открыть SectionModal → DateRangeInput\n- Drag-resize работает только если сроки уже установлены\n\n## Целевое поведение\n\n### Вариант 1: Кнопка 'Разместить'\n- Если startDate/endDate пустые, в timeline части строки показывать кнопку 'Разместить'\n- При клике открывается popover с двумя date picker'ами (начало + конец)\n- После выбора дат — сохранение через updateSectionDates\n\n### Вариант 2: Click-to-place\n- Если сроки пустые, при клике на timeline в этой строке:\n  - Первый клик устанавливает startDate на дату клика\n  - Появляется временная рамка, следующая за курсором\n  - Второй клик устанавливает endDate\n  - Либо: зажать + drag для выбора диапазона\n\n### Рекомендуемый вариант: Кнопка + Popover\n- Проще в реализации\n- Понятнее для пользователя\n- Меньше edge cases\n\n## UI/UX требования\n- Кнопка 'Разместить' отображается по центру timeline части строки\n- Стиль: ghost button с иконкой Calendar, text-muted-foreground\n- При hover — подсветка amber\n- Popover: тёмная тема, два поля дат рядом\n- Валидация: endDate >= startDate\n- После сохранения: появляется SectionPeriodFrame с возможностью resize\n\n## Технические детали\n- Создать SectionPlaceButton компонент (или PlaceSectionPopover)\n- Использовать существующий updateSectionDates action\n- Позиция кнопки: по центру timeline ячейки\n- Date pickers: использовать существующий DatePicker компонент\n- После сохранения — refetch данных (queryKeys.resourceGraph.list)",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-05",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/shared/PlaceSectionPopover.tsx",
+        "modules/resource-graph/hooks/index.ts"
+      ],
+      "estimatedHours": 5,
+      "acceptanceCriteria": [
+        "Для разделов без сроков отображается кнопка 'Разместить' в timeline",
+        "Клик открывает popover с выбором дат начала и конца",
+        "Валидация: дата окончания не раньше даты начала",
+        "После сохранения появляется SectionPeriodFrame",
+        "SectionPeriodFrame поддерживает drag-resize",
+        "Ошибки отображаются в popover или toast"
+      ],
+      "technicalNotes": {
+        "existingComponents": [
+          "DateRangeInput — можно адаптировать для popover",
+          "updateSectionDates action — уже готов",
+          "useUpdateSectionDates hook — уже готов",
+          "SectionPeriodFrame — рамка с resize handles"
+        ],
+        "newComponents": [
+          "PlaceSectionPopover — popover с date pickers"
+        ],
+        "stateManagement": "После успешного сохранения section.startDate/endDate обновятся через refetch, и вместо кнопки появится SectionPeriodFrame"
+      }
+    },
+    {
+      "id": "RG-017",
+      "title": "Выровнять параметры раздела в сайдбаре по сетке",
+      "description": "Привести sidebar строки раздела (SectionRow) к единому сеточному layout, где все поля занимают фиксированное место независимо от заполненности.\n\n## Текущее поведение\n- Вторая строка sidebar содержит: даты, бюджет, сегодняшние показатели (П/Ф/Б)\n- Элементы выстраиваются в flex row с gap\n- Если бюджет не указан — его место 'схлопывается'\n- Если показатели не в периоде — их нет вообще\n- Это приводит к 'прыганью' элементов между разными разделами\n\n## Целевое поведение\n- Sidebar использует CSS Grid с фиксированными колонками:\n  ```\n  | Даты          | Бюджет      | Показатели П/Ф/Б |\n  | 01.01 - 31.12 | 1.2M BYN    | П:45% Ф:40% Б:30%|\n  ```\n- Каждая колонка имеет min-width\n- Если значение пустое — показывать placeholder или пустое место\n- Все разделы выровнены одинаково\n\n## UI/UX требования\n- Grid layout: `grid-cols-[auto_auto_1fr]` или подобный\n- Минимальные ширины: даты ~120px, бюджет ~80px, показатели ~100px\n- Для пустых значений: либо placeholder ('—'), либо пустое пространство\n- Бюджет: если нет бюджета, показать '—' или скрытую иконку Wallet\n- Показатели: если раздел вне периода, показать прочерки или скрыть колонку\n- Alignment: text-right для числовых значений, text-left для дат\n\n## Альтернативный вариант: двухстрочный layout\n```\nСтрока 1: | Название раздела |\nСтрока 2: | Даты | Бюджет | Показатели |\n```\nКаждая ячейка имеет фиксированную ширину через grid.\n\n## Технические детали\n- Изменить flex на grid в sidebar части SectionRow\n- Определить breakpoints если нужно (для узких экранов)\n- Возможно вынести в отдельный компонент SectionSidebarGrid",
+      "category": "refactor",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-05",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Даты, бюджет и показатели всегда занимают одинаковое место",
+        "При отсутствии бюджета — placeholder или пустое место (не схлопывание)",
+        "При отсутствии показателей — прочерки или пустое место",
+        "Все разделы выровнены одинаково по вертикали",
+        "Числовые значения выровнены по правому краю"
+      ],
+      "technicalNotes": {
+        "currentLayout": "flex items-center gap-2 (вторая строка sidebar)",
+        "proposedLayout": "grid grid-cols-[120px_80px_1fr] gap-2",
+        "placeholders": {
+          "dates": "Даты не указаны (но лучше не показывать вообще если нет)",
+          "budget": "— или скрытая иконка Wallet",
+          "indicators": "П:—% Ф:—% Б:—%"
+        }
+      }
+    },
+    {
+      "id": "RG-018",
+      "title": "Оптимизация загрузки данных разделов (убрать 'Загрузка данных...')",
+      "description": "Убрать строку 'Загрузка данных...' при раскрытии объекта/раздела за счёт предзагрузки данных в фоне.\n\n## Текущее поведение\n- При клике на объект → `useSectionsBatch` начинает загрузку\n- Пока `batchLoading === true`, показывается строка 'Загрузка данных...'\n- Есть частичный prefetch при hover (только для чекпоинтов)\n- staleTime: Infinity (данные кешируются навсегда)\n\n## Проблема\n- Пользователь видит строку загрузки при каждом первом развороте объекта\n- Создаёт ощущение медленной работы\n- Даже при быстром hover и клике — не успевает прогрузиться\n\n## Анализ вариантов\n\n### Вариант 1: Eager Loading (Жадная загрузка) ❌\n- Грузить batch данные для ВСЕХ объектов сразу при загрузке графика\n- Плюсы: нет задержки при развороте\n- Минусы: огромная начальная загрузка, много лишних данных\n- Вердикт: НЕ подходит для больших проектов\n\n### Вариант 2: Background Prefetch ✅ РЕКОМЕНДУЕТСЯ\n- После загрузки основных данных графика, в фоне грузить batch данные\n- Приоритизация: первые N объектов (видимые на экране)\n- Используем `queryClient.prefetchQuery` в idle time\n- Плюсы: нет задержки для пользователя, оптимальная нагрузка\n- Минусы: сложнее в реализации\n\n### Вариант 3: Prefetch on Hover ✅ В ДОПОЛНЕНИЕ\n- Расширить существующий prefetch при hover на весь `useSectionsBatch`\n- Сейчас: только чекпоинты через `prefetchForSections`\n- Нужно: добавить `prefetchQuery` для `queryKeys.resourceGraph.sectionsBatch(objectId)`\n- Плюсы: мгновенный результат для вдумчивых пользователей\n- Минусы: не помогает при быстром клике\n\n### Вариант 4: Skeleton UI ✅ В ДОПОЛНЕНИЕ\n- Вместо строки 'Загрузка данных...' показывать skeleton разделов\n- Плюсы: лучший UX, ощущение скорости\n- Минусы: не решает проблему, только маскирует\n\n## Рекомендуемое решение: Вариант 2 + 3 + 4\n\n### Шаг 1: Prefetch on Hover (быстрая победа)\n```typescript\n// ObjectRow.tsx - расширить handleMouseEnter\nconst handleMouseEnter = useCallback(() => {\n  if (!isExpanded && sectionIds.length > 0) {\n    // Существующий prefetch чекпоинтов\n    prefetchForSections(sectionIds)\n    prefetchProjectSections(object.sections[0].id)\n    \n    // НОВОЕ: prefetch batch данных\n    queryClient.prefetchQuery({\n      queryKey: queryKeys.resourceGraph.sectionsBatch(object.id),\n      queryFn: () => getSectionsBatchData(sectionIds),\n      staleTime: Infinity,\n    })\n  }\n}, [...])\n```\n\n### Шаг 2: Background Prefetch (основное решение)\n```typescript\n// hooks/usePrefetchSectionsBatch.ts\nexport function usePrefetchSectionsBatch(objects: ProjectObject[]) {\n  const queryClient = useQueryClient()\n  \n  useEffect(() => {\n    // Ждём idle time браузера\n    const prefetchNext = () => {\n      requestIdleCallback(() => {\n        // Берём первые N объектов которые ещё не в кеше\n        const toPrefetch = objects\n          .filter(obj => {\n            const cached = queryClient.getQueryData(\n              queryKeys.resourceGraph.sectionsBatch(obj.id)\n            )\n            return !cached && obj.sections.length > 0\n          })\n          .slice(0, 3) // Batch по 3 объекта\n        \n        toPrefetch.forEach(obj => {\n          queryClient.prefetchQuery({\n            queryKey: queryKeys.resourceGraph.sectionsBatch(obj.id),\n            queryFn: () => getSectionsBatchData(obj.sections.map(s => s.id)),\n            staleTime: Infinity,\n          })\n        })\n        \n        // Продолжаем если есть ещё\n        if (toPrefetch.length > 0) {\n          setTimeout(prefetchNext, 1000) // Пауза между батчами\n        }\n      })\n    }\n    \n    // Начинаем через 2 секунды после загрузки графика\n    const timer = setTimeout(prefetchNext, 2000)\n    return () => clearTimeout(timer)\n  }, [objects, queryClient])\n}\n```\n\n### Шаг 3: Skeleton UI вместо 'Загрузка данных...'\n```typescript\n// Заменить строку загрузки на skeleton разделов\n{batchLoading && (\n  <>\n    {section.decompositionStages.slice(0, 3).map((stage, i) => (\n      <div key={i} className=\"animate-pulse h-10 bg-muted/20 border-b\" />\n    ))}\n  </>\n)}\n```\n\n## Технические детали\n- Использовать `requestIdleCallback` для фоновой загрузки\n- Fallback на `setTimeout` для Safari\n- Не блокировать UI при prefetch\n- Ограничить concurrent prefetch (max 3 объекта одновременно)\n- Инвалидация через Realtime работает как прежде",
+      "category": "performance",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-05",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/ObjectRow.tsx",
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/hooks/usePrefetchSectionsBatch.ts",
+        "modules/resource-graph/hooks/index.ts",
+        "modules/resource-graph/components/ResourceGraph.tsx"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "Строка 'Загрузка данных...' больше не появляется (или появляется редко)",
+        "При hover на кнопку развёртывания начинается prefetch",
+        "Фоновая загрузка первых N объектов после initial load",
+        "Skeleton UI показывается вместо текста при загрузке",
+        "Нет деградации производительности на больших проектах",
+        "requestIdleCallback с fallback на setTimeout"
+      ],
+      "technicalNotes": {
+        "currentPrefetch": "Только чекпоинты при hover (prefetchForSections, prefetchProjectSections)",
+        "targetPrefetch": "Весь useSectionsBatch + фоновая предзагрузка",
+        "cacheStrategy": "staleTime: Infinity — данные не устаревают, обновляются через Realtime",
+        "prioritization": "Первые объекты (видимые) → остальные в idle time",
+        "browserSupport": "requestIdleCallback с fallback на setTimeout для Safari"
+      }
+    },
+    {
+      "id": "RG-019",
+      "title": "Упростить кнопку Разместить - авто-размещение на 10 дней",
+      "description": "При нажатии кнопки 'Разместить' автоматически устанавливать даты раздела: от сегодня на 10 дней вперёд, без открытия popover выбора дат.\n\n## Проблема\nPopover выбора дат в InlineDateRangeSelect выходит за пределы sticky sidebar и 'теряется'.\n\n## Решение\nВместо popover - мгновенное сохранение дат: startDate = today, endDate = today + 10 days.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "completedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/shared/InlineDateRangeSelect.tsx"
+      ],
+      "estimatedHours": 0.5
+    },
+    {
+      "id": "RG-020",
+      "title": "Убрать инлайн выбор ответственного - открывать модалку",
+      "description": "Заменить InlineResponsibleSelect на открытие SectionModal при клике на аватар.\n\n## Проблема\nDropdown с поиском пользователей выходит за пределы sticky sidebar и 'теряется'.\n\n## Решение\nПри клике на аватар открывать SectionModal, где можно изменить ответственного через полноценный UI.",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "completedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/shared/InlineResponsibleSelect.tsx"
+      ],
+      "estimatedHours": 0.5
+    },
+    {
+      "id": "RG-021",
+      "title": "[Bug] Элементы timeline просвечивают через sticky sidebar",
+      "description": "Элементы графика (ручки перетаскивания сроков раздела, чекпоинты, tooltips) просвечивают через sticky sidebar при горизонтальном скролле.\n\n## Проблема\nНа скриншоте видно что:\n- Оранжевые ручки перетаскивания дат раздела видны поверх сайдбара\n- Чекпоинты (голубые маркеры) просвечивают\n- Tooltips чекпоинтов ('Чекпоинт') отображаются поверх сайдбара\n\n## Причина\nz-index элементов timeline выше чем z-index sticky sidebar, либо sidebar не имеет background.\n\n## Решение\n1. Добавить/увеличить z-index для sticky sidebar\n2. Убедиться что sidebar имеет solid background (не transparent)\n3. Проверить что все interactive элементы timeline имеют z-index ниже sidebar",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-06",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/ResourceGraphTimeline.tsx",
+        "modules/resource-graph/components/timeline/shared/index.ts"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "Ручки перетаскивания дат НЕ видны поверх сайдбара при скролле",
+        "Чекпоинты НЕ просвечивают через сайдбар",
+        "Tooltips скрываются под сайдбаром при скролле",
+        "Sidebar имеет solid background"
+      ]
+    },
+    {
+      "id": "RG-022",
+      "title": "[Bug] Элементы просвечивают в щелях между строками",
+      "description": "В промежутках (gaps) между строками разделов видны элементы из соседних строк.\n\n## Проблема\nПри скролле или при определённом положении элементы timeline (графики, чекпоинты) видны в щелях между строками.\n\n## Причина\nВозможно:\n1. Строки имеют gap/margin без background\n2. border-b создаёт щель без перекрытия\n3. Элементы имеют overflow: visible и выходят за границы строки\n\n## Решение\n1. Убедиться что каждая строка имеет solid background на всю высоту\n2. Добавить overflow: hidden для timeline части строки\n3. Или использовать negative margin для перекрытия",
+      "category": "bug",
+      "priority": "medium",
+      "status": "done",
+      "completedAt": "2026-01-06",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/rows/ObjectRow.tsx",
+        "modules/resource-graph/components/timeline/rows/ProjectRow.tsx"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "Элементы НЕ просвечивают между строками",
+        "Строки имеют solid background без щелей",
+        "При скролле нет визуальных артефактов"
+      ]
+    },
+    {
+      "id": "RG-023",
+      "title": "Кнопка 'Разместить' для этапа декомпозиции",
+      "description": "Добавить кнопку 'Разместить' для этапов декомпозиции без дат, аналогично разделам.\n\n## Текущее поведение\n- Для разделов без дат есть кнопка 'Разместить' которая устанавливает даты от сегодня на 10 дней\n- Для этапов декомпозиции такой кнопки нет\n\n## Целевое поведение\n- Если у этапа нет startDate/finishDate, показывать кнопку 'Разместить'\n- При клике: startDate = today, finishDate = today + 10 days\n- Стиль кнопки идентичен кнопке в SectionRow\n\n## Реализация\nПереиспользовать логику из SectionRow → InlineDateRangeSelect, адаптировать для DecompositionStageRow.",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/actions/index.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Для этапов без дат отображается кнопка 'Разместить'",
+        "Клик устанавливает даты: today → today+10 days",
+        "После размещения появляется рамка с возможностью resize",
+        "Стиль кнопки соответствует кнопке в SectionRow"
+      ]
+    },
+    {
+      "id": "RG-024",
+      "title": "[Bug] Модалка этапа: даты вылезают за экран",
+      "description": "В модалке этапа декомпозиции (DecompositionStageModal) поля дат вылезают за границы экрана и создают горизонтальный скролл.\n\n## Проблема\n- DateRangePicker или отдельные поля дат слишком широкие\n- Не вписываются в ширину модалки\n- Появляется горизонтальный скролл в модалке\n\n## Решение\n1. Использовать responsive layout для полей дат\n2. На мобильных/узких экранах размещать даты вертикально\n3. Ограничить max-width input полей\n4. Использовать compact date format если нужно",
+      "category": "bug",
+      "priority": "high",
+      "status": "done",
+      "completedAt": "2026-01-06",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/modals/components/stage/DecompositionStageModal.tsx"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "Даты полностью видны в модалке без горизонтального скролла",
+        "На узких экранах layout адаптируется",
+        "Модалка не создаёт overflow на body"
+      ]
+    },
+    {
+      "id": "RG-025",
+      "title": "[Research] Загрузка чекпоинтов вместе с данными раздела",
+      "description": "Проанализировать возможность загрузки чекпоинтов в составе getSectionsBatchData вместо отдельного запроса.\n\n## Текущее поведение\n- Чекпоинты загружаются отдельным запросом useCheckpoints(sectionId)\n- Есть prefetch через usePrefetchCheckpoints\n- Это создаёт дополнительный round-trip к серверу\n\n## Вопросы для исследования\n1. Насколько увеличится payload getSectionsBatchData при добавлении чекпоинтов?\n2. Можно ли добавить чекпоинты в view_section_checkpoints как часть batch query?\n3. Какой прирост производительности даст объединение запросов?\n4. Не сломает ли это существующую логику prefetch?\n\n## План анализа\n1. Измерить текущее время загрузки чекпоинтов отдельно\n2. Проверить структуру getSectionsBatchData\n3. Попробовать добавить чекпоинты в batch\n4. Измерить разницу в производительности\n5. Оценить сложность рефакторинга",
+      "category": "research",
+      "priority": "low",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-06",
+      "updatedAt": "2026-01-06",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/actions/index.ts",
+        "modules/resource-graph/hooks/index.ts",
+        "modules/checkpoints/hooks/index.ts"
+      ],
+      "estimatedHours": 2,
+      "deliverables": [
+        "Отчёт с замерами производительности",
+        "Рекомендация: объединять или оставить раздельно",
+        "План рефакторинга (если объединять)"
+      ]
+    },
+    {
+      "id": "RG-026",
+      "title": "[Bug] Аватар пользователя отображает 'UNDEFINED' вместо инициалов",
+      "description": "На вкладке 'Отделы' внутри команды ГР-2 на аватарке пользователя vladimir.nesterovich@enecagroup.com отображается текст 'UNDEFINED' вместо аватара или инициалов имени.\n\n## Проблема\n- В компоненте Avatar fallback показывает строку 'UNDEFINED'\n- Ожидается: либо аватар пользователя (если есть), либо первые буквы имени (например 'ВН' для Владимира Нестеровича)\n\n## Воспроизведение\n1. Открыть страницу /dashboard/tasks\n2. Перейти на вкладку 'Отделы'\n3. Открыть команду ГР-2\n4. Найти пользователя vladimir.nesterovich@enecagroup.com\n5. Наблюдать: на аватарке отображается 'UNDEFINED'\n\n## Возможные причины\n1. Поле `name` или `display_name` у пользователя не заполнено в БД\n2. Компонент AvatarFallback получает `undefined` вместо строки инициалов\n3. Функция генерации инициалов возвращает undefined при пустом имени\n4. Отсутствует fallback на email при пустом имени\n\n## Решение\n1. Проверить данные пользователя в таблице profiles (полнота полей name, display_name, email)\n2. Добавить fallback в компонент Avatar: если имя пустое, использовать email для генерации инициалов\n3. Добавить защиту в функцию генерации инициалов: возвращать первые 2 буквы email если имя отсутствует\n4. Пример: 'vladimir.nesterovich@enecagroup.com' → 'VN'",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/SectionRow.tsx",
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/components/timeline/LoadingBadges.tsx",
+        "modules/resource-graph/components/timeline/LoadingBars.tsx",
+        "shared/components/Avatar.tsx",
+        "shared/utils/getInitials.ts"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "Аватар НЕ показывает 'UNDEFINED' ни при каких обстоятельствах",
+        "Если имя пользователя пустое, используются инициалы из email",
+        "Для vladimir.nesterovich@enecagroup.com отображается корректный fallback (инициалы или аватар)",
+        "Все аватары в модуле resource-graph корректно отображают инициалы"
+      ]
+    },
+    {
+      "id": "RG-027",
+      "title": "[Bug] При hover на строку сотрудника пропадает отображение выходных и сегодняшнего дня",
+      "description": "При наведении курсора на строку сотрудника (DecompositionStageRow с загрузками) пропадает цветовое выделение выходных дней и сегодняшнего дня на timeline.\n\n## Проблема\n- TimelineGrid отображает фоны для выходных (серый/amber) и сегодняшнего дня (primary)\n- При hover на строку DecompositionStageRow эти фоны пропадают\n- Пользователь теряет визуальную ориентацию по датам во время наведения\n\n## Ожидаемое поведение\n- При hover на строку команды или отдела фоны выходных и сегодняшнего дня сохраняются\n- Hover эффект должен быть виден, но НЕ должен перекрывать фоновые индикаторы дат\n- Аналогично поведению в ProjectRow, ObjectRow, SectionRow\n\n## Возможные причины\n1. Строка DecompositionStageRow имеет класс 'group' но не имеет явного hover:bg-* стиля\n2. Возможно применяется глобальный CSS для .group:hover который перекрывает TimelineGrid\n3. z-index TimelineGrid ниже чем hover overlay\n4. Hover эффект использует непрозрачный фон вместо полупрозрачного\n\n## Решение\n1. Проверить есть ли hover:bg-* на строке DecompositionStageRow\n2. Если есть hover эффект, убедиться что он использует полупрозрачный фон (bg-muted/10 вместо bg-muted)\n3. Или применить hover эффект только к sidebar части, не затрагивая timeline область\n4. Проверить z-index: TimelineGrid должен быть выше hover overlay\n5. Альтернативно: применить pointer-events-none к TimelineGrid и mix-blend-mode для корректного наложения",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/resource-graph/components/timeline/rows/DecompositionStageRow.tsx",
+        "modules/resource-graph/components/timeline/shared/TimelineGrid.tsx",
+        "modules/resource-graph/components/timeline/rows/BaseRow.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "При hover на строку сотрудника фоны выходных дней остаются видимыми",
+        "При hover на строку сотрудника фон сегодняшнего дня остаётся видимым",
+        "Hover эффект на строку всё ещё виден (например, на sidebar части)",
+        "Поведение консистентно со всеми другими типами строк (ProjectRow, ObjectRow, SectionRow)",
+        "UX: пользователь не теряет визуальную ориентацию по датам при наведении"
+      ]
+    },
+    {
+      "id": "RG-028",
+      "title": "[Bug] Модалка актуализации данных не соответствует теме пользователя",
+      "description": "При нажатии на точку актуальности (FreshnessIndicator) для актуализации данных модальное окно отображается в светлой теме, хотя пользователь работает в тёмной теме.\n\n## Проблема\n- Пользователь работает в тёмной теме\n- При клике на точку актуальности открывается модалка 'Актуализировать данные?'\n- Модалка отображается в светлой теме (белый фон, тёмный текст)\n- Это создаёт визуальный диссонанс и плохой UX\n\n## Ожидаемое поведение\n- Модалка должна соответствовать текущей теме пользователя\n- Если пользователь в тёмной теме → модалка тёмная\n- Если пользователь в светлой теме → модалка светлая\n\n## Причина\n- В TeamRow.tsx на строке 102: `theme=\"light\"` - хардкод светлой темы\n- В DepartmentRow.tsx аналогичная проблема\n- Нужно передавать актуальную тему пользователя из useTheme() или аналога\n\n## Решение\n1. Импортировать useTheme() hook в TeamRow.tsx и DepartmentRow.tsx\n2. Получить текущую тему: `const { theme } = useTheme()`\n3. Передать динамическую тему в FreshnessIndicator:\n   ```typescript\n   <FreshnessIndicator\n     theme={theme === 'dark' ? 'dark' : 'light'}\n     // ... other props\n   />\n   ```\n4. Убедиться что все места использования FreshnessIndicator обновлены",
+      "category": "bug",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/departments-timeline/components/timeline/TeamRow.tsx",
+        "modules/departments-timeline/components/timeline/DepartmentRow.tsx"
+      ],
+      "estimatedHours": 1,
+      "acceptanceCriteria": [
+        "Модалка актуализации отображается в тёмной теме когда пользователь в тёмной теме",
+        "Модалка актуализации отображается в светлой теме когда пользователь в светлой теме",
+        "Тема модалки переключается автоматически при смене темы пользователем",
+        "Все использования FreshnessIndicator используют динамическую тему"
+      ]
+    },
+    {
+      "id": "RG-029",
+      "title": "[Bug] Точка актуальности не обновляется после подтверждения актуализации",
+      "description": "После подтверждения актуализации данных в модалке точка актуальности (FreshnessIndicator) не меняет свой цвет до перезагрузки страницы.\n\n## Проблема\n- Точка актуальности жёлтая/красная (данные устарели на 3+ дней)\n- Пользователь нажимает на точку → открывается модалка 'Актуализировать данные?'\n- Пользователь нажимает 'Подтвердить'\n- Модалка закрывается, но точка остаётся жёлтой/красной\n- Только после полной перезагрузки страницы (F5) точка становится зелёной\n\n## Ожидаемое поведение\n- После нажатия 'Подтвердить' точка должна мгновенно стать зелёной\n- daysSinceUpdate должен обновиться до 0\n- lastUpdate должен обновиться до текущей даты/времени\n- Не должна требоваться перезагрузка страницы\n\n## Причина\n- В FreshnessIndicator.tsx после успешного подтверждения (строка 198) просто закрывается модалка\n- Нет optimistic update локального состояния компонента\n- Нет invalidation кэша React Query для обновления данных из БД\n- Компонент продолжает рендерить старые props `daysSinceUpdate` до следующего refetch\n\n## Решение\n\n### Вариант 1: Invalidation кэша (рекомендуется)\n1. После успешного onConfirm вызвать invalidation:\n   ```typescript\n   if (result.success) {\n     await queryClient.invalidateQueries({ \n       queryKey: ['departmentsTimeline'] \n     })\n     onClose()\n   }\n   ```\n2. React Query автоматически перезапросит данные\n3. Компонент получит новые props с обновлённым daysSinceUpdate\n\n### Вариант 2: Optimistic update\n1. Добавить локальное состояние в FreshnessIndicator:\n   ```typescript\n   const [optimisticUpdate, setOptimisticUpdate] = useState<Date | null>(null)\n   const effectiveDaysSinceUpdate = optimisticUpdate ? 0 : daysSinceUpdate\n   ```\n2. После подтверждения установить optimisticUpdate:\n   ```typescript\n   if (result.success) {\n     setOptimisticUpdate(new Date())\n     onClose()\n   }\n   ```\n\n### Вариант 3: Callback с новыми данными\n1. onConfirm возвращает новые данные:\n   ```typescript\n   onConfirm: (teamId) => Promise<{ \n     success: boolean\n     data?: { daysSinceUpdate: number, lastUpdate: Date }\n   }>\n   ```\n2. Родительский компонент обновляет state",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "components/shared/timeline/FreshnessIndicator.tsx",
+        "modules/departments-timeline/hooks/index.ts",
+        "modules/departments-timeline/components/timeline/TeamRow.tsx",
+        "modules/departments-timeline/components/timeline/DepartmentRow.tsx"
+      ],
+      "estimatedHours": 2,
+      "acceptanceCriteria": [
+        "После нажатия 'Подтвердить' точка актуальности мгновенно становится зелёной",
+        "Не требуется перезагрузка страницы для обновления цвета точки",
+        "daysSinceUpdate обновляется до 0 сразу после подтверждения",
+        "lastUpdate обновляется до текущей даты/времени сразу после подтверждения",
+        "Tooltip точки показывает 'Обновлено сегодня' сразу после подтверждения",
+        "Если актуализация не удалась (ошибка сервера), точка остаётся в прежнем состоянии"
+      ]
+    },
+    {
+      "id": "RG-030",
+      "title": "[Bug] Фильтры по проекту, ответственному и метке не работают на вкладке Отделы",
+      "description": "На вкладке 'Отделы' фильтры по проекту, ответственному и метке не применяются — отображаются все отделы и команды, хотя ожидается фильтрация только задействованных отделов/команд/сотрудников.\n\n## Проблема 1: Фильтр по проекту\n- Пользователь выбирает проект в InlineFilter на вкладке 'Отделы'\n- Timeline отображает все отделы, команды и сотрудников\n- Ожидается: должны отображаться только те отделы/команды/сотрудники, у которых есть загрузки (loadings) в выбранном проекте\n\n## Проблема 2: Фильтр по ответственному (responsible_id)\n- Пользователь выбирает конкретного сотрудника в фильтре\n- Timeline отображает все отделы и команды\n- Ожидается: должны отображаться только отдел и команда, в которых работает этот сотрудник\n- ПРИМЕЧАНИЕ: Сам сотрудник фильтруется корректно (строка 181-187), НО его отдел и команда всё равно показывают всех остальных сотрудников\n\n## Проблема 3: Фильтр по метке (tag_id)\n- Пользователь выбирает метку проекта в фильтре\n- Timeline отображает все отделы и команды\n- Ожидается: должны отображаться только отделы/команды/сотрудники, работающие над проектами с этой меткой\n- ПРИМЕЧАНИЕ: Фильтр по метке вообще не реализован в getDepartmentsData\n\n## Воспроизведение\n\n### Для фильтра по проекту:\n1. Открыть страницу /dashboard/tasks\n2. Перейти на вкладку 'Отделы'\n3. В InlineFilter выбрать конкретный проект (например, 'Проект А')\n4. Наблюдать: отображаются все отделы, а не только те, что работают над 'Проект А'\n\n### Для фильтра по ответственному:\n1. В InlineFilter выбрать конкретного сотрудника (например, 'Иванов Иван')\n2. Наблюдать: отображаются все отделы и все сотрудники в командах, хотя должна быть видна только команда Иванова\n\n### Для фильтра по метке:\n1. В InlineFilter выбрать метку проекта (например, 'Срочно')\n2. Наблюдать: отображаются все отделы, фильтр не применяется\n\n## Причина\nВ getDepartmentsData (modules/departments-timeline/actions/index.ts) отсутствует корректная обработка фильтров:\n\n### Для проекта:\n- Строки 94-148: есть фильтры по subdivision_id, department_id, team_id, но НЕТ project_id\n- Строки 161-188: employeeQuery фильтруется по department/team/responsible, но НЕ по project_id\n- Загрузки (loadings) в view_employee_workloads содержат project_id, но фильтр не применяется\n\n### Для ответственного:\n- Строка 181-187: фильтр по responsible_id ЕСТЬ и работает для employeeQuery\n- НО orgQuery (строка 92-150) НЕ фильтруется по ответственному\n- Результат: возвращаются все команды и отделы, даже если в них нет отфильтрованных сотрудников\n\n### Для метки:\n- Фильтр по tag_id вообще не реализован\n- Нужно джойнить project_tag_links для получения проектов с меткой\n- Затем фильтровать loadings по этим проектам\n\n## Решение\n\n### Для проекта (project_id):\n```typescript\n// После строки 165 в employeeQuery\nif (secureFilters?.project_id) {\n  if (isUuid(secureFilters.project_id)) {\n    employeeQuery = employeeQuery.eq('project_id', secureFilters.project_id)\n  } else {\n    employeeQuery = employeeQuery.ilike('project_name', `%${secureFilters.project_id}%`)\n  }\n}\n```\n\n### Для метки (tag_id):\n```typescript\n// После фильтра по project_id\nif (secureFilters?.tag_id) {\n  // Получаем проекты с этой меткой\n  const { data: taggedProjects } = await supabase\n    .from('project_tag_links')\n    .select('project_id')\n    .eq('tag_id', secureFilters.tag_id)\n  \n  const projectIds = taggedProjects?.map(p => p.project_id) || []\n  if (projectIds.length > 0) {\n    employeeQuery = employeeQuery.in('project_id', projectIds)\n  } else {\n    return { success: true, data: [] }\n  }\n}\n```\n\n### Для всех фильтров: Очистка пустых элементов\nПосле сборки иерархии (после строки 332) удалить пустые команды и отделы:\n```typescript\n// Удаляем команды без сотрудников\ndepartments.forEach((dept) => {\n  dept.teams = dept.teams.filter(team => team.employees.length > 0)\n})\n\n// Удаляем отделы без команд\nconst filteredDepartments = departments.filter(dept => dept.teams.length > 0)\n\nreturn { success: true, data: filteredDepartments }\n```\n\nЭто решит проблему с ответственным: если у команды не осталось сотрудников после фильтрации, команда не отобразится.\n\n## Дополнительные проверки\n- Убедиться что view_employee_workloads содержит корректный project_id для всех загрузок\n- Протестировать фильтрацию по UUID проекта и по названию проекта\n- Протестировать фильтр по ответственному: должна отображаться только его команда\n- Протестировать фильтр по метке: должны отображаться только проекты с этой меткой\n- Проверить что при сбросе фильтра отображаются все отделы обратно\n- Протестировать комбинацию фильтров (проект + ответственный)",
+      "category": "bug",
+      "priority": "high",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-08",
+      "updatedAt": "2026-01-08",
+      "blockedBy": [],
+      "blocks": [],
+      "affectedFiles": [
+        "modules/departments-timeline/actions/index.ts"
+      ],
+      "estimatedHours": 4,
+      "acceptanceCriteria": [
+        "ПРОЕКТ: При выборе проекта отображаются только отделы/команды с загрузками в этом проекте",
+        "ПРОЕКТ: Фильтрация работает как по UUID проекта, так и по названию проекта",
+        "ПРОЕКТ: dailyWorkloads корректно вычисляются только для загрузок выбранного проекта",
+        "ОТВЕТСТВЕННЫЙ: При выборе сотрудника отображается только его отдел и команда",
+        "ОТВЕТСТВЕННЫЙ: В команде отображается только выбранный сотрудник, остальные скрыты",
+        "ОТВЕТСТВЕННЫЙ: Фильтрация работает как по UUID сотрудника, так и по имени",
+        "МЕТКА: При выборе метки отображаются только отделы/команды, работающие над проектами с этой меткой",
+        "МЕТКА: Фильтр корректно работает с project_tag_links",
+        "ОБЩЕЕ: Пустые отделы/команды не отображаются при активных фильтрах",
+        "ОБЩЕЕ: При сбросе фильтров отображаются все отделы обратно",
+        "ОБЩЕЕ: Комбинация фильтров работает корректно (например, проект + ответственный)",
+        "ОБЩЕЕ: dailyWorkloads корректно агрегируются только для отфильтрованных данных"
+      ]
+    },
+    {
+      "id": "RG-AUDIT",
+      "title": "Full Module Audit: Resource Graph",
+      "description": "Полный аудит модуля resource-graph для подтверждения качества перед production.\n\nАудит включает проверку: базы данных, безопасности, бизнес-логики, производительности, качества кода и кэширования.",
+      "category": "audit",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-01-05",
+      "updatedAt": "2026-01-05",
+      "blockedBy": [],
+      "blocks": [],
+      "estimatedHours": 8,
+      "checklist": {
+        "database": [
+          "[ ] Проверить v_resource_graph на N+1 (нет ли вложенных SELECT)",
+          "[ ] Проверить индексы на часто фильтруемых полях (project_id, section_id, dates)",
+          "[ ] Убедиться что JOIN'ы оптимальны (EXPLAIN ANALYZE на типичных запросах)",
+          "[ ] Проверить что не грузятся лишние поля (SELECT * vs SELECT needed_fields)",
+          "[ ] Проверить время выполнения getSectionsBatchData < 200ms",
+          "[ ] Проверить что loadings грузятся эффективно (batch, не по одной)"
+        ],
+        "security": [
+          "[ ] Все Server Actions имеют auth check (getUser())",
+          "[ ] RLS policies покрывают: projects, sections, loadings, checkpoints",
+          "[ ] Zod validation на всех входных данных",
+          "[ ] Нет hardcoded IDs или secrets",
+          "[ ] Permission checks в UI (resource_graph.view, resource_graph.edit_*)"
+        ],
+        "businessLogic": [
+          "[ ] Проценты готовности (П/Ф/Б) считаются корректно для разделов",
+          "[ ] Агрегация вверх по иерархии правильная (item → stage → section → object → project)",
+          "[ ] Даты периодов отображаются корректно (timezone Europe/Minsk)",
+          "[ ] Бюджет раздела = сумма бюджетов этапов + собственный",
+          "[ ] Плановые часы раздела = сумма часов задач (с коэффициентами сложности)",
+          "[ ] Фактические часы = сумма work_logs за период",
+          "[ ] Чекпоинты отображаются в правильных позициях на timeline",
+          "[ ] Вертикальные связи чекпоинтов рендерятся корректно",
+          "[ ] Drag-resize дат работает и сохраняет корректно",
+          "[ ] Edge case: раздел без этапов отображается корректно",
+          "[ ] Edge case: раздел без дат показывает 'Разместить'",
+          "[ ] Edge case: пустой проект (без объектов) не ломает UI"
+        ],
+        "performance": [
+          "[ ] Начальная загрузка графика < 2 сек",
+          "[ ] Раскрытие объекта < 500ms (с prefetch < 100ms)",
+          "[ ] Нет лишних ре-рендеров при скролле (React DevTools Profiler)",
+          "[ ] Timeline скроллится плавно (60fps)",
+          "[ ] Virtualization работает для больших проектов (>50 разделов)",
+          "[ ] Loading states показываются во всех async операциях",
+          "[ ] Optimistic updates работают для всех мутаций"
+        ],
+        "codeQuality": [
+          "[ ] Нет `any` в TypeScript (strict mode)",
+          "[ ] Все компоненты < 400 строк",
+          "[ ] Нет дублирования кода между Row компонентами",
+          "[ ] Все utils покрыты JSDoc комментариями",
+          "[ ] Naming conventions соблюдены (camelCase, PascalCase)",
+          "[ ] Нет console.log в production коде",
+          "[ ] Все TODO помечены и задокументированы"
+        ],
+        "cache": [
+          "[ ] Query keys структурированы правильно (queryKeys.resourceGraph.*)",
+          "[ ] staleTime/gcTime адекватны для типа данных",
+          "[ ] Cache invalidation работает при мутациях",
+          "[ ] Realtime подписки чистятся при unmount",
+          "[ ] Нет stale data после обновлений",
+          "[ ] Prefetch работает при hover на expand buttons"
+        ]
+      },
+      "auditProcedure": [
+        "1. Запустить npm run build — должен пройти без ошибок",
+        "2. Открыть /dashboard/tasks, вкладка 'График'",
+        "3. Открыть DevTools → Network, проверить количество запросов",
+        "4. Открыть DevTools → Performance, записать загрузку страницы",
+        "5. Раскрыть несколько объектов, проверить время загрузки",
+        "6. Проверить Console на ошибки и warnings",
+        "7. Протестировать все interactive элементы (drag, resize, click)",
+        "8. Проверить с разными ролями пользователей"
+      ]
+    }
+  ],
+
+  "changelog": [
+    {
+      "version": "2.0.6",
+      "date": "2026-01-06",
+      "changes": [
+        "[RG-021] Исправлено просвечивание элементов timeline через sticky sidebar (z-index: z-20 → z-40)",
+        "[RG-022] Исправлено просвечивание элементов между строками (добавлен overflow-hidden + isolate)",
+        "[RG-024] Исправлена верстка модалки этапа — даты теперь не вылезают за экран"
+      ]
+    },
+    {
+      "version": "2.0.5",
+      "date": "2026-01-06",
+      "changes": [
+        "[RG-019] Упрощена кнопка 'Разместить' — авто-размещение от сегодня на 10 дней без popover",
+        "[RG-020] Убран инлайн выбор ответственного — теперь открывается модалка раздела",
+        "Оптимистичный рендер: рамка раздела появляется мгновенно при размещении",
+        "Авто-создание плана: при размещении создаются контрольные точки 0% и 100%"
+      ]
+    },
+    {
+      "version": "2.0.4",
+      "date": "2026-01-05",
+      "changes": [
+        "[RG-015] Инлайн назначение ответственного за раздел",
+        "[RG-016] Инлайн внесение сроков в раздел (кнопка Разместить с popover)",
+        "[RG-017] Выравнивание параметров раздела в сайдбаре по CSS Grid",
+        "[RG-018] Оптимизация загрузки данных разделов (prefetch + skeleton)",
+        "[RG-012] Компактная модалка раздела в Resource Graph стиле (amber акценты)",
+        "[RG-009] Кнопка развернуть всё до разделов",
+        "[RG-011] Унификация кнопок развернуть/свернуть (button group с разделителями)"
+      ]
+    },
+    {
+      "version": "2.0.3",
+      "date": "2025-01-05",
+      "changes": [
+        "[RG-014] Добавлено отображение бюджета задачи в TaskSidebar и DecompositionItemRow"
+      ]
+    },
+    {
+      "version": "2.0.2",
+      "date": "2025-01-05",
+      "changes": [
+        "[RG-005] Добавлен индикатор прироста прогресса в строках задач (item_progress_history + UI бейдж)"
+      ]
+    },
+    {
+      "version": "2.0.1",
+      "date": "2025-01-05",
+      "changes": [
+        "[RG-001] Исправлен рендеринг вертикальных связей чекпоинтов при expand/collapse строк"
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "date": "2025-01-01",
+      "changes": [
+        "Полный рефакторинг на Server Actions",
+        "Интеграция с cache module",
+        "Batch загрузка данных секций",
+        "Realtime синхронизация через Supabase"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2024-10-01",
+      "changes": [
+        "Initial release",
+        "Timeline визуализация",
+        "Иерархия Project → Object → Section",
+        "Загрузки сотрудников"
+      ]
+    }
+  ]
+}

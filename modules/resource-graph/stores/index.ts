@@ -6,7 +6,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { Building2, Users, FolderKanban, Tag } from 'lucide-react'
+import { Building2, Users, FolderKanban, Tag, CircleDot } from 'lucide-react'
 import type { TimelineScale, DisplaySettings, TreeNodeType } from '../types'
 import { DEFAULT_DISPLAY_SETTINGS } from '../constants'
 import type { FilterConfig, FilterQueryParams } from '@/modules/inline-filter'
@@ -43,8 +43,14 @@ export const RESOURCE_GRAPH_FILTER_CONFIG: FilterConfig = {
       icon: Tag,
       color: 'emerald',
     },
+    'статус проекта': {
+      field: 'project_status',
+      label: 'Статус проекта',
+      icon: CircleDot,
+      color: 'cyan',
+    },
   },
-  placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название"',
+  placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название" статус проекта:"active"',
 }
 
 // ============================================================================
@@ -145,6 +151,9 @@ export const useFiltersStore = create<FiltersState>()(
 // UI State Store
 // ============================================================================
 
+/** Формат для сериализации expandedNodes в localStorage */
+type SerializedExpandedNodes = Record<TreeNodeType, string[]>
+
 interface UIState {
   /** Развёрнутые узлы по типу */
   expandedNodes: Record<TreeNodeType, Set<string>>
@@ -153,13 +162,21 @@ interface UIState {
   /** Тип выбранного элемента */
   selectedItemType: TreeNodeType | null
 
+  // Check operations
+  isExpanded: (type: TreeNodeType, id: string) => boolean
+
   // Toggle operations
   toggleNode: (type: TreeNodeType, id: string) => void
   expandNode: (type: TreeNodeType, id: string) => void
   collapseNode: (type: TreeNodeType, id: string) => void
 
+  // Batch operations (эффективнее чем множество expandNode)
+  batchExpand: (nodes: Array<{ type: TreeNodeType; id: string }>) => void
+  batchCollapse: (nodes: Array<{ type: TreeNodeType; id: string }>) => void
+
   // Bulk operations
-  expandAll: (type?: TreeNodeType) => void
+  expandAll: (nodesByType: Partial<Record<TreeNodeType, string[]>>) => void
+  expandToSections: (nodesByType: { project: string[]; object: string[] }) => void
   collapseAll: (type?: TreeNodeType) => void
 
   // Selection
@@ -175,76 +192,237 @@ const createEmptyExpandedNodes = (): Record<TreeNodeType, Set<string>> => ({
   decomposition_item: new Set(),
 })
 
+/** Сериализация Set в массив для localStorage */
+const serializeExpandedNodes = (
+  nodes: Record<TreeNodeType, Set<string>>
+): SerializedExpandedNodes => ({
+  project: Array.from(nodes.project),
+  stage: Array.from(nodes.stage),
+  object: Array.from(nodes.object),
+  section: Array.from(nodes.section),
+  decomposition_stage: Array.from(nodes.decomposition_stage),
+  decomposition_item: Array.from(nodes.decomposition_item),
+})
+
+/** Десериализация массива в Set из localStorage */
+const deserializeExpandedNodes = (
+  nodes: SerializedExpandedNodes
+): Record<TreeNodeType, Set<string>> => ({
+  project: new Set(nodes.project || []),
+  stage: new Set(nodes.stage || []),
+  object: new Set(nodes.object || []),
+  section: new Set(nodes.section || []),
+  decomposition_stage: new Set(nodes.decomposition_stage || []),
+  decomposition_item: new Set(nodes.decomposition_item || []),
+})
+
 export const useUIStateStore = create<UIState>()(
   devtools(
-    (set) => ({
-      expandedNodes: createEmptyExpandedNodes(),
-      selectedItemId: null,
-      selectedItemType: null,
+    persist(
+      (set, get): UIState => ({
+        expandedNodes: createEmptyExpandedNodes(),
+        selectedItemId: null,
+        selectedItemType: null,
 
-      toggleNode: (type, id) =>
-        set((state) => {
-          const newSet = new Set(state.expandedNodes[type])
-          if (newSet.has(id)) {
-            newSet.delete(id)
-          } else {
-            newSet.add(id)
-          }
-          return {
-            expandedNodes: {
-              ...state.expandedNodes,
-              [type]: newSet,
-            },
-          }
-        }),
+        isExpanded: (type, id) => get().expandedNodes[type].has(id),
 
-      expandNode: (type, id) =>
-        set((state) => {
-          const newSet = new Set(state.expandedNodes[type])
-          newSet.add(id)
-          return {
-            expandedNodes: {
-              ...state.expandedNodes,
-              [type]: newSet,
-            },
-          }
-        }),
-
-      collapseNode: (type, id) =>
-        set((state) => {
-          const newSet = new Set(state.expandedNodes[type])
-          newSet.delete(id)
-          return {
-            expandedNodes: {
-              ...state.expandedNodes,
-              [type]: newSet,
-            },
-          }
-        }),
-
-      expandAll: (type) =>
-        set((state) => {
-          if (type) {
-            return state
-          }
-          return { expandedNodes: createEmptyExpandedNodes() }
-        }),
-
-      collapseAll: (type) =>
-        set((state) => {
-          if (type) {
+        toggleNode: (type, id) =>
+          set((state) => {
+            const newSet = new Set(state.expandedNodes[type])
+            if (newSet.has(id)) {
+              newSet.delete(id)
+            } else {
+              newSet.add(id)
+            }
             return {
               expandedNodes: {
                 ...state.expandedNodes,
-                [type]: new Set(),
+                [type]: newSet,
               },
             }
-          }
-          return { expandedNodes: createEmptyExpandedNodes() }
-        }),
+          }),
 
-      setSelectedItem: (id, type = null) =>
-        set({ selectedItemId: id, selectedItemType: type }),
-    })
+        expandNode: (type, id) =>
+          set((state) => {
+            if (state.expandedNodes[type].has(id)) return state
+            const newSet = new Set(state.expandedNodes[type])
+            newSet.add(id)
+            return {
+              expandedNodes: {
+                ...state.expandedNodes,
+                [type]: newSet,
+              },
+            }
+          }),
+
+        collapseNode: (type, id) =>
+          set((state) => {
+            if (!state.expandedNodes[type].has(id)) return state
+            const newSet = new Set(state.expandedNodes[type])
+            newSet.delete(id)
+            return {
+              expandedNodes: {
+                ...state.expandedNodes,
+                [type]: newSet,
+              },
+            }
+          }),
+
+        batchExpand: (nodes) =>
+          set((state) => {
+            const newExpandedNodes = { ...state.expandedNodes }
+            let hasChanges = false
+
+            for (const { type, id } of nodes) {
+              if (!newExpandedNodes[type].has(id)) {
+                if (!hasChanges) {
+                  // Клонируем все Set только если есть изменения
+                  for (const key of Object.keys(newExpandedNodes) as TreeNodeType[]) {
+                    newExpandedNodes[key] = new Set(newExpandedNodes[key])
+                  }
+                  hasChanges = true
+                }
+                newExpandedNodes[type].add(id)
+              }
+            }
+
+            return hasChanges ? { expandedNodes: newExpandedNodes } : state
+          }),
+
+        batchCollapse: (nodes) =>
+          set((state) => {
+            const newExpandedNodes = { ...state.expandedNodes }
+            let hasChanges = false
+
+            for (const { type, id } of nodes) {
+              if (newExpandedNodes[type].has(id)) {
+                if (!hasChanges) {
+                  for (const key of Object.keys(newExpandedNodes) as TreeNodeType[]) {
+                    newExpandedNodes[key] = new Set(newExpandedNodes[key])
+                  }
+                  hasChanges = true
+                }
+                newExpandedNodes[type].delete(id)
+              }
+            }
+
+            return hasChanges ? { expandedNodes: newExpandedNodes } : state
+          }),
+
+        expandAll: (nodesByType) =>
+          set((state) => {
+            const newExpandedNodes = { ...state.expandedNodes }
+
+            for (const [type, ids] of Object.entries(nodesByType) as [TreeNodeType, string[]][]) {
+              if (ids && ids.length > 0) {
+                const newSet = new Set(state.expandedNodes[type])
+                for (const id of ids) {
+                  newSet.add(id)
+                }
+                newExpandedNodes[type] = newSet
+              }
+            }
+
+            return { expandedNodes: newExpandedNodes }
+          }),
+
+        // Развернуть до уровня разделов (проекты + объекты, но НЕ разделы)
+        expandToSections: (nodesByType) =>
+          set((state) => {
+            // Клонируем только project и object Sets
+            const newProjectSet = new Set(state.expandedNodes.project)
+            const newObjectSet = new Set(state.expandedNodes.object)
+
+            // Добавляем все проекты
+            for (const id of nodesByType.project) {
+              newProjectSet.add(id)
+            }
+
+            // Добавляем все объекты
+            for (const id of nodesByType.object) {
+              newObjectSet.add(id)
+            }
+
+            // Сворачиваем все разделы и этапы декомпозиции
+            return {
+              expandedNodes: {
+                ...state.expandedNodes,
+                project: newProjectSet,
+                object: newObjectSet,
+                section: new Set(),
+                decomposition_stage: new Set(),
+              },
+            }
+          }),
+
+        collapseAll: (type) =>
+          set((state) => {
+            if (type) {
+              if (state.expandedNodes[type].size === 0) return state
+              return {
+                expandedNodes: {
+                  ...state.expandedNodes,
+                  [type]: new Set(),
+                },
+              }
+            }
+            return { expandedNodes: createEmptyExpandedNodes() }
+          }),
+
+        setSelectedItem: (id, type = null) =>
+          set({ selectedItemId: id, selectedItemType: type }),
+      }),
+      {
+        name: 'resource-graph-ui-state',
+        partialize: (state) => ({
+          expandedNodes: state.expandedNodes,
+        }),
+        storage: {
+          getItem: (name) => {
+            const str = localStorage.getItem(name)
+            if (!str) return null
+            const parsed = JSON.parse(str)
+            return {
+              ...parsed,
+              state: {
+                ...parsed.state,
+                expandedNodes: deserializeExpandedNodes(parsed.state.expandedNodes),
+              },
+            }
+          },
+          setItem: (name, value) => {
+            const serialized = {
+              ...value,
+              state: {
+                ...value.state,
+                expandedNodes: serializeExpandedNodes(value.state.expandedNodes),
+              },
+            }
+            localStorage.setItem(name, JSON.stringify(serialized))
+          },
+          removeItem: (name) => localStorage.removeItem(name),
+        },
+      }
+    )
   )
 )
+
+// ============================================================================
+// Convenience Hook for Row Components
+// ============================================================================
+
+/**
+ * Хук для управления состоянием раскрытия строки
+ *
+ * @example
+ * const { isExpanded, toggle } = useRowExpanded('project', project.id)
+ */
+export function useRowExpanded(type: TreeNodeType, id: string) {
+  const expandedNodes = useUIStateStore((state) => state.expandedNodes)
+  const toggleNode = useUIStateStore((state) => state.toggleNode)
+
+  const isExpanded = expandedNodes[type].has(id)
+  const toggle = () => toggleNode(type, id)
+
+  return { isExpanded, toggle }
+}

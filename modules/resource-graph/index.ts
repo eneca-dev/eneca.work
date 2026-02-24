@@ -22,6 +22,7 @@
 // ============================================================================
 
 export { ResourceGraph, ResourceGraphTimeline } from './components'
+export { ProgressCircle } from './components/timeline/shared'
 
 // ============================================================================
 // Hooks
@@ -31,6 +32,9 @@ export {
   useResourceGraphData,
   useUserWorkload,
   useTagOptions,
+  useWorkLogs,
+  useLoadings,
+  useStageReadiness,
 } from './hooks'
 
 // ============================================================================
@@ -54,6 +58,10 @@ export {
   getOrgStructure,
   getProjectStructure,
   getProjectTags,
+  getWorkLogsForSection,
+  getLoadingsForSection,
+  getStageReadinessSnapshots,
+  getStageReadinessForSection,
 } from './actions'
 
 // ============================================================================
@@ -77,13 +85,16 @@ export type {
   ProjectStatusType,
   ViewRow,
   DbEnum,
-  // Domain types - hierarchy
+  // Domain types - hierarchy (Project → Object → Section → DecompositionStage → DecompositionItem)
   DecompositionItem,
   DecompositionStage,
   Section,
   ProjectObject,
-  Stage,
   Project,
+  // Work logs
+  WorkLog,
+  // Loadings
+  Loading,
   // Filter types
   ProjectTag,
   // View types
@@ -107,6 +118,12 @@ export {
   isWeekend,
   getWeekBounds,
   transformRowsToHierarchy,
+  // Employee colors
+  EMPLOYEE_COLORS,
+  getEmployeeColor,
+  getInitials,
+  // Progress colors
+  getProgressColor,
 } from './utils'
 
 // ============================================================================
@@ -118,6 +135,8 @@ export {
   RATE_COLORS,
   LOADING_STATUS_COLORS,
   ROW_HEIGHT,
+  SECTION_ROW_HEIGHT,
+  STAGE_ROW_HEIGHT,
   DAY_CELL_WIDTH,
   SIDEBAR_WIDTH,
   DEFAULT_MONTHS_RANGE,

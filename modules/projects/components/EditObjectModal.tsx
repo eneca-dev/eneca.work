@@ -5,7 +5,7 @@ import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
-import { DeleteObjectModal } from './DeleteObjectModal'
+import { DeleteObjectModal } from '@/modules/modals'
 
 interface EditObjectModalProps {
   isOpen: boolean

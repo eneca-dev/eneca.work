@@ -82,7 +82,7 @@ export function FilterSuggestions({
       role="listbox"
       aria-label="Варианты фильтров"
       className={cn(
-        'absolute left-0 right-0 top-full z-50 mt-1',
+        'absolute left-0 right-0 top-full z-[100] mt-1',
         'rounded-md border bg-popover py-1 shadow-lg',
         'animate-in fade-in-0 slide-in-from-top-1 duration-100'
       )}
@@ -97,7 +97,7 @@ export function FilterSuggestions({
 
           return (
             <button
-              key={`${suggestion.type}-${suggestion.label}`}
+              key={`${suggestion.type}-${idx}-${suggestion.label}`}
               id={optionId}
               type="button"
               role="option"

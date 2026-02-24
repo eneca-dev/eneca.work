@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState, KeyboardEvent } from "react"
+import { formatMinskDate } from '@/lib/timezone-utils'
 import { createClient } from "@/utils/supabase/client"
 import { Modal, ModalButton } from "@/components/modals"
 import { Loader2, Search, User } from "lucide-react"
@@ -48,7 +49,8 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
   const [users, setUsers] = useState<UserOption[]>([])
 
   const [selectedItemId, setSelectedItemId] = useState<string>(defaultItemId || "")
-  const [workDate, setWorkDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  // Используем дату по Минскому времени для дефолтного значения
+  const [workDate, setWorkDate] = useState<string>(formatMinskDate(new Date()))
   const [hours, setHours] = useState<string>("")  
   const [rate, setRate] = useState<string>("")  
   const [description, setDescription] = useState<string>("")  
@@ -65,7 +67,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
   useEffect(() => {
     if (isOpen) {
       setSelectedItemId(defaultItemId || "")
-      setWorkDate(new Date().toISOString().slice(0, 10))
+      setWorkDate(formatMinskDate(new Date()))
       setHours("")
       setRate("")
       setDescription("")

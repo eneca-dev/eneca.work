@@ -12,13 +12,13 @@ interface MessageListProps {
 function TypingIndicator() {
   return (
     <div className="flex justify-start mt-1">
-      <div className="bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 shadow-sm">
+      <div className="bg-card text-foreground border border-border rounded-lg px-3 py-1.5 shadow-sm">
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Печатаю</span>
+          <span className="text-sm text-muted-foreground">Печатаю</span>
           <div className="flex items-center space-x-1">
-            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0s'}}>•</span>
-            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0.2s'}}>•</span>
-            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0.4s'}}>•</span>
+            <span className="text-lg text-muted-foreground animate-bounce inline-block" style={{animationDelay: '0s'}}>•</span>
+            <span className="text-lg text-muted-foreground animate-bounce inline-block" style={{animationDelay: '0.2s'}}>•</span>
+            <span className="text-lg text-muted-foreground animate-bounce inline-block" style={{animationDelay: '0.4s'}}>•</span>
           </div>
         </div>
       </div>
@@ -35,7 +35,7 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
   }, [messages, isLoading, isTyping])
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/30 dark:bg-gray-900/30">
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/30">
       {messages.map((message) => (
         <div
           key={message.id}
@@ -45,7 +45,7 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
             className={`px-4 py-2 rounded-lg shadow-sm break-words ${
               message.role === 'user'
                 ? 'max-w-[80%] bg-gradient-to-r from-emerald-500 to-emerald-600 text-white relative'
-                : 'max-w-[100%] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
+                : 'max-w-[100%] bg-card text-foreground border border-border'
             }`}
             style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
           >
@@ -69,7 +69,7 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
                     isUserMessage={false}
                   />
                 </div>
-                <div className="text-xs mt-1 text-gray-500 dark:text-gray-400 text-right">
+                <div className="text-xs mt-1 text-muted-foreground text-right">
                   {formatMessageTime(message.created_at)}
                 </div>
               </>

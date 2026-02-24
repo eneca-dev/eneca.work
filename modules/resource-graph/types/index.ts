@@ -33,15 +33,35 @@ export type ProjectStatusType = DbEnum<'project_status_enum'>
 // ============================================================================
 
 /**
+ * Запись истории изменения прогресса
+ */
+export interface ProgressHistoryEntry {
+  /** Дата изменения (YYYY-MM-DD) */
+  date: string
+  /** Изменение прогресса (+25, -10, etc.) */
+  delta: number
+  /** Предыдущее значение прогресса (0-100) */
+  oldProgress: number
+  /** Новое значение прогресса (0-100) */
+  newProgress: number
+}
+
+/**
  * Элемент декомпозиции (самый нижний уровень)
- * Project → Stage → Object → Section → DecompositionStage → DecompositionItem
+ * Project → Object → Section → DecompositionStage → DecompositionItem
  */
 export interface DecompositionItem {
   id: string
+  /** ID этапа (для TaskSidebar) */
+  stageId: string | null
   description: string
   plannedHours: number
   plannedDueDate: string | null
   progress: number | null
+  /** Прирост прогресса за последнее обновление (+5, -2, etc.) */
+  progressDelta: number | null
+  /** История изменений прогресса (последние 30 дней) */
+  progressHistory: ProgressHistoryEntry[]
   order: number
   responsible: {
     id: string | null
@@ -61,11 +81,24 @@ export interface DecompositionItem {
   }
   workCategoryId: string | null
   workCategoryName: string | null
+  /** Бюджет задачи */
+  budget: {
+    /** ID бюджета (может быть null если бюджет не создан) */
+    id: string | null
+    /** Общая сумма бюджета */
+    total: number
+    /** Израсходовано */
+    spent: number
+    /** Остаток */
+    remaining: number
+    /** Процент расхода */
+    percentage: number
+  }
 }
 
 /**
  * Этап декомпозиции
- * Project → Stage → Object → Section → DecompositionStage
+ * Project → Object → Section → DecompositionStage
  */
 export interface DecompositionStage {
   id: string
@@ -78,15 +111,115 @@ export interface DecompositionStage {
     color: string | null
   }
   items: DecompositionItem[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness?: ReadinessPoint[]
+}
+
+/**
+ * Точка готовности (плановая или фактическая)
+ */
+export interface ReadinessPoint {
+  /** Дата */
+  date: string
+  /** Готовность в % (0-100) */
+  value: number
+}
+
+/** @deprecated Используй ReadinessPoint */
+export type ReadinessCheckpoint = ReadinessPoint
+
+/**
+ * Точка расходования бюджета (накопительно по дням)
+ */
+export interface BudgetSpendingPoint {
+  /** Дата */
+  date: string
+  /** Накопленная сумма расхода */
+  spent: number
+  /** Процент от бюджета (0-100+) */
+  percentage: number
+}
+
+// ============================================================================
+// Work Log Types - Отчёты о работе
+// ============================================================================
+
+/**
+ * Отчёт о работе (work_log)
+ * Привязан к decomposition_item
+ */
+export interface WorkLog {
+  /** ID отчёта */
+  id: string
+  /** ID элемента декомпозиции */
+  itemId: string
+  /** Дата отчёта */
+  date: string
+  /** Количество часов */
+  hours: number
+  /** Сумма в деньгах (hours * hourly_rate) */
+  amount: number
+  /** Описание работы (для tooltip) */
+  description: string
+  /** Кто создал отчёт */
+  createdBy: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+  }
+  /** Бюджет (budget_id теперь обязателен) */
+  budget: {
+    id: string
+    name: string
+    typeName: string | null
+    typeColor: string | null
+  }
+}
+
+
+// ============================================================================
+// Loading Types - Загрузки сотрудников
+// ============================================================================
+
+/**
+ * Загрузка сотрудника на этап декомпозиции
+ */
+export interface Loading {
+  /** ID загрузки */
+  id: string
+  /** ID этапа декомпозиции */
+  stageId: string
+  /** Дата начала загрузки */
+  startDate: string
+  /** Дата окончания загрузки */
+  finishDate: string
+  /** Ставка (0.25, 0.5, 0.75, 1) */
+  rate: number
+  /** Комментарий к загрузке */
+  comment: string | null
+  /** Статус загрузки */
+  status: 'active' | 'completed' | 'cancelled'
+  /** Это запрос на ресурс (нехватка) */
+  isShortage: boolean
+  /** Сотрудник */
+  employee: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+    avatarUrl: string | null
+  }
 }
 
 /**
  * Раздел проекта
- * Project → Stage → Object → Section
+ * Project → Object → Section
  */
 export interface Section {
   id: string
   name: string
+  description: string | null
   startDate: string | null
   endDate: string | null
   responsible: {
@@ -94,33 +227,32 @@ export interface Section {
     firstName: string | null
     lastName: string | null
     name: string | null
+    avatarUrl: string | null
   }
   status: {
     id: string | null
     name: string | null
     color: string | null
   }
+  /** Контрольные точки плановой готовности */
+  readinessCheckpoints: ReadinessCheckpoint[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness: ReadinessPoint[]
+  /** Расходование бюджета (накопительно по дням) */
+  budgetSpending: BudgetSpendingPoint[]
+  /** Часовая ставка для расчёта бюджета (BYN/час). NULL = использовать default */
+  hourlyRate: number | null
   decompositionStages: DecompositionStage[]
 }
 
 /**
  * Объект проекта
- * Project → Stage → Object
+ * Project → Object
  */
 export interface ProjectObject {
   id: string
   name: string
   sections: Section[]
-}
-
-/**
- * Стадия проекта
- * Project → Stage
- */
-export interface Stage {
-  id: string
-  name: string
-  objects: ProjectObject[]
 }
 
 /**
@@ -131,13 +263,18 @@ export interface Project {
   id: string
   name: string
   status: ProjectStatusType | null
+  /** Тип стадии проекта (поле, не отдельный уровень) */
+  stageType: string | null
   manager: {
     id: string | null
     firstName: string | null
     lastName: string | null
     name: string | null
   }
-  stages: Stage[]
+  /** Теги проекта (загружаются отдельно через useProjectTagsMap) */
+  tags?: ProjectTag[]
+  /** Объекты проекта (напрямую, без уровня Stage) */
+  objects: ProjectObject[]
 }
 
 // ============================================================================
@@ -230,7 +367,6 @@ export interface DisplaySettings {
 /** Тип узла дерева */
 export type TreeNodeType =
   | 'project'
-  | 'stage'
   | 'object'
   | 'section'
   | 'decomposition_stage'
@@ -243,4 +379,115 @@ export interface TreeNode {
   name: string
   children?: TreeNode[]
   data?: Record<string, unknown>
+}
+
+// ============================================================================
+// Filter Structure Types - для InlineFilter автокомплита
+// ============================================================================
+
+/** Организационная структура для фильтров */
+export interface OrgStructure {
+  subdivisions: Array<{ id: string; name: string }>
+  departments: Array<{ id: string; name: string; subdivisionId: string | null }>
+  teams: Array<{ id: string; name: string; departmentId: string | null }>
+  employees: Array<{ id: string; name: string; teamId: string | null }>
+}
+
+/** Проектная структура для фильтров */
+export interface ProjectStructure {
+  managers: Array<{ id: string; name: string }>
+  projects: Array<{ id: string; name: string; managerId: string | null }>
+  objects: Array<{ id: string; name: string; projectId: string | null }>
+  sections: Array<{ id: string; name: string; objectId: string | null }>
+}
+
+// ============================================================================
+// Stage Responsibles Types - Ответственные за этапы
+// ============================================================================
+
+/** Ответственный за этап декомпозиции */
+export interface StageResponsible {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  avatarUrl: string | null
+}
+
+// ============================================================================
+// Batch Data Types - Данные для всех секций объекта
+// ============================================================================
+
+/**
+ * Опции для batch загрузки данных секций
+ */
+export interface SectionsBatchOptions {
+  /** Включить загрузку бюджетов (может быть отключено по permissions) */
+  includeBudgets?: boolean
+}
+
+/**
+ * Связанный раздел для чекпоинта в batch данных
+ */
+export interface BatchLinkedSection {
+  section_id: string
+  section_name: string
+  object_id: string | null
+}
+
+/**
+ * Чекпоинт в batch данных (для timeline и маркеров)
+ * Содержит все поля, необходимые для CheckpointMarkers
+ */
+export interface BatchCheckpoint {
+  id: string
+  sectionId: string
+  typeId: string
+  typeCode: string
+  typeName: string
+  isCustom: boolean
+  icon: string
+  color: string
+  title: string | null
+  description: string | null
+  checkpointDate: string
+  completedAt: string | null
+  status: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  statusLabel: string
+  linkedSections: BatchLinkedSection[]
+  linkedSectionsCount: number
+}
+
+/**
+ * Бюджет в batch данных (совместим с BudgetCurrent для BudgetsRow)
+ * Используем snake_case для совместимости с существующими компонентами
+ */
+export interface BatchBudget {
+  budget_id: string
+  name: string
+  planned_amount: number
+  spent_amount: number
+  remaining_amount: number
+  spent_percentage: number
+  type_name: string | null
+  type_color: string | null
+  is_active: boolean
+}
+
+/**
+ * Batch данные для всех секций объекта
+ * Загружается одним запросом при развороте объекта
+ */
+export interface SectionsBatchData {
+  /** Work logs по секциям: Record<sectionId, WorkLog[]> */
+  workLogs: Record<string, WorkLog[]>
+  /** Loadings по секциям: Record<sectionId, Loading[]> */
+  loadings: Record<string, Loading[]>
+  /** Stage readiness по секциям и этапам: Record<sectionId, Record<stageId, ReadinessPoint[]>> */
+  stageReadiness: Record<string, Record<string, ReadinessPoint[]>>
+  /** Stage responsibles по секциям и этапам: Record<sectionId, Record<stageId, StageResponsible[]>> */
+  stageResponsibles: Record<string, Record<string, StageResponsible[]>>
+  /** Checkpoints по секциям: Record<sectionId, BatchCheckpoint[]> */
+  checkpoints: Record<string, BatchCheckpoint[]>
+  /** Budgets по секциям: Record<sectionId, BatchBudget[]> (может быть пустым если нет доступа) */
+  budgets: Record<string, BatchBudget[]>
 }

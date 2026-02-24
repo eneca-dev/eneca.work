@@ -1,236 +1,154 @@
-import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
-import { SectionStatus, SectionStatusFormData } from '../types';
+'use client'
 
-// Helper функция для отправки событий с логированием
-const dispatchStatusEvent = (
-  eventType: 'statusCreated' | 'statusUpdated' | 'statusDeleted',
-  logData: any,
-  eventDetail: any,
-  logIcon: string = '📤'
-) => {
-  console.log(`${logIcon} Отправляем событие ${eventType}:`, logData);
-  
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(eventType, {
-      detail: eventDetail
-    }));
-  }
-};
+/**
+ * Хуки для работы со статусами секций
+ *
+ * Использует cache module для:
+ * - Кеширование данных через TanStack Query
+ * - Автоматическая инвалидация при мутациях
+ * - Realtime синхронизация через Supabase
+ */
 
+import {
+  createSimpleCacheQuery,
+  createCacheMutation,
+  staleTimePresets,
+  queryKeys,
+} from '@/modules/cache'
+import {
+  getSectionStatuses,
+  createSectionStatus,
+  updateSectionStatus,
+  deleteSectionStatus,
+  type SectionStatus,
+  type CreateStatusInput,
+  type UpdateStatusInput,
+} from '../actions'
+
+// ============================================================================
+// Query Hook
+// ============================================================================
+
+/**
+ * Хук для получения списка статусов секций
+ *
+ * @example
+ * const { data: statuses, isLoading } = useSectionStatuses()
+ */
+export const useSectionStatusesQuery = createSimpleCacheQuery<SectionStatus[]>({
+  queryKey: queryKeys.sectionStatuses.list(),
+  queryFn: getSectionStatuses,
+  staleTime: staleTimePresets.medium, // 5 минут - справочник меняется редко
+})
+
+// ============================================================================
+// Mutation Hooks
+// ============================================================================
+
+/**
+ * Хук для создания нового статуса
+ *
+ * @example
+ * const { mutate: create, isPending } = useCreateSectionStatus()
+ * create({ name: 'В работе', color: '#10B981' })
+ */
+export const useCreateSectionStatus = createCacheMutation<CreateStatusInput, SectionStatus>({
+  mutationFn: createSectionStatus,
+  invalidateKeys: () => [queryKeys.sectionStatuses.all],
+})
+
+/**
+ * Хук для обновления статуса
+ *
+ * @example
+ * const { mutate: update, isPending } = useUpdateSectionStatus()
+ * update({ id: '123', name: 'Завершён', color: '#6B7280' })
+ */
+export const useUpdateSectionStatus = createCacheMutation<UpdateStatusInput, SectionStatus>({
+  mutationFn: updateSectionStatus,
+  invalidateKeys: () => [
+    queryKeys.sectionStatuses.all,
+    queryKeys.sections.all, // секции могут показывать статус
+    queryKeys.resourceGraph.all, // resource graph показывает статусы
+  ],
+})
+
+/**
+ * Хук для удаления статуса
+ *
+ * @example
+ * const { mutate: remove, isPending } = useDeleteSectionStatus()
+ * remove('status-id-123')
+ */
+export const useDeleteSectionStatus = createCacheMutation<string, { deleted: boolean }>({
+  mutationFn: deleteSectionStatus,
+  invalidateKeys: () => [
+    queryKeys.sectionStatuses.all,
+    queryKeys.sections.all, // секции с удалённым статусом обновятся
+    queryKeys.resourceGraph.all,
+  ],
+})
+
+// ============================================================================
+// Legacy-compatible wrapper (для обратной совместимости)
+// ============================================================================
+
+/**
+ * Legacy-совместимый хук для плавной миграции
+ *
+ * @deprecated Используйте useSectionStatusesQuery, useCreateSectionStatus,
+ * useUpdateSectionStatus, useDeleteSectionStatus напрямую
+ *
+ * @example
+ * // Старый способ (deprecated):
+ * const { statuses, isLoading, createStatus, updateStatus, deleteStatus } = useSectionStatuses()
+ *
+ * // Новый способ:
+ * const { data: statuses, isLoading } = useSectionStatusesQuery()
+ * const createMutation = useCreateSectionStatus()
+ * const updateMutation = useUpdateSectionStatus()
+ * const deleteMutation = useDeleteSectionStatus()
+ */
 export function useSectionStatuses() {
-  const [statuses, setStatuses] = useState<SectionStatus[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadStatuses = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('section_statuses')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.warn('Ошибка загрузки статусов из Supabase:', error);
-        setError(error.message || 'Ошибка загрузки статусов');
-        return;
-      }
-      
-      setStatuses(data || []);
-    } catch (err) {
-      console.warn('Ошибка загрузки статусов:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки статусов';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Мемоизированные обработчики событий для предотвращения лишних перерегистраций
-  const handleStatusCreated = useCallback(() => {
-    console.log('📥 useSectionStatuses: получили событие statusCreated, обновляем список');
-    loadStatuses();
-  }, [loadStatuses]);
-
-  const handleStatusUpdated = useCallback(() => {
-    console.log('📥 useSectionStatuses: получили событие statusUpdated, обновляем список');
-    loadStatuses();
-  }, [loadStatuses]);
-
-  const handleStatusDeleted = useCallback(() => {
-    console.log('📥 useSectionStatuses: получили событие statusDeleted, обновляем список');
-    loadStatuses();
-  }, [loadStatuses]);
-
-  const createStatus = useCallback(async (statusData: SectionStatusFormData): Promise<SectionStatus | null> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('section_statuses')
-        .insert({
-          name: statusData.name,
-          color: statusData.color,
-          description: statusData.description || null
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      // Уведомляем другие компоненты о создании статуса
-      // loadStatuses() будет вызван автоматически из event listener'а
-      dispatchStatusEvent(
-        'statusCreated',
-        {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color
-        },
-        {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color,
-          statusDescription: data.description
-        },
-        '✅'
-      );
-      
-      return data;
-    } catch (err) {
-      console.warn('Ошибка создания статуса:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка создания статуса');
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const updateStatus = useCallback(async (id: string, statusData: SectionStatusFormData): Promise<SectionStatus | null> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('section_statuses')
-        .update({
-          name: statusData.name,
-          color: statusData.color,
-          description: statusData.description || null
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      // Уведомляем другие компоненты об изменении статуса
-      // loadStatuses() будет вызван автоматически из event listener'а
-      dispatchStatusEvent(
-        'statusUpdated',
-        {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color
-        },
-        {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color,
-          statusDescription: data.description
-        },
-        '🔄'
-      );
-      
-      return data;
-    } catch (err) {
-      console.warn('Ошибка обновления статуса:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка обновления статуса');
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const deleteStatus = useCallback(async (id: string): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      
-      // Сначала обновляем все разделы, которые используют этот статус, 
-      // устанавливая им "Без статуса" (section_status_id = NULL)
-      const { error: updateError } = await supabase
-        .from('sections')
-        .update({ section_status_id: null })
-        .eq('section_status_id', id);
-
-      if (updateError) {
-        console.warn('Ошибка обновления разделов:', updateError);
-        throw new Error('Не удалось обновить разделы, использующие статус');
-      }
-
-      console.log(`🔄 Обновлены разделы: статус ${id} заменен на "Без статуса"`);
-
-      // Затем удаляем сам статус
-      const { error } = await supabase
-        .from('section_statuses')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      // Уведомляем другие компоненты об удалении статуса
-      // loadStatuses() будет вызван автоматически из event listener'а
-      dispatchStatusEvent(
-        'statusDeleted',
-        { statusId: id },
-        { statusId: id },
-        '🗑️'
-      );
-      
-      return true;
-    } catch (err) {
-      console.warn('Ошибка удаления статуса:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка удаления статуса');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadStatuses();
-  }, [loadStatuses]);
-
-  // Слушаем глобальные события изменения статусов для автоматического обновления
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('statusCreated', handleStatusCreated);
-      window.addEventListener('statusUpdated', handleStatusUpdated);
-      window.addEventListener('statusDeleted', handleStatusDeleted);
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('statusCreated', handleStatusCreated);
-        window.removeEventListener('statusUpdated', handleStatusUpdated);
-        window.removeEventListener('statusDeleted', handleStatusDeleted);
-      }
-    };
-  }, [handleStatusCreated, handleStatusUpdated, handleStatusDeleted]);
+  const { data: statuses = [], isLoading, error } = useSectionStatusesQuery()
+  const createMutation = useCreateSectionStatus()
+  const updateMutation = useUpdateSectionStatus()
+  const deleteMutation = useDeleteSectionStatus()
 
   return {
     statuses,
-    isLoading,
-    error,
-    loadStatuses,
-    createStatus,
-    updateStatus,
-    deleteStatus
-  };
-} 
+    isLoading: isLoading || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending,
+    error: error?.message || null,
+
+    // Legacy methods - возвращают Promise для совместимости
+    createStatus: async (data: CreateStatusInput): Promise<SectionStatus | null> => {
+      try {
+        return await createMutation.mutateAsync(data)
+      } catch {
+        return null
+      }
+    },
+
+    updateStatus: async (id: string, data: Omit<UpdateStatusInput, 'id'>): Promise<SectionStatus | null> => {
+      try {
+        return await updateMutation.mutateAsync({ id, ...data })
+      } catch {
+        return null
+      }
+    },
+
+    deleteStatus: async (id: string): Promise<boolean> => {
+      try {
+        await deleteMutation.mutateAsync(id)
+        return true
+      } catch {
+        return false
+      }
+    },
+
+    // Deprecated - для совместимости, теперь не нужен (данные автоматически обновляются)
+    loadStatuses: () => {
+      console.warn('[useSectionStatuses] loadStatuses() deprecated - данные обновляются автоматически')
+    },
+  }
+}
