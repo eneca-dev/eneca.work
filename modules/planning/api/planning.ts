@@ -11,7 +11,7 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[]> {
     async (span) => {
       try {
         span.setAttribute("table", "view_section_hierarchy")
-        
+
         const { data, error } = await supabase.from("view_section_hierarchy").select("*")
 
         if (error) {

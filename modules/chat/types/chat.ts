@@ -1,8 +1,20 @@
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
+  conversation_id: string
+  user_id: string
+  role: 'user' | 'assistant' | 'system'
+  kind: 'message' | 'thinking' | 'tool' | 'observation'
   content: string
-  timestamp: Date
+  is_final: boolean
+  created_at: Date
+}
+
+export interface ChatConversation {
+  id: string
+  user_id: string
+  task_id?: string
+  status: 'active' | 'closed'
+  created_at: Date
 }
 
 export interface ChatRequest {

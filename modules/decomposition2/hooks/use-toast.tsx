@@ -57,8 +57,8 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            "min-w-[260px] rounded-md border bg-card text-card-foreground shadow px-4 py-3",
-            t.variant === "destructive" && "border-destructive/50 bg-destructive/10 text-destructive"
+            "min-w-[260px] rounded-md border bg-card dark:bg-slate-900 text-card-foreground shadow px-4 py-3",
+            t.variant === "destructive" && "border-destructive/50 bg-destructive/10 dark:bg-destructive/20 text-destructive"
           )}
         >
           {t.title && <div className="text-sm font-medium">{t.title}</div>}

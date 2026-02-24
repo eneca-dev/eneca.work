@@ -15,6 +15,7 @@ import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { LoadingModal } from "./loading-modal"
+import { SectionLoadingBars, calculateSectionBarsHeight } from "./section-loading-bars"
 
 
 interface TimelineRowProps {
@@ -148,11 +149,17 @@ export function TimelineRow({
     }
   }
 
+  // ============================================
+  // ВРЕМЕННО ЗАМОРОЖЕНО: Раскрытие разделов до уровня этапов
+  // ============================================
   // Обработчик клика по разделу для раскрытия/скрытия
+  // const handleToggleExpand = () => {
+  //   if (hasChildren) {
+  //     toggleSectionExpanded(section.id)
+  //   }
+  // }
   const handleToggleExpand = () => {
-    if (hasChildren) {
-      toggleSectionExpanded(section.id)
-    }
+    // Функционал раскрытия временно отключен
   }
 
   // Заглушка для обработчика добавления ответственного
@@ -163,37 +170,50 @@ export function TimelineRow({
 
   // Получаем загрузки раздела (с резервом из loadingsMap стора)
   const loadings = (section.loadings && section.loadings.length > 0) ? section.loadings : loadingsFromMap
-  
+
   // Фильтруем дубликаты загрузок по ID для избежания проблем с React ключами
   // Убираем дубликаты и сортируем загрузки так, чтобы записи одного человека шли рядом
-  const uniqueLoadings = loadings
-    .filter((loading: Loading, index: number, array: Loading[]) => array.findIndex((l: Loading) => l.id === loading.id) === index)
-    .sort((a: Loading, b: Loading) => {
-      // Сначала ответственный за раздел
-      const aIsSectionResponsible = a.responsibleId && section && (a.responsibleId === (section as any).responsibleId)
-      const bIsSectionResponsible = b.responsibleId && section && (b.responsibleId === (section as any).responsibleId)
-      if (aIsSectionResponsible && !bIsSectionResponsible) return -1
-      if (!aIsSectionResponsible && bIsSectionResponsible) return 1
-      const nameA = (a.responsibleName || "").toLowerCase()
-      const nameB = (b.responsibleName || "").toLowerCase()
-      if (nameA !== nameB) return nameA.localeCompare(nameB, "ru")
-      // внутри одного сотрудника сортируем по дате начала
-      const aStart = new Date(a.startDate).getTime()
-      const bStart = new Date(b.startDate).getTime()
-      return aStart - bStart
-    })
+  // Мемоизируем для предотвращения лишних пересчётов
+  const uniqueLoadings = React.useMemo(() => {
+    const sectionResponsibleId = section.responsibleId
+    return loadings
+      .filter((loading: Loading, index: number, array: Loading[]) => array.findIndex((l: Loading) => l.id === loading.id) === index)
+      .sort((a: Loading, b: Loading) => {
+        // Сначала ответственный за раздел
+        const aIsSectionResponsible = a.responsibleId && sectionResponsibleId && (a.responsibleId === sectionResponsibleId)
+        const bIsSectionResponsible = b.responsibleId && sectionResponsibleId && (b.responsibleId === sectionResponsibleId)
+        if (aIsSectionResponsible && !bIsSectionResponsible) return -1
+        if (!aIsSectionResponsible && bIsSectionResponsible) return 1
+        const nameA = (a.responsibleName || "").toLowerCase()
+        const nameB = (b.responsibleName || "").toLowerCase()
+        if (nameA !== nameB) return nameA.localeCompare(nameB, "ru")
+        // внутри одного сотрудника сортируем по дате начала
+        const aStart = new Date(a.startDate).getTime()
+        const bStart = new Date(b.startDate).getTime()
+        return aStart - bStart
+      })
+  }, [loadings, section])
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
 
-  // Функция для расчета суммы ставок по загрузкам в разделе
-  const calculateTotalRate = (): number => {
+  // Динамическая высота строки раздела на основе баров загрузок
+  const actualSectionRowHeight = React.useMemo(() => {
+    if (!uniqueLoadings || uniqueLoadings.length === 0) return rowHeight
+    return calculateSectionBarsHeight(
+      uniqueLoadings,
+      timeUnits,
+      cellWidth,
+      theme === "dark",
+      rowHeight
+    )
+  }, [uniqueLoadings, timeUnits, cellWidth, theme, rowHeight])
+
+  // Вычисляем суммарную ставку (мемоизировано)
+  const totalRate = React.useMemo(() => {
     if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
     return uniqueLoadings.reduce((total: number, loading: Loading) => total + (loading.rate || 0), 0)
-  }
-
-  // Вычисляем суммарную ставку
-  const totalRate = calculateTotalRate()
+  }, [uniqueLoadings])
 
   // Удалена логика подсветки перерасходов относительно этапов
 
@@ -267,14 +287,14 @@ export function TimelineRow({
       <div className="group/row min-w-full relative">
         <div
           className={cn("flex transition-colors", hasLoadings ? "cursor-pointer" : "cursor-default", "min-w-full")}
-          style={{ height: `${rowHeight}px` }}
+          style={{ height: `${actualSectionRowHeight}px` }}
           onClick={handleToggleExpand}
         >
           {/* Фиксированные столбцы с sticky позиционированием */}
           <div
             className={cn("sticky left-0 z-20", "flex")}
             style={{
-              height: `${rowHeight}px`,
+              height: `${actualSectionRowHeight}px`,
               width: `${totalFixedWidth}px`,
               borderBottom: "1px solid",
               borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
@@ -285,8 +305,8 @@ export function TimelineRow({
               className={cn(
                 "p-2 font-medium border-r flex items-center transition-colors h-full", // Изменяем на flex items-center для горизонтального выравнивания
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                  : "border-slate-200 bg-white group-hover/row:bg-slate-100",
               )}
               style={{
                 width: `${sectionWidth}px`,
@@ -298,8 +318,10 @@ export function TimelineRow({
             >
               {/* Компактное отображение в одну строку с аватаром слева */}
               <div className="flex items-center w-full" style={{ paddingLeft: '60px' }}>
-                {/* Иконка раскрытия */}
-                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-2">
+                {/* ============================================
+                    ВРЕМЕННО ЗАМОРОЖЕНО: Иконка раскрытия раздела
+                    ============================================ */}
+                {/* <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-2">
                   {hasChildren ? (
                     isExpanded ? (
                       <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
@@ -309,7 +331,7 @@ export function TimelineRow({
                   ) : (
                     <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
                   )}
-                </div>
+                </div> */}
 
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
@@ -415,8 +437,10 @@ export function TimelineRow({
 
                 {/* Индикатор перерасходов удалён */}
 
-                {/* Кнопка сворачивания/разворачивания загрузок всех этапов раздела */}
-                {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
+                {/* ============================================
+                    ВРЕМЕННО ЗАМОРОЖЕНО: Кнопка сворачивания/разворачивания загрузок всех этапов раздела
+                    ============================================ */}
+                {/* {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
                   <button
                     className={cn(
                       "ml-2 inline-flex items-center justify-center transition-colors hover:opacity-70",
@@ -434,7 +458,7 @@ export function TimelineRow({
                       <ChevronsUp className="h-4 w-4" />
                     )}
                   </button>
-                )}
+                )} */}
 
                 {/* Дополнительная информация в две строки */}
                 <div className="flex flex-col gap-1 ml-auto text-xs justify-center">
@@ -511,8 +535,8 @@ export function TimelineRow({
                 className={cn(
                   "p-3 border-r transition-colors h-full",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                    : "border-slate-200 bg-white group-hover/row:bg-slate-100",
                 )}
                 style={{
                   width: `${objectWidth}px`,
@@ -529,17 +553,24 @@ export function TimelineRow({
             )}
           </div>
 
-          {/* Ячейки для каждого периода - сдвигаем влево */}
-          <div className="flex-1 flex w-full">
+          {/* Ячейки для каждого периода */}
+          <div className="flex-1 flex w-full" style={{ position: "relative", flexWrap: "nowrap" }}>
+            {/* Overlay с чипами загрузок сотрудников */}
+            <SectionLoadingBars
+              loadings={uniqueLoadings}
+              timeUnits={timeUnits}
+              cellWidth={cellWidth}
+              theme={theme}
+              rowHeight={actualSectionRowHeight}
+            />
+
+            {/* Базовые ячейки таймлайна (фон, границы, выходные) */}
             {timeUnits.map((unit, i) => {
               // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
               const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
-              const isActive = isSectionActiveInPeriod(section, unit.date)
               const isMonthStart = isFirstDayOfMonth(unit.date)
-
-              // Получаем суммарную нагрузку на эту дату
-              const sectionWorkload = getSectionWorkloadForDate(unit.date)
+              const isMonthBoundary = i === 0 || i === timeUnits.length - 1
 
               return (
                 <div
@@ -549,80 +580,39 @@ export function TimelineRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-emerald-900/20" : "group-hover/row:bg-emerald-50",
+                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
                     isMonthStart
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
                         : "border-l border-l-slate-300"
                       : "",
+                    isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                   )}
                   style={{
-                    height: `${rowHeight}px`,
-                    width: `${cellWidth}px`,
+                    height: `${actualSectionRowHeight}px`,
+                    width: `${unit.width ?? cellWidth}px`,
+                    minWidth: `${unit.width ?? cellWidth}px`,
+                    flexShrink: 0,
                     borderRight: "1px solid",
-                    borderBottom: "1px solid",
+                    borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                     borderLeft: isMonthStart ? "1px solid" : "none",
                     borderLeftColor: isMonthStart
                       ? theme === "dark"
-                        ? "rgb(71, 85, 105)" // slate-600
-                        : "rgb(203, 213, 225)" // slate-300
+                        ? "rgb(71, 85, 105)"
+                        : "rgb(203, 213, 225)"
                       : "transparent",
-                    borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                    borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                   }}
-                >
-                  {/* Фоновая подсветка активности раздела */}
-                  {isActive && (
-                    <div
-                      className={cn(
-                        "absolute inset-1 rounded-sm",
-                        getSectionStatusColor(section.status),
-                        theme === "dark" ? "opacity-70" : "opacity-50",
-                      )}
-                    ></div>
-                  )}
-                  
-                  {/* Отображение этапов декомпозиции */}
-                  {(() => {
-                    const activeStages = getActiveStagesForDate(unit.date)
-                    const allStages = section.decompositionStages || []
-                    
-                    if (activeStages.length === 0) return null
-                    
-                    const barHeight = Math.floor(rowHeight / Math.max(allStages.length, 1)) - 2
-                    
-                    return (
-                      <div className="absolute inset-0 flex flex-col justify-center gap-0.5 p-1">
-                        {activeStages.map((stage) => {
-                          const stageIndex = allStages.findIndex(s => s.id === stage.id)
-                          const color = getStageColor(stageIndex, theme === "dark")
-                          
-                          return (
-                            <div
-                              key={stage.id}
-                              className="rounded-sm transition-all duration-200"
-                              style={{
-                                backgroundColor: color,
-                                height: `${barHeight}px`,
-                                minHeight: '3px',
-                                opacity: theme === "dark" ? 0.8 : 0.7,
-                              }}
-                              title={`${stage.name}`}
-                            />
-                          )
-                        })}
-                      </div>
-                    )
-                  })()}
-                </div>
+                />
               )
             })}
           </div>
         </div>
       </div>
 
-      {/* Отображаем этапы и загрузки, если раздел раскрыт */}
-      {isExpanded && (
+      {/* ============================================
+          ВРЕМЕННО ЗАМОРОЖЕНО: Отображение этапов и загрузок при раскрытии раздела
+          ============================================ */}
+      {/* {isExpanded && (
         <>
           {(() => {
             // Группируем фактические загрузки по stageId
@@ -657,7 +647,6 @@ export function TimelineRow({
 
             return stagesWithNoStage.map((stage, stageIndex) => (
               <React.Fragment key={`${stage.id}-${stageIndex}`}>
-                {/* Строка этапа */}
                 <StageRow
                   stage={stage}
                   sectionPosition={sectionPosition}
@@ -677,7 +666,6 @@ export function TimelineRow({
                   allLoadings={uniqueLoadings}
                 />
 
-                {/* Фактические загрузки для этого этапа */}
                 {!isStageCollapsed(stage.id) && (loadingsByStage[stage.id] || []).map((loading, loadingIndex) => (
                   <LoadingRow
                     key={`loading-${stage.id}-${loading.id}-${loadingIndex}`}
@@ -700,7 +688,7 @@ export function TimelineRow({
             ))
           })()}
         </>
-      )}
+      )} */}
       {/* Модальное окно назначения ответственного */}
       {showAssignResponsibleModal && (
         <AssignResponsibleModal section={section} setShowAssignModal={setShowAssignResponsibleModal} theme={theme} />
@@ -965,13 +953,14 @@ function LoadingRow({
         </div>
 
         {/* Ячейки для каждого периода */}
-        <div className="flex-1 flex w-full">
+        <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
           {timeUnits.map((unit, i) => {
             // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
             const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
             const isActive = isLoadingActiveInPeriod(loading, unit.date)
             const isMonthStart = isFirstDayOfMonth(unit.date)
+            const isMonthBoundary = i === 0 || i === timeUnits.length - 1
 
             return (
               <div
@@ -980,27 +969,28 @@ function LoadingRow({
                   "border-r border-b relative",
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                  isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                  isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                   theme === "dark" ? "group-hover/loading:bg-emerald-900/20" : "group-hover/loading:bg-emerald-50",
                   isMonthStart
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
                       : "border-l border-l-slate-300"
                     : "",
+                  isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                 )}
                 style={{
                   height: `${reducedRowHeight}px`,
-                  width: `${cellWidth}px`,
+                  width: `${unit.width ?? cellWidth}px`,
+                  minWidth: `${unit.width ?? cellWidth}px`,
+                  flexShrink: 0,
                   borderRight: "1px solid",
-                  borderBottom: "1px solid",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                   borderLeft: isMonthStart ? "1px solid" : "none",
                   borderLeftColor: isMonthStart
                     ? theme === "dark"
-                      ? "rgb(71, 85, 105)" // slate-600
-                      : "rgb(203, 213, 225)" // slate-300
+                      ? "rgb(71, 85, 105)"
+                      : "rgb(203, 213, 225)"
                     : "transparent",
-                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
                 {isActive && (
@@ -1012,14 +1002,13 @@ function LoadingRow({
                       ...(loading.rate >= 1 && {
                         position: "absolute",
                         top: "4px",
-                        bottom: "4px", 
+                        bottom: "4px",
                         left: "4px",
                         right: "4px"
                       })
                     }}
                   ></div>
                 )}
-                {/* Красные оверлеи удалены */}
               </div>
             )
           })}
@@ -1387,7 +1376,7 @@ function StageRow({
         </div>
 
         {/* Ячейки таймлайна для этапа + sparkline поверх */}
-        <div className="flex-1 flex w-full" style={{ position: "relative" }}>
+        <div className="flex-1 flex w-full" style={{ position: "relative", flexWrap: "nowrap" }}>
           {/* Sparkline суммарной загрузки этапа */}
           {graphWidth > 0 && (segments.length > 0 || hasPlannedRange) && (
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
@@ -1428,6 +1417,8 @@ function StageRow({
           )}
           {timeUnits.map((unit, i) => {
             const isMonthStart = isFirstDayOfMonth(unit.date)
+            const isMonthBoundary = i === 0 || i === timeUnits.length - 1
+            const isTodayDate = isToday(unit.date)
             // Совпадение дня с датами старта/окончания этапа
             const day = new Date(unit.date)
             day.setHours(0, 0, 0, 0)
@@ -1439,26 +1430,28 @@ function StageRow({
                 className={cn(
                   "border-r border-b relative",
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
+                  isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                   theme === "dark" ? "group-hover/stage:bg-emerald-900/20" : "group-hover/stage:bg-emerald-50",
                   isMonthStart
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
                       : "border-l border-l-slate-300"
                     : "",
+                  isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                 )}
                 style={{
                   height: `${reducedRowHeight}px`,
-                  width: `${cellWidth}px`,
+                  width: `${unit.width ?? cellWidth}px`,
+                  minWidth: `${unit.width ?? cellWidth}px`,
+                  flexShrink: 0,
                   borderRight: "1px solid",
-                  borderBottom: "1px solid",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                   borderLeft: isMonthStart ? "1px solid" : "none",
                   borderLeftColor: isMonthStart
                     ? theme === "dark"
                       ? "rgb(71, 85, 105)"
                       : "rgb(203, 213, 225)"
                     : "transparent",
-                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
                 {/* Вертикальные линии начала/конца этапа поверх графика */}

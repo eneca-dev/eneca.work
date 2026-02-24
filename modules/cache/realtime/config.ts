@@ -1,0 +1,130 @@
+import { queryKeys } from '../keys/query-keys'
+
+/**
+ * Типы событий Postgres Realtime
+ */
+export type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*'
+
+/**
+ * Конфигурация подписки на таблицу
+ */
+export interface TableSubscription {
+  /** Имя таблицы в БД */
+  table: string
+  /** События для подписки (по умолчанию все) */
+  events?: RealtimeEvent[]
+  /** Query keys для инвалидации при изменении */
+  invalidateKeys: readonly unknown[][]
+  /** Дополнительный фильтр (например, filter: 'user_id=eq.123') */
+  filter?: string
+}
+
+/**
+ * Конфигурация всех подписок
+ *
+ * Чтобы добавить новую таблицу:
+ * 1. Добавь запись в этот массив
+ * 2. Укажи какие query keys инвалидировать
+ *
+ * @example
+ * {
+ *   table: 'my_table',
+ *   invalidateKeys: [queryKeys.myEntity.all],
+ * }
+ */
+export const realtimeSubscriptions: TableSubscription[] = [
+  // ============================================================================
+  // Проекты и структура
+  // ============================================================================
+  {
+    table: 'projects',
+    invalidateKeys: [queryKeys.projects.all],
+  },
+  {
+    table: 'stages',
+    invalidateKeys: [queryKeys.projects.all], // Структура проекта
+  },
+  {
+    table: 'objects',
+    invalidateKeys: [queryKeys.projects.all], // Структура проекта
+  },
+  {
+    table: 'sections',
+    invalidateKeys: [
+      queryKeys.sections.all,
+      queryKeys.projects.all, // Структура проекта тоже обновляется
+      queryKeys.resourceGraph.all, // График ресурсов
+    ],
+  },
+
+  // ============================================================================
+  // Сотрудники
+  // ============================================================================
+  {
+    table: 'profiles',
+    invalidateKeys: [queryKeys.users.all],
+  },
+
+  // ============================================================================
+  // Загрузки
+  // ============================================================================
+  {
+    table: 'loadings',
+    invalidateKeys: [
+      queryKeys.loadings.all,
+      queryKeys.sections.all, // Подсчёты в секциях
+    ],
+  },
+  {
+    table: 'decomposition_stages',
+    invalidateKeys: [
+      queryKeys.sections.all, // Подсчёты в секциях
+      queryKeys.resourceGraph.all, // График ресурсов
+    ],
+  },
+  {
+    table: 'decomposition_items',
+    invalidateKeys: [
+      queryKeys.sections.all, // Подсчёты в секциях
+      queryKeys.resourceGraph.all, // График ресурсов
+    ],
+  },
+
+  // ============================================================================
+  // Справочники
+  // ============================================================================
+  {
+    table: 'departments',
+    invalidateKeys: [queryKeys.departments.all],
+  },
+  {
+    table: 'teams',
+    invalidateKeys: [queryKeys.teams.all],
+  },
+  {
+    table: 'clients',
+    invalidateKeys: [queryKeys.projects.all], // Клиенты в проектах
+  },
+
+  // ============================================================================
+  // Уведомления (опционально - можно убрать если не нужно)
+  // ============================================================================
+  {
+    table: 'notifications',
+    invalidateKeys: [queryKeys.notifications.all],
+  },
+  {
+    table: 'user_notifications',
+    invalidateKeys: [queryKeys.notifications.all],
+  },
+]
+
+/**
+ * Имя канала Realtime
+ */
+export const REALTIME_CHANNEL_NAME = 'cache-sync'
+
+/**
+ * Debounce время в мс для группировки инвалидаций
+ */
+export const INVALIDATION_DEBOUNCE_MS = 100

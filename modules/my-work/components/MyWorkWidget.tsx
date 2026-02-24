@@ -72,7 +72,7 @@ export const MyWorkWidget: React.FC = () => {
     
     try {
       const { data: loadingsData, error } = await supabase
-        .from('view_sections_with_loadings')
+        .from('view_sections_with_loadings_v2')
         .select('*')
         .eq('loading_responsible', userStore.id)
         .eq('loading_status', status)

@@ -154,7 +154,7 @@ export async function deleteTemplate(templateId: string): Promise<void> {
 export async function applyTemplate(
   templateId: string,
   sectionId: string,
-  statuses: Array<{ id: string; name: string }>
+  defaultStatusId?: string | null
 ): Promise<Stage[]> {
   const supabase = createClient()
 
@@ -176,19 +176,33 @@ export async function applyTemplate(
 
   const maxOrder = existingStages?.[0]?.decomposition_stage_order ?? 0
 
+  // 2.5. Определить статус для новых этапов (используем stage_statuses, не section_statuses!)
+  let statusId = defaultStatusId
+  if (!statusId) {
+    // Загружаем статусы напрямую из stage_statuses
+    const { data: stageStatuses } = await supabase
+      .from('stage_statuses')
+      .select('id, name')
+      .order('name')
+    const planStatus = stageStatuses?.find(s => /план/i.test(s.name))
+    statusId = planStatus?.id || stageStatuses?.[0]?.id || null
+  }
+
   // 3. Batch insert новых этапов
   const stagesToCreate = template.stages.map((stage) => ({
     decomposition_stage_section_id: sectionId,
     decomposition_stage_name: stage.name,
     decomposition_stage_order: maxOrder + stage.order + 1,
     decomposition_stage_start: null,
-    decomposition_stage_finish: null
+    decomposition_stage_finish: null,
+    decomposition_stage_description: null,
+    stage_status_id: statusId // Используем stage_status_id (не decomposition_stage_status_id!)
   }))
 
   const { data: createdStages, error: stagesError } = await supabase
     .from('decomposition_stages')
     .insert(stagesToCreate)
-    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish')
+    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, stage_status_id')
 
   if (stagesError) {
     console.error('Ошибка создания этапов:', stagesError)
@@ -203,27 +217,20 @@ export async function applyTemplate(
   const createdStageIds = createdStages.map((s: any) => s.decomposition_stage_id)
 
   try {
-    // 4. Найти статус "План" с помощью регулярного выражения (используем переданные статусы)
-    const planStatus = statuses.find((s) => /план/i.test(s.name)) || statuses[0]
-    const planStatusId = planStatus?.id || null
-    const planStatusName = planStatus?.name || ''
-
-    // 5. Batch insert всех декомпозиций для всех этапов
+    // 4. Batch insert всех декомпозиций для всех этапов
     const itemsToCreate: any[] = []
     createdStages.forEach((dbStage: any, stageIndex: number) => {
       const templateStage = template.stages[stageIndex]
       templateStage.items.forEach((item, itemIndex) => {
         itemsToCreate.push({
-          decomposition_item_section_id: sectionId, // Обязательное поле!
+          decomposition_item_section_id: sectionId,
           decomposition_item_stage_id: dbStage.decomposition_stage_id,
           decomposition_item_description: item.description,
           decomposition_item_work_category_id: item.workCategoryId,
           decomposition_item_difficulty_id: item.difficultyId,
           decomposition_item_planned_hours: item.plannedHours,
-          decomposition_item_order: itemIndex,
-          decomposition_item_progress: 0,
-          decomposition_item_planned_due_date: null,
-          decomposition_item_status_id: planStatusId
+          decomposition_item_order: itemIndex
+          // progress, planned_due_date, status_id используют default значения из БД
         })
       })
     })
@@ -256,11 +263,8 @@ export async function applyTemplate(
         description: item.description,
         typeOfWork: item.workCategoryName,
         difficulty: item.difficultyName || '',
-        responsible: '',
         plannedHours: item.plannedHours,
-        progress: 0,
-        status: planStatusName,
-        completionDate: null
+        progress: 0
       }))
 
       return {
@@ -268,6 +272,8 @@ export async function applyTemplate(
         name: dbStage.decomposition_stage_name,
         startDate: dbStage.decomposition_stage_start,
         endDate: dbStage.decomposition_stage_finish,
+        description: dbStage.decomposition_stage_description,
+        statusId: dbStage.stage_status_id,
         decompositions
       }
     })

@@ -2,6 +2,128 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## 🚨 ОБЯЗАТЕЛЬНО: Пайплайн разработки
+
+**При любой задаче по разработке функционала СТРОГО следуй пайплайну из `docs/main-pipeline.md`.**
+
+### Как это работает:
+
+1. **Всегда объявляй текущий шаг** в начале ответа:
+   ```
+   📍 ПАЙПЛАЙН: Фаза 1 — Декомпозиция задачи
+   ```
+
+2. **Запрашивай необходимые данные** от разработчика перед переходом к следующему шагу
+
+3. **Не переходи к следующему шагу** без явного подтверждения разработчика
+
+### Триггеры активации пайплайна:
+
+Активируй пайплайн когда разработчик:
+- Просит создать новый функционал/фичу
+- Просит добавить новый модуль
+- Описывает задачу, требующую более 1 файла изменений
+- Использует слова: "разработать", "реализовать", "добавить функционал", "новая фича"
+
+### Шаблон ответа при активации:
+
+```
+📍 ПАЙПЛАЙН: Фаза 0 — Подготовка
+
+Вижу задачу на разработку. Активирую пайплайн.
+
+**Мне нужно от тебя:**
+1. Создана ли ветка для этой фичи? (если нет — создай: `git checkout -b feature/название`)
+2. Опиши глобальную цель в 2-3 предложениях
+3. Какие критерии готовности (Definition of Done)?
+
+Жду ответа для перехода к Фазе 1.
+```
+
+### Шаблоны для каждой фазы:
+
+**Фаза 1 — Декомпозиция:**
+```
+📍 ПАЙПЛАЙН: Фаза 1 — Декомпозиция задачи
+
+[Разбиваю задачу на этапы...]
+
+**Согласуй план перед продолжением:**
+- Этап 1: ...
+- Этап 2: ...
+
+Подтверди план или внеси корректировки.
+```
+
+**Фаза 2.1 — Планирование этапа:**
+```
+📍 ПАЙПЛАЙН: Фаза 2.1 — Планирование этапа N
+
+**План реализации:**
+- Архитектура: ...
+- Файлы: ...
+- Риски: ...
+
+Подтверди план этапа для начала реализации.
+```
+
+**Фаза 2.3 — Реализация:**
+```
+📍 ПАЙПЛАЙН: Фаза 2.3 — Реализация этапа N
+
+[Код...]
+
+Реализация завершена. Запусти `npm run build` и проверь.
+```
+
+**Фаза 2.4 — Тестирование:**
+```
+📍 ПАЙПЛАЙН: Фаза 2.4 — Ручное тестирование
+
+**Чек-лист для проверки:**
+- [ ] Сценарий 1
+- [ ] Сценарий 2
+
+Пройди чек-лист и сообщи результаты.
+```
+
+**Фаза 2.5 — Code Review:**
+```
+📍 ПАЙПЛАЙН: Фаза 2.5 — Code Review
+
+**Результаты проверки:**
+1. Архитектура: ✅/⚠️
+2. Дублирование: ✅/⚠️
+3. Безопасность: ✅/⚠️
+4. Ошибки: ✅/⚠️
+5. TypeScript: ✅/⚠️
+
+[Замечания если есть]
+
+Подтверди исправления или переходим к коммиту.
+```
+
+**Фаза 2.7 — Коммит:**
+```
+📍 ПАЙПЛАЙН: Фаза 2.7 — Коммит
+
+Этап N завершён. Сделай коммит:
+`git add . && git commit -m "feat(module): описание"`
+
+После коммита переходим к этапу N+1.
+```
+
+### Важно:
+
+- **НЕ пропускай шаги** — даже если кажется очевидным
+- **НЕ начинай код** без согласованного плана
+- **НЕ переходи дальше** без подтверждения разработчика
+- **ВСЕГДА показывай** на каком шаге находишься
+
+---
+
 ## Claude Code Instructions
 
 ### Context7 Integration
@@ -34,6 +156,7 @@ npm run dev        # Start development server (localhost:3000)
 npm run build      # Build for production
 npm run start      # Start production server
 npm run lint       # Run ESLint
+npm run db:types   # Regenerate TypeScript types from Supabase schema
 ```
 
 **Note:** No test scripts are currently configured in package.json.
@@ -58,6 +181,7 @@ The application follows a strict **module-first architecture**. Each major featu
 
 ```
 modules/
+├── cache/                # Centralized caching with TanStack Query + Server Actions
 ├── planning/              # Resource planning & timeline (Gantt chart)
 ├── permissions/          # Dynamic permission system
 ├── notifications/        # Real-time notification system
@@ -104,6 +228,33 @@ The planning module follows this hierarchical structure:
 - Each loading connects: Employee + Decomposition Stage + Date Range + Rate
 - The decomposition layer exists in the data model but is not exposed in UI modals
 
+### Database Types (`types/db.ts`)
+
+TypeScript types are auto-generated from Supabase schema and used throughout the application.
+
+**Regenerating types after schema changes:**
+```bash
+npm run db:types
+```
+
+**IMPORTANT:** Always run `npm run db:types` after:
+- Creating or modifying migrations
+- Adding new tables or views
+- Changing column types or adding columns
+- Creating new enums
+
+**Using types in code:**
+```typescript
+import type { Database } from '@/types/db'
+
+// Or use helper types from cache module:
+import { TableRow, ViewRow, DbEnum } from '@/modules/cache'
+
+type Project = TableRow<'projects'>           // Table row type
+type CacheProject = ViewRow<'v_cache_projects'>  // View row type
+type Status = DbEnum<'project_status_enum'>   // Enum type
+```
+
 ### Permission System
 
 Dynamic, database-driven permission system:
@@ -147,7 +298,8 @@ usePlanningStore      // Planning module state
 
 **Server State:**
 - TanStack Query (`@tanstack/react-query`) for server state caching
-- Supabase Realtime for live updates
+- **Cache Module** (`modules/cache/`) - centralized caching system (see `modules/cache/README.md`)
+- Supabase Realtime for live updates with automatic cache invalidation
 - Custom hooks wrap query logic
 
 **Form State:**
@@ -208,6 +360,42 @@ app/api/
 - `PermissionsErrorBoundary` for permission errors
 - Structured error responses from API routes
 
+### 6. Cache Module (`modules/cache/`)
+
+**IMPORTANT:** Read `modules/cache/README.md` before implementing data fetching in new modules.
+
+The cache module provides:
+- **Server Actions** - Type-safe data fetching from Supabase
+- **Hook Factories** - Create typed query/mutation hooks with one line
+- **Optimistic Updates** - Instant UI feedback
+- **Realtime Sync** - Automatic cache invalidation on DB changes
+
+**Quick example:**
+```typescript
+import { createCacheQuery, createUpdateMutation, queryKeys } from '@/modules/cache'
+
+// Create a query hook
+export const useProjects = createCacheQuery({
+  queryKey: () => queryKeys.projects.lists(),
+  queryFn: getProjects,
+})
+
+// Create a mutation hook with optimistic updates
+export const useUpdateProject = createUpdateMutation({
+  mutationFn: updateProject,
+  listQueryKey: queryKeys.projects.lists(),
+  getId: (input) => input.project_id,
+  getItemId: (item) => item.project_id,
+  merge: (item, input) => ({ ...item, ...input }),
+})
+```
+
+When migrating modules to use cache:
+1. Create Server Actions in `modules/[module]/actions/`
+2. Add query keys to `modules/cache/keys/query-keys.ts`
+3. Create hooks using factories from cache module
+4. Add Realtime subscription if needed (see `modules/cache/realtime/config.ts`)
+
 ## Important Conventions
 
 ### Naming Conventions
@@ -237,7 +425,7 @@ app/api/
 
 4. **Database Access:** Prefer using existing views over direct table queries to avoid N+1 problems
 
-5. **Type Safety:** Extensive TypeScript usage - maintain type safety across database types (`types/db.ts`)
+5. **Type Safety:** Extensive TypeScript usage - maintain type safety across database types (`types/db.ts`). **Run `npm run db:types` after any schema changes.**
 
 6. **Realtime:** Many features require Supabase Realtime subscriptions - remember to unsubscribe in cleanup
 
@@ -245,9 +433,12 @@ app/api/
 
 8. **App Router:** Uses Next.js 15 App Router (NOT Pages Router) - server components by default
 
+9. **Cache Module:** For new data fetching, use the cache module (`modules/cache/`). Read `modules/cache/README.md` first.
+
 ## Module Documentation
 
 For detailed module-specific documentation, refer to individual module READMEs:
+- **`modules/cache/README.md`** - **Caching system (READ FIRST for new data fetching)**
 - `modules/permissions/README.md` - Permission system details
 - `modules/chat/README.md` - Chat system architecture
 - `modules/notifications/README.md` - Notification system

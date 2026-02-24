@@ -45,6 +45,7 @@ export interface LoadingData {
   loading_finish: string | null
   loading_rate: number | null
   loading_status: "active" | "archived"
+  loading_comment?: string | null
   loading_created: string | null
   loading_updated: string | null
 }
@@ -76,6 +77,7 @@ export interface SectionWithLoadings {
   loading_finish: string | null
   loading_rate: number | null
   loading_status: string | null
+  loading_comment?: string | null
   loading_created: string | null
   loading_updated: string | null
   responsible_first_name: string | null
@@ -106,6 +108,7 @@ export interface EmployeeWorkloadData {
   loading_finish: string | null
   loading_rate: number | null
   loading_status: "active" | "archived" | null
+  loading_comment?: string | null
   section_name: string | null
   project_id: string | null
   project_name: string | null
@@ -178,11 +181,11 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | Stru
   }
 }
 
-// Обновляем функцию fetchLoadings для использования представления view_sections_with_loadings
+// Обновляем функцию fetchLoadings для использования представления view_sections_with_loadings_v2
 export async function fetchLoadings(sectionId: string, checkOnly = false): Promise<LoadingData[] | StructuredError> {
   try {
     let query = supabase
-      .from("view_sections_with_loadings")
+      .from("view_sections_with_loadings_v2")
       .select(`
         loading_id,
         loading_responsible,
@@ -195,6 +198,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
         loading_created,
         loading_updated,
         loading_status,
+        loading_comment,
         responsible_first_name,
         responsible_last_name,
         responsible_avatar
@@ -229,6 +233,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
       loading_finish: item.loading_finish,
       loading_rate: item.loading_rate,
       loading_status: item.loading_status,
+      loading_comment: item.loading_comment ?? null,
       loading_created: item.loading_created,
       loading_updated: item.loading_updated,
       responsible_name: (item.responsible_first_name && item.responsible_last_name)
@@ -269,7 +274,7 @@ export async function fetchSectionsWithLoadings(
       subdivisionId
     })
 
-    let query = supabase.from("view_sections_with_loadings").select("*")
+    let query = supabase.from("view_sections_with_loadings_v2").select("*")
 
     // Добавляем фильтр по проекту, если он указан
     if (projectId) {
@@ -372,7 +377,7 @@ export async function fetchSectionsWithLoadings(
     const { data, error } = await query
 
     if (error) {
-      console.error("Ошибка при загрузке данных из view_sections_with_loadings:", error)
+      console.error("Ошибка при загрузке данных из view_sections_with_loadings_v2:", error)
       return {
         success: false,
         error: "Не удалось загрузить данные разделов с загрузками",
@@ -721,9 +726,9 @@ export async function updateLoading(
     stageId?: string
     comment?: string
   },
-): Promise<{ 
-  success: boolean; 
-  error?: string; 
+): Promise<{
+  success: boolean;
+  error?: string;
   updatedLoading?: {
     id: string
     sectionId: string
@@ -733,6 +738,7 @@ export async function updateLoading(
     startDate: Date
     endDate: Date
     rate: number
+    comment?: string
   }
 }> {
   try {
@@ -775,7 +781,7 @@ export async function updateLoading(
 
     // После успешного обновления получаем актуальные данные о загрузке с информацией о проекте и разделе
     const { data: loadingData, error: fetchError } = await supabase
-      .from("view_sections_with_loadings")
+      .from("view_sections_with_loadings_v2")
       .select(`
         loading_id,
         section_id,
@@ -784,7 +790,8 @@ export async function updateLoading(
         project_name,
         loading_start,
         loading_finish,
-        loading_rate
+        loading_rate,
+        loading_comment
       `)
       .eq("loading_id", loadingId)
       .single()
@@ -804,6 +811,7 @@ export async function updateLoading(
       startDate: new Date(loadingData.loading_start),
       endDate: new Date(loadingData.loading_finish),
       rate: loadingData.loading_rate || 1,
+      comment: loadingData.loading_comment || undefined,
     }
 
     console.log("Загрузка успешно обновлена с актуальными данными:", updatedLoading)
@@ -1207,7 +1215,7 @@ export async function fetchProjectObjects(
         hint: viewError.hint || 'Нет подсказки',
         originalError: JSON.stringify(viewError, null, 2)
       }
-      
+
       console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
       return {
         success: false,

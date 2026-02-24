@@ -282,13 +282,22 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
           setStages([]); setObjects([])
           return
         }
-        // Стадии
+        // Стадии - загружаем только те, у которых есть разделы в view_section_hierarchy
         const { data: stageRows } = await supabase
-          .from("stages")
+          .from("view_section_hierarchy")
           .select("stage_id, stage_name")
-          .eq("stage_project_id", formData.projectId)
-          .order("stage_name")
-        setStages(stageRows || [])
+          .eq("project_id", formData.projectId)
+          .not("stage_id", "is", null)
+          .not("stage_name", "is", null)
+
+        // Уникализация стадий (в VIEW могут быть дубликаты)
+        const stageMap = new Map<string, { stage_id: string; stage_name: string }>()
+        ;(stageRows || []).forEach((r: any) => {
+          if (r.stage_id && r.stage_name && !stageMap.has(r.stage_id)) {
+            stageMap.set(r.stage_id, { stage_id: r.stage_id, stage_name: r.stage_name })
+          }
+        })
+        setStages(Array.from(stageMap.values()).sort((a, b) => a.stage_name.localeCompare(b.stage_name)))
 
         // Объекты проекта (через представление, с уникализацией)
         const { data: objectRows } = await supabase

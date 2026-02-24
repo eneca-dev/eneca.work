@@ -165,10 +165,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       if (currentDepartmentId !== targetDepartmentId) return false
 
       // Руководитель отдела может редактировать только team_lead и user
-      const targetRole = user?.role?.toLowerCase()
+      // Проверяем ВСЕ роли пользователя через roles_display_string, а не только основную роль
+      const rolesString = (user as any)?.roles_display_string || user?.role || ''
+      const targetRoles = rolesString.toLowerCase().split(',').map((r: string) => r.trim())
       const allowedRoles = ['team_lead', 'user']
 
-      return allowedRoles.includes(targetRole || '')
+      // Разрешаем редактирование, если хотя бы одна из ролей пользователя входит в список разрешённых
+      return targetRoles.some((role: string) => allowedRoles.includes(role))
     }
 
     return false
@@ -1056,9 +1059,10 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
             {/* Ставка и Загруженность в одну строку */}
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
-              <Label className="text-right md:col-span-1 col-span-full pt-2">Ставка и Загруженность</Label>
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Загруженность</Label>
               <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="space-y-1">
+                {/* TEMPORARILY HIDDEN: Salary field */}
+                {/* <div className="space-y-1">
                   <Input
                     id="salary"
                     type="number"
@@ -1072,7 +1076,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     title={!canEditSalaryFields ? "Недостаточно прав для редактирования ставки" : ""}
                   />
                   <p className="text-xs text-gray-500">Ставка BYN/час {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
-                </div>
+                </div> */}
 
                 <div className="space-y-1">
                   <Select

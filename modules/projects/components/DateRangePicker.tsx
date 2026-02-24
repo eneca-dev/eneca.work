@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
+import { Info } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type DateRange = { from: Date | null; to: Date | null }
 
@@ -302,8 +304,27 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           ) : (
             <span className="w-[28px] h-[24px]" />
           )}
-          <div className="text-center font-bold text-foreground text-sm">
+          <div className="text-center font-bold text-foreground text-sm flex items-center justify-center gap-1">
             {date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}
+            {showNavigation === 'right' && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help hover:text-foreground transition-colors" />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[340px] text-xs bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-50 border-slate-200 dark:border-slate-500">
+                    <p className="mb-1.5">
+                     <strong>Как изменить только одну дату периода:</strong>
+                    </p>
+                    <p className="mb-1">
+                      Перетащите начало или конец на нужную дату            </p>
+                    <p>
+                      Для смены месяца — перетащите на стрелку (← →)
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
           {showNavigation === 'right' ? (
             <button

@@ -115,11 +115,11 @@ export function SaveTemplateDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md sm:rounded-md">
         <DialogHeader>
           <DialogTitle>Сохранить шаблон</DialogTitle>
           <DialogDescription className="text-sm">
-            Сохраните текущую структуру декомпозиции как шаблон
+            Сохраните текущую структуру этапов как шаблон
           </DialogDescription>
         </DialogHeader>
 
@@ -158,7 +158,7 @@ export function SaveTemplateDialog({
               id="template-name"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="Например: Стандартная декомпозиция"
+              placeholder="Например: Стандартная задача"
               disabled={isSaving}
             />
           </div>

@@ -1,8 +1,10 @@
 export interface FilterOption {
   id: string
   name: string
-  departmentId?: string // для команд - связь с отделом
-  managerId?: string    // для проектов - связь с менеджером
+  departmentId?: string   // для команд и сотрудников - связь с отделом
+  managerId?: string      // для проектов - связь с менеджером
+  subdivisionId?: string  // для отделов - связь с подразделением
+  teamId?: string         // для сотрудников - связь с командой
 }
 
 export interface FilterState {
@@ -85,7 +87,7 @@ export interface FilterStore {
   config: FilterConfigs
   
   // Методы
-  initialize: (config: FilterConfigs) => void
+  initialize: (config: FilterConfigs) => Promise<void>
   setFilter: (type: FilterType, value: string | null) => void
   resetFilters: () => void
 

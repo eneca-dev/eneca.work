@@ -26,6 +26,13 @@ const mockDocumentationStructure: DocumentationFile[] = [
   { name: 'Планирование', path: 'planirovanie', type: 'folder', children: [
     { name: 'Общая информация', path: 'planirovanie/planirovanie.md', type: 'file' },
   ]},
+  { name: 'Заметки', path: 'notions', type: 'folder', children: [
+    { name: 'Руководство по заметкам', path: 'notions/notions.md', type: 'file' },
+  ]},
+  { name: 'Уведомления', path: 'notifications', type: 'folder', children: [
+    { name: 'Руководство по уведомлениям', path: 'notifications/notifications.md', type: 'file' },
+    { name: 'Объявления', path: 'notifications/announcements.md', type: 'file' },
+  ]},
   { name: 'Пользователи', path: 'users', type: 'folder', children: [
     { name: 'Общая информация', path: 'users/index.md', type: 'file' },
     { name: 'Администратор', path: 'users/administrator.md', type: 'file' },
@@ -39,7 +46,7 @@ const mockDocumentationStructure: DocumentationFile[] = [
 export function useDocumentationFiles() {
   const [files] = useState<DocumentationFile[]>(mockDocumentationStructure)
   const [selectedFile, setSelectedFile] = useState<string | null>('my-work/glavnaya-stranitsa.md')
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my-work', 'projects', 'users']))
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my-work', 'projects', 'notions', 'notifications', 'users']))
   const [searchQuery, setSearchQuery] = useState<string>('')
   
   // FlexSearch состояния

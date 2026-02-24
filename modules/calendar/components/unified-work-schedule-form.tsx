@@ -45,7 +45,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   // - Вносить изменения в общий график работы
   const { canManageGlobalEvents } = useCalendarPermissions()
 
-  const [activeTab, setActiveTab] = useState("dayoff")
+  // функциональность перенесена в загрузки
+  const [activeTab, setActiveTab] = useState("transfer")
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
     to: null,
@@ -78,36 +79,37 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
     }
   }
 
+  // функциональность перенесена в загрузки
   // Функция для создания личных событий (отгул, отпуск, больничный)
-  const submitPersonalEvent = async () => {
-    if (!dateRange.from || !currentUserId) return
+  // const submitPersonalEvent = async () => {
+  //   if (!dateRange.from || !currentUserId) return
 
-    let eventType: "Отгул" | "Отпуск запрошен" | "Больничный"
+  //   let eventType: "Отгул" | "Отпуск запрошен" | "Больничный"
 
-    switch (activeTab) {
-      case "dayoff":
-        eventType = "Отгул"
-        break
-      case "vacation":
-        eventType = "Отпуск запрошен"
-        break
-      case "sick":
-        eventType = "Больничный"
-        break
-      default:
-        eventType = "Отгул"
-    }
+  //   switch (activeTab) {
+  //     case "dayoff":
+  //       eventType = "Отгул"
+  //       break
+  //     case "vacation":
+  //       eventType = "Отпуск запрошен"
+  //       break
+  //     case "sick":
+  //       eventType = "Больничный"
+  //       break
+  //     default:
+  //       eventType = "Отгул"
+  //   }
 
-    await createEvent({
-      calendar_event_type: eventType,
-      calendar_event_comment: comment,
-      calendar_event_is_global: false,
-      calendar_event_is_weekday: null,
-      calendar_event_created_by: currentUserId,
-      calendar_event_date_start: formatDateToString(dateRange.from),
-      calendar_event_date_end: dateRange.to ? formatDateToString(dateRange.to) : undefined,
-    }, currentUserId)
-  }
+  //   await createEvent({
+  //     calendar_event_type: eventType,
+  //     calendar_event_comment: comment,
+  //     calendar_event_is_global: false,
+  //     calendar_event_is_weekday: null,
+  //     calendar_event_created_by: currentUserId,
+  //     calendar_event_date_start: formatDateToString(dateRange.from),
+  //     calendar_event_date_end: dateRange.to ? formatDateToString(dateRange.to) : undefined,
+  //   }, currentUserId)
+  // }
 
   // Функция для создания событий переноса рабочих дней
   const submitTransferEvent = async () => {
@@ -179,11 +181,13 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
           } else if (activeTab === "holiday" && canManageGlobalEvents) {
             span.setAttribute("event.type", "holiday")
             await submitHolidayEvent()
-          } else {
-            span.setAttribute("event.type", "personal")
-            span.setAttribute("event.personal_type", activeTab)
-            await submitPersonalEvent()
           }
+          // функциональность перенесена в загрузки
+          // else {
+          //   span.setAttribute("event.type", "personal")
+          //   span.setAttribute("event.personal_type", activeTab)
+          //   await submitPersonalEvent()
+          // }
 
           span.setAttribute("submit.success", true)
 
@@ -249,18 +253,33 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
     )
   }
 
+  // Если у пользователя нет прав, показываем сообщение
+  if (!canManageGlobalEvents) {
+    return (
+      <div className="p-4 bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 rounded-md">
+        <p className="text-sm">
+          У вас нет прав для изменения общего рабочего графика.
+          Для получения доступа обратитесь к администратору.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-2">
+            {/* функциональность перенесена в загрузки
             <TabsTrigger value="dayoff">Отгул</TabsTrigger>
             <TabsTrigger value="vacation">Отпуск</TabsTrigger>
             <TabsTrigger value="sick">Больничный</TabsTrigger>
-            {canManageGlobalEvents && <TabsTrigger value="transfer">Перенос</TabsTrigger>}
-            {canManageGlobalEvents && <TabsTrigger value="holiday">Праздник</TabsTrigger>}
+            */}
+            <TabsTrigger value="transfer">Перенос</TabsTrigger>
+            <TabsTrigger value="holiday">Праздник</TabsTrigger>
           </TabsList>
 
+          {/* функциональность перенесена в загрузки
           <TabsContent value="dayoff" className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="date-range">Даты отгула</Label>
@@ -335,10 +354,9 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
               />
             </div>
           </TabsContent>
+          */}
 
-          {canManageGlobalEvents && (
-            <>
-              <TabsContent value="transfer" className="space-y-4 pt-4">
+          <TabsContent value="transfer" className="space-y-4 pt-4">
                 <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
                   <p className="text-sm font-medium">Общее изменение рабочего графика</p>
                 </div>
@@ -407,8 +425,6 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
                   />
                 </div>
               </TabsContent>
-            </>
-          )}
         </Tabs>
 
         <div className="flex justify-end space-x-2">
@@ -416,10 +432,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             Отмена
           </Button>
           <Button type="submit" disabled={isSubmitting || !isFormValid()}>
-            {isSubmitting 
-              ? (activeTab === "vacation" ? "Запрашиваем..." : "Добавление...")
-              : (activeTab === "vacation" ? "Запросить отпуск" : "Добавить")
-            }
+            {isSubmitting ? "Добавление..." : "Добавить"}
           </Button>
         </div>
       </form>

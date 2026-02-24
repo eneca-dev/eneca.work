@@ -1,5 +1,8 @@
 export { FeedbackAnalyticsPage } from "./components/FeedbackAnalyticsPage"
 export { FeedbackStats } from "./components/FeedbackStats"
 export { FeedbackCommentsList } from "./components/FeedbackCommentsList"
+export { UserReportsList } from "./components/UserReportsList"
 export { AddUserModal } from "./components/AddUserModal"
 export { useFeedbackAnalytics } from "./hooks/useFeedbackAnalytics"
+export { useUserReports } from "./hooks/useUserReports"
+export type { UserReport } from "./services/feedbackAnalyticsService"

@@ -8,7 +8,8 @@ import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
-import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
+// TEMPORARILY HIDDEN: Reports tab
+// import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
@@ -201,7 +202,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           // Получаем данные объекта
           const { data: objectData, error: objectError } = await supabase
             .from('objects')
-            .select('object_id, object_name, object_stage_id')
+            .select('object_id, object_name, object_stage_id, object_project_id')
             .eq('object_id', sectionData.section_object_id)
             .single()
 
@@ -217,34 +218,54 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             throw new Error('Объект не найден')
           }
 
-          console.log('Загружаем стадию для object_stage_id:', objectData.object_stage_id)
+          let stageData = null
+          let projectIdFromStage = null
 
-          // Получаем данные стадии
-          const { data: stageData, error: stageError } = await supabase
-            .from('stages')
-            .select('stage_id, stage_name, stage_project_id')
-            .eq('stage_id', objectData.object_stage_id)
-            .single()
+          // Проверяем, есть ли у объекта стадия
+          if (objectData.object_stage_id) {
+            console.log('Загружаем стадию для object_stage_id:', objectData.object_stage_id)
 
-          console.log('Результат загрузки стадии:', { stageData, stageError })
+            // Получаем данные стадии
+            const { data: stage, error: stageError } = await supabase
+              .from('stages')
+              .select('stage_id, stage_name, stage_project_id')
+              .eq('stage_id', objectData.object_stage_id)
+              .single()
 
-          if (stageError) {
-            console.error('Ошибка загрузки стадии:', stageError)
-            throw stageError
+            console.log('Результат загрузки стадии:', { stage, stageError })
+
+            if (stageError) {
+              console.error('Ошибка загрузки стадии:', stageError)
+              throw stageError
+            }
+
+            if (!stage) {
+              console.error('Стадия не найдена')
+              throw new Error('Стадия не найдена')
+            }
+
+            stageData = stage
+            projectIdFromStage = stage.stage_project_id
+          } else {
+            console.log('Объект без стадии (object_stage_id = null), используем object_project_id:', objectData.object_project_id)
+            projectIdFromStage = objectData.object_project_id
           }
 
-          if (!stageData) {
-            console.error('Стадия не найдена')
-            throw new Error('Стадия не найдена')
+          // Определяем project_id: либо из стадии, либо напрямую из объекта
+          const projectId = projectIdFromStage
+
+          if (!projectId) {
+            console.error('Не удалось определить project_id')
+            throw new Error('Не удалось определить project_id')
           }
 
-          console.log('Загружаем проект для stage_project_id:', stageData.stage_project_id)
+          console.log('Загружаем проект для project_id:', projectId)
 
           // Получаем данные проекта
           const { data: projectData, error: projectError } = await supabase
             .from('projects')
             .select('project_id, project_name, project_manager')
-            .eq('project_id', stageData.stage_project_id)
+            .eq('project_id', projectId)
             .single()
 
           console.log('Результат загрузки проекта:', { projectData, projectError })
@@ -280,8 +301,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           hierarchyData = {
             object_id: objectData.object_id,
             object_name: objectData.object_name,
-            stage_id: stageData.stage_id,
-            stage_name: stageData.stage_name,
+            stage_id: stageData?.stage_id || null,
+            stage_name: stageData?.stage_name || null,
             project_id: projectData.project_id,
             project_name: projectData.project_name,
             manager_name: managerName
@@ -782,7 +803,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
-              Декомпозиция
+              Задачи
             </button>
             
             <button
@@ -805,7 +826,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             >
               Комментарии
             </button>
-            <button
+            {/* TEMPORARILY HIDDEN: Reports tab button */}
+            {/* <button
               onClick={() => setActiveTab('reports')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
                 activeTab === 'reports'
@@ -814,7 +836,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               }`}
             >
               Отчёты
-            </button>
+            </button> */}
             <button
               onClick={() => setActiveTab('loadings')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
@@ -1237,9 +1259,10 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   <SectionTasksPreview sectionId={sectionId} />
                 </div>
               )}
-              {activeTab === 'reports' && (
+              {/* TEMPORARILY HIDDEN: Reports tab content */}
+              {/* {activeTab === 'reports' && (
                 <SectionReportsTab sectionId={sectionId} />
-              )}
+              )} */}
               {activeTab === 'loadings' && (
                 <SectionLoadingsTab sectionId={sectionId} />
               )}

@@ -44,8 +44,7 @@ export async function GET(request: Request) {
     const { count, error: countError } = await supabase
       .from("user_feedback")
       .select("*", { count: 'exact', head: true })
-      .eq("completed", true)
-      .not("score", "is", null)
+      .or("completed.eq.true,next_survey_at.eq.infinity")
 
     if (countError) {
       console.error('Error fetching count:', countError.message)
@@ -58,8 +57,7 @@ export async function GET(request: Request) {
     const { data: feedbackData, error: feedbackError } = await supabase
       .from("user_feedback")
       .select("id, user_id, first_name, last_name, score, had_problems, problem_text, created_at, updated_at, completed, answers, next_survey_at")
-      .eq("completed", true)
-      .not("score", "is", null)
+      .or("completed.eq.true,next_survey_at.eq.infinity")
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 

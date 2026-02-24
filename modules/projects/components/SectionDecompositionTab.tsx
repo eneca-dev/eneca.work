@@ -1273,8 +1273,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       )}
       {!compact && (
         <div>
-          <h3 className="text-base xl:text-lg font-semibold dark:text-slate-200 text-slate-800">Декомпозиция раздела</h3>
-          <p className="text-xs xl:text-sm text-slate-500 dark:text-slate-400">Создавайте и управляйте строками декомпозиции. Все записи автоматически привязываются к текущему разделу.</p>
+          <h3 className="text-base xl:text-lg font-semibold dark:text-slate-200 text-slate-800">Задачи раздела</h3>
+          <p className="text-xs xl:text-sm text-slate-500 dark:text-slate-400">Создавайте и управляйте строками задач. Все записи автоматически привязываются к текущему разделу.</p>
         </div>
       )}
 
@@ -1312,7 +1312,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             )}
 
           </div>
-          {/* Блок управления этапами и декомпозициями встроен ниже */}
+          {/* Блок управления этапами и задачами встроен ниже */}
 
           {/* !groupByStage и группированные таблицы заменены на inline ManageStagesDialog */}
           {false && (

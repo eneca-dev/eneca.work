@@ -58,7 +58,7 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
                   />
                 </div>
                 <span className="absolute bottom-2 right-3 text-xs text-emerald-100">
-                  {formatMessageTime(message.timestamp)}
+                  {formatMessageTime(message.created_at)}
                 </span>
               </>
             ) : (
@@ -70,7 +70,7 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
                   />
                 </div>
                 <div className="text-xs mt-1 text-gray-500 dark:text-gray-400 text-right">
-                  {formatMessageTime(message.timestamp)}
+                  {formatMessageTime(message.created_at)}
                 </div>
               </>
             )}

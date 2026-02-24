@@ -88,6 +88,10 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
       }
     })
 
+    // ОТКЛЮЧЕНО: исключаем отпуска, больничные, отгулы
+    const excludedTypes = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"]
+    filtered = filtered.filter(event => !excludedTypes.includes(event.calendar_event_type))
+
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase()

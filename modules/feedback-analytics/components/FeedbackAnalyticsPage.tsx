@@ -2,20 +2,36 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, AlertCircle, UserPlus } from "lucide-react"
+import { RefreshCw, AlertCircle, UserPlus, MessageSquare } from "lucide-react"
 import { FeedbackStats } from "./FeedbackStats"
 import { FeedbackCommentsList } from "./FeedbackCommentsList"
+import { UserReportsList } from "./UserReportsList"
 import { AddUserModal } from "./AddUserModal"
 import { useFeedbackAnalytics } from "../hooks/useFeedbackAnalytics"
+import { useUserReports } from "../hooks/useUserReports"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent } from "@/components/ui/card"
 
 export function FeedbackAnalyticsPage() {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'feedback' | 'reports'>('feedback')
+
   const { stats, comments, isLoading, error, refresh, hasAccess } = useFeedbackAnalytics()
+  const {
+    reports,
+    isLoading: reportsLoading,
+    error: reportsError,
+    refresh: refreshReports,
+    hasAccess: reportsAccess,
+    sortOrder,
+    toggleSortOrder
+  } = useUserReports()
 
   // Проверка доступа в процессе (первая загрузка)
-  if (hasAccess === null && isLoading) {
+  const currentLoading = viewMode === 'feedback' ? isLoading : reportsLoading
+  const currentAccess = viewMode === 'feedback' ? hasAccess : reportsAccess
+
+  if (currentAccess === null && currentLoading) {
     return (
       <div className="p-6">
         <Card>
@@ -29,7 +45,7 @@ export function FeedbackAnalyticsPage() {
   }
 
   // Нет доступа
-  if (hasAccess === false) {
+  if (currentAccess === false) {
     return (
       <div className="p-6">
         <Alert variant="destructive">
@@ -43,6 +59,8 @@ export function FeedbackAnalyticsPage() {
     )
   }
 
+  const currentError = viewMode === 'feedback' ? error : reportsError
+
   return (
     <div className="space-y-6 p-6 min-h-screen dark:bg-[rgb(17_24_39)]">
       {/* Заголовок с кнопками */}
@@ -51,6 +69,15 @@ export function FeedbackAnalyticsPage() {
           Аналитика опросов
         </h1>
         <div className="flex gap-2">
+          <Button
+            onClick={() => setViewMode(viewMode === 'feedback' ? 'reports' : 'feedback')}
+            variant="outline"
+            size="sm"
+            className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            {viewMode === 'feedback' ? 'Сообщения о проблемах' : 'Ответы пользователей'}
+          </Button>
           <Button
             onClick={() => setIsAddUserModalOpen(true)}
             variant="outline"
@@ -61,13 +88,13 @@ export function FeedbackAnalyticsPage() {
             Добавить
           </Button>
           <Button
-            onClick={refresh}
-            disabled={isLoading}
+            onClick={viewMode === 'feedback' ? refresh : refreshReports}
+            disabled={currentLoading}
             variant="outline"
             size="sm"
             className="bg-white dark:bg-[rgb(15_23_42)] !border-gray-200 dark:!border-slate-600"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${currentLoading ? "animate-spin" : ""}`} />
             Обновить
           </Button>
         </div>
@@ -84,10 +111,10 @@ export function FeedbackAnalyticsPage() {
       />
 
       {/* Ошибка */}
-      {error && (
+      {currentError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {error.message}
+            {currentError.message}
           </AlertDescription>
         </Alert>
       )}
@@ -95,8 +122,17 @@ export function FeedbackAnalyticsPage() {
       {/* Статистика */}
       <FeedbackStats stats={stats} isLoading={isLoading} />
 
-      {/* Список комментариев */}
-      <FeedbackCommentsList comments={comments} isLoading={isLoading} />
+      {/* Список комментариев или сообщений о проблемах */}
+      {viewMode === 'feedback' ? (
+        <FeedbackCommentsList comments={comments} isLoading={isLoading} />
+      ) : (
+        <UserReportsList
+          reports={reports}
+          isLoading={reportsLoading}
+          sortOrder={sortOrder}
+          onToggleSortOrder={toggleSortOrder}
+        />
+      )}
     </div>
   )
 }

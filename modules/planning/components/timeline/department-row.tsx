@@ -1,7 +1,7 @@
 "use client" 
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, MessageSquare } from "lucide-react"
 import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -15,15 +15,39 @@ import { FreshnessIndicator } from "./FreshnessIndicator"
 import { useTeamActivityPermissions } from "../../hooks/useTeamActivityPermissions"
 import {
   loadingsToPeriods,
-  groupVacationPeriods,
-  groupSickLeavePeriods,
-  groupTimeOffPeriods,
   calculateBarRenders,
+  calculateBarTop,
+  splitPeriodByNonWorkingDays,
   formatBarLabel,
   formatBarTooltip,
   getBarLabelParts,
+  BASE_BAR_HEIGHT,
+  BAR_GAP,
+  COMMENT_HEIGHT,
+  COMMENT_GAP,
   type BarPeriod,
 } from "./loading-bars-utils"
+
+// Helper для конвертации цвета в rgba
+function hexToRgba(color: string, alpha: number): string {
+  // Если цвет уже в формате rgb/rgba, извлекаем r, g, b
+  if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g)
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
+    }
+  }
+
+  // Убираем # если есть
+  let hex = color.replace('#', '')
+
+  // Конвертируем в RGB
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 interface DepartmentRowProps {
   department: Department
@@ -163,8 +187,8 @@ export function DepartmentRow({
               className={cn(
                 "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r",
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                  : "border-slate-200 bg-white group-hover/row:bg-slate-100",
               )}
               style={{
                 width: `${COLUMN_WIDTHS.section}px`,
@@ -233,8 +257,8 @@ export function DepartmentRow({
                 className={cn(
                   "p-3 transition-colors h-full flex items-center justify-center border-b border-r",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                    : "border-slate-200 bg-white group-hover/row:bg-slate-100",
                 )}
                 style={{
                   width: `${COLUMN_WIDTHS.object}px`,
@@ -283,7 +307,7 @@ export function DepartmentRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-emerald-900" : "group-hover/row:bg-emerald-50",
+                    !isTodayDate && (theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50"),
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-60"
@@ -310,8 +334,12 @@ export function DepartmentRow({
                     <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                       <div
                         className={cn(
-                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                          theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                          "rounded-sm pointer-events-auto relative",
+                          departmentLoadPercentage > 100
+                            ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                            : departmentLoadPercentage >= 90
+                              ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                              : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                         )}
                         style={{
                           width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -323,14 +351,12 @@ export function DepartmentRow({
                         {/* Внутренняя заливка, показывающая процент загрузки */}
                         <div
                           className={cn(
-                            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                            "absolute bottom-0 left-0 right-0",
                             departmentLoadPercentage > 100
-                              ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
-                              : departmentLoadPercentage <= 50
-                                ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
-                                : departmentLoadPercentage <= 85
-                                  ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                  : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                              ? "bg-red-500"
+                              : departmentLoadPercentage >= 90
+                                ? "bg-teal-500"
+                                : "bg-amber-500"
                           )}
                           style={{
                             height: `${Math.max(
@@ -522,6 +548,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                   isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                  !isTodayDate && (theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50"),
                   isFirstDayOfMonth(unit.date)
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
@@ -542,8 +569,12 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                     <div
                       className={cn(
-                        "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                        theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                        "rounded-sm pointer-events-auto relative",
+                        loadPct > 100
+                          ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                          : loadPct >= 90
+                            ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                            : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -554,14 +585,12 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                     >
                       <div
                         className={cn(
-                          "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                          "absolute bottom-0 left-0 right-0",
                           loadPct > 100
-                            ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
-                            : loadPct <= 50
-                              ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
-                              : loadPct <= 85
-                                ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                            ? "bg-red-500"
+                            : loadPct >= 90
+                              ? "bg-teal-500"
+                              : "bg-amber-500"
                         )}
                         style={{
                           height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
@@ -639,14 +668,10 @@ export function EmployeeRow({
   // Базовая высота строки сотрудника (90% от rowHeight)
   const reducedRowHeight = Math.floor(rowHeight * 0.9)
 
-  // Преобразуем загрузки, отпуска, больничные и отгулы в периоды для отрисовки
   const allPeriods = useMemo(() => {
     const loadingPeriods = loadingsToPeriods(employee.loadings)
-    const vacationPeriods = groupVacationPeriods(employee.vacationsDaily)
-    const sickLeavePeriods = groupSickLeavePeriods(employee.sickLeavesDaily)
-    const timeOffPeriods = groupTimeOffPeriods(employee.timeOffsDaily)
-    return [...loadingPeriods, ...vacationPeriods, ...sickLeavePeriods, ...timeOffPeriods]
-  }, [employee.loadings, employee.vacationsDaily, employee.sickLeavesDaily, employee.timeOffsDaily])
+    return loadingPeriods
+  }, [employee.loadings])
 
   // Вычисляем параметры отрисовки всех полосок
   const barRenders = useMemo(() => {
@@ -678,46 +703,28 @@ export function EmployeeRow({
     return maxRate
   }, [allPeriods])
 
-  // Базовая высота полоски для 1 ставки и зазор между ними
-  // Рассчитано так, чтобы при 0.25 ставки текст 8px был читаемым (56 * 0.25 = 14px)
-  const BASE_BAR_HEIGHT = 56 // Высота для полной ставки (rate = 1)
-  const BAR_GAP = 3 // Минимальное расстояние между полосками
-
   // Динамический расчёт высоты строки на основе загрузок
   const actualRowHeight = useMemo(() => {
     if (barRenders.length === 0) return reducedRowHeight
 
-    // Рассчитываем необходимую высоту для вертикального размещения всех полосок
+    // Рассчитываем необходимую высоту для вертикального размещения всех полосок + комментарии
     let maxBottom = 0
 
     barRenders.forEach(bar => {
-      const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+      const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
 
-      // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
-      const overlappingBars = barRenders.filter(other =>
-        other.period.startDate <= bar.period.endDate &&
-        other.period.endDate >= bar.period.startDate &&
-        other.layer < bar.layer
-      )
+      // Используем централизованную функцию для расчёта top
+      const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
-      // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
-      let top = 8 // начальный отступ
-      if (overlappingBars.length > 0) {
-        const layersMap = new Map<number, number>()
-        overlappingBars.forEach(other => {
-          const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-          layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-        })
+      // Базовая высота: позиция + высота полоски
+      let totalBarHeight = top + barHeight
 
-        // Суммируем высоты только тех слоёв, которые реально пересекаются
-        for (let i = 0; i < bar.layer; i++) {
-          if (layersMap.has(i)) {
-            top += layersMap.get(i)! + BAR_GAP
-          }
-        }
+      // Если есть комментарий - добавляем его высоту
+      if (bar.period.type === 'loading' && bar.period.comment) {
+        totalBarHeight += COMMENT_GAP + COMMENT_HEIGHT
       }
 
-      maxBottom = Math.max(maxBottom, top + barHeight)
+      maxBottom = Math.max(maxBottom, totalBarHeight)
     })
 
     // Возвращаем максимум из минимальной высоты и требуемой высоты + отступ снизу
@@ -867,37 +874,18 @@ export function EmployeeRow({
                 // ВЕРТИКАЛЬНОЕ РАЗМЕЩЕНИЕ: загрузки размещаются одна под другой только при пересечении во времени
 
                 return barRenders.map((bar, idx) => {
-                  const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+                  const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
 
-                  // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
-                  const overlappingBars = barRenders.filter(other =>
-                    other.period.startDate <= bar.period.endDate &&
-                    other.period.endDate >= bar.period.startDate &&
-                    other.layer < bar.layer
-                  )
+                  // Используем централизованную функцию для расчёта top
+                  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
-                  // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
-                  let top = 8 // Начальный отступ
-                  if (overlappingBars.length > 0) {
-                    const layersMap = new Map<number, number>()
-                    overlappingBars.forEach(other => {
-                      const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-                      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-                    })
-
-                    // Суммируем высоты только тех слоёв, которые реально пересекаются
-                    for (let i = 0; i < bar.layer; i++) {
-                      if (layersMap.has(i)) {
-                        top += layersMap.get(i)! + BAR_GAP
-                      }
-                    }
-                  }
+                  // DEBUG: испралена ошибка Cannot access 'h' before initialization
 
                   return (
+                    <Fragment key={`${bar.period.id}-${idx}`}>
                     <div
-                      key={`${bar.period.id}-${idx}`}
                       className={cn(
-                        "absolute rounded transition-all duration-200 pointer-events-auto",
+                        "absolute transition-all duration-200 pointer-events-auto",
                         // Всегда используем горизонтальное выравнивание
                         "flex items-center",
                         // Курсор pointer для загрузок (можно редактировать)
@@ -917,6 +905,11 @@ export function EmployeeRow({
                         paddingBottom: "4px",
                         overflow: "hidden",
                         filter: "brightness(1.1)",
+                        // Закругляем верхние углы всегда, нижние - только если нет комментария
+                        borderTopLeftRadius: '4px',
+                        borderTopRightRadius: '4px',
+                        borderBottomLeftRadius: bar.period.comment ? '0' : '4px',
+                        borderBottomRightRadius: bar.period.comment ? '0' : '4px',
                       }}
                       title={formatBarTooltip(bar.period)}
                       onClick={() => {
@@ -926,180 +919,173 @@ export function EmployeeRow({
                         }
                       }}
                     >
-                      {(() => {
-                        // Адаптивное отображение для загрузок
-                        if (bar.period.type === "loading") {
+                      {/* Контейнер для текста - должен быть поверх оверлея выходных */}
+                      <div className="relative w-full h-full flex items-center" style={{ zIndex: 2 }}>
+                        {(() => {
+                          // Адаптивное отображение для загрузок
+                          if (bar.period.type === "loading") {
                           const labelParts = getBarLabelParts(bar.period, bar.width)
-                          const rate = bar.period.rate || 1
 
-                          // Определяем максимальное количество строк в зависимости от rate (высоты)
-                          let maxLines = 3
-                          if (rate < 0.5) {
-                            maxLines = 1 // Очень низкие бары - только одна строка
-                          } else if (rate < 1) {
-                            maxLines = 2 // Средние бары - максимум 2 строки
-                          }
+                          // При фиксированной высоте 42px помещается 2 строки текста
+                          const maxLines = 2
 
                           if (labelParts.displayMode === 'icon-only') {
                             return (
-                              <FolderKanban
-                                size={11}
-                                className="text-white"
-                                style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                              />
+                              <div className="flex items-center gap-1">
+                                {/* Rate chip - integrated subtle style */}
+                                <span
+                                  className="px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <FolderKanban
+                                  size={11}
+                                  className="text-white"
+                                  style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                />
+                              </div>
                             )
                           }
 
                           if (labelParts.displayMode === 'minimal') {
-                            // Узкие бары - многострочное отображение, используем высоту
-                            const displayText = labelParts.project || labelParts.stage
-
-                            if (maxLines === 1) {
-                              // Одна строка для маленьких баров
-                              return (
-                                <span
-                                  className="text-[10px] font-semibold text-white truncate"
-                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                  title={displayText}
-                                >
-                                  {displayText}
-                                </span>
-                              )
-                            }
-
                             let lineCount = 0
                             return (
-                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
-                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[10px] font-semibold text-white truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.project}
-                                    >
-                                      {labelParts.project}
-                                    </span>
-                                  </div>
-                                )})()}
-                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[9px] font-medium text-white/90 truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.stage}
-                                    >
-                                      {labelParts.stage}
-                                    </span>
-                                  </div>
-                                )})()}
+                              <div className="flex items-start gap-1 overflow-hidden w-full h-full">
+                                {/* Rate chip - subtle integrated */}
+                                <span
+                                  className="mt-0.5 px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded flex-shrink-0"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <div className="flex flex-col justify-center items-start overflow-hidden flex-1" style={{ gap: "2px" }}>
+                                  {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[10px] font-semibold text-white truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.project}
+                                      >
+                                        {labelParts.project}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                  {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[9px] font-medium text-white/90 truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.object}
+                                      >
+                                        {labelParts.object}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                </div>
                               </div>
                             )
                           }
 
                           if (labelParts.displayMode === 'compact') {
-                            // Средние бары
-                            const displayText = labelParts.project || labelParts.stage
-
-                            if (maxLines === 1) {
-                              const Icon = labelParts.project ? FolderKanban : Milestone
-                              return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[10px] font-semibold text-white truncate"
-                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                    title={displayText}
-                                  >
-                                    {displayText}
-                                  </span>
-                                </div>
-                              )
-                            }
-
+                            // Компактный режим
                             let lineCount = 0
                             return (
-                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+                              <div className="flex items-start gap-1 overflow-hidden w-full h-full">
+                                {/* Rate chip - subtle integrated */}
+                                <span
+                                  className="mt-0.5 px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded flex-shrink-0"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <div className="flex flex-col justify-center items-start overflow-hidden flex-1" style={{ gap: "2px" }}>
+                                  {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[10px] font-semibold text-white truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.project}
+                                      >
+                                        {labelParts.project}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                  {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[9px] font-medium text-white/90 truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.object}
+                                      >
+                                        {labelParts.object}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          // full mode - многострочное отображение с иконками
+                          let lineCount = 0
+                          return (
+                            <div className="flex items-start gap-1.5 overflow-hidden w-full">
+                              {/* Rate chip - subtle integrated, slightly larger in full mode */}
+                              <span
+                                className="mt-0.5 px-1.5 py-0.5 bg-black/15 text-white text-[10px] font-semibold rounded flex-shrink-0"
+                                style={{
+                                  fontVariantNumeric: 'tabular-nums',
+                                  textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                }}
+                              >
+                                {bar.period.rate || 1}
+                              </span>
+                              <div className="flex flex-col justify-center overflow-hidden flex-1" style={{ gap: "1px" }}>
                                 {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <div className="flex items-center gap-1 overflow-hidden">
+                                    <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                     <span
                                       className="text-[10px] font-semibold text-white truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                      style={{
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                        lineHeight: "1.2"
+                                      }}
                                       title={labelParts.project}
                                     >
                                       {labelParts.project}
                                     </span>
                                   </div>
                                 )})()}
-                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Milestone size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 overflow-hidden">
+                                    <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                     <span
                                       className="text-[9px] font-medium text-white/90 truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.stage}
+                                      style={{
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                        lineHeight: "1.2"
+                                      }}
+                                      title={labelParts.object}
                                     >
-                                      {labelParts.stage}
+                                      {labelParts.object}
                                     </span>
                                   </div>
                                 )})()}
                               </div>
-                            )
-                          }
-
-                          // full mode - многострочное отображение с иконками
-                          if (maxLines === 1) {
-                            const displayText = labelParts.project || labelParts.stage
-                            const Icon = labelParts.project ? FolderKanban : Milestone
-                            return (
-                              <div className="flex items-center gap-1 overflow-hidden">
-                                <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                <span
-                                  className="text-[11px] font-semibold text-white truncate"
-                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                  title={displayText}
-                                >
-                                  {displayText}
-                                </span>
-                              </div>
-                            )
-                          }
-
-                          let lineCount = 0
-                          return (
-                            <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
-                              {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[10px] font-semibold text-white truncate"
-                                    style={{
-                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                                      lineHeight: "1.2"
-                                    }}
-                                    title={labelParts.project}
-                                  >
-                                    {labelParts.project}
-                                  </span>
-                                </div>
-                              )})()}
-                              {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[9px] font-medium text-white/90 truncate"
-                                    style={{
-                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                                      lineHeight: "1.2"
-                                    }}
-                                    title={labelParts.stage}
-                                  >
-                                    {labelParts.stage}
-                                  </span>
-                                </div>
-                              )})()}
                             </div>
                           )
                         }
@@ -1113,8 +1099,118 @@ export function EmployeeRow({
                             {formatBarLabel(bar.period)}
                           </span>
                         )
+                        })()}
+                      </div>
+
+                      {/* Overlay для нерабочих дней */}
+                      {(() => {
+                        const nonWorkingSegments = splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits)
+                        const HORIZONTAL_GAP = 6 // Константа из loading-bars-utils.ts
+
+                        return nonWorkingSegments.map((segment, segmentIdx) => {
+                          // Вычисляем left относительно бара, но компенсируем HORIZONTAL_GAP чтобы совпадать с сеткой
+                          const barStartLeft = timeUnits[bar.startIdx]?.left ?? 0
+                          const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
+                          const overlayLeft = segmentStartLeft - barStartLeft - HORIZONTAL_GAP / 2
+
+                          let overlayWidth = 0
+                          for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+                            overlayWidth += timeUnits[idx]?.width ?? cellWidth
+                          }
+                          overlayWidth -= 3 // Делаем правый край на 2px левее
+
+                          return (
+                            <div
+                              key={`non-working-${segmentIdx}`}
+                              className="absolute pointer-events-none"
+                              style={{
+                                left: `${overlayLeft}px`,
+                                width: `${overlayWidth}px`,
+                                top: '-3px',
+                                bottom: '-3px',
+                                backgroundImage: theme === 'dark'
+                                  ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0, 0, 0, 0.1) 4px, rgba(0, 0, 0, 0.1) 15px)'
+                                  : 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
+                                borderTop: `3px dashed ${bar.color}`,
+                                borderBottom: `3px dashed ${bar.color}`,
+                                zIndex: 1,
+                              }}
+                            />
+                          )
+                        })
                       })()}
                     </div>
+
+                    {/* Комментарий под полоской с градиентным фоном */}
+                    {bar.period.type === 'loading' && bar.period.comment && (
+                      <div
+                        className="absolute pointer-events-none"
+                        style={{
+                          top: `${top + barHeight}px`,
+                          left: `${bar.left}px`,
+                          width: `${bar.width}px`,
+                          height: `${COMMENT_GAP + COMMENT_HEIGHT}px`,
+                          zIndex: 3,
+                        }}
+                      >
+                        {/* Пунктирная линия-разделитель */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '-2px',
+                            left: '3px',
+                            right: '3px',
+                            height: `${COMMENT_GAP}px`,
+                            borderTop: `2px dashed ${theme === 'dark' ? '#212c40' : '#ffffff'}`,
+                            opacity: 1,
+                          }}
+                        />
+
+                        {/* Сам комментарий */}
+                        <div
+                          className="absolute flex items-center gap-1 px-2 pointer-events-auto cursor-pointer"
+                          style={{
+                            top: `${COMMENT_GAP - 2}px`,
+                            left: '0',
+                            right: '0',
+                            height: `${COMMENT_HEIGHT}px`,
+                            backgroundColor: hexToRgba(bar.color, 0.5),
+                            borderLeft: `2px solid ${bar.color}`,
+                            borderRight: `2px solid ${bar.color}`,
+                            borderBottom: `2px solid ${bar.color}`,
+                            borderBottomLeftRadius: '4px',
+                            borderBottomRightRadius: '4px',
+                            opacity: 0.8,
+                            filter: "brightness(1.1)",
+                          }}
+                          title={bar.period.comment}
+                          onClick={() => {
+                            // Открыть модалку редактирования для загрузки
+                            if (bar.period.type === "loading" && bar.period.loading) {
+                              setEditingLoading(bar.period.loading)
+                            }
+                          }}
+                        >
+                          <MessageSquare
+                            size={11}
+                            className="text-white flex-shrink-0"
+                            style={{
+                              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))",
+                            }}
+                          />
+                          <span
+                            className="text-[10px] leading-tight truncate text-white font-medium"
+                            style={{
+                              textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
+                              fontFamily: 'system-ui, -apple-system, sans-serif',
+                            }}
+                          >
+                            {bar.period.comment}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    </Fragment>
                   )
                 })
               })()}
@@ -1135,6 +1231,7 @@ export function EmployeeRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                    !isTodayDate && (theme === "dark" ? "group-hover/employee:bg-slate-700/50" : "group-hover/employee:bg-slate-200/50"),
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
