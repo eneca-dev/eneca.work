@@ -190,7 +190,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       case "SIGNED_OUT":
         clearAllState()
         setIsLoading(false)
-        if (window.location.pathname.startsWith("/dashboard")) {
+        if (!window.location.pathname.startsWith("/auth")) {
           router.push("/auth/login")
         }
         break
