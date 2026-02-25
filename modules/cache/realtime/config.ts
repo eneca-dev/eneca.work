@@ -121,71 +121,13 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.resourceGraph.all, // Фактическая готовность
     ],
   },
-  {
-    table: 'stage_readiness_snapshots',
-    invalidateKeys: [
-      // Инвалидируем stageReadiness кеши (lazy-loaded данные по этапам)
-      [...queryKeys.resourceGraph.all, 'stageReadiness'],
-    ],
-  },
-
-  // ============================================================================
-  // Отчёты о работе (work_logs)
-  // ============================================================================
-  {
-    table: 'work_logs',
-    invalidateKeys: [
-      // Инвалидируем все workLogs кеши (lazy-loaded данные)
-      [...queryKeys.resourceGraph.all, 'workLogs'],
-      // Инвалидируем resourceGraph.all для обновления section_budget_spending во view
-      queryKeys.resourceGraph.all,
-    ],
-  },
-
-  // ============================================================================
-  // Отчёты к стадиям (project_reports)
-  // ============================================================================
-  {
-    table: 'project_reports',
-    invalidateKeys: [
-      // Инвалидируем все stageReports кеши (lazy-loaded данные)
-      [...queryKeys.resourceGraph.all, 'stageReports'],
-      // Инвалидируем resourceGraph.all для обновления timeline
-      queryKeys.resourceGraph.all,
-    ],
-  },
-
-  // ============================================================================
-  // Бюджеты
-  // ============================================================================
-  {
-    table: 'budgets',
-    invalidateKeys: [
-      // При изменении бюджета обновляем данные графика ресурсов
-      queryKeys.resourceGraph.all,
-      queryKeys.budgets.all,
-    ],
-  },
-  {
-    table: 'budget_parts',
-    invalidateKeys: [
-      // При изменении частей бюджета (сумм) обновляем данные
-      queryKeys.resourceGraph.all,
-      queryKeys.budgets.all,
-    ],
-  },
+  // stage_readiness_snapshots, work_logs, project_reports, budgets, budget_parts —
+  // не добавлены в supabase_realtime publication и слабо используются на фронте.
+  // Убраны чтобы не вызывать CHANNEL_ERROR и снизить нагрузку на realtime.
 
   // ============================================================================
   // Справочники
   // ============================================================================
-  {
-    table: 'section_statuses',
-    invalidateKeys: [
-      queryKeys.sectionStatuses.all,
-      queryKeys.sections.all, // секции показывают статусы
-      queryKeys.resourceGraph.all, // resource graph показывает статусы
-    ],
-  },
   {
     table: 'departments',
     invalidateKeys: [

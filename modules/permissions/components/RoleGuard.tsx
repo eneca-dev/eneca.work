@@ -37,7 +37,7 @@ interface RoleGuardProps {
  */
 export function RoleGuard({
   allowedRoles,
-  redirectTo = "/dashboard",
+  redirectTo = "/",
   fallback = <div>Доступ запрещен</div>,
   children,
   showFallback = false
