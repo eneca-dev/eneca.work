@@ -7,6 +7,7 @@
  */
 
 import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import { persist } from 'zustand/middleware'
 import { eachDayOfInterval } from 'date-fns'
 import { parseMinskDate, formatMinskDate } from '@/lib/timezone-utils'
@@ -71,6 +72,29 @@ const EMPTY_CAPACITY_OVERRIDES: Record<string, number> = {}
  */
 export function useDateCapacityOverrides(sectionId: string): Record<string, number> {
   return useSectionsPageUIStore((state) => state.capacityOverrides[sectionId] || EMPTY_CAPACITY_OVERRIDES)
+}
+
+/**
+ * Selector hook для получения capacity overrides нескольких разделов
+ *
+ * Использует useShallow для предотвращения ре-рендеров при изменении
+ * нерелевантных разделов (только shallow-сравнение выбранных ключей)
+ */
+export function useMultipleSectionsCapacityOverrides(
+  sectionIds: string[]
+): Record<string, Record<string, number>> {
+  return useSectionsPageUIStore(
+    useShallow((state) => {
+      const result: Record<string, Record<string, number>> = {}
+      for (const id of sectionIds) {
+        const overrides = state.capacityOverrides[id]
+        if (overrides) {
+          result[id] = overrides
+        }
+      }
+      return result
+    })
+  )
 }
 
 /**

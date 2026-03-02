@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, FolderKanban } from 'lucide-react'
-import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
+import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, PROJECT_ROW_HEIGHT } from '../../constants'
 import { ObjectSectionRow } from './ObjectSectionRow'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
@@ -50,8 +50,12 @@ export function ProjectRow({
     }, 0)
   }, [project.objectSections])
 
-  // Read capacity overrides from store to account for per-date section overrides
-  const capacityOverrides = useSectionsPageUIStore((s) => s.capacityOverrides)
+  // rerender-derived-state: подписка только на overrides релевантных разделов (useShallow)
+  const sectionIds = useMemo(
+    () => project.objectSections.map((os) => os.sectionId),
+    [project.objectSections]
+  )
+  const capacityOverrides = useMultipleSectionsCapacityOverrides(sectionIds)
 
   // Compute per-date aggregated capacity: for each date where any section has an override,
   // sum effective capacity across all sections (override ?? defaultCapacity)

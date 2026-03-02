@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   Plus,
   Pencil,
@@ -109,33 +109,37 @@ interface TasksTabsProps {
 }
 
 export function TasksTabs({ className }: TasksTabsProps) {
-  const { tabs, activeTabId, setActiveTab, deleteTab } = useTasksTabsStore()
+  // rerender-derived-state: индивидуальные селекторы вместо подписки на весь store
+  const tabs = useTasksTabsStore((s) => s.tabs)
+  const activeTabId = useTasksTabsStore((s) => s.activeTabId)
+  const setActiveTab = useTasksTabsStore((s) => s.setActiveTab)
+  const deleteTab = useTasksTabsStore((s) => s.deleteTab)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTab, setEditingTab] = useState<TaskTab | null>(null)
 
-  const sortedTabs = [...tabs].sort((a, b) => a.order - b.order)
+  const sortedTabs = useMemo(() => [...tabs].sort((a, b) => a.order - b.order), [tabs])
   const tabsCount = tabs.length
   const canAddMore = tabsCount < MAX_USER_TABS
 
-  const handleAddClick = () => {
+  const handleAddClick = useCallback(() => {
     setEditingTab(null)
     setModalOpen(true)
-  }
+  }, [])
 
-  const handleEditClick = (tab: TaskTab) => {
+  const handleEditClick = useCallback((tab: TaskTab) => {
     setEditingTab(tab)
     setModalOpen(true)
-  }
+  }, [])
 
-  const handleDeleteClick = (tab: TaskTab) => {
+  const handleDeleteClick = useCallback((tab: TaskTab) => {
     deleteTab(tab.id)
-  }
+  }, [deleteTab])
 
-  const handleModalClose = () => {
+  const handleModalClose = useCallback(() => {
     setModalOpen(false)
     setEditingTab(null)
-  }
+  }, [])
 
   return (
     <>

@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -15,8 +15,6 @@ import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/
 import { useTasksTabsStore, TASKS_FILTER_CONFIG } from '../stores'
 import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
-import { ResourceGraphInternal } from '@/modules/resource-graph/components/ResourceGraph'
-import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { SectionsPageInternal } from '@/modules/sections-page'
 import { TasksTabs } from './TasksTabs'
@@ -66,9 +64,9 @@ export function TasksView() {
   }, [filterString])
 
   // Handler for filter changes
-  const handleFilterChange = (newFilterString: string) => {
+  const handleFilterChange = useCallback((newFilterString: string) => {
     updateActiveTabFilters(newFilterString)
-  }
+  }, [updateActiveTabFilters])
 
   return (
     <div className="h-screen flex flex-col bg-card">
@@ -134,14 +132,7 @@ export function TasksView() {
             onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
-        {tabs.length > 0 && viewMode === 'timeline' && (
-          <ResourceGraphInternal
-            filterString={filterString}
-            queryParams={queryParams}
-            filterConfig={TASKS_FILTER_CONFIG}
-          />
-        )}
-        {tabs.length > 0 && viewMode === 'departments' && (
+{tabs.length > 0 && viewMode === 'departments' && (
           <DepartmentsTimelineInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
@@ -153,13 +144,6 @@ export function TasksView() {
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}
-          />
-        )}
-        {tabs.length > 0 && viewMode === 'budgets' && (
-          <BudgetsViewInternal
-            filterString={filterString}
-            queryParams={queryParams}
-            filterConfig={TASKS_FILTER_CONFIG}
           />
         )}
       </div>

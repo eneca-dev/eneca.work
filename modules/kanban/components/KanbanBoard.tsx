@@ -66,8 +66,10 @@ export function KanbanBoardInternal({ filterString, queryParams, loadAllEnabled,
     filtersApplied ? queryParams : undefined
   )
 
-  // UI state из Zustand store (сохраняется между переключениями вкладок)
-  const { collapsedSections, showEmptySwimlanes, toggleSectionCollapse } = useKanbanUIStore()
+  // rerender-derived-state: индивидуальные селекторы вместо подписки на весь store
+  const collapsedSections = useKanbanUIStore((s) => s.collapsedSections)
+  const showEmptySwimlanes = useKanbanUIStore((s) => s.showEmptySwimlanes)
+  const toggleSectionCollapse = useKanbanUIStore((s) => s.toggleSectionCollapse)
 
   // HTML5 Drag and Drop handlers
   const { draggedCard, handleDragStart, handleDragOver, handleDrop, handleDragEnd } = useDragHandlers({
@@ -217,8 +219,10 @@ export function KanbanBoard() {
   // State: загрузить все данные без фильтров
   const [loadAll, setLoadAll] = useState(false)
 
-  // Фильтры
-  const { filterString, setFilterString, getQueryParams } = useKanbanFiltersStore()
+  // rerender-derived-state: индивидуальные селекторы вместо подписки на весь store
+  const filterString = useKanbanFiltersStore((s) => s.filterString)
+  const setFilterString = useKanbanFiltersStore((s) => s.setFilterString)
+  const getQueryParams = useKanbanFiltersStore((s) => s.getQueryParams)
   const { options: filterOptions } = useKanbanFilterOptions()
 
   // Получаем параметры фильтра

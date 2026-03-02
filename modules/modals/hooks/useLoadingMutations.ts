@@ -332,26 +332,33 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           let originalLoading: any = null
           let originalEmployeeId: string | null = null
 
-          // Если меняется employeeId, нужно переместить загрузку между сотрудниками
-          const isMovingBetweenEmployees = input.employeeId !== undefined
-
           // ПЕРВЫЙ ПРОХОД: Находим загрузку и сохраняем её данные
-          if (isMovingBetweenEmployees) {
-            for (const dept of departments) {
-              for (const team of dept.teams || []) {
-                for (const emp of team.employees || []) {
-                  const foundLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
-                  if (foundLoading) {
-                    originalLoading = foundLoading
-                    originalEmployeeId = emp.id
-                    loadingFound = true
-                    break
-                  }
+          for (const dept of departments) {
+            for (const team of dept.teams || []) {
+              for (const emp of team.employees || []) {
+                const foundLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
+                if (foundLoading) {
+                  originalLoading = foundLoading
+                  originalEmployeeId = emp.id
+                  loadingFound = true
+                  break
                 }
-                if (loadingFound) break
               }
               if (loadingFound) break
             }
+            if (loadingFound) break
+          }
+
+          // Определяем реальное перемещение между сотрудниками:
+          // только если employeeId передан И отличается от текущего владельца загрузки
+          const isMovingBetweenEmployees = !!(
+            input.employeeId && originalEmployeeId && input.employeeId !== originalEmployeeId
+          )
+
+          // Если загрузка не найдена в departments cache — пропускаем optimistic update
+          // (данные обновятся через invalidateQueries после мутации)
+          if (!loadingFound) {
+            return isDirectArray ? departments : old
           }
 
           // ВТОРОЙ ПРОХОД: Обновляем departments с учетом найденной информации
@@ -361,18 +368,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
               ...team,
               employees: team.employees.map((emp: any) => {
                 // Собираем обновленные загрузки
-                let updatedLoadings: any[] = []
+                const updatedLoadings: any[] = []
 
                 // Обрабатываем каждую загрузку текущего сотрудника
                 for (const loading of emp.loadings || []) {
                   if (loading.id === input.loadingId) {
-                    // Нашли целевую загрузку
-                    if (!loadingFound) {
-                      loadingFound = true
-                      originalLoading = loading
-                      originalEmployeeId = emp.id
-                    }
-
                     // Если меняется сотрудник и это НЕ целевой сотрудник - удаляем загрузку
                     if (isMovingBetweenEmployees && emp.id !== input.employeeId) {
                       continue // Не добавляем в updatedLoadings
@@ -396,12 +396,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                   }
                 }
 
-                // Если меняется сотрудник и это целевой сотрудник И это не тот же сотрудник
-                // Добавляем загрузку к новому сотруднику
-                if (originalLoading && isMovingBetweenEmployees && emp.id === input.employeeId && originalEmployeeId !== emp.id) {
+                // Если меняется сотрудник и это целевой сотрудник — добавляем загрузку
+                if (isMovingBetweenEmployees && emp.id === input.employeeId && originalEmployeeId !== emp.id) {
                   updatedLoadings.push({
                     ...originalLoading,
-                    id: originalLoading.id, // Важно сохранить ID!
+                    id: originalLoading.id,
                     employeeId: input.employeeId,
                     responsibleId: input.employeeId,
                     ...(input.stageId !== undefined && { stageId: input.stageId, sectionId: input.stageId }),
@@ -411,11 +410,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                     ...(input.comment !== undefined && { comment: input.comment }),
                     updatedAt: new Date().toISOString(),
                     _optimistic: true,
-                  })
-                } else if (isMovingBetweenEmployees && emp.id === input.employeeId && !originalLoading) {
-                  console.error('❌ [UPDATE onMutate] НЕ МОГУ добавить загрузку - originalLoading отсутствует!', {
-                    targetEmployeeId: emp.id,
-                    targetEmployeeName: emp.name || emp.fullName,
                   })
                 }
 

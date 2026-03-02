@@ -8,7 +8,7 @@
 
 import { useMemo } from 'react'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
-import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
+import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import { ProjectRow } from './ProjectRow'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
@@ -49,12 +49,16 @@ export function DepartmentRow({
     , 0)
   }, [department.projects])
 
-  // Read capacity overrides from store to account for per-date section overrides
-  const capacityOverrides = useSectionsPageUIStore((s) => s.capacityOverrides)
+  // rerender-derived-state: подписка только на overrides релевантных разделов (useShallow)
+  const allSections = useMemo(
+    () => department.projects.flatMap((p) => p.objectSections),
+    [department.projects]
+  )
+  const sectionIds = useMemo(() => allSections.map((os) => os.sectionId), [allSections])
+  const capacityOverrides = useMultipleSectionsCapacityOverrides(sectionIds)
 
   // Compute per-date aggregated capacity across all sections of all projects
   const departmentDateCapacityOverrides = useMemo(() => {
-    const allSections = department.projects.flatMap((p) => p.objectSections)
     const allDates = new Set(
       allSections.flatMap((os) => Object.keys(capacityOverrides[os.sectionId] ?? {}))
     )
@@ -66,7 +70,7 @@ export function DepartmentRow({
       }, 0)
     }
     return result
-  }, [department.projects, capacityOverrides])
+  }, [allSections, capacityOverrides])
 
   return (
     <>
