@@ -51,7 +51,6 @@ type QueriesSnapshot = [readonly unknown[], unknown][]
 interface OptimisticContext {
   previousDepartmentsData?: QueriesSnapshot
   previousResourceGraphData?: QueriesSnapshot
-  previousProjectsData?: QueriesSnapshot
   previousSectionsPageData?: QueriesSnapshot
 }
 
@@ -82,7 +81,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -92,9 +90,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -231,15 +226,15 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
 
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
+      // (Realtime также инвалидирует при изменении таблицы loadings,
+      //  но явная инвалидация здесь гарантирует немедленное обновление)
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -258,11 +253,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousResourceGraphData) {
         context.previousResourceGraphData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -296,7 +286,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -306,9 +295,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -537,7 +523,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -545,7 +530,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -564,11 +548,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousResourceGraphData) {
         context.previousResourceGraphData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -602,7 +581,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -612,9 +590,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -703,7 +678,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -711,7 +685,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -730,11 +703,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousResourceGraphData) {
         context.previousResourceGraphData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
@@ -768,7 +736,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -778,9 +745,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -869,7 +833,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -877,7 +840,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -896,11 +858,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousResourceGraphData) {
         context.previousResourceGraphData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }
