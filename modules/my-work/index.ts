@@ -9,7 +9,6 @@ export { ScrollableContainer } from './components/ScrollableContainer'
 
 export { useMyWorkData } from './hooks/useMyWorkData'
 export { useDecompositionData } from './hooks/useDecompositionData'
-export { useTasksData } from './hooks/useTasksData'
 
 export type {
   UserLoading,

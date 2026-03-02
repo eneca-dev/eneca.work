@@ -30,8 +30,11 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   const pathname = usePathname()
   const { signOut } = useAuthContext()
 
-  // Получаем данные из store
-  const { id: userId, name: storeName, email: storeEmail, profile } = useUserStore()
+  // rerender-derived-state: отдельные примитивные селекторы вместо подписки на весь store
+  const userId = useUserStore(state => state.id)
+  const storeName = useUserStore(state => state.name)
+  const storeEmail = useUserStore(state => state.email)
+  const avatarUrlFromStore = useUserStore(state => state.profile?.avatar_url)
 
   // Проверяем доступ к аналитике через API
   const [hasAnalyticsAccess, setHasAnalyticsAccess] = useState(false)
@@ -94,7 +97,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   // Данные для отображения — приоритет: store > props > defaults
   const displayName = storeName || user.name || "Пользователь"
   const displayEmail = storeEmail || user.email || ""
-  const avatarUrl = profile?.avatar_url || null
+  const avatarUrl = avatarUrlFromStore || null
 
   // Обработчик выхода — использует AuthProvider
   const handleLogoutInternal = async () => {

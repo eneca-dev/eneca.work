@@ -54,11 +54,13 @@ function makeQueryClient(): QueryClient {
         // Экспоненциальная задержка между попытками
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
 
-        // Обновлять при возврате на вкладку
-        refetchOnWindowFocus: true,
+        // НЕ обновлять автоматически при возврате на вкладку —
+        // Realtime подписки уже обеспечивают актуальность данных.
+        // Это предотвращает шквал запросов при переключении вкладок.
+        refetchOnWindowFocus: false,
 
-        // Не обновлять при восстановлении соединения автоматически
-        refetchOnReconnect: 'always',
+        // Обновлять при восстановлении соединения (после потери интернета)
+        refetchOnReconnect: true,
       },
       mutations: {
         // Повторные попытки для мутаций

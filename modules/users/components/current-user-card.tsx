@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,52 +21,51 @@ interface CurrentUserCardProps {
 
 function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const userState = useUserStore() // Получаем все состояние без деструктурирования
+  // rerender-derived-state: отдельные селекторы вместо подписки на весь store
+  const isAuthenticated = useUserStore(state => state.isAuthenticated)
+  const storeUserId = useUserStore(state => state.id)
+  const storeName = useUserStore(state => state.name)
+  const storeEmail = useUserStore(state => state.email)
+  const storeProfile = useUserStore(state => state.profile)
+  const updateAvatar = useUserStore(state => state.updateAvatar)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  
-  // Используем существующий клиент Supabase
-  const supabase = createClient()
-  const updateAvatar = useUserStore((state) => state.updateAvatar)
+
+  // Стабильная ссылка на Supabase клиент (не пересоздаётся при ре-рендерах)
+  const supabaseRef = useRef(createClient())
 
   // Получаем полные данные пользователя из view_users
   useEffect(() => {
     async function fetchUserData() {
-      if (!userState.isAuthenticated || !userState.id) return
+      if (!isAuthenticated || !storeUserId) return
 
       setIsLoading(true)
       try {
-        // console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
-        
-        const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: userState.id } }, async () =>
-          supabase
+        const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: storeUserId } }, async () =>
+          supabaseRef.current
             .from("view_users")
             .select("*")
-            .eq("user_id", userState.id)
-            .single()
+            .eq("user_id", storeUserId)
+            .maybeSingle()
         )
 
         if (error) {
           console.error("Ошибка получения данных пользователя из view_users:", error)
-          Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view', error_type: 'db_error' }, extra: { user_id: userState.id } })
-          // Если не удалось получить данные из view, используем данные из Zustand
-          if (userState.profile) {
+          Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view', error_type: 'db_error' }, extra: { user_id: storeUserId } })
+          if (storeProfile) {
             setCurrentUser(createUserFromZustand())
           }
           return
         }
 
         if (userData) {
-          // console.log("CurrentUserCard: Получены данные из view_users:", userData)
-          
-          // Формируем объект пользователя из данных view_users
           const formattedUser: User = {
             id: userData.user_id,
             email: userData.email || "",
             name: userData.full_name?.trim() ||
                   (userData.first_name && userData.last_name
                     ? `${userData.first_name} ${userData.last_name}`.trim()
-                    : userState.name || ""),
+                    : storeName || ""),
             avatar_url: userData.avatar_url || "",
             position: userData.position_name === "Без должности" ? "" : userData.position_name || "",
             subdivision: userData.subdivision_name || "",
@@ -86,20 +85,18 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
               "office",
             country: userData.country_name || "",
             city: userData.city_name || "",
-            employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) : 1,
-            salary: userData.salary ? parseFloat(userData.salary) : 0,
+            employmentRate: userData.employment_rate ? parseFloat(String(userData.employment_rate)) : 1,
+            salary: userData.salary ? parseFloat(String(userData.salary)) : 0,
             isHourly: userData.is_hourly || false
           }
-          
-          // console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
+
           setCurrentUser(formattedUser)
         }
 
       } catch (error) {
         console.error("Критическая ошибка при получении данных пользователя:", error)
-        Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view_unexpected', error_type: 'unexpected' }, extra: { user_id: userState.id } })
-        // Fallback к данным из Zustand
-        if (userState.profile) {
+        Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view_unexpected', error_type: 'unexpected' }, extra: { user_id: storeUserId } })
+        if (storeProfile) {
           setCurrentUser(createUserFromZustand())
         }
       } finally {
@@ -110,12 +107,12 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
     // Функция для создания пользователя из данных Zustand (fallback)
     function createUserFromZustand(): User {
       return {
-        id: userState.id!,
-        email: userState.email || "",
-        name: userState.profile?.first_name && userState.profile?.last_name
-          ? `${userState.profile.first_name} ${userState.profile.last_name}`
-          : userState.name || "",
-        avatar_url: userState.profile?.avatar_url || "",
+        id: storeUserId!,
+        email: storeEmail || "",
+        name: storeProfile?.first_name && storeProfile?.last_name
+          ? `${storeProfile.first_name} ${storeProfile.last_name}`
+          : storeName || "",
+        avatar_url: storeProfile?.avatar_url || "",
         position: "",
         department: "",
         team: "",
@@ -124,25 +121,20 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
 
         dateJoined: "",
         workLocation:
-          userState.profile?.work_format === "Гибридный" ? "hybrid" :
-          userState.profile?.work_format === "В офисе" ? "office" :
-          userState.profile?.work_format === "Удаленно" ? "remote" :
+          storeProfile?.work_format === "Гибридный" ? "hybrid" :
+          storeProfile?.work_format === "В офисе" ? "office" :
+          storeProfile?.work_format === "Удаленно" ? "remote" :
           "office",
-        country: userState.profile?.country || "",
-        city: userState.profile?.city || "",
-        employmentRate: userState.profile?.employment_rate || 1,
-        salary: userState.profile?.salary || 0,
-        isHourly: userState.profile?.is_hourly || false
+        country: "",
+        city: "",
+        employmentRate: storeProfile?.employment_rate || 1,
+        salary: storeProfile?.salary || 0,
+        isHourly: storeProfile?.is_hourly || false
       }
     }
 
     fetchUserData()
-  }, [userState.isAuthenticated, userState.id, supabase])
-
-  // // Отладочный вывод для понимания, что содержится в хранилище
-  // useEffect(() => {
-  //   console.log("CurrentUserCard: Состояние из Zustand:", userState)
-  // }, [userState])
+  }, [isAuthenticated, storeUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fallback к переданному пользователю, если нет данных
   useEffect(() => {

@@ -62,11 +62,10 @@ export const useProjectStatistics = (projectId: string) => {
     queryKey: ['dashboard', 'project-statistics', projectId],
     queryFn: () => fetchProjectStatistics(projectId),
     enabled: !!projectId,
-    staleTime: 2 * 60 * 1000, // 2 минуты
-    refetchInterval: 2 * 60 * 1000, // Обновляем каждые 2 минуты
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    retry: 3,
+    staleTime: 5 * 60 * 1000, // 5 минут — статистика не меняется часто
+    // refetchInterval убран — polling каждые 2 мин создавал лишнюю нагрузку.
+    // Данные обновятся при навигации или инвалидации через Realtime.
+    retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };

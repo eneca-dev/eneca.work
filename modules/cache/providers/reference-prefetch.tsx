@@ -1,18 +1,23 @@
 'use client'
 
 /**
- * ReferencePrefetch - Компонент для prefetch справочных данных
+ * ReferencePrefetch - Компонент для отложенного prefetch справочных данных
  *
  * Загружает справочники (категории работ, уровни сложности, статусы этапов,
- * типы чекпоинтов) при старте приложения. Эти данные редко меняются и нужны во многих местах.
+ * типы чекпоинтов) ПОСЛЕ инициализации приложения, когда браузер свободен.
  *
- * Размещается в ClientProviders после QueryProvider для preloading данных.
+ * Оптимизации:
+ * - Загрузка откладывается через requestIdleCallback (не блокирует основной поток)
+ * - Справочники загружаются последовательно с паузой (не шквал параллельных запросов)
+ * - Проверка авторизации перед запуском (не грузим для анонимных)
+ * - staleTime: infinity — справочники не перезапрашиваются в рамках сессии
  */
 
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys/query-keys'
 import { staleTimePresets } from '../client/query-client'
+import { useUserStore } from '@/stores/useUserStore'
 
 // Server Actions для справочников
 import { getWorkCategories } from '@/modules/modals/actions/getWorkCategories'
@@ -21,85 +26,123 @@ import { getStageStatuses } from '@/modules/modals/actions/getStageStatuses'
 import { getCheckpointTypes } from '@/modules/checkpoints/actions/checkpoint-types'
 import { getUsers } from '../actions/users'
 
+/**
+ * Хелпер: requestIdleCallback с fallback на setTimeout
+ */
+function scheduleIdle(callback: () => void): number {
+  if (typeof requestIdleCallback !== 'undefined') {
+    return requestIdleCallback(callback)
+  }
+  return window.setTimeout(callback, 2000) as unknown as number
+}
+
+function cancelIdle(id: number): void {
+  if (typeof cancelIdleCallback !== 'undefined') {
+    cancelIdleCallback(id)
+  } else {
+    clearTimeout(id)
+  }
+}
+
+/**
+ * Пауза между запросами для снижения нагрузки
+ */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Описание одного справочника для prefetch
+ */
+interface ReferenceConfig {
+  queryKey: readonly unknown[]
+  queryFn: () => Promise<unknown>
+}
+
 export function ReferencePrefetch() {
   const queryClient = useQueryClient()
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated)
 
   useEffect(() => {
-    // Prefetch справочники если их нет в кеше
-    const prefetchReferenceData = async () => {
-      // Work Categories
-      const categoriesKey = queryKeys.workCategories.list()
-      if (!queryClient.getQueryData(categoriesKey)) {
-        queryClient.prefetchQuery({
-          queryKey: categoriesKey,
-          queryFn: async () => {
-            const result = await getWorkCategories()
-            if (!result.success) throw new Error(result.error)
-            return result.data
-          },
-          staleTime: staleTimePresets.static,
-        })
-      }
+    // Не загружаем справочники для неавторизованных пользователей
+    if (!isAuthenticated) return
 
-      // Difficulty Levels
-      const difficultiesKey = queryKeys.difficultyLevels.list()
-      if (!queryClient.getQueryData(difficultiesKey)) {
-        queryClient.prefetchQuery({
-          queryKey: difficultiesKey,
-          queryFn: async () => {
-            const result = await getDifficultyLevels()
-            if (!result.success) throw new Error(result.error)
-            return result.data
-          },
-          staleTime: staleTimePresets.static,
-        })
-      }
+    let cancelled = false
+    let idleId: number | null = null
 
-      // Stage Statuses
-      const statusesKey = queryKeys.stageStatuses.list()
-      if (!queryClient.getQueryData(statusesKey)) {
-        queryClient.prefetchQuery({
-          queryKey: statusesKey,
-          queryFn: async () => {
-            const result = await getStageStatuses()
-            if (!result.success) throw new Error(result.error)
-            return result.data
-          },
-          staleTime: staleTimePresets.static,
-        })
-      }
+    // Конфигурация справочников
+    const references: ReferenceConfig[] = [
+      {
+        queryKey: queryKeys.workCategories.list(),
+        queryFn: async () => {
+          const result = await getWorkCategories()
+          if (!result.success) throw new Error(result.error)
+          return result.data
+        },
+      },
+      {
+        queryKey: queryKeys.difficultyLevels.list(),
+        queryFn: async () => {
+          const result = await getDifficultyLevels()
+          if (!result.success) throw new Error(result.error)
+          return result.data
+        },
+      },
+      {
+        queryKey: queryKeys.stageStatuses.list(),
+        queryFn: async () => {
+          const result = await getStageStatuses()
+          if (!result.success) throw new Error(result.error)
+          return result.data
+        },
+      },
+      {
+        queryKey: queryKeys.checkpointTypes.list(),
+        queryFn: async () => {
+          const result = await getCheckpointTypes()
+          if (!result.success) throw new Error(result.error)
+          return result.data
+        },
+      },
+      {
+        queryKey: queryKeys.users.lists(),
+        queryFn: async () => {
+          const result = await getUsers()
+          if (!result.success) throw new Error(result.error)
+          return result.data
+        },
+      },
+    ]
 
-      // Checkpoint Types - нужны для модалки чекпоинтов
-      const checkpointTypesKey = queryKeys.checkpointTypes.list()
-      if (!queryClient.getQueryData(checkpointTypesKey)) {
-        queryClient.prefetchQuery({
-          queryKey: checkpointTypesKey,
-          queryFn: async () => {
-            const result = await getCheckpointTypes()
-            if (!result.success) throw new Error(result.error)
-            return result.data
-          },
-          staleTime: staleTimePresets.static, // 10 минут - типы меняются очень редко
-        })
-      }
+    // Последовательная загрузка справочников с паузой между ними
+    const prefetchSequentially = async () => {
+      for (const ref of references) {
+        if (cancelled) return
 
-      // Users - нужны для модалок с выбором сотрудников
-      const usersKey = queryKeys.users.lists()
-      if (!queryClient.getQueryData(usersKey)) {
-        queryClient.prefetchQuery({
-          queryKey: usersKey,
-          queryFn: async () => {
-            const result = await getUsers()
-            if (!result.success) throw new Error(result.error)
-            return result.data
-          },
-          staleTime: staleTimePresets.static, // 10 минут - пользователи редко меняются
+        // Пропускаем если уже в кеше
+        if (queryClient.getQueryData(ref.queryKey)) continue
+
+        await queryClient.prefetchQuery({
+          queryKey: ref.queryKey,
+          queryFn: ref.queryFn,
+          staleTime: staleTimePresets.infinity,
         })
+
+        // Пауза 300ms между запросами — даём Supabase «продохнуть»
+        if (!cancelled) await delay(300)
       }
     }
 
-    prefetchReferenceData()
-  }, [queryClient])
+    // Откладываем загрузку до момента когда браузер свободен
+    idleId = scheduleIdle(() => {
+      if (!cancelled) {
+        prefetchSequentially()
+      }
+    })
+
+    return () => {
+      cancelled = true
+      if (idleId !== null) cancelIdle(idleId)
+    }
+  }, [queryClient, isAuthenticated])
 
   return null
 }
