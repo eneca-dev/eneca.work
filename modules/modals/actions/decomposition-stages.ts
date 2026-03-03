@@ -28,7 +28,6 @@ export async function fetchDecompositionStages(
   input: FetchDecompositionStagesInput
 ): Promise<ActionResult<DecompositionStage[]>> {
   try {
-    console.log('📡 [fetchDecompositionStages] Начало запроса:', input)
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -63,7 +62,6 @@ export async function fetchDecompositionStages(
       order: row.decomposition_stage_order,
     }))
 
-    console.log('[fetchDecompositionStages] Успех, этапов:', stages.length)
     return { success: true, data: stages }
   } catch (error) {
     console.error('[fetchDecompositionStages] Error:', error)

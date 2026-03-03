@@ -167,9 +167,6 @@ export function CheckpointCreateModal({
 
     // Создание происходит в фоне с optimistic update
     createCheckpoint.mutate(payload, {
-      onSuccess: (result) => {
-        console.log('[CheckpointCreateModal] Checkpoint created successfully:', result)
-      },
       onError: (error) => {
         console.error('[CheckpointCreateModal] Failed to create checkpoint:', error)
         // TODO: Показать toast с ошибкой пользователю
