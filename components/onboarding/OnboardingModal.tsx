@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useState } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -82,11 +82,38 @@ const PAGES: PageConfig[] = [
 ]
 
 function VideoBlock({ videoId, title, pageIndex }: { videoId: string; title: string; pageIndex: number }) {
+  const [isActivated, setIsActivated] = useState(false)
+
+  if (!isActivated) {
+    return (
+      <button
+        onClick={() => setIsActivated(true)}
+        className="relative w-full rounded-lg overflow-hidden bg-black group cursor-pointer"
+        style={{ aspectRatio: "16/9" }}
+        aria-label={`Воспроизвести: ${title}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+          alt={title}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
+          <div className="w-16 h-16 rounded-full bg-red-600 group-hover:bg-red-500 flex items-center justify-center transition-colors shadow-lg">
+            <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
       <iframe
         key={`video-${pageIndex}`}
-        src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`}
+        src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&autoplay=1`}
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
@@ -113,28 +140,29 @@ function ImageBlock({ imageSrc, imageAlt, pageIndex }: { imageSrc: string; image
 }
 
 export function OnboardingModal() {
-  const { isOpen, currentPage, close, nextPage, prevPage, goToPage } = useOnboardingStore()
+  const isOpen = useOnboardingStore((s) => s.isOpen)
+  const currentPage = useOnboardingStore((s) => s.currentPage)
+  const close = useOnboardingStore((s) => s.close)
+  const nextPage = useOnboardingStore((s) => s.nextPage)
+  const prevPage = useOnboardingStore((s) => s.prevPage)
+  const goToPage = useOnboardingStore((s) => s.goToPage)
 
   const isFirst = currentPage === 0
   const isLast = currentPage === TOTAL_PAGES - 1
   const page = PAGES[currentPage]
 
-  const handleClose = useCallback(() => {
-    close()
-  }, [close])
-
   const hasVideo = !!page.videoId
   const hasImage = !!page.imageSrc
 
   const videoBlock = hasVideo && (
-    <VideoBlock videoId={page.videoId!} title={page.title} pageIndex={currentPage} />
+    <VideoBlock key={`video-${currentPage}`} videoId={page.videoId!} title={page.title} pageIndex={currentPage} />
   )
   const imageBlock = hasImage && (
     <ImageBlock imageSrc={page.imageSrc!} imageAlt={page.imageAlt || page.title} pageIndex={currentPage} />
   )
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="xl" closeOnOverlayClick={false}>
+    <Modal isOpen={isOpen} onClose={close} size="xl" closeOnOverlayClick={false}>
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border flex-shrink-0">
         <div>
@@ -149,7 +177,7 @@ export function OnboardingModal() {
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-foreground flex-shrink-0"
-          onClick={handleClose}
+          onClick={close}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -188,7 +216,7 @@ export function OnboardingModal() {
 
         {/* Стрелка вперёд */}
         <button
-          onClick={isLast ? handleClose : nextPage}
+          onClick={isLast ? close : nextPage}
           className="flex-shrink-0 w-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           aria-label={isLast ? "Завершить" : "Следующая страница"}
         >
@@ -228,7 +256,7 @@ export function OnboardingModal() {
           </Button>
 
           {isLast ? (
-            <Button size="sm" onClick={handleClose}>
+            <Button size="sm" onClick={close}>
               Завершить
             </Button>
           ) : (

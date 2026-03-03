@@ -10,6 +10,8 @@ import type { OrgContext } from '../types'
 // Глобальные маркеры, чтобы избежать повторных загрузок при том же userId в dev (StrictMode/HMR)
 let globalLastUserId: string | null = null
 let globalLoadInFlight: Promise<void> | null = null
+// Маркер успешной загрузки — переживает StrictMode cleanup/remount
+let globalLoadedForUserId: string | null = null
 
 /**
  * Unified Permissions Loader
@@ -37,7 +39,8 @@ export function usePermissionsLoader() {
   const reset = usePermissionsStore((s) => s.reset)
   const isLoading = usePermissionsStore((s) => s.isLoading)
   const error = usePermissionsStore((s) => s.error)
-  const permissions = usePermissionsStore((s) => s.permissions)
+  // Derived boolean — ре-рендер только при переходе true↔false, не при каждом изменении массива
+  const hasPermissions = usePermissionsStore((s) => s.permissions.length > 0)
 
   const loadingRef = useRef(false)
   const lastUserIdRef = useRef<string | null>(null)
@@ -58,7 +61,15 @@ export function usePermissionsLoader() {
       return
     }
 
+    // Защита от StrictMode: если уже инициировали загрузку для этого userId — не грузим повторно
+    if (!isForce && globalLoadedForUserId === userId) {
+      return
+    }
+
     loadingRef.current = true
+    // Ставим маркер СРАЗУ (синхронно) — до await. StrictMode remount увидит его и пропустит.
+    // force (reloadPermissions) обходит этот guard. Сбрасывается при логауте.
+    globalLoadedForUserId = userId
     // Не показываем loading если это фоновое обновление кешированных данных
     if (!isBackground) {
       setLoading(true)
@@ -124,6 +135,8 @@ export function usePermissionsLoader() {
       console.error('Критическая ошибка загрузки permissions:', errorMsg)
       setError(`Критическая ошибка: ${errorMsg}`)
       Sentry.captureException(error)
+      // Сбрасываем маркер при ошибке — следующая попытка сможет загрузить
+      globalLoadedForUserId = null
     } finally {
       setLoading(false)
       loadingRef.current = false
@@ -179,6 +192,7 @@ export function usePermissionsLoader() {
       // Пользователь вышел
       lastUserIdRef.current = null
       globalLastUserId = null
+      globalLoadedForUserId = null
       reset()
     }
   }, [isAuthenticated, userId, loadPermissions, reset])
@@ -192,10 +206,9 @@ export function usePermissionsLoader() {
   }, [userId, loadPermissions])
 
   return {
-    permissions,
     isLoading,
     error,
     reloadPermissions,
-    hasPermissions: permissions.length > 0,
+    hasPermissions,
   }
 }
