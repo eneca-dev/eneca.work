@@ -1,16 +1,15 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
-import { createClient } from "@/utils/supabase/client"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import EntityModal from "./EntityModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
-import * as Sentry from "@sentry/nextjs"
+import { useAdminEntity } from "../hooks/useAdminData"
 
 interface EntityTabConfig {
   entityName: string
@@ -38,52 +37,13 @@ interface EntityTabProps {
 }
 
 export default function EntityTab({ config }: EntityTabProps) {
-  const [entities, setEntities] = useState<Entity[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
-  // Мемоизируем функцию загрузки сущностей
-  const fetchEntities = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const supabase = createClient()
-      
-      const { data, error } = await supabase
-        .from(config.tableName)
-        .select(`${config.idField}, ${config.nameField}`)
-      
-      if (error) {
-        console.error(`Ошибка при загрузке ${config.entityNamePlural}:`, error)
-        Sentry.captureException(error, { tags: { module: 'users', component: 'EntityTab', action: 'load_entities', error_type: 'db_error' }, extra: { table: config.tableName } })
-        toast.error(`Не удалось загрузить ${config.entityNamePlural}`)
-        return
-      }
-      
-      setEntities(
-        data ? 
-        data.map((item: any) => ({ 
-          id: item[config.idField], 
-          name: item[config.nameField] 
-        })) : 
-        []
-      )
-    } catch (error) {
-      console.error(`Ошибка при загрузке ${config.entityNamePlural}:`, error)
-      Sentry.captureException(error, { tags: { module: 'users', component: 'EntityTab', action: 'fetch_entities', error_type: 'unexpected' }, extra: { table: config.tableName } })
-      toast.error("Произошла ошибка при загрузке данных")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [config])
-
-  // Загружаем сущности при монтировании компонента
-  useEffect(() => {
-    fetchEntities()
-  }, [fetchEntities])
+  const { entities, isLoading, refetch } = useAdminEntity(config.tableName, config.idField, config.nameField)
 
   // Мемоизируем фильтрованные сущности
   const filtered = useMemo(() => {
@@ -244,7 +204,7 @@ export default function EntityTab({ config }: EntityTabProps) {
         entity={entityData}
         existingNames={entities.map(e => e.name)}
         entityType={config.tableName.replace(/s$/, '')}
-        onSuccess={fetchEntities}
+        onSuccess={refetch}
       />
 
       {selectedEntity && (
@@ -256,7 +216,7 @@ export default function EntityTab({ config }: EntityTabProps) {
           table={config.tableName}
           idField={config.idField}
           entityId={selectedEntity.id}
-          onSuccess={fetchEntities}
+          onSuccess={refetch}
         />
       )}
     </div>

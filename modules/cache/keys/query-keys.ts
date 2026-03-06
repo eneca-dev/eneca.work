@@ -74,6 +74,8 @@ export const queryKeys = {
     all: ['users'] as const,
     lists: () => [...queryKeys.users.all, 'list'] as const,
     list: (filters?: UserFilters) => [...queryKeys.users.lists(), filters] as const,
+    /** Полный список пользователей с ролями (UserWithRoles из view_users) */
+    fullList: () => [...queryKeys.users.all, 'full-list'] as const,
     details: () => [...queryKeys.users.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.users.details(), id] as const,
     current: () => [...queryKeys.users.all, 'current'] as const,
@@ -143,6 +145,12 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // Справочники (редко меняются)
   // -------------------------------------------------------------------------
+  reference: {
+    all: ['reference'] as const,
+    /** Все справочники одним batch-запросом */
+    batch: () => [...queryKeys.reference.all, 'batch'] as const,
+  },
+
   departments: {
     all: ['departments'] as const,
     list: () => [...queryKeys.departments.all, 'list'] as const,
@@ -163,6 +171,16 @@ export const queryKeys = {
   categories: {
     all: ['categories'] as const,
     list: () => [...queryKeys.categories.all, 'list'] as const,
+  },
+
+  subdivisions: {
+    all: ['subdivisions'] as const,
+    list: () => [...queryKeys.subdivisions.all, 'list'] as const,
+  },
+
+  roles: {
+    all: ['roles'] as const,
+    list: () => [...queryKeys.roles.all, 'list'] as const,
   },
 
   workCategories: {
@@ -416,6 +434,25 @@ export const queryKeys = {
     details: () => [...queryKeys.decTemplates.all, 'detail'] as const,
     /** Детали шаблона по ID */
     detail: (id: string) => [...queryKeys.decTemplates.details(), id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Admin (панель администратора)
+  // -------------------------------------------------------------------------
+  admin: {
+    all: ['admin'] as const,
+    /** Подразделения с руководителями (view_subdivisions_with_heads) */
+    subdivisions: () => [...queryKeys.admin.all, 'subdivisions'] as const,
+    /** Отделы с руководителями (view_departments_with_heads) */
+    departments: () => [...queryKeys.admin.all, 'departments'] as const,
+    /** Команды с руководителями (view_teams_with_leads) */
+    teams: () => [...queryKeys.admin.all, 'teams'] as const,
+    /** Универсальный ключ для простых сущностей (positions, categories) */
+    entity: (table: string) => [...queryKeys.admin.all, 'entity', table] as const,
+    /** Роли + разрешения + связи */
+    roles: () => [...queryKeys.admin.all, 'roles'] as const,
+    /** Аналитика пользователей (графики, метрики) */
+    analytics: () => [...queryKeys.admin.all, 'analytics'] as const,
   },
 
   // -------------------------------------------------------------------------

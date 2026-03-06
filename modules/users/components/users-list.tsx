@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserDialog } from "./user-dialog"
 import { deleteUser } from "@/services/org-data-service"
-import type { User, UserWithRoles } from "@/types/db"
+import type { UserPresentation as User } from "@/modules/users/lib/types"
 import { toast } from "@/components/ui/use-toast"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
@@ -60,7 +60,7 @@ interface UsersListProps {
 type GroupBy = "none" | "subdivisions"
 
 // Функция для получения информации о расположении (восстановлена из оригинала)
-const getWorkLocationInfo = (location: string | null) => {
+const getWorkLocationInfo = (location: string | null | undefined) => {
   if (!location) {
     return { icon: null, label: "Не указано" }
   }
@@ -75,6 +75,86 @@ const getWorkLocationInfo = (location: string | null) => {
     default:
       return { icon: null, label: location }
   }
+}
+
+/** Переиспользуемый компонент фильтра-дропдауна для списка пользователей */
+function FilterDropdown({
+  icon,
+  tooltip,
+  searchPlaceholder,
+  items,
+  selected,
+  onToggle,
+  disabled,
+  renderLabel,
+}: {
+  icon: React.ReactNode
+  tooltip: string
+  searchPlaceholder: string
+  items: string[]
+  selected: string[]
+  onToggle: (item: string, checked: boolean) => void
+  disabled?: boolean
+  renderLabel?: (item: string) => string
+}) {
+  const [search, setSearch] = useState("")
+  const idPrefix = tooltip.replace(/\s+/g, '-').toLowerCase()
+
+  const filteredItems = items.filter(item => {
+    const label = renderLabel ? renderLabel(item) : item
+    return label.toLowerCase().includes(search.toLowerCase()) ||
+           item.toLowerCase().includes(search.toLowerCase())
+  })
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+              {icon}
+              {selected.length > 0 && (
+                <span className="ml-1 text-xs text-blue-600">({selected.length})</span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <div className="p-2 space-y-2">
+              <Input
+                placeholder={searchPlaceholder}
+                className="h-8 text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {filteredItems.map(item => (
+                  <div key={item} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`${idPrefix}-${item}`}
+                      checked={selected.includes(item)}
+                      disabled={disabled}
+                      onChange={(e) => onToggle(item, e.target.checked)}
+                      className="rounded"
+                    />
+                    <label
+                      htmlFor={`${idPrefix}-${item}`}
+                      className={`text-xs ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                    >
+                      {renderLabel ? renderLabel(item) : item}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{tooltip}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: UsersListProps) {
@@ -115,21 +195,13 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
   const [itemsPerPage] = useState(100)
   const [showAll, setShowAll] = useState(false)
   
-  // Состояния для поиска в dropdown фильтрах
-  const [searchSubdivisionDropdown, setSearchSubdivisionDropdown] = useState("")
-  const [searchDepartmentDropdown, setSearchDepartmentDropdown] = useState("")
-  const [searchTeamDropdown, setSearchTeamDropdown] = useState("")
-  const [searchPositionDropdown, setSearchPositionDropdown] = useState("")
-  const [searchCategoryDropdown, setSearchCategoryDropdown] = useState("")
-  const [searchRoleDropdown, setSearchRoleDropdown] = useState("")
-  const [searchLocationDropdown, setSearchLocationDropdown] = useState("")
-  
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   // Получаем разрешения пользователя
-  const { profile, id: viewerId } = useUserStore()
+  const profile = useUserStore((state) => state.profile)
+  const viewerId = useUserStore((state) => state.id)
   const {
     canEditAllUsers,
     canEditSubdivision,
@@ -143,9 +215,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
     isAdmin, // Добавляем проверку на администратора
   } = useUserPermissions()
 
-  const viewerDeptId = profile?.departmentId || profile?.department_id || null
-  const viewerTeamId = profile?.teamId || profile?.team_id || null
-  const viewerSubdivisionId = profile?.subdivisionId || (profile as any)?.subdivision_id || null
+  const viewerDeptId = profile?.department_id || null
+  const viewerTeamId = profile?.team_id || null
+  const viewerSubdivisionId = profile?.subdivision_id || null
 
   const canEditUser = (u: User) => {
     // Запрещаем редактирование своего профиля через список пользователей
@@ -494,15 +566,6 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
       roles: [],
     })
 
-    // Сбрасываем поисковые строки в dropdown'ах
-    setSearchSubdivisionDropdown("")
-    setSearchDepartmentDropdown("")
-    setSearchTeamDropdown("")
-    setSearchPositionDropdown("")
-    setSearchCategoryDropdown("")
-    setSearchRoleDropdown("")
-    setSearchLocationDropdown("")
-
     // Сбрасываем основной поиск
     setSearchTerm("")
   }, [isAdmin, users, viewerId])
@@ -512,6 +575,31 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
     return searchTerm.length > 0 || 
            Object.values(filters).some(filterArray => filterArray.length > 0)
   }, [searchTerm, filters])
+
+  // Уникальные значения для фильтров
+  const uniqueFilterItems = useMemo(() => {
+    const unique = (values: (string | undefined)[]) =>
+      [...new Set(values.filter((v): v is string => Boolean(v)))].sort()
+    return {
+      subdivisions: unique(users.map(u => u.subdivision)),
+      departments: unique(users.map(u => u.department)),
+      teams: unique(users.map(u => u.team)),
+      positions: unique(users.map(u => u.position)),
+      categories: unique(users.map(u => u.category)),
+      roles: unique(users.map(u => u.role)),
+      workLocations: unique(users.map(u => u.workLocation)),
+    }
+  }, [users])
+
+  // Универсальный обработчик переключения фильтра
+  const toggleFilter = useCallback((filterKey: keyof typeof filters, item: string, checked: boolean) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterKey]: checked
+        ? [...prev[filterKey], item]
+        : prev[filterKey].filter(i => i !== item)
+    }))
+  }, [])
 
   // Функция для получения пагинированных пользователей из группы
   const getPaginatedUsersFromGroup = useCallback((groupUsers: User[]) => {
@@ -555,67 +643,16 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по подразделениям */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Network className="h-4 w-4" />
-                       {filters.subdivisions.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.subdivisions.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input
-                         placeholder="Поиск подразделений..."
-                         className="h-8 text-xs"
-                         value={searchSubdivisionDropdown}
-                         onChange={(e) => setSearchSubdivisionDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.subdivision).filter((s): s is string => Boolean(s)))]
-                           .sort()
-                           .filter(subdiv => subdiv.toLowerCase().includes(searchSubdivisionDropdown.toLowerCase()))
-                           .map(subdiv => {
-                             // Для не-админов блокируем изменение фильтра подразделения
-                             const isDisabled = !isAdmin
-                             return (
-                           <div key={subdiv} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`subdiv-${subdiv}`}
-                               checked={filters.subdivisions.includes(subdiv)}
-                               disabled={isDisabled}
-                               onChange={(e) => {
-                                 if (isAdmin) {
-                                   const newSubdivs = e.target.checked
-                                     ? [...filters.subdivisions, subdiv]
-                                     : filters.subdivisions.filter(s => s !== subdiv)
-                                   setFilters({...filters, subdivisions: newSubdivs})
-                                 }
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`subdiv-${subdiv}`} className={`text-xs ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
-                               {subdiv}
-                             </label>
-                           </div>
-                             )
-                           })}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по подразделениям</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           {/* Фильтры */}
+           <FilterDropdown
+             icon={<Network className="h-4 w-4" />}
+             tooltip="Фильтр по подразделениям"
+             searchPlaceholder="Поиск подразделений..."
+             items={uniqueFilterItems.subdivisions}
+             selected={filters.subdivisions}
+             onToggle={(item, checked) => toggleFilter('subdivisions', item, checked)}
+             disabled={!isAdmin}
+           />
 
            {/* Чип с выбранным подразделением */}
            {filters.subdivisions.length > 0 && (
@@ -629,7 +666,6 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                    : `${filters.subdivisions[0]} +${filters.subdivisions.length - 1}`
                  }
                </span>
-               {/* Показываем кнопку удаления только для администраторов */}
                {isAdmin && (
                  <button
                    onClick={(e) => {
@@ -646,352 +682,70 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по отделам */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Building2 className="h-4 w-4" />
-                       {filters.departments.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.departments.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input
-                         placeholder="Поиск отделов..."
-                         className="h-8 text-xs"
-                         value={searchDepartmentDropdown}
-                         onChange={(e) => setSearchDepartmentDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.department).filter((d): d is string => Boolean(d)))]
-                           .sort()
-                           .filter(dept => dept.toLowerCase().includes(searchDepartmentDropdown.toLowerCase()))
-                           .map(dept => (
-                           <div key={dept} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`dept-${dept}`}
-                               checked={filters.departments.includes(dept)}
-                               onChange={(e) => {
-                                 const newDepts = e.target.checked
-                                   ? [...filters.departments, dept]
-                                   : filters.departments.filter(d => d !== dept)
-                                 setFilters({...filters, departments: newDepts})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`dept-${dept}`} className="text-xs cursor-pointer">
-                               {dept}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по отделам</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Building2 className="h-4 w-4" />}
+             tooltip="Фильтр по отделам"
+             searchPlaceholder="Поиск отделов..."
+             items={uniqueFilterItems.departments}
+             selected={filters.departments}
+             onToggle={(item, checked) => toggleFilter('departments', item, checked)}
+           />
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по командам */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Users className="h-4 w-4" />
-                       {filters.teams.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.teams.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input 
-                         placeholder="Поиск команд..." 
-                         className="h-8 text-xs"
-                         value={searchTeamDropdown}
-                         onChange={(e) => setSearchTeamDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.team).filter((t): t is string => Boolean(t)))]
-                           .sort()
-                           .filter(team => team.toLowerCase().includes(searchTeamDropdown.toLowerCase()))
-                           .map(team => (
-                           <div key={team} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`team-${team}`}
-                               checked={filters.teams.includes(team)}
-                               onChange={(e) => {
-                                 const newTeams = e.target.checked
-                                   ? [...filters.teams, team]
-                                   : filters.teams.filter(t => t !== team)
-                                 setFilters({...filters, teams: newTeams})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`team-${team}`} className="text-xs cursor-pointer">
-                               {team}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по командам</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Users className="h-4 w-4" />}
+             tooltip="Фильтр по командам"
+             searchPlaceholder="Поиск команд..."
+             items={uniqueFilterItems.teams}
+             selected={filters.teams}
+             onToggle={(item, checked) => toggleFilter('teams', item, checked)}
+           />
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по должностям */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Briefcase className="h-4 w-4" />
-                       {filters.positions.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.positions.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input 
-                         placeholder="Поиск должностей..." 
-                         className="h-8 text-xs"
-                         value={searchPositionDropdown}
-                         onChange={(e) => setSearchPositionDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.position).filter((p): p is string => Boolean(p)))]
-                           .sort()
-                           .filter(position => position.toLowerCase().includes(searchPositionDropdown.toLowerCase()))
-                           .map(position => (
-                           <div key={position} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`position-${position}`}
-                               checked={filters.positions.includes(position)}
-                               onChange={(e) => {
-                                 const newPositions = e.target.checked
-                                   ? [...filters.positions, position]
-                                   : filters.positions.filter(p => p !== position)
-                                 setFilters({...filters, positions: newPositions})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`position-${position}`} className="text-xs cursor-pointer">
-                               {position}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по должностям</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Briefcase className="h-4 w-4" />}
+             tooltip="Фильтр по должностям"
+             searchPlaceholder="Поиск должностей..."
+             items={uniqueFilterItems.positions}
+             selected={filters.positions}
+             onToggle={(item, checked) => toggleFilter('positions', item, checked)}
+           />
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по категориям */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Tag className="h-4 w-4" />
-                       {filters.categories.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.categories.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input 
-                         placeholder="Поиск категорий..." 
-                         className="h-8 text-xs"
-                         value={searchCategoryDropdown}
-                         onChange={(e) => setSearchCategoryDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.category).filter((c): c is string => Boolean(c)))]
-                           .sort()
-                           .filter(category => category.toLowerCase().includes(searchCategoryDropdown.toLowerCase()))
-                           .map(category => (
-                           <div key={category} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`category-${category}`}
-                               checked={filters.categories.includes(category)}
-                               onChange={(e) => {
-                                 const newCategories = e.target.checked
-                                   ? [...filters.categories, category]
-                                   : filters.categories.filter(c => c !== category)
-                                 setFilters({...filters, categories: newCategories})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`category-${category}`} className="text-xs cursor-pointer">
-                               {category}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по категориям</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Tag className="h-4 w-4" />}
+             tooltip="Фильтр по категориям"
+             searchPlaceholder="Поиск категорий..."
+             items={uniqueFilterItems.categories}
+             selected={filters.categories}
+             onToggle={(item, checked) => toggleFilter('categories', item, checked)}
+           />
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           {/* Фильтр по ролям */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                      <Users className="h-4 w-4" />
-                       {filters.roles.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.roles.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input 
-                         placeholder="Поиск ролей..." 
-                         className="h-8 text-xs"
-                         value={searchRoleDropdown}
-                         onChange={(e) => setSearchRoleDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.role).filter((r): r is string => Boolean(r)))]
-                           .sort()
-                           .filter(role => role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
-                           .map(role => (
-                           <div key={role} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`role-${role}`}
-                               checked={filters.roles.includes(role as string)}
-                               onChange={(e) => {
-                                 const newRoles = e.target.checked
-                                   ? [...filters.roles, role as string]
-                                   : filters.roles.filter(r => r !== role)
-                                 setFilters({...filters, roles: newRoles})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`role-${role}`} className="text-xs cursor-pointer">
-                               {role}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по ролям</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Users className="h-4 w-4" />}
+             tooltip="Фильтр по ролям"
+             searchPlaceholder="Поиск ролей..."
+             items={uniqueFilterItems.roles}
+             selected={filters.roles}
+             onToggle={(item, checked) => toggleFilter('roles', item, checked)}
+           />
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
-           
-
-           {/* Фильтр по расположению */}
-           <TooltipProvider>
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <DropdownMenu>
-                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                       <Home className="h-4 w-4" />
-                       {filters.workLocations.length > 0 && (
-                         <span className="ml-1 text-xs text-blue-600">({filters.workLocations.length})</span>
-                       )}
-                     </Button>
-                   </DropdownMenuTrigger>
-                   <DropdownMenuContent align="start" className="w-64">
-                     <div className="p-2 space-y-2">
-                       <Input 
-                         placeholder="Поиск расположений..." 
-                         className="h-8 text-xs"
-                         value={searchLocationDropdown}
-                         onChange={(e) => setSearchLocationDropdown(e.target.value)}
-                       />
-                       <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.workLocation).filter((l): l is "office" | "remote" | "hybrid" => Boolean(l)))]
-                           .sort()
-                           .filter(location => {
-                             const locationInfo = getWorkLocationInfo(location)
-                             if (!locationInfo) return false
-                             return locationInfo.label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
-                                    location.toLowerCase().includes(searchLocationDropdown.toLowerCase())
-                           })
-                           .map(location => (
-                           <div key={location} className="flex items-center space-x-2">
-                             <input
-                               type="checkbox"
-                               id={`location-${location}`}
-                               checked={filters.workLocations.includes(location)}
-                               onChange={(e) => {
-                                 const newLocations = e.target.checked
-                                   ? [...filters.workLocations, location]
-                                   : filters.workLocations.filter(l => l !== location)
-                                 setFilters({...filters, workLocations: newLocations})
-                               }}
-                               className="rounded"
-                             />
-                             <label htmlFor={`location-${location}`} className="text-xs cursor-pointer">
-                               {getWorkLocationInfo(location)?.label || location}
-                             </label>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </DropdownMenuContent>
-                 </DropdownMenu>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Фильтр по расположению</p>
-               </TooltipContent>
-             </Tooltip>
-           </TooltipProvider>
+           <FilterDropdown
+             icon={<Home className="h-4 w-4" />}
+             tooltip="Фильтр по расположению"
+             searchPlaceholder="Поиск расположений..."
+             items={uniqueFilterItems.workLocations}
+             selected={filters.workLocations}
+             onToggle={(item, checked) => toggleFilter('workLocations', item, checked)}
+             renderLabel={(location) => getWorkLocationInfo(location)?.label || location}
+           />
 
            {/* Кнопка сброса фильтров */}
            <TooltipProvider>

@@ -1,10 +1,9 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
-import { createClient } from "@/utils/supabase/client"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Edit2 } from "lucide-react"
@@ -17,6 +16,7 @@ import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import { useAdminTeams, useAdminDepartments } from "../hooks/useAdminData"
 import { useUserStore } from "@/stores/useUserStore"
 import * as Sentry from "@sentry/nextjs"
 
@@ -29,7 +29,7 @@ interface Department {
 interface Team {
   id: string;
   name: string;
-  departmentId: string;
+  departmentId: string | null;
   departmentName: string | null;
   team_lead_id: string | null;
   headFirstName: string | null;
@@ -49,8 +49,6 @@ export default function TeamsTab(props: TeamsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
   const subdivisionId = 'subdivisionId' in props ? props.subdivisionId : null
-  const [teams, setTeams] = useState<Team[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
   const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? departmentId : null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -60,10 +58,55 @@ export default function TeamsTab(props: TeamsTabProps) {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
   const perms = useAdminPermissions()
   const currentUserId = useUserStore(state => state.id)
+
+  // TanStack Query hooks — автоматическая дедупликация и кеширование
+  const { teams: rawTeams, isLoading: isTeamsLoading, refetch: refetchTeams } = useAdminTeams()
+  const { departments: rawDepartments, isLoading: isDeptsLoading } = useAdminDepartments()
+  const isLoading = isTeamsLoading || isDeptsLoading
+
+  // Маппинг и scope-фильтрация команд (derived state — не useEffect)
+  const teams = useMemo<Team[]>(() => {
+    const mapped = rawTeams.map(t => ({
+      id: t.team_id,
+      name: t.team_name,
+      departmentId: t.department_id,
+      departmentName: t.department_name,
+      team_lead_id: t.team_lead_id,
+      headFirstName: t.team_lead_first_name,
+      headLastName: t.team_lead_last_name,
+      headFullName: t.team_lead_full_name,
+      headEmail: t.team_lead_email,
+      headAvatarUrl: t.team_lead_avatar_url,
+    }))
+
+    if (scope === 'department') {
+      return departmentId ? mapped.filter(t => t.departmentId === departmentId) : []
+    }
+    if (scope === 'subdivision') {
+      const subdivisionDeptIds = new Set(
+        rawDepartments
+          .filter(d => d.subdivision_id === subdivisionId)
+          .map(d => d.department_id)
+      )
+      return mapped.filter(t => t.departmentId && subdivisionDeptIds.has(t.departmentId))
+    }
+    return mapped
+  }, [rawTeams, rawDepartments, scope, departmentId, subdivisionId])
+
+  // Scope-фильтрация отделов для dropdown
+  const departments = useMemo<Department[]>(() => {
+    const all = rawDepartments.map(d => ({ id: d.department_id, name: d.department_name }))
+    if (scope === 'department') return all.filter(d => d.id === departmentId)
+    if (scope === 'subdivision') {
+      return rawDepartments
+        .filter(d => d.subdivision_id === subdivisionId)
+        .map(d => ({ id: d.department_id, name: d.department_name }))
+    }
+    return all
+  }, [rawDepartments, scope, departmentId, subdivisionId])
 
   // Определяем, должны ли быть видны элементы управления
   const canManageAllTeams = perms.canManageTeams
@@ -74,129 +117,17 @@ export default function TeamsTab(props: TeamsTabProps) {
   const canManageTeamLead = perms.canManageTeamLead
   const isTeamScoped = scope === 'department'
   const showManagementControls = (canManageAllTeams && !isTeamScoped) || (canEditSubdivision && scope === 'subdivision')
-  // Создавать команды могут: admin (manage.teams), subdivision_head (edit.subdivision) и department_head (edit.department)
   const canCreateTeam = canManageAllTeams || canEditSubdivision || canEditDepartment
-  // Редактировать команды могут: admin, subdivision_head, department_head и team_lead (edit.team)
   const canModifyTeams = canManageAllTeams || canEditSubdivision || canEditDepartment || canEditTeams
-  // Удалять команды могут: только те, у кого есть разрешение delete.team (admin и department_head)
   const canDelete = canDeleteTeam
-  // Управлять руководителями команд могут: только те, у кого есть разрешение manage.team_lead (admin и department_head)
   const canManageHead = canManageTeamLead
 
   // Проверяет, может ли текущий пользователь управлять данной командой
   const canManageTeam = useCallback((team: Team) => {
-    // Admin может управлять всеми командами
-    if (canManageAllTeams || canEditSubdivision || canEditDepartment) {
-      return true
-    }
-
-    // Team_lead может управлять только своей командой
-    if (canEditTeams && currentUserId && team.team_lead_id === currentUserId) {
-      return true
-    }
-
+    if (canManageAllTeams || canEditSubdivision || canEditDepartment) return true
+    if (canEditTeams && currentUserId && team.team_lead_id === currentUserId) return true
     return false
   }, [canManageAllTeams, canEditSubdivision, canEditDepartment, canEditTeams, currentUserId])
-
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const supabase = createClient()
-      
-      // Получаем команды с руководителями из view_teams_with_leads
-      const { data: teamsData, error: teamsError } = await supabase
-        .from("view_teams_with_leads")
-        .select(`
-          team_id,
-          team_name,
-          department_id,
-          department_name,
-          team_lead_id,
-          team_lead_first_name,
-          team_lead_last_name,
-          team_lead_full_name,
-          team_lead_email,
-          team_lead_avatar_url
-        `)
-        .order("team_name")
-      
-      if (teamsError) {
-        console.error('Ошибка при загрузке команд:', teamsError)
-        Sentry.captureException(teamsError, { tags: { module: 'users', component: 'TeamsTab', action: 'load_teams', error_type: 'db_error' } })
-        toast.error('Не удалось загрузить команды')
-        return
-      }
-      
-      // Получаем отделы
-      const { data: deptsData, error: deptsError } = await supabase
-        .from("departments")
-        .select("department_id, department_name, subdivision_id")
-      
-      if (deptsError) {
-        console.error('Ошибка при загрузке отделов:', deptsError)
-        Sentry.captureException(deptsError, { tags: { module: 'users', component: 'TeamsTab', action: 'load_departments', error_type: 'db_error' } })
-        toast.error('Не удалось загрузить отделы')
-        return
-      }
-      
-      // Дедупликация команд по team_id
-      const uniqueTeamsMap = new Map()
-      teamsData?.forEach(team => {
-        if (!uniqueTeamsMap.has(team.team_id)) {
-          uniqueTeamsMap.set(team.team_id, {
-            id: team.team_id,
-            name: team.team_name,
-            departmentId: team.department_id,
-            departmentName: team.department_name || null,
-            team_lead_id: team.team_lead_id,
-            headFirstName: team.team_lead_first_name,
-            headLastName: team.team_lead_last_name,
-            headFullName: team.team_lead_full_name,
-            headEmail: team.team_lead_email,
-            headAvatarUrl: team.team_lead_avatar_url
-          })
-        }
-      })
-      
-      // Устанавливаем данные команд с учетом скоупа
-      const preparedTeams = Array.from(uniqueTeamsMap.values())
-      let scopedTeams = preparedTeams
-      if (scope === 'department') {
-        scopedTeams = preparedTeams.filter(t => t.departmentId === departmentId!)
-      } else if (scope === 'subdivision') {
-        // Для subdivision нужно фильтровать по отделам, которые принадлежат подразделению
-        // Сначала получаем список отделов подразделения
-        const subdivisionDeptIds = deptsData
-          ?.filter((d: any) => d.subdivision_id === subdivisionId)
-          .map((d: any) => d.department_id) || []
-        scopedTeams = preparedTeams.filter(t => t.departmentId && subdivisionDeptIds.includes(t.departmentId))
-      }
-      setTeams(scopedTeams)
-
-      // Устанавливаем данные отделов с учетом скоупа
-      const allDepartments = deptsData ? deptsData.map(dep => ({ id: dep.department_id, name: dep.department_name })) : []
-      let scopedDepartments = allDepartments
-      if (scope === 'department') {
-        scopedDepartments = allDepartments.filter(d => d.id === departmentId!)
-      } else if (scope === 'subdivision') {
-        scopedDepartments = deptsData
-          ?.filter((d: any) => d.subdivision_id === subdivisionId)
-          .map((d: any) => ({ id: d.department_id, name: d.department_name })) || []
-      }
-      setDepartments(scopedDepartments)
-    } catch (error) {
-      console.error("Ошибка при загрузке данных:", error)
-      Sentry.captureException(error, { tags: { module: 'users', component: 'TeamsTab', action: 'fetch_data', error_type: 'unexpected' } })
-      toast.error('Произошла ошибка при загрузке данных')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [scope, departmentId, subdivisionId])
-
-  // Загружаем данные при монтировании компонента
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
 
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
@@ -636,7 +567,7 @@ export default function TeamsTab(props: TeamsTabProps) {
         extraFields={scopedExtraFields}
         existingNames={teams.map(t => t.name)}
         entityType="team"
-        onSuccess={fetchData}
+        onSuccess={refetchTeams}
       />
 
       {selectedTeam && (
@@ -648,7 +579,7 @@ export default function TeamsTab(props: TeamsTabProps) {
           table="teams"
           idField="team_id"
           entityId={selectedTeam.id}
-          onSuccess={fetchData}
+          onSuccess={refetchTeams}
         />
       )}
 
@@ -658,7 +589,7 @@ export default function TeamsTab(props: TeamsTabProps) {
           open={headModalOpen}
           onOpenChange={setHeadModalOpen}
           team={teamHeadData}
-          onSuccess={fetchData}
+          onSuccess={refetchTeams}
         />
       )}
 
@@ -670,7 +601,7 @@ export default function TeamsTab(props: TeamsTabProps) {
           type="team"
           entityName={selectedTeam.name}
           entityId={selectedTeam.id}
-          onSuccess={fetchData}
+          onSuccess={refetchTeams}
         />
       )}
 
@@ -686,7 +617,7 @@ export default function TeamsTab(props: TeamsTabProps) {
             departmentName: selectedTeam.departmentName || "",
             team_lead_id: selectedTeam.team_lead_id
           }}
-          onSuccess={fetchData}
+          onSuccess={refetchTeams}
         />
       )}
     </div>

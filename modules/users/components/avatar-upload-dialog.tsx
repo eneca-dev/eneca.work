@@ -16,7 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Upload, Loader2, X, Trash2 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
-import { useUserStore } from "@/stores/useUserStore"
 
 interface AvatarUploadDialogProps {
   open: boolean
@@ -34,7 +33,6 @@ function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUplo
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
-  const userState = useUserStore()
   const supabase = createClient()
 
   // Проверяем время последней загрузки
@@ -166,9 +164,6 @@ function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUplo
           return
         }
 
-        // DEBUG: временно выводим ответ сервера
-        console.log("[DEBUG] Edge Function response:", resp)
-
         let data
         try {
           data = await resp.json()
@@ -178,9 +173,6 @@ function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUplo
           toast.error("Некорректный ответ от сервера")
           return
         }
-
-        // DEBUG: временно выводим data
-        console.log("[DEBUG] Edge Function data:", data)
 
         if (!resp.ok || !data?.url) {
           setIsProcessing(false)

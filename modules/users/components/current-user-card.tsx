@@ -1,148 +1,34 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { User } from "@/types/db"
 import { Settings, Building2, Home, Briefcase } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserDialog } from "./user-dialog"
 import { useUserStore } from "@/stores/useUserStore"
-import { createClient } from "@/utils/supabase/client"
 import { AvatarUploader } from "./avatar-uploader"
 import { toast } from "sonner"
 import * as Sentry from "@sentry/nextjs"
+import type { UserPresentation } from "@/modules/users/lib/types"
 
 interface CurrentUserCardProps {
   onUserUpdated?: () => void
-  fallbackUser?: User // Для случаев, если в Zustand нет данных
+  user: UserPresentation
 }
 
-function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) {
+function CurrentUserCard({ onUserUpdated, user: userProp }: CurrentUserCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  // rerender-derived-state: отдельные селекторы вместо подписки на весь store
-  const isAuthenticated = useUserStore(state => state.isAuthenticated)
-  const storeUserId = useUserStore(state => state.id)
-  const storeName = useUserStore(state => state.name)
-  const storeEmail = useUserStore(state => state.email)
-  const storeProfile = useUserStore(state => state.profile)
   const updateAvatar = useUserStore(state => state.updateAvatar)
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
 
-  // Стабильная ссылка на Supabase клиент (не пересоздаётся при ре-рендерах)
-  const supabaseRef = useRef(createClient())
+  // Локальный override аватара (мгновенный фидбек после загрузки, до инвалидации родительского query)
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
 
-  // Получаем полные данные пользователя из view_users
-  useEffect(() => {
-    async function fetchUserData() {
-      if (!isAuthenticated || !storeUserId) return
-
-      setIsLoading(true)
-      try {
-        const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: storeUserId } }, async () =>
-          supabaseRef.current
-            .from("view_users")
-            .select("*")
-            .eq("user_id", storeUserId)
-            .maybeSingle()
-        )
-
-        if (error) {
-          console.error("Ошибка получения данных пользователя из view_users:", error)
-          Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view', error_type: 'db_error' }, extra: { user_id: storeUserId } })
-          if (storeProfile) {
-            setCurrentUser(createUserFromZustand())
-          }
-          return
-        }
-
-        if (userData) {
-          const formattedUser: User = {
-            id: userData.user_id,
-            email: userData.email || "",
-            name: userData.full_name?.trim() ||
-                  (userData.first_name && userData.last_name
-                    ? `${userData.first_name} ${userData.last_name}`.trim()
-                    : storeName || ""),
-            avatar_url: userData.avatar_url || "",
-            position: userData.position_name === "Без должности" ? "" : userData.position_name || "",
-            subdivision: userData.subdivision_name || "",
-            subdivisionId: userData.subdivision_id || undefined,
-            department: userData.department_name === "Без отдела" ? "" : userData.department_name || "",
-            departmentId: userData.department_id || undefined,
-            team: userData.team_name || "",
-            teamId: userData.team_id || undefined,
-            category: userData.category_name === "Не применяется" ? "" : userData.category_name || "",
-            role: userData.roles_display_string || "",
-
-            dateJoined: userData.created_at || "",
-            workLocation:
-              userData.work_format === "Гибридный" ? "hybrid" :
-              userData.work_format === "В офисе" ? "office" :
-              userData.work_format === "Удаленно" ? "remote" :
-              "office",
-            country: userData.country_name || "",
-            city: userData.city_name || "",
-            employmentRate: userData.employment_rate ? parseFloat(String(userData.employment_rate)) : 1,
-            salary: userData.salary ? parseFloat(String(userData.salary)) : 0,
-            isHourly: userData.is_hourly || false
-          }
-
-          setCurrentUser(formattedUser)
-        }
-
-      } catch (error) {
-        console.error("Критическая ошибка при получении данных пользователя:", error)
-        Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view_unexpected', error_type: 'unexpected' }, extra: { user_id: storeUserId } })
-        if (storeProfile) {
-          setCurrentUser(createUserFromZustand())
-        }
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    // Функция для создания пользователя из данных Zustand (fallback)
-    function createUserFromZustand(): User {
-      return {
-        id: storeUserId!,
-        email: storeEmail || "",
-        name: storeProfile?.first_name && storeProfile?.last_name
-          ? `${storeProfile.first_name} ${storeProfile.last_name}`
-          : storeName || "",
-        avatar_url: storeProfile?.avatar_url || "",
-        position: "",
-        department: "",
-        team: "",
-        category: "",
-        role: "",
-
-        dateJoined: "",
-        workLocation:
-          storeProfile?.work_format === "Гибридный" ? "hybrid" :
-          storeProfile?.work_format === "В офисе" ? "office" :
-          storeProfile?.work_format === "Удаленно" ? "remote" :
-          "office",
-        country: "",
-        city: "",
-        employmentRate: storeProfile?.employment_rate || 1,
-        salary: storeProfile?.salary || 0,
-        isHourly: storeProfile?.is_hourly || false
-      }
-    }
-
-    fetchUserData()
-  }, [isAuthenticated, storeUserId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fallback к переданному пользователю, если нет данных
-  useEffect(() => {
-    if (!currentUser && !isLoading && fallbackUser) {
-      // console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
-      setCurrentUser(fallbackUser)
-    }
-  }, [currentUser, isLoading, fallbackUser])
+  // Данные пользователя берём из родительского TanStack Query — без дублирующего запроса
+  const currentUser = avatarOverride
+    ? { ...userProp, avatar_url: avatarOverride }
+    : userProp
 
   // Функция для отображения значка и цвета в зависимости от расположения
   const getLocationBadge = (location: "office" | "remote" | "hybrid") => {
@@ -174,41 +60,19 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
   // Обработчик успешной загрузки аватара
   const handleAvatarUploaded = (url: string) => {
     Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'CurrentUserCard: avatar uploaded' })
+    // Мгновенный фидбек — локальный override аватара
+    setAvatarOverride(url)
     // Обновляем аватар в Zustand
     updateAvatar(url)
-    
+
     toast.success("После обработки аватар будет автоматически применен", {
       description: "Повторно загрузить аватар можно будет через 15 минут"
     })
-    
-    // Обновление аватара в локальном состоянии для демонстрации
-    if (currentUser) {
-      setCurrentUser({
-        ...currentUser,
-        avatar_url: url
-      })
-    }
-    
-    // Вызываем callback, если он есть
+
+    // Инвалидируем родительский query для обновления данных
     if (onUserUpdated) {
       onUserUpdated()
     }
-  }
-
-  // Если данных нет, показываем пустую карточку или индикатор загрузки
-  if (isLoading || !currentUser) {
-    // console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
-    return (
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-center h-16">
-            <p className="text-muted-foreground">
-              {isLoading ? "Загрузка профиля..." : "Профиль недоступен"}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   return (

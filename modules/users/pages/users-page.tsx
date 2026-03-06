@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useCallback, useMemo, useEffect } from "react"
 import * as Sentry from "@sentry/nextjs"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import UsersList from "../components/users-list"
 import CurrentUserCard from "../components/current-user-card"
@@ -10,25 +11,28 @@ import { AdminAccessCheck } from "../components/admin-access-check"
 import AddUserForm from "../components/add-user-form"
 import UserAnalytics from "../components/user-analytics"
 import { getUsers } from "@/services/org-data-service"
-import type { UserWithRoles } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
 import { toast } from "@/components/ui/use-toast"
-// Отладочный флаг для управления console.log вызовами
-const debug = process.env.NEXT_PUBLIC_DEBUG === "true"
+import { queryKeys, staleTimePresets } from "@/modules/cache"
+import { useUserStore } from "@/stores/useUserStore"
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserWithRoles[]>([])
-  const [currentUser, setCurrentUser] = useState<UserWithRoles | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
+  const queryClient = useQueryClient()
+  const authUserId = useUserStore(state => state.id)
+
+  // TanStack Query для списка пользователей (автоматическое кеширование и дедупликация)
+  const { data: users = [], isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: queryKeys.users.fullList(),
+    queryFn: getUsers,
+    staleTime: staleTimePresets.medium,
+  })
 
   const searchParams = useSearchParams()
   const router = useRouter()
   const tabFromUrl = searchParams.get('tab')
-  
+
   // Set initial tab value based on URL
   const [adminTab, setAdminTab] = useState(
     tabFromUrl && ["list", "add-user", "analytics", "admin"].includes(tabFromUrl)
@@ -36,77 +40,53 @@ export default function UsersPage() {
       : "list"
   )
 
-  // ОПТИМИЗАЦИЯ: Мемоизируем функцию загрузки пользователей
-  const loadUsers = useCallback(async () => {
-    try {
-      debug && console.log("UsersPage: Начинаем загрузку пользователей")
-      setIsLoading(true)
-      setError(null)
-      
-      const loadedUsers = await getUsers()
-
-      debug && console.log("UsersPage: Загружено пользователей:", loadedUsers.length)
-      setUsers(loadedUsers)
-
-      // Устанавливаем текущего пользователя (первый в списке для демонстрации)
-      if (loadedUsers.length > 0) {
-        setCurrentUser(loadedUsers[0])
-        debug && console.log("UsersPage: Установлен текущий пользователь:", loadedUsers[0].full_name)
-      }
-    } catch (error) {
-      debug && console.error("UsersPage: Ошибка загрузки пользователей:", error)
-      Sentry.captureException(error, { tags: { module: 'users', component: 'UsersPage', action: 'load_users', error_type: 'unexpected' } })
-      setError("Не удалось загрузить пользователей")
-    } finally {
-      setIsLoading(false)
-      debug && console.log("UsersPage: Загрузка завершена")
-    }
-  }, [])
-
-  // Загрузка пользователей при монтировании
-  useEffect(() => {
-    loadUsers()
-  }, [loadUsers])
-
-  // ОПТИМИЗАЦИЯ: Мемоизируем обработчик изменения вкладки
   const handleTabChange = useCallback((value: string) => {
     setAdminTab(value)
     router.replace(`/users?tab=${value}`)
   }, [router])
 
-  // ОПТИМИЗАЦИЯ: Мемоизируем обработчик обновления пользователя
   const handleUserUpdated = useCallback(() => {
-    debug && console.log("UsersPage: Пользователь обновлен, перезагружаем список")
-    loadUsers()
-  }, [loadUsers])
+    queryClient.invalidateQueries({ queryKey: queryKeys.users.all })
+  }, [queryClient])
 
-  // Принудительное обновление данных с индикатором загрузки
   const forceRefresh = useCallback(async () => {
     Sentry.addBreadcrumb({
       category: 'ui.action',
       level: 'info',
       message: 'UsersPage: forceRefresh clicked'
     })
-    console.log("🔄 Принудительное обновление списка пользователей...")
     try {
-      await Sentry.startSpan({ name: 'Users/UsersPage forceRefresh', op: 'ui.action' }, async () => {
-        await loadUsers()
-      })
+      await refetch()
       toast({
         title: "Данные обновлены",
         description: "Список пользователей успешно обновлён"
       })
-    } catch (error) {
-      console.error("Ошибка при обновлении данных:", error)
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { module: 'users', component: 'UsersPage', action: 'force_refresh' }
+      })
       toast({
         title: "Ошибка",
         description: "Не удалось обновить данные",
         variant: "destructive"
       })
     }
-  }, [loadUsers])
+  }, [refetch])
 
-  // ОПТИМИЗАЦИЯ: Мемоизируем fallback пользователя
+  // Логируем ошибки загрузки в Sentry
+  useEffect(() => {
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { module: 'users', component: 'UsersPage', action: 'load_users' }
+      })
+    }
+  }, [error])
+
+  const currentUser = useMemo(
+    () => users.find(u => u.user_id === authUserId) ?? null,
+    [users, authUserId]
+  )
+
   const fallbackUser = useMemo(() => currentUser || {
     user_id: "current",
     first_name: "Текущий",
@@ -115,12 +95,14 @@ export default function UsersPage() {
     email: "user@eneca.work",
     avatar_url: "/placeholder.svg?height=40&width=40&text=ТП",
     position_name: "Сотрудник",
+    subdivision_name: null,
+    subdivision_id: null,
     department_name: "Общий",
     team_name: "Основная команда",
     category_name: "Штатный сотрудник",
     role_name: "user",
     is_active: true,
-    created_at: new Date().toISOString(),
+    created_at: new Date(2024, 0, 1).toISOString(),
     work_format: "hybrid",
     country_name: "Belarus",
     city_name: "Minsk",
@@ -130,7 +112,6 @@ export default function UsersPage() {
     roles_display_string: "user (осн.)",
     roles_count: 1,
     has_multiple_roles: false,
-    // Остальные поля
     department_id: null,
     team_id: null,
     position_id: null,
@@ -143,7 +124,7 @@ export default function UsersPage() {
 
   // Преобразуем UserWithRoles в User для совместимости с компонентами
   const usersAsUserType = useMemo(() => {
-    const transformed = users.map(user => ({
+    return users.map(user => ({
       id: user.user_id,
       name: user.full_name,
       email: user.email,
@@ -157,29 +138,15 @@ export default function UsersPage() {
       teamId: user.team_id || undefined,
       category: user.category_name || "",
       role: user.roles_display_string || "",
-      roles_display_string: user.roles_display_string || "", // Добавляем явно
+      roles_display_string: user.roles_display_string || "",
       dateJoined: user.created_at,
       workLocation: (user.work_format === "В офисе" ? "office" : user.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
       country: user.country_name || "",
       city: user.city_name || "",
       employmentRate: user.employment_rate ? parseFloat(user.employment_rate) : 1,
-      // Не подменяем: если salary отсутствует, оставляем как 0, а UI покажет "—"
       salary: user.salary ? parseFloat(user.salary) : 0,
       isHourly: user.is_hourly || false
     }))
-    
-    // ДИАГНОСТИКА: Проверяем что передается в UsersList
-    if (transformed.length > 0) {
-      const vadim = transformed.find(u => u.email === 'ghgjob123@gmail.com');
-      if (vadim) {
-        debug && console.log("=== USERS PAGE: ДАННЫЕ ДЛЯ USERSLIST ===");
-        debug && console.log("Вадим в usersAsUserType:", vadim);
-        debug && console.log("role:", vadim.role);
-        debug && console.log("roles_display_string:", vadim.roles_display_string);
-      }
-    }
-    
-    return transformed
   }, [users])
 
   if (error) {
@@ -187,9 +154,9 @@ export default function UsersPage() {
       <div className="px-4 md:px-6 py-8">
         <div className="text-center">
           <div className="text-red-500 text-lg font-semibold mb-2">Ошибка</div>
-          <div className="text-gray-600 mb-4">{error}</div>
-          <button 
-            onClick={loadUsers}
+          <div className="text-gray-600 mb-4">{error instanceof Error ? error.message : "Не удалось загрузить пользователей"}</div>
+          <button
+            onClick={() => refetch()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Попробовать снова
@@ -201,8 +168,6 @@ export default function UsersPage() {
 
   return (
     <div className="px-0 pt-0 pb-0">
-      
-      
       <div className="px-1 md:px-2 space-y-6">
         {isLoading && users.length === 0 ? (
           <div className="flex justify-center items-center h-64">
@@ -215,15 +180,19 @@ export default function UsersPage() {
           <>
             {/* Карточка текущего пользователя */}
             <div className="mb-6">
-              <CurrentUserCard 
-                fallbackUser={{
+              <CurrentUserCard
+                user={{
                   id: fallbackUser.user_id,
                   name: fallbackUser.full_name,
                   email: fallbackUser.email,
                   avatar_url: fallbackUser.avatar_url || undefined,
                   position: fallbackUser.position_name || "",
+                  subdivision: fallbackUser.subdivision_name || "",
+                  subdivisionId: fallbackUser.subdivision_id || undefined,
                   department: fallbackUser.department_name || "",
+                  departmentId: fallbackUser.department_id || undefined,
                   team: fallbackUser.team_name || "",
+                  teamId: fallbackUser.team_id || undefined,
                   category: fallbackUser.category_name || "",
                   role: fallbackUser.roles_display_string || "",
                   dateJoined: fallbackUser.created_at,
@@ -258,7 +227,7 @@ export default function UsersPage() {
                   users={usersAsUserType}
                   onUserUpdated={handleUserUpdated}
                   onRefresh={forceRefresh}
-                  isRefreshing={isLoading}
+                  isRefreshing={isFetching}
                 />
               </TabsContent>
               

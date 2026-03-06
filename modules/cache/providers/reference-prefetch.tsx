@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys/query-keys'
 import { staleTimePresets } from '../client/query-client'
 import { useUserStore } from '@/stores/useUserStore'
+import * as Sentry from '@sentry/nextjs'
 
 // Server Actions для справочников
 import { getWorkCategories } from '@/modules/modals/actions/getWorkCategories'
@@ -25,6 +26,7 @@ import { getDifficultyLevels } from '@/modules/modals/actions/getDifficultyLevel
 import { getStageStatuses } from '@/modules/modals/actions/getStageStatuses'
 import { getCheckpointTypes } from '@/modules/checkpoints/actions/checkpoint-types'
 import { getUsers } from '../actions/users'
+import { getAllReferenceData } from '../actions/reference-data'
 
 /**
  * Хелпер: requestIdleCallback с fallback на setTimeout
@@ -114,6 +116,27 @@ export function ReferencePrefetch() {
 
     // Последовательная загрузка справочников с паузой между ними
     const prefetchSequentially = async () => {
+      // 1. Batch prefetch: departments, teams, positions, categories, subdivisions, roles
+      //    Один запрос на сервер вместо 6, результат раскладывается по отдельным ключам
+      if (!queryClient.getQueryData(queryKeys.reference.batch())) {
+        try {
+          const batchResult = await getAllReferenceData()
+          if (batchResult.success && batchResult.data) {
+            queryClient.setQueryData(queryKeys.reference.batch(), batchResult.data)
+            queryClient.setQueryData(queryKeys.departments.list(), batchResult.data.departments)
+            queryClient.setQueryData(queryKeys.teams.list(), batchResult.data.teams)
+            queryClient.setQueryData(queryKeys.positions.list(), batchResult.data.positions)
+            queryClient.setQueryData(queryKeys.categories.list(), batchResult.data.categories)
+            queryClient.setQueryData(queryKeys.subdivisions.list(), batchResult.data.subdivisions)
+            queryClient.setQueryData(queryKeys.roles.list(), batchResult.data.roles)
+          }
+        } catch (err) {
+          Sentry.addBreadcrumb({ category: 'prefetch', level: 'warning', message: 'Batch reference prefetch failed', data: { error: String(err) } })
+        }
+        if (!cancelled) await delay(300)
+      }
+
+      // 2. Остальные справочники — последовательно
       for (const ref of references) {
         if (cancelled) return
 
