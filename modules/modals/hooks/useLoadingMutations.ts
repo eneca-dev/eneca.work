@@ -52,6 +52,13 @@ interface OptimisticContext {
   previousDepartmentsData?: QueriesSnapshot
   previousResourceGraphData?: QueriesSnapshot
   previousSectionsPageData?: QueriesSnapshot
+  /** Temp ID загрузки (для замены на реальный UUID после создания) */
+  tempId?: string
+}
+
+/** Проверяет, является ли ID временным (оптимистичным) */
+export function isTempLoadingId(id: string): boolean {
+  return id.startsWith('temp-')
 }
 
 // ============================================================================
@@ -227,10 +234,47 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         previousDepartmentsData,
         previousResourceGraphData,
         previousSectionsPageData,
+        tempId: tempLoading.id,
       }
     },
 
-    onSuccess: (data) => {
+    onSuccess: (data, _variables, context) => {
+      // Немедленно заменяем temp ID на реальный UUID в кэше,
+      // чтобы resize/update работали корректно до завершения refetch
+      const tempId = context?.tempId
+      if (tempId) {
+        const replaceTempId = (obj: any): any => {
+          if (!obj) return obj
+          if (Array.isArray(obj)) return obj.map(replaceTempId)
+          if (typeof obj === 'object') {
+            const result: any = {}
+            for (const key of Object.keys(obj)) {
+              if (key === 'id' && obj[key] === tempId) {
+                result[key] = data.id
+              } else {
+                result[key] = replaceTempId(obj[key])
+              }
+            }
+            return result
+          }
+          return obj
+        }
+
+        // Заменяем temp ID во всех затронутых кэшах
+        for (const key of [
+          queryKeys.departmentsTimeline.all,
+          queryKeys.resourceGraph.all,
+          queryKeys.sectionsPage.all,
+        ]) {
+          const queriesData = queryClient.getQueriesData({ queryKey: key })
+          queriesData.forEach(([queryKey, queryData]) => {
+            if (queryData) {
+              queryClient.setQueryData(queryKey, replaceTempId(queryData))
+            }
+          })
+        }
+      }
+
       // Инвалидация кешей для обновления с реальными данными
       // (Realtime также инвалидирует при изменении таблицы loadings,
       //  но явная инвалидация здесь гарантирует немедленное обновление)
@@ -271,6 +315,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const update = useMutation({
     mutationFn: async (input: UpdateLoadingInput) => {
+      // Блокируем обновление для оптимистичных записей с temp ID
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await updateLoading(input)
 
       if (!result.success) {
@@ -566,6 +615,10 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const archive = useMutation({
     mutationFn: async (input: ArchiveLoadingInput) => {
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await archiveLoading(input)
 
       if (!result.success) {
@@ -721,6 +774,10 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const remove = useMutation({
     mutationFn: async (input: DeleteLoadingInput) => {
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await deleteLoading(input)
 
       if (!result.success) {
