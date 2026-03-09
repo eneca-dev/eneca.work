@@ -238,7 +238,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
     },
 
-    onSuccess: (data, _variables, context) => {
+    onSuccess: async (data, _variables, context) => {
       // Немедленно заменяем temp ID на реальный UUID в кэше,
       // чтобы resize/update работали корректно до завершения refetch
       const tempId = context?.tempId
@@ -276,12 +276,14 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
 
       // Инвалидация кешей для обновления с реальными данными
-      // (Realtime также инвалидирует при изменении таблицы loadings,
-      //  но явная инвалидация здесь гарантирует немедленное обновление)
-      queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
+      // Ожидаем завершения рефетча, чтобы данные обновились до закрытия модалки
+      // (важно для staleTime: Infinity — без явного ожидания кэш не обновится)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
+      ])
 
       options.onCreateSuccess?.(data)
     },

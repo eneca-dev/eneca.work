@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react'
-import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2 } from 'lucide-react'
+import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2, Copy } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useLoadingModal, useLoadingMutations, useBreadcrumbs } from '../../hooks'
+import { openLoadingModalNewCreate, closeModal } from '../../stores/modal-store'
 import { useUsers } from '@/modules/cache'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
@@ -93,6 +94,12 @@ export function LoadingModalNew({
     initialSectionId: mode === 'create' ? createData?.sectionId : editData?.sectionId,
     initialEmployeeId: mode === 'create' ? createData?.employeeId : undefined,
     initialLoading: mode === 'edit' ? editData?.loading : undefined,
+    initialFormValues: mode === 'create' && createData ? {
+      rate: createData.rate,
+      startDate: createData.startDate,
+      endDate: createData.endDate,
+      comment: createData.comment,
+    } : undefined,
   })
 
   // Загрузка breadcrumbs для режима редактирования или создания с sectionId.
@@ -297,6 +304,24 @@ export function LoadingModalNew({
     setIsDeleteWarningOpen(true)
   }
 
+  // Копирование загрузки: закрываем edit → открываем create с теми же данными
+  const handleCopyLoading = () => {
+    const sectionId = formData.decompositionStageId || selectedSectionId || undefined
+    closeModal()
+    // setTimeout чтобы modal store успел сброситься перед открытием нового
+    setTimeout(() => {
+      openLoadingModalNewCreate({
+        sectionId,
+        employeeId: formData.employeeId,
+        projectId: effectiveProjectId ?? undefined,
+        rate: formData.rate,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        comment: formData.comment,
+      })
+    }, 0)
+  }
+
   const handleArchiveButtonClick = () => {
     setIsArchiveConfirmOpen(true)
   }
@@ -491,6 +516,14 @@ export function LoadingModalNew({
             {/* Левая часть - кнопки архивирования и удаления (только в режиме edit) */}
             {mode === 'edit' ? (
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCopyLoading}
+                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Копировать
+                </Button>
                 <Button
                   variant="outline"
                   onClick={handleArchiveButtonClick}
