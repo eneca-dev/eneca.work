@@ -178,6 +178,14 @@ export interface LoadingModalNewCreateData {
   employeeId?: string
   /** ID проекта (для автоматического выбора проекта в дереве) */
   projectId?: string
+  /** Предзаполненная ставка (для копирования загрузки) */
+  rate?: number
+  /** Предзаполненная дата начала (для копирования загрузки) */
+  startDate?: string
+  /** Предзаполненная дата окончания (для копирования загрузки) */
+  endDate?: string
+  /** Предзаполненный комментарий (для копирования загрузки) */
+  comment?: string
 }
 
 export interface LoadingModalNewEditData {

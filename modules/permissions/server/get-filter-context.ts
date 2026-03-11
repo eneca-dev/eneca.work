@@ -23,6 +23,12 @@ const FILTER_SCOPE_PERMISSIONS: FilterScopePermission[] = [
   'filters.scope.managed_projects',
 ]
 
+/**
+ * Отделы, в которых тимлиды получают scope уровня department (видят весь отдел).
+ * Обычные тимлиды видят только свою команду — здесь перечислены исключения.
+ */
+const ELEVATED_TEAM_LEAD_DEPARTMENTS = ['КР гражд']
+
 /** UUID validation regex (hoisted out of function for performance) */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -223,13 +229,28 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
         // Извлекаем результаты руководящих позиций (null → undefined для совместимости с UserFilterContext)
         const leadTeamId = teamResult?.data?.team_id ?? undefined
         const leadTeamName = teamResult?.data?.team_name ?? undefined
-        const headDepartmentId = deptResult?.data?.department_id ?? undefined
-        const headDepartmentName = deptResult?.data?.department_name ?? undefined
+        let headDepartmentId = deptResult?.data?.department_id ?? undefined
+        let headDepartmentName = deptResult?.data?.department_name ?? undefined
         const headSubdivisionId = subResult?.data?.subdivision_id ?? undefined
         const headSubdivisionName = subResult?.data?.subdivision_name ?? undefined
         const projectsData = projectsResult?.data?.length ? projectsResult.data : undefined
         const managedProjectIds = projectsData?.map((p) => p.project_id)
         const managedProjectNames = projectsData?.map((p) => p.project_name)
+
+        // Elevated team leads: тимлиды из определённых отделов получают department scope
+        const isElevatedTeamLead =
+          !headDepartmentId &&
+          roles.includes('team_lead') &&
+          profile.department_name &&
+          ELEVATED_TEAM_LEAD_DEPARTMENTS.includes(profile.department_name)
+
+        if (isElevatedTeamLead && profile.department_id) {
+          headDepartmentId = profile.department_id
+          headDepartmentName = profile.department_name ?? undefined
+          if (!filterPermissions.includes('filters.scope.department')) {
+            filterPermissions.push('filters.scope.department')
+          }
+        }
 
         // Phase 3: Вычисляем scope (синхронная операция)
         const scope = resolveFilterScope(filterPermissions, {

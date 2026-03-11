@@ -11,6 +11,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
+import { addDays } from 'date-fns'
+import { formatMinskDate } from '@/lib/timezone-utils'
 
 /**
  * Breadcrumb item для отображения пути
@@ -58,6 +60,13 @@ export interface UseLoadingModalOptions {
   initialEmployeeId?: string
   /** Данные загрузки для редактирования */
   initialLoading?: Loading
+  /** Предзаполненные данные формы (для копирования загрузки) */
+  initialFormValues?: {
+    rate?: number
+    startDate?: string
+    endDate?: string
+    comment?: string
+  }
 }
 
 export interface UseLoadingModalResult {
@@ -94,22 +103,10 @@ export interface UseLoadingModalResult {
 }
 
 /**
- * Функция для получения даты в формате YYYY-MM-DD
- */
-function formatDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-/**
- * Функция для получения даты через N дней от сегодня
+ * Функция для получения даты через N дней от сегодня (в часовом поясе Минска)
  */
 function getDateInDays(daysFromNow: number): string {
-  const date = new Date()
-  date.setDate(date.getDate() + daysFromNow)
-  return formatDate(date)
+  return formatMinskDate(addDays(new Date(), daysFromNow))
 }
 
 /**
@@ -127,7 +124,7 @@ function getDefaultFormData(): LoadingFormData {
 }
 
 export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModalResult {
-  const { mode, initialSectionId, initialEmployeeId, initialLoading } = options
+  const { mode, initialSectionId, initialEmployeeId, initialLoading, initialFormValues } = options
 
   // Состояние навигации
   const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
@@ -149,10 +146,10 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       // Конвертируем даты в строки формата YYYY-MM-DD
       const startDate = typeof initialLoading.start_date === 'string'
         ? initialLoading.start_date
-        : formatDate(new Date(initialLoading.start_date))
+        : formatMinskDate(new Date(initialLoading.start_date))
       const endDate = typeof initialLoading.end_date === 'string'
         ? initialLoading.end_date
-        : formatDate(new Date(initialLoading.end_date))
+        : formatMinskDate(new Date(initialLoading.end_date))
 
       const initialFormData = {
         employeeId: initialLoading.employee_id,
@@ -168,6 +165,13 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     const defaultForm = getDefaultFormData()
     if (initialEmployeeId) {
       defaultForm.employeeId = initialEmployeeId
+    }
+    // Применяем предзаполненные значения (для копирования загрузки)
+    if (initialFormValues) {
+      if (initialFormValues.rate !== undefined) defaultForm.rate = initialFormValues.rate
+      if (initialFormValues.startDate !== undefined) defaultForm.startDate = initialFormValues.startDate
+      if (initialFormValues.endDate !== undefined) defaultForm.endDate = initialFormValues.endDate
+      if (initialFormValues.comment !== undefined) defaultForm.comment = initialFormValues.comment
     }
     return defaultForm
   })
@@ -268,10 +272,10 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     // Нормализуем даты из initialLoading к формату YYYY-MM-DD для корректного сравнения
     const initialStartDate = typeof initialLoading.start_date === 'string'
       ? initialLoading.start_date
-      : formatDate(new Date(initialLoading.start_date))
+      : formatMinskDate(new Date(initialLoading.start_date))
     const initialEndDate = typeof initialLoading.end_date === 'string'
       ? initialLoading.end_date
-      : formatDate(new Date(initialLoading.end_date))
+      : formatMinskDate(new Date(initialLoading.end_date))
 
     // Сравниваем текущие значения с исходными
     // Для rate используем сравнение с допуском для чисел с плавающей точкой
