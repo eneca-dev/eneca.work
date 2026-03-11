@@ -29,16 +29,6 @@ function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
   const minLevel = Math.min(...nodes.map(n => n.level))
   const maxLevel = Math.max(...nodes.map(n => n.level))
 
-  console.log('🔧 buildTree start:', {
-    totalNodes: nodes.length,
-    minLevel,
-    maxLevel,
-    nodesByType: nodes.reduce((acc, n) => {
-      acc[n.type] = (acc[n.type] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-  })
-
   for (const node of nodes) {
     if (!byLevel[node.level]) {
       byLevel[node.level] = []
@@ -75,14 +65,6 @@ function buildTree(nodes: ProjectTreeNode[]): ProjectTreeNodeWithChildren[] {
 
   // Возвращаем узлы минимального уровня (корневые)
   const roots = (byLevel[minLevel] || []).map(node => nodeMap.get(node.id)!).filter(Boolean)
-
-  console.log('🔍 buildTree debug:', {
-    rootsCount: roots.length,
-    rootLevel: minLevel,
-    rootTypes: roots.map(r => r.type),
-    rootChildren: roots.map(r => ({ name: r.name, childrenCount: r.children?.length || 0 })),
-    rootDetails: roots.map(r => ({ id: r.id, type: r.type, name: r.name, hasChildren: !!r.children?.length, children: r.children?.map(c => ({ id: c.id, name: c.name, type: c.type })) }))
-  })
 
   // Возвращаем корневые узлы
   // Корни могут быть любого типа (project, stage, object, section) в зависимости от того,
@@ -136,16 +118,6 @@ export function useProjectTree(options: UseProjectTreeOptions) {
 
       // Строим иерархическое дерево из плоского списка
       const tree = buildTree(result.data)
-
-      console.log('🌲 Построено дерево проекта:', {
-        projectId,
-        nodesFlat: result.data.length,
-        treeRoots: tree.length,
-        minLevel: Math.min(...result.data.map(n => n.level), 0),
-        maxLevel: Math.max(...result.data.map(n => n.level), 0),
-        nodeLevels: result.data.map(n => ({ type: n.type, level: n.level, name: n.name })),
-        treeResult: tree.map(n => ({ type: n.type, name: n.name, childrenCount: n.children?.length || 0 }))
-      })
 
       return tree
     },

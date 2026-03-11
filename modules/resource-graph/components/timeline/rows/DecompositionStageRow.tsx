@@ -110,6 +110,9 @@ export function DecompositionStageRow({
 
   // Callback for loading resize
   const handleLoadingResize = (loadingId: string, startDate: string, finishDate: string) => {
+    // Block resize for optimistic entries with temp ID (not yet saved to DB)
+    if (loadingId.startsWith('temp-')) return
+
     updateLoadingDates.mutate({
       loadingId,
       sectionId,

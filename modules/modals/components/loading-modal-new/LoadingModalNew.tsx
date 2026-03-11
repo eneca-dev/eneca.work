@@ -31,6 +31,17 @@ import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { ArchiveConfirmationDialog } from './ArchiveConfirmationDialog'
 import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 
+// Маппинг типа элемента → иконка (hoisted: чистая функция, не нужно пересоздавать на каждом рендере)
+const BREADCRUMB_ICON_MAP = {
+  project: Folder,
+  object: Box,
+  section: CircleDashed,
+} as const
+
+function getBreadcrumbIcon(type: 'project' | 'object' | 'section') {
+  return BREADCRUMB_ICON_MAP[type] ?? Folder
+}
+
 export interface LoadingModalNewProps {
   /** Открыто ли модальное окно */
   open: boolean
@@ -54,20 +65,6 @@ export function LoadingModalNew({
   editData,
   userId,
 }: LoadingModalNewProps) {
-  // Функция получения иконки по типу элемента
-  const getIcon = (type: 'project' | 'object' | 'section') => {
-    switch (type) {
-      case 'project':
-        return Folder
-      case 'object':
-        return Box
-      case 'section':
-        return CircleDashed
-      default:
-        return Folder
-    }
-  }
-
   // Хук для управления состоянием модалки
   const {
     // Состояние навигации
@@ -454,7 +451,7 @@ export function LoadingModalNew({
                             {selectedBreadcrumbs
                               .filter(item => item.type !== 'decomposition_stage')
                               .map((item, index, filteredArray) => {
-                                const Icon = getIcon(item.type as 'project' | 'object' | 'section')
+                                const Icon = getBreadcrumbIcon(item.type as 'project' | 'object' | 'section')
                                 return (
                                   <span key={`${item.id}-${index}`} className="flex items-center gap-1">
                                     <Icon className="h-3.5 w-3.5 shrink-0" />

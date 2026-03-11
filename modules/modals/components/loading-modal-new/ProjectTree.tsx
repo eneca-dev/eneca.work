@@ -30,6 +30,59 @@ export interface BreadcrumbItem {
   type: 'project' | 'object' | 'section' | 'decomposition_stage'
 }
 
+// ============================================================================
+// Pure helpers (hoisted: не пересоздаются на каждом рендере)
+// ============================================================================
+
+/** Рекурсивный сбор всех ID узлов дерева */
+function collectAllNodeIds(nodes: ProjectTreeNodeWithChildren[]): string[] {
+  const ids: string[] = []
+  for (const node of nodes) {
+    ids.push(node.id)
+    if (node.children && node.children.length > 0) {
+      ids.push(...collectAllNodeIds(node.children))
+    }
+  }
+  return ids
+}
+
+/** Цвет чипа стадии проекта */
+function getStageColor(stage: string | null | undefined) {
+  if (!stage) return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+  const s = stage.toUpperCase()
+
+  // Сначала проверяем более специфичные комбинации
+  if (s.includes('РД')) return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-700'
+  if (s.includes('ПД')) return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700'
+  if (s.includes('ИД')) return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-700'
+
+  // Затем основные стадии А, С, Р, П
+  if (s.includes(' А') || s === 'А' || s.endsWith('А')) return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
+  if (s.includes(' С') || s === 'С' || s.endsWith('С')) return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
+  if (s.includes(' Р') || s === 'Р' || s.endsWith('Р')) return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700'
+  if (s.includes(' П') || s === 'П' || s.endsWith('П')) return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
+
+  return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700'
+}
+
+/** Цвет иконки и текста узла дерева */
+function getNodeColor(nodeType: string) {
+  switch (nodeType) {
+    case 'object':
+      return 'text-blue-600 dark:text-blue-400'
+    case 'section':
+      return 'text-emerald-600 dark:text-emerald-400'
+    case 'decomposition_stage':
+      return ''
+    default:
+      return 'text-slate-600 dark:text-slate-400'
+  }
+}
+
+// ============================================================================
+// ProjectItem Component
+// ============================================================================
+
 /**
  * Компонент для отображения одного проекта и его дерева
  */
@@ -91,37 +144,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
       }
     }
   }, [shouldAutoExpand, hasAutoExpanded, autoExpandBreadcrumbs, tree, isLoading])
-
-  // Функция для сбора всех ID узлов рекурсивно
-  const collectAllNodeIds = (nodes: ProjectTreeNodeWithChildren[]): string[] => {
-    const ids: string[] = []
-    for (const node of nodes) {
-      ids.push(node.id)
-      if (node.children && node.children.length > 0) {
-        ids.push(...collectAllNodeIds(node.children))
-      }
-    }
-    return ids
-  }
-
-  // Цвет чипа в зависимости от стадии проекта (стиль как в графике)
-  const getStageColor = (stage: string | null | undefined) => {
-    if (!stage) return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-    const s = stage.toUpperCase()
-
-    // Сначала проверяем более специфичные комбинации
-    if (s.includes('РД')) return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-700' // Рабочая документация
-    if (s.includes('ПД')) return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700' // Проектная документация
-    if (s.includes('ИД')) return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-700' // Исходные данные
-
-    // Затем основные стадии А, С, Р, П
-    if (s.includes(' А') || s === 'А' || s.endsWith('А')) return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700' // Архитектура
-    if (s.includes(' С') || s === 'С' || s.endsWith('С')) return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700' // Строительство
-    if (s.includes(' Р') || s === 'Р' || s.endsWith('Р')) return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700' // Рабочий проект
-    if (s.includes(' П') || s === 'П' || s.endsWith('П')) return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700' // Проект
-
-    return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700' // Другие стадии
-  }
 
   // Переключение раскрытия проекта (корневой уровень)
   const toggleProject = () => {
@@ -220,20 +242,6 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     }
   }
 
-
-  // Цвет иконки и текста в зависимости от типа узла
-  const getNodeColor = (nodeType: string) => {
-    switch (nodeType) {
-      case 'object':
-        return 'text-blue-600 dark:text-blue-400' // Объекты - синий
-      case 'section':
-        return 'text-emerald-600 dark:text-emerald-400' // Разделы - зеленый
-      case 'decomposition_stage':
-        return '' // Этапы декомпозиции - стандартный цвет (белый/черный)
-      default:
-        return 'text-slate-600 dark:text-slate-400' // Проект - серый
-    }
-  }
 
   // Рекурсивный рендер узла дерева
   const renderTreeNode = (node: ProjectTreeNodeWithChildren, depth: number = 1): React.ReactNode => {

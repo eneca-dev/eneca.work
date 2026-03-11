@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
@@ -10,11 +10,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { updateUser, getDepartments, getTeams, getPositions, getCategories, getSubdivisions } from "@/services/org-data-service"
-import { getAllRoles, assignRoleToUser, revokeRoleFromUser, getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
-import type { Role } from "@/modules/permissions/types"
-// УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
-import type { User, Department, Team, Position, Category, Subdivision } from "@/types/db"
+import { updateUser } from "@/services/org-data-service"
+import { assignRoleToUser, revokeRoleFromUser, getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useAllReferenceData,
+  queryKeys,
+  staleTimePresets,
+} from "@/modules/cache"
+import type { UserPresentation as User } from "@/modules/users/lib/types"
 import { toast } from "@/hooks/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
@@ -50,26 +54,24 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     employmentRate: 1,
   })
 
-  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
-  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([])
-  const [positions, setPositions] = useState<Position[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [roles, setRoles] = useState<Role[]>([])
+  // Справочные данные — 1 batch-запрос вместо 6 отдельных
+  const { subdivisions, departments, teams, positions, categories, roles } = useAllReferenceData({ enabled: open })
+
   const [isLoading, setIsLoading] = useState(false)
-  const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
-  const [cities, setCities] = useState<{ name: string }[]>([])
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
   
-  // Состояние для ролей пользователя (новая система)
-  const [userRoles, setUserRoles] = useState<Array<{
-    roleId: string
-    roleName: string
-    assignedAt: string
-    assignedByName?: string
-  }>>([])
+  // Роли пользователя — TanStack Query для кеширования и дедупликации
+  const queryClient = useQueryClient()
+  const userRolesQuery = useQuery({
+    queryKey: queryKeys.users.permissions(user?.id ?? ""),
+    queryFn: () => Sentry.startSpan(
+      { name: "Users/UserDialog loadUserRoles", op: "ui.load", attributes: { user_id: user!.id } },
+      () => getUserRoles(user!.id)
+    ),
+    enabled: open && !!user?.id,
+    staleTime: staleTimePresets.medium,
+  })
+  const userRoles = useMemo(() => userRolesQuery.data?.roles || [], [userRolesQuery.data])
   
   // Состояние для управления ролями
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
@@ -81,8 +83,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   // Добавляем состояния для поиска
   const [countrySearch, setCountrySearch] = useState("")
   const [citySearch, setCitySearch] = useState("")
-  const [filteredCountries, setFilteredCountries] = useState<{ code: string; name: string }[]>([])
-  const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
   const [countrySelectOpen, setCountrySelectOpen] = useState(false)
   const [citySelectOpen, setCitySelectOpen] = useState(false)
 
@@ -144,7 +144,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
     // Руководитель подразделения может редактировать сотрудников своего подразделения
     if (canEditSalarySubdivision) {
-      const currentSubdivisionId = currentUserProfile?.subdivisionId || (currentUserProfile as any)?.subdivision_id
+      const currentSubdivisionId = currentUserProfile?.subdivision_id
       const targetSubdivisionId = user?.subdivisionId
 
       // Если не известны ID подразделений, запрещаем редактирование
@@ -155,7 +155,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
     // Руководитель отдела может редактировать только своего отдела
     if (canEditSalaryDepartment) {
-      const currentDepartmentId = currentUserProfile?.departmentId
+      const currentDepartmentId = currentUserProfile?.department_id
       const targetDepartmentId = user?.departmentId
 
       // Если не известны ID отделов, запрещаем редактирование
@@ -180,142 +180,45 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
 
-  // Загрузка справочных данных
+  // Справочные данные загружаются через useCached* хуки выше (enabled: open)
+
+  // Синхронизируем selectedRoles при загрузке/обновлении ролей
   useEffect(() => {
-    async function loadReferenceData() {
-      try {
-        const [subdivisionsData, departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Sentry.startSpan({ name: 'Users/UserDialog loadReferenceData', op: 'ui.load' }, async () => Promise.all([
-          getSubdivisions(),
-          getDepartments(),
-          getTeams(),
-          getPositions(),
-          getCategories(),
-          getAllRoles()
-        ]))
-
-        // console.log("=== UserDialog: Загружены справочные данные ===")
-        // console.log("subdivisions:", subdivisionsData)
-        // console.log("departments:", departmentsData)
-        // console.log("teams:", teamsData)
-        // console.log("positions:", positionsData)
-        // console.log("categories:", categoriesData)
-        // console.log("roles:", rolesData)
-
-        setSubdivisions(subdivisionsData)
-        setDepartments(departmentsData)
-        setTeams(teamsData)
-        setPositions(positionsData)
-        setCategories(categoriesData)
-        setRoles(rolesData)
-        
-        // Загружаем страны
-        const countriesData = Country.getAllCountries().map(c => ({
-          code: c.isoCode,
-          name: c.name
-        }))
-        setCountries(countriesData)
-        setFilteredCountries(countriesData)
-        
-      } catch (error) {
-        console.error("Ошибка загрузки справочных данных:", error)
-        toast({
-          title: "Ошибка",
-          description: "Не удалось загрузить справочные данные",
-          variant: "destructive",
-        })
-        
-        // Устанавливаем пустые массивы при ошибке для предотвращения ошибок рендеринга
-        setDepartments([])
-        setTeams([])
-        setFilteredTeams([])
-        setPositions([])
-        setCategories([])
-        setRoles([])
-      }
+    if (userRoles.length > 0) {
+      setSelectedRoles(userRoles.map(r => r.roleId))
     }
-    
-    loadReferenceData()
-  }, [])
+  }, [userRoles])
 
-  // Функция для загрузки ролей пользователя
-  const loadUserRoles = async (userId: string) => {
-    try {
-      const result = await Sentry.startSpan({ name: 'Users/UserDialog loadUserRoles', op: 'ui.load', attributes: { user_id: userId } }, async () => getUserRoles(userId))
-      if (result.error) {
-        console.error("Ошибка загрузки ролей пользователя:", result.error)
-        return
-      }
-      
-      // console.log("UserDialog: Загружены роли пользователя:", result.roles)
-      setUserRoles(result.roles)
+  // Derived state: страны и города (country-state-city — синхронная in-memory библиотека)
+  const countries = useMemo(() => Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name })), [])
 
-      // Устанавливаем выбранные роли для управления
-      const roleIds = result.roles.map(r => r.roleId)
-      setSelectedRoles(roleIds)
-      // console.log("UserDialog: Установлены selectedRoles:", roleIds)
-    } catch (error) {
-      console.error("Ошибка загрузки ролей пользователя:", error)
-    }
-  }
+  const filteredCountries = useMemo(() => {
+    if (!countrySearch.trim()) return countries
+    const lc = countrySearch.toLowerCase()
+    return countries.filter(c => c.name.toLowerCase().includes(lc))
+  }, [countries, countrySearch])
 
-  // Загрузка стран/городов
-  useEffect(() => {
-    if (!open) return
-    const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
-    setCountries(all)
-    setFilteredCountries(all)
-  }, [open])
-
-  // Фильтрация стран по поиску
-  useEffect(() => {
-    if (!countrySearch.trim()) {
-      setFilteredCountries(countries)
-    } else {
-      const filtered = countries.filter(country =>
-        country.name.toLowerCase().includes(countrySearch.toLowerCase())
-      )
-      setFilteredCountries(filtered)
-    }
-  }, [countrySearch, countries])
-
-  useEffect(() => {
-    if (!selectedCountryCode) {
-      setCities([])
-      setFilteredCities([])
-      return
-    }
+  const cities = useMemo(() => {
+    if (!selectedCountryCode) return []
     const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
-    // Дедупликация по названию города с дополнительной проверкой
     const seenNames = new Set<string>()
     const unique: { name: string }[] = []
-
     for (const c of loaded) {
-      // Проверяем и нормализуем название города
       const normalizedName = c.name.trim()
       if (normalizedName && !seenNames.has(normalizedName)) {
         seenNames.add(normalizedName)
         unique.push({ name: normalizedName })
       }
     }
-
-    // Сортируем для консистентности
     unique.sort((a, b) => a.name.localeCompare(b.name))
-
-    setCities(unique)
-    setFilteredCities(unique)
+    return unique
   }, [selectedCountryCode])
 
-  // Фильтрация городов по поиску
-  useEffect(() => {
-    if (!citySearch.trim()) {
-      setFilteredCities(cities)
-    } else {
-      const filtered = cities.filter(city =>
-        city.name.toLowerCase().includes(citySearch.toLowerCase())
-      )
-      setFilteredCities(filtered)
-    }
-  }, [citySearch, cities])
+  const filteredCities = useMemo(() => {
+    if (!citySearch.trim()) return cities
+    const lc = citySearch.toLowerCase()
+    return cities.filter(c => c.name.toLowerCase().includes(lc))
+  }, [cities, citySearch])
 
   // Автофокус на поле поиска стран при открытии
   useEffect(() => {
@@ -339,30 +242,23 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     }
   }, [citySelectOpen, selectedCountryCode])
 
-  // Загрузка данных пользователя при открытии диалога
-  useEffect(() => {
-    if (open && user) {
-      // console.log("=== UserDialog: Загрузка данных пользователя ===")
-      // console.log("user:", user)
-      // console.log("user.team:", user.team)
-      // console.log("user.team type:", typeof user.team)
-      // console.log("user.department:", user.department)
-      // console.log("user.department type:", typeof user.department)
-      
-      // Загружаем роли пользователя
-      loadUserRoles(user.id)
-      
-      // Устанавливаем данные формы
+  // Синхронная инициализация формы при открытии диалога (render-time state update).
+  // В отличие от useEffect, setState во время render заставляет React перезапустить render
+  // ДО коммита в DOM — Select получает правильное value на первом же отрисованном кадре.
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open && !prevOpen) {
+    setPrevOpen(true)
+    if (user) {
       const firstName = user.name?.split(' ')[0] || ""
       const lastName = user.name?.split(' ').slice(1).join(' ') || ""
-      
-      setFormData({
+
+      const newFormData: Partial<User & { firstName?: string; lastName?: string }> = {
         firstName,
         lastName,
         email: user.email || "",
         subdivision: user.subdivision || "",
         position: user.position || "",
-        department: user.department || "",
+        department: canEditOnlyTeam && user.department ? user.department : (user.department || ""),
         team: user.team || "",
         category: user.category || "",
         role: user.role || "",
@@ -371,129 +267,39 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         city: user.city || "",
         salary: user.salary || 0,
         employmentRate: user.employmentRate || 1,
-      })
-      
-      // console.log("=== UserDialog: Установлены данные формы ===")
-      // console.log("formData.team:", user.team || "")
-      // console.log("formData.department:", user.department || "")
-      
-      // Устанавливаем страну
+      }
+
+      setFormData(newFormData)
+
+      // Устанавливаем страну — cities подхватятся через useMemo(selectedCountryCode)
       if (user.country) {
         const foundCountry = countries.find(c => c.name === user.country)
         if (foundCountry) {
           setSelectedCountryCode(foundCountry.code)
-          // Загружаем города для выбранной страны
-          const citiesData = City.getCitiesOfCountry(foundCountry.code)?.map(c => ({ name: c.name })) || []
-          setCities(citiesData)
-          setFilteredCities(citiesData)
         }
-      }
-      
-      // Роли теперь управляются отдельно через handleRoleToggle
-      
-      // Инициализируем filteredDepartments на основе подразделения пользователя
-      if (user.subdivision && user.subdivision !== "") {
-        const subdivisionId = subdivisions.find((s) => s.name === user.subdivision)?.id
-        if (subdivisionId) {
-          const filtered = departments.filter((d) => d.subdivisionId === subdivisionId && d.name !== "Не назначен")
-          setFilteredDepartments(filtered)
-        }
-      } else {
-        setFilteredDepartments(departments.filter((d) => d.name !== "Не назначен"))
-      }
-
-      // Инициализируем filteredTeams на основе отдела пользователя
-      if (user.department && user.department !== "") {
-        const departmentId = departments.find((d) => d.name === user.department)?.id
-        if (departmentId) {
-          const filtered = teams.filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
-          setFilteredTeams(filtered)
-        }
-      } else {
-        setFilteredTeams([])
-      }
-
-      // Для пользователей с canEditOnlyTeam блокируем изменение отдела
-      if (canEditOnlyTeam && user.department) {
-        setFormData((prev) => ({
-          ...prev,
-          department: user.department // Фиксируем отдел пользователя
-        }))
       }
     }
-  }, [open, user, countries, roles, canEditRoles, departments, teams, subdivisions, canEditOnlyTeam])
+  }
+  if (!open && prevOpen) {
+    setPrevOpen(false)
+  }
 
-  // Фильтрация отделов по выбранному подразделению
-  useEffect(() => {
-    // console.log("=== UserDialog: Фильтрация отделов ===")
-    // console.log("formData.subdivision:", formData.subdivision)
-    // console.log("subdivisions:", subdivisions)
-    // console.log("departments:", departments)
-
+  // Фильтрация отделов по выбранному подразделению (derived state)
+  const filteredDepartments = useMemo(() => {
     if (formData.subdivision && formData.subdivision !== "") {
       const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
-      // console.log("Найденный subdivisionId:", subdivisionId)
-
-      // Фильтруем отделы по подразделению, исключая "Не назначен"
-      const filtered = departments.filter((d) => {
-        // Проверяем есть ли у отдела поле subdivisionId
-        const deptSubdivisionId = (d as any).subdivisionId
-        return deptSubdivisionId === subdivisionId && d.name !== "Не назначен"
-      })
-      // console.log("Отфильтрованные отделы:", filtered)
-      setFilteredDepartments(filtered)
-
-      // Если выбранный отдел не принадлежит выбранному подразделению, сбрасываем его и команду
-      if (formData.department && formData.department !== "") {
-        const departmentExists = filtered.some((d) => d.name === formData.department)
-        // console.log("Отдел найден в подразделении:", departmentExists)
-
-        if (!departmentExists) {
-          // console.log("Сбрасываем отдел и команду, так как отдел не принадлежит подразделению")
-          setFormData((prev) => ({ ...prev, department: "", team: "" }))
-        }
-      }
-    } else {
-      // console.log("Подразделение не выбрано, показываем все отделы")
-      setFilteredDepartments(departments.filter((d) => d.name !== "Не назначен"))
+      return departments.filter((d) => d.subdivisionId === subdivisionId && d.name !== "Не назначен")
     }
+    return departments.filter((d) => d.name !== "Не назначен")
   }, [formData.subdivision, subdivisions, departments])
 
-  // Фильтрация команд по выбранному отделу
-  useEffect(() => {
-    // console.log("=== UserDialog: Фильтрация команд ===")
-    // console.log("formData.department:", formData.department)
-    // console.log("formData.team:", formData.team)
-    // console.log("departments:", departments)
-    // console.log("teams:", teams)
-
+  // Фильтрация команд по выбранному отделу (derived state)
+  const filteredTeams = useMemo(() => {
     if (formData.department && formData.department !== "") {
       const departmentId = departments.find((d) => d.name === formData.department)?.id
-      // console.log("Найденный departmentId:", departmentId)
-
-      const filtered = teams
-        .filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
-      // console.log("Отфильтрованные команды:", filtered)
-      setFilteredTeams(filtered)
-
-      // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
-      if (formData.team && formData.team !== "") {
-        const teamExists = filtered.some((t) => t.name === formData.team)
-        // console.log("Команда найдена по имени:", teamExists)
-
-        if (!teamExists) {
-          // console.log("Сбрасываем команду, так как она не принадлежит отделу")
-          setFormData((prev) => ({ ...prev, team: "" }))
-        }
-      }
-    } else {
-      // console.log("Отдел не выбран, сбрасываем команду и показываем пустой список")
-      setFilteredTeams([])
-      // Сбрасываем команду при сбросе отдела
-      if (formData.team && formData.team !== "") {
-        setFormData((prev) => ({ ...prev, team: "" }))
-      }
+      return teams.filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
     }
+    return []
   }, [formData.department, departments, teams])
 
   const handleChange = (field: string, value: string | boolean | number) => {
@@ -587,12 +393,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       }
       
       if (success) {
-        // Обновляем список ролей пользователя
-        await loadUserRoles(user.id)
-        
-        // Обновляем tempSelectedRoles для синхронизации с основным интерфейсом
-        // После loadUserRoles selectedRoles уже обновлены
-        setTempSelectedRoles(selectedRoles)
+        // Инвалидируем кеш ролей — useQuery перезагрузит данные
+        await queryClient.invalidateQueries({ queryKey: queryKeys.users.permissions(user.id) })
+
+        // tempSelectedRoles синхронизируется через useEffect [userRoles]
+        setTempSelectedRoles(tempSelectedRoles)
         
         toast({
           title: "Успешно",
@@ -768,19 +573,17 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               email: freshProfile.email,
               name: [freshProfile.first_name, freshProfile.last_name].filter(Boolean).join(" "),
               profile: {
-                firstName: freshProfile.first_name,
-                lastName: freshProfile.last_name,
-                departmentId: freshProfile.department_id,
-                teamId: freshProfile.team_id,
-                positionId: freshProfile.position_id,
-                categoryId: freshProfile.category_id,
-                workFormat: freshProfile.work_format,
+                first_name: freshProfile.first_name,
+                last_name: freshProfile.last_name,
+                department_id: freshProfile.department_id,
+                team_id: freshProfile.team_id,
+                position_id: freshProfile.position_id,
+                category_id: freshProfile.category_id,
+                work_format: freshProfile.work_format,
                 salary: freshProfile.salary,
-                isHourly: freshProfile.is_hourly,
-                employmentRate: freshProfile.employment_rate,
-                country: freshProfile.country_name,
-                city: freshProfile.city_name,
-                // Роли управляются через модальное окно
+                is_hourly: freshProfile.is_hourly,
+                employment_rate: freshProfile.employment_rate,
+                city_id: freshProfile.city_id,
                 avatar_url: freshProfile.avatar_url,
               },
             })
@@ -932,7 +735,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 onValueChange={(value) => handleChange("subdivision", value)}
                 disabled={!isAdmin}
               >
-                <SelectTrigger className={`md:col-span-3 col-span-full ${!formData.subdivision ? "border-purple-200 bg-purple-50" : ""}`}>
+                <SelectTrigger className={`md:col-span-3 col-span-full ${!formData.subdivision ? "border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950/30" : ""}`}>
                   <SelectValue placeholder="Выберите подразделение" />
                 </SelectTrigger>
                 <SelectContent>
@@ -959,7 +762,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onValueChange={(value) => handleChange("department", value)}
                   disabled={!canEditDepartmentField}
                 >
-                  <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
+                  <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
                   </SelectTrigger>
                   <SelectContent>
@@ -981,7 +784,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onValueChange={(value) => handleChange("team", value)}
                   disabled={!canEditTeamField || !formData.department}
                 >
-                  <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
+                  <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30" : ""}>
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
                   </SelectTrigger>
                   <SelectContent>

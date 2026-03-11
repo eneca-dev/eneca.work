@@ -4,85 +4,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Users, Building2, Tag } from "lucide-react"
-import { useEffect, useState } from "react"
-import {
-  getUsersByDepartment,
-  getUsersByTeam,
-  getUsersByCategory,
-  getActiveUsersCount,
-  getInactiveUsersCount,
-  getUsersJoinedByMonth,
-  getTopDepartments,
-  getTopTeams,
-} from "@/services/org-data-service"
-import { toast } from "@/components/ui/use-toast"
 import * as Sentry from "@sentry/nextjs"
+import { useUserAnalytics } from "../hooks/useUserAnalytics"
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
 
 function UserAnalytics() {
-  const [departmentData, setDepartmentData] = useState<{ name: string; value: number }[]>([])
-  const [teamData, setTeamData] = useState<{ name: string; value: number }[]>([])
-  const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([])
-  const [monthlyData, setMonthlyData] = useState<{ name: string; value: number }[]>([])
-  const [topDepartments, setTopDepartments] = useState<{ name: string; count: number }[]>([])
-  const [topTeams, setTopTeams] = useState<{ name: string; count: number }[]>([])
-  const [activeUsers, setActiveUsers] = useState(0)
-  const [inactiveUsers, setInactiveUsers] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
-
-  useEffect(() => {
-    async function loadAnalyticsData() {
-      try {
-        setIsLoading(true)
-
-        // Загрузка данных для аналитики
-        const [deptData, teamData, catData, monthData, topDepts, topTeamsData, activeCount, inactiveCount] = await Sentry.startSpan({ name: 'Users/UserAnalytics loadAnalytics', op: 'ui.load' }, async () => Promise.all([
-          getUsersByDepartment(),
-          getUsersByTeam(),
-          getUsersByCategory(),
-          getUsersJoinedByMonth(),
-          getTopDepartments(),
-          getTopTeams(),
-          getActiveUsersCount(),
-          getInactiveUsersCount(),
-        ]))
-
-        // Преобразование данных в формат для графиков
-        // Данные уже приходят в нужном формате {name, value}, просто устанавливаем их
-        setDepartmentData(deptData)
-        setTeamData(teamData)
-        setCategoryData(catData)
-        setMonthlyData(monthData)
-        
-        // Преобразование формата данных для top departments и teams
-        // Оба API возвращают массив объектов {name, value}, нужно преобразовать value в count
-        setTopDepartments(topDepts.map(item => ({ 
-          name: item.name, 
-          count: item.value
-        })))
-        
-        setTopTeams(topTeamsData.map(item => ({ 
-          name: item.name, 
-          count: item.value
-        })))
-        
-        setActiveUsers(activeCount)
-        setInactiveUsers(inactiveCount)
-      } catch (error) {
-        console.error("Ошибка загрузки аналитических данных:", error)
-        toast({
-          title: "Ошибка",
-          description: "Не удалось загрузить аналитические данные",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadAnalyticsData()
-  }, [])
+  const {
+    departmentData,
+    teamData,
+    categoryData,
+    monthlyData,
+    topDepartments,
+    topTeams,
+    activeUsers,
+    isLoading,
+  } = useUserAnalytics()
 
   if (isLoading) {
     return (
@@ -98,7 +35,7 @@ function UserAnalytics() {
   return (
     <div className="space-y-6">
       <h2 className="section-title">Аналитика пользователей</h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -106,9 +43,9 @@ function UserAnalytics() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeUsers + inactiveUsers}</div>
+            <div className="text-2xl font-bold">{activeUsers}</div>
             <p className="metadata">
-              Активных: {activeUsers} | Неактивных: {inactiveUsers}
+              Активных: {activeUsers}
             </p>
           </CardContent>
         </Card>

@@ -22,8 +22,8 @@ interface User {
 interface Team {
   id: string
   name: string
-  departmentId: string
-  departmentName: string
+  departmentId: string | null
+  departmentName: string | null
   team_lead_id: string | null
   headFirstName: string | null
   headLastName: string | null
@@ -67,8 +67,7 @@ export default function TeamHeadModal({
           email,
           avatar_url,
           department_name,
-          position_name,
-          team_name
+          position_name
         `)
         .eq("team_name", team.name) // Фильтруем только по нужной команде
         .order("first_name")
@@ -80,7 +79,10 @@ export default function TeamHeadModal({
         return
       }
       
-      setUsers(data || [])
+      setUsers(
+        (data || [])
+          .filter((u): u is typeof u & { user_id: string; email: string } => u.user_id != null && u.email != null)
+      )
     } catch (error) {
       console.error("Ошибка при загрузке пользователей:", error)
       Sentry.captureException(error, { tags: { module: 'users', component: 'TeamHeadModal', action: 'fetch_users', error_type: 'unexpected' }, extra: { team_name: team.name } })

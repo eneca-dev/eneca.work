@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -18,9 +18,9 @@ import { Badge } from "@/components/ui/badge"
 import { Edit, MoreHorizontal, Search, Clock, DollarSign, Users } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { User } from "@/types/db"
 import { useRouter } from "next/navigation"
-import { PaymentDialog } from "./payment-dialog"
+import PaymentDialog from "./payment-dialog"
+import type { UserPresentation as User } from "@/modules/users/lib/types"
 
 interface PaymentListProps {
   users: User[]
@@ -34,74 +34,58 @@ interface PaymentListProps {
   }
 }
 
-export default function PaymentList({ users: initialUsers, filters: initialFilters }: PaymentListProps) {
-  const [users, setUsers] = useState<User[]>(initialUsers)
-  const [filteredUsers, setFilteredUsers] = useState<User[]>(initialUsers)
+export default function PaymentList({ users, filters }: PaymentListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [groupBy, setGroupBy] = useState<"none" | "department" | "team">("none")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const router = useRouter()
 
-  // Состояние для фильтров
-  const [filters, setFilters] = useState(initialFilters)
-
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
-  // Применение фильтров и поиска
-  useEffect(() => {
-    let result = [...users]
+  // Derived state: фильтрация + поиск (rerender-derived-state-no-effect)
+  const filteredUsers = useMemo(() => {
+    let result = users
 
-    // Применение поиска
     if (searchTerm) {
+      const lc = searchTerm.toLowerCase()
       result = result.filter(
         (user) =>
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.position.toLowerCase().includes(searchTerm.toLowerCase()),
+          user.name.toLowerCase().includes(lc) ||
+          user.email.toLowerCase().includes(lc) ||
+          user.department.toLowerCase().includes(lc) ||
+          user.team.toLowerCase().includes(lc) ||
+          user.position.toLowerCase().includes(lc),
       )
     }
 
-    // Применение фильтров
     if (filters.departments.length > 0) {
       result = result.filter((user) => filters.departments.includes(user.department))
     }
-
     if (filters.teams.length > 0) {
       result = result.filter((user) => filters.teams.includes(user.team))
     }
-
     if (filters.categories.length > 0) {
       result = result.filter((user) => filters.categories.includes(user.category))
     }
-
     if (filters.positions.length > 0) {
       result = result.filter((user) => filters.positions.includes(user.position))
     }
-
     if (filters.workLocations.length > 0) {
       result = result.filter((user) => user.workLocation && filters.workLocations.includes(user.workLocation))
     }
-
     if (filters.roles.length > 0) {
       result = result.filter((user) => user.role && filters.roles.includes(user.role))
     }
 
-    setFilteredUsers(result)
+    return result
   }, [users, searchTerm, filters])
 
-  useEffect(() => {
-    setFilters(initialFilters)
-  }, [initialFilters])
-
-  // Группировка пользователей
-  const groupUsers = () => {
+  // Derived state: группировка пользователей
+  const groupedUsers = useMemo(() => {
     if (groupBy === "none") return { "": filteredUsers }
 
     const groups: Record<string, User[]> = {}
-
     filteredUsers.forEach((user) => {
       const groupKey = groupBy === "department" ? user.department : user.team
       if (!groups[groupKey]) {
@@ -111,9 +95,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
     })
 
     return groups
-  }
-
-  const groupedUsers = groupUsers()
+  }, [groupBy, filteredUsers])
 
   // Функция для переключения состояния развернутости группы
   const toggleGroup = (groupName: string) => {
@@ -122,24 +104,6 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
       [groupName]: !prev[groupName],
     }))
   }
-
-  // Инициализируем состояние развернутости для всех групп
-  const initializeExpandedGroups = () => {
-    const newExpandedGroups: Record<string, boolean> = {}
-    Object.keys(groupedUsers).forEach((group) => {
-      if (!expandedGroups.hasOwnProperty(group)) {
-        newExpandedGroups[group] = true // По умолчанию все группы развернуты
-      }
-    })
-    if (Object.keys(newExpandedGroups).length > 0) {
-      setExpandedGroups((prev) => ({ ...prev, ...newExpandedGroups }))
-    }
-  }
-
-  // Вызываем инициализацию при изменении групп
-  React.useEffect(() => {
-    initializeExpandedGroups()
-  }, [groupBy, filteredUsers.length])
 
   const handleEditPayment = (user: User) => {
     setSelectedUser(user)
@@ -179,38 +143,23 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
     )
   }
 
-  // Функция для получения общего количества отображаемых пользователей
-  const getTotalDisplayedUsers = () => {
-    return filteredUsers.length
-  }
-
-  // Получаем общее количество отображаемых пользователей
-  const totalDisplayedUsers = getTotalDisplayedUsers()
-
-  // Формируем текст для счетчика
-  const getCounterText = () => {
+  // Derived state: счётчик и общая зарплата
+  const counterText = useMemo(() => {
     const total = users.length
-    const filtered = totalDisplayedUsers
+    const filtered = filteredUsers.length
+    return filtered === total
+      ? `Показано ${filtered} из ${total} сотрудников`
+      : `Отфильтровано: ${filtered} из ${total} сотрудников`
+  }, [users.length, filteredUsers.length])
 
-    if (filtered === total) {
-      return `Показано ${filtered} из ${total} сотрудников`
-    } else {
-      return `Отфильтровано: ${filtered} из ${total} сотрудников`
-    }
-  }
-
-  // Расчет общей суммы зарплат
-  const getTotalSalary = () => {
+  const totalSalary = useMemo(() => {
     return filteredUsers.reduce((total, user) => {
       const employmentRate = user.employmentRate || 1
       const salary = user.salary || 0
-      // Для почасовой оплаты считаем примерную месячную зарплату (168 часов в месяц)
       const monthlySalary = user.isHourly ? salary * 168 * employmentRate : salary * employmentRate
       return total + monthlySalary
     }, 0)
-  }
-
-  const totalSalary = getTotalSalary()
+  }, [filteredUsers])
 
   return (
     <TooltipProvider>
@@ -242,7 +191,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
               </div>
               <div className="flex items-center text-sm text-muted-foreground ml-auto">
                 <Users className="h-4 w-4 mr-1" />
-                <span>{getCounterText()}</span>
+                <span>{counterText}</span>
               </div>
             </div>
           </div>
@@ -281,7 +230,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                         <TableRow className="bg-muted/50 hover:bg-muted/70 transition-colors">
                           <TableCell colSpan={7} className="py-1 border-l-4 border-border">
                             <div className="flex items-center cursor-pointer" onClick={() => toggleGroup(groupName)}>
-                              {expandedGroups[groupName] ? (
+                              {(expandedGroups[groupName] ?? true) ? (
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"
                                   width="16"
@@ -324,7 +273,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                         </TableRow>
                       )}
 
-                      {(groupName === "" || expandedGroups[groupName]) &&
+                      {(groupName === "" || (expandedGroups[groupName] ?? true)) &&
                         groupUsers.map((user) => (
                           <TableRow key={user.id} className="h-12">
                             <TableCell className="py-1">
@@ -351,7 +300,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                             <TableCell className="py-1">
                               <div className="text-sm">{user.position}</div>
                             </TableCell>
-                            <TableCell className="py-1">{getEmploymentRateBadge(user.employmentRate)}</TableCell>
+                            <TableCell className="py-1">{getEmploymentRateBadge(user.employmentRate ?? 1)}</TableCell>
                             <TableCell className="py-1">
                               <div className="flex items-center">
                                 {user.isHourly ? (

@@ -51,8 +51,14 @@ type QueriesSnapshot = [readonly unknown[], unknown][]
 interface OptimisticContext {
   previousDepartmentsData?: QueriesSnapshot
   previousResourceGraphData?: QueriesSnapshot
-  previousProjectsData?: QueriesSnapshot
   previousSectionsPageData?: QueriesSnapshot
+  /** Temp ID загрузки (для замены на реальный UUID после создания) */
+  tempId?: string
+}
+
+/** Проверяет, является ли ID временным (оптимистичным) */
+export function isTempLoadingId(id: string): boolean {
+  return id.startsWith('temp-')
 }
 
 // ============================================================================
@@ -82,7 +88,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -92,9 +97,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -231,15 +233,52 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
+        tempId: tempLoading.id,
       }
     },
 
-    onSuccess: (data) => {
+    onSuccess: (data, _variables, context) => {
+      // Немедленно заменяем temp ID на реальный UUID в кэше,
+      // чтобы resize/update работали корректно до завершения refetch
+      const tempId = context?.tempId
+      if (tempId) {
+        const replaceTempId = (obj: any): any => {
+          if (!obj) return obj
+          if (Array.isArray(obj)) return obj.map(replaceTempId)
+          if (typeof obj === 'object') {
+            const result: any = {}
+            for (const key of Object.keys(obj)) {
+              if (key === 'id' && obj[key] === tempId) {
+                result[key] = data.id
+              } else {
+                result[key] = replaceTempId(obj[key])
+              }
+            }
+            return result
+          }
+          return obj
+        }
+
+        // Заменяем temp ID во всех затронутых кэшах
+        for (const key of [
+          queryKeys.departmentsTimeline.all,
+          queryKeys.resourceGraph.all,
+          queryKeys.sectionsPage.all,
+        ]) {
+          const queriesData = queryClient.getQueriesData({ queryKey: key })
+          queriesData.forEach(([queryKey, queryData]) => {
+            if (queryData) {
+              queryClient.setQueryData(queryKey, replaceTempId(queryData))
+            }
+          })
+        }
+      }
+
       // Инвалидация кешей для обновления с реальными данными
+      // (Realtime также инвалидирует при изменении таблицы loadings,
+      //  но явная инвалидация здесь гарантирует немедленное обновление)
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -261,11 +300,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           queryClient.setQueryData(queryKey, data)
         })
       }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
       if (context?.previousSectionsPageData) {
         context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
@@ -281,6 +315,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const update = useMutation({
     mutationFn: async (input: UpdateLoadingInput) => {
+      // Блокируем обновление для оптимистичных записей с temp ID
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await updateLoading(input)
 
       if (!result.success) {
@@ -296,7 +335,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -306,9 +344,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -332,26 +367,33 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           let originalLoading: any = null
           let originalEmployeeId: string | null = null
 
-          // Если меняется employeeId, нужно переместить загрузку между сотрудниками
-          const isMovingBetweenEmployees = input.employeeId !== undefined
-
           // ПЕРВЫЙ ПРОХОД: Находим загрузку и сохраняем её данные
-          if (isMovingBetweenEmployees) {
-            for (const dept of departments) {
-              for (const team of dept.teams || []) {
-                for (const emp of team.employees || []) {
-                  const foundLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
-                  if (foundLoading) {
-                    originalLoading = foundLoading
-                    originalEmployeeId = emp.id
-                    loadingFound = true
-                    break
-                  }
+          for (const dept of departments) {
+            for (const team of dept.teams || []) {
+              for (const emp of team.employees || []) {
+                const foundLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
+                if (foundLoading) {
+                  originalLoading = foundLoading
+                  originalEmployeeId = emp.id
+                  loadingFound = true
+                  break
                 }
-                if (loadingFound) break
               }
               if (loadingFound) break
             }
+            if (loadingFound) break
+          }
+
+          // Определяем реальное перемещение между сотрудниками:
+          // только если employeeId передан И отличается от текущего владельца загрузки
+          const isMovingBetweenEmployees = !!(
+            input.employeeId && originalEmployeeId && input.employeeId !== originalEmployeeId
+          )
+
+          // Если загрузка не найдена в departments cache — пропускаем optimistic update
+          // (данные обновятся через invalidateQueries после мутации)
+          if (!loadingFound) {
+            return isDirectArray ? departments : old
           }
 
           // ВТОРОЙ ПРОХОД: Обновляем departments с учетом найденной информации
@@ -361,18 +403,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
               ...team,
               employees: team.employees.map((emp: any) => {
                 // Собираем обновленные загрузки
-                let updatedLoadings: any[] = []
+                const updatedLoadings: any[] = []
 
                 // Обрабатываем каждую загрузку текущего сотрудника
                 for (const loading of emp.loadings || []) {
                   if (loading.id === input.loadingId) {
-                    // Нашли целевую загрузку
-                    if (!loadingFound) {
-                      loadingFound = true
-                      originalLoading = loading
-                      originalEmployeeId = emp.id
-                    }
-
                     // Если меняется сотрудник и это НЕ целевой сотрудник - удаляем загрузку
                     if (isMovingBetweenEmployees && emp.id !== input.employeeId) {
                       continue // Не добавляем в updatedLoadings
@@ -396,12 +431,11 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                   }
                 }
 
-                // Если меняется сотрудник и это целевой сотрудник И это не тот же сотрудник
-                // Добавляем загрузку к новому сотруднику
-                if (originalLoading && isMovingBetweenEmployees && emp.id === input.employeeId && originalEmployeeId !== emp.id) {
+                // Если меняется сотрудник и это целевой сотрудник — добавляем загрузку
+                if (isMovingBetweenEmployees && emp.id === input.employeeId && originalEmployeeId !== emp.id) {
                   updatedLoadings.push({
                     ...originalLoading,
-                    id: originalLoading.id, // Важно сохранить ID!
+                    id: originalLoading.id,
                     employeeId: input.employeeId,
                     responsibleId: input.employeeId,
                     ...(input.stageId !== undefined && { stageId: input.stageId, sectionId: input.stageId }),
@@ -411,11 +445,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                     ...(input.comment !== undefined && { comment: input.comment }),
                     updatedAt: new Date().toISOString(),
                     _optimistic: true,
-                  })
-                } else if (isMovingBetweenEmployees && emp.id === input.employeeId && !originalLoading) {
-                  console.error('❌ [UPDATE onMutate] НЕ МОГУ добавить загрузку - originalLoading отсутствует!', {
-                    targetEmployeeId: emp.id,
-                    targetEmployeeName: emp.name || emp.fullName,
                   })
                 }
 
@@ -543,7 +572,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -551,7 +579,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -573,11 +600,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           queryClient.setQueryData(queryKey, data)
         })
       }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
       if (context?.previousSectionsPageData) {
         context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
@@ -593,6 +615,10 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const archive = useMutation({
     mutationFn: async (input: ArchiveLoadingInput) => {
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await archiveLoading(input)
 
       if (!result.success) {
@@ -608,7 +634,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -618,9 +643,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -709,7 +731,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -717,7 +738,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -739,11 +759,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
           queryClient.setQueryData(queryKey, data)
         })
       }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
       if (context?.previousSectionsPageData) {
         context.previousSectionsPageData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
@@ -759,6 +774,10 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
   // ==========================================================================
   const remove = useMutation({
     mutationFn: async (input: DeleteLoadingInput) => {
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
       const result = await deleteLoading(input)
 
       if (!result.success) {
@@ -774,7 +793,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
-        queryClient.cancelQueries({ queryKey: queryKeys.projects.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
 
@@ -784,9 +802,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       })
       const previousResourceGraphData = queryClient.getQueriesData({
         queryKey: queryKeys.resourceGraph.all,
-      })
-      const previousProjectsData = queryClient.getQueriesData({
-        queryKey: queryKeys.projects.all,
       })
       const previousSectionsPageData = queryClient.getQueriesData({
         queryKey: queryKeys.sectionsPage.all,
@@ -875,7 +890,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       return {
         previousDepartmentsData,
         previousResourceGraphData,
-        previousProjectsData,
         previousSectionsPageData,
       }
     },
@@ -883,7 +897,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
@@ -902,11 +915,6 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       }
       if (context?.previousResourceGraphData) {
         context.previousResourceGraphData.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-      if (context?.previousProjectsData) {
-        context.previousProjectsData.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data)
         })
       }

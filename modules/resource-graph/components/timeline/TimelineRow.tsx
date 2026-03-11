@@ -655,6 +655,9 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
 
   // Callback для resize загрузок
   const handleLoadingResize = (loadingId: string, startDate: string, finishDate: string) => {
+    // Блокируем resize для оптимистичных записей с temp ID (ещё не сохранены в БД)
+    if (loadingId.startsWith('temp-')) return
+
     updateLoadingDates.mutate({
       loadingId,
       sectionId,

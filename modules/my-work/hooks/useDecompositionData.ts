@@ -31,45 +31,36 @@ export function useDecompositionData() {
         return
       }
 
-      // Получаем категории работ отдельным запросом
+      // async-parallel: категории и work_logs независимы — запускаем параллельно
       const categoryIds = decompositionData.map(item => item.decomposition_item_work_category_id).filter(Boolean)
-      
+      const decompositionIds = decompositionData.map(item => item.decomposition_item_id)
+
       interface WorkCategory {
         work_category_id: string
         work_category_name: string
       }
-
-      let categoriesData: WorkCategory[] = []
-      if (categoryIds.length > 0) {
-        const { data: categories, error: categoriesError } = await supabase
-          .from('work_categories')
-          .select('work_category_id, work_category_name')
-          .in('work_category_id', categoryIds)
-
-        if (!categoriesError) {
-          categoriesData = categories || []
-        }
-      }
-
-      // Получаем фактические часы из work_logs
-      const decompositionIds = decompositionData.map(item => item.decomposition_item_id)
       interface WorkLogSummary {
         decomposition_item_id: string
         work_log_hours: number
       }
 
-      let workLogsData: WorkLogSummary[] = []
-      
-      if (decompositionIds.length > 0) {
-        const { data: workLogs, error: workLogsError } = await supabase
-          .from('work_logs')
-          .select('decomposition_item_id, work_log_hours')
-          .in('decomposition_item_id', decompositionIds)
+      const [categoriesResult, workLogsResult] = await Promise.all([
+        categoryIds.length > 0
+          ? supabase
+              .from('work_categories')
+              .select('work_category_id, work_category_name')
+              .in('work_category_id', categoryIds)
+          : Promise.resolve({ data: [] as WorkCategory[], error: null }),
+        decompositionIds.length > 0
+          ? supabase
+              .from('work_logs')
+              .select('decomposition_item_id, work_log_hours')
+              .in('decomposition_item_id', decompositionIds)
+          : Promise.resolve({ data: [] as WorkLogSummary[], error: null })
+      ])
 
-        if (!workLogsError) {
-          workLogsData = workLogs || []
-        }
-      }
+      const categoriesData: WorkCategory[] = !categoriesResult.error ? (categoriesResult.data || []) : []
+      const workLogsData: WorkLogSummary[] = !workLogsResult.error ? (workLogsResult.data || []) : []
 
       // Вычисляем сумму фактических часов для каждого элемента
       const actualHoursMap = workLogsData.reduce((acc, log) => {

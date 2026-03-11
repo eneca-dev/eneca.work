@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from '@/utils/supabase/client';
 import { useCalendarStore } from '@/modules/calendar/store';
@@ -17,7 +17,8 @@ export function useCalendarEvents() {
     setError,
   } = useCalendarStore();
 
-  const supabase = createClient();
+  // Стабильная ссылка на Supabase клиент (не пересоздаётся при ре-рендерах)
+  const supabaseRef = useRef(createClient());
 
   // Загрузка событий для авторизованного пользователя
   const fetchEvents = useCallback(async (userId?: string) => {
@@ -37,7 +38,7 @@ export function useCalendarEvents() {
           // Загружаем все события без фильтрации на сервере
           // Фильтрация будет происходить на клиенте: глобальные события + события текущего пользователя
           // функциональнсоть перенесена: не загружаем отпуска, больничные, отгулы
-          const { data, error } = await supabase
+          const { data, error } = await supabaseRef.current
             .from('calendar_events')
             .select('*')
             .not('calendar_event_type', 'in', '("Отгул","Больничный","Отпуск запрошен","Отпуск одобрен","Отпуск отклонен")')
@@ -98,7 +99,7 @@ export function useCalendarEvents() {
         }
       }
     )
-  }, [supabase, setEvents, setLoading, setError]);
+  }, [setEvents, setLoading, setError]);
 
   // Создание события
   const createEvent = useCallback(async (eventData: EventFormData, userId: string) => {
@@ -123,7 +124,7 @@ export function useCalendarEvents() {
             calendar_event_created_by: userId,
           };
 
-          const { data, error } = await supabase
+          const { data, error } = await supabaseRef.current
             .from('calendar_events')
             .insert([newEvent])
             .select()
@@ -195,7 +196,7 @@ export function useCalendarEvents() {
         }
       }
     )
-  }, [supabase, fetchEvents, setLoading, setError]);
+  }, [fetchEvents, setLoading, setError]);
 
   // Обновление события
   const editEvent = useCallback(async (id: string, eventData: Partial<EventFormData>, userId: string) => {
@@ -203,7 +204,7 @@ export function useCalendarEvents() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseRef.current
         .from('calendar_events')
         .update(eventData)
         .eq('calendar_event_id', id)
@@ -224,7 +225,7 @@ export function useCalendarEvents() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, fetchEvents, setLoading, setError]);
+  }, [fetchEvents, setLoading, setError]);
 
   // Удаление события
   const removeEvent = useCallback(async (id: string, userId: string) => {
@@ -241,7 +242,7 @@ export function useCalendarEvents() {
           span.setAttribute("user.id", userId)
           span.setAttribute("event.id", id)
 
-          const { error } = await supabase
+          const { error } = await supabaseRef.current
             .from('calendar_events')
             .delete()
             .eq('calendar_event_id', id);
@@ -306,7 +307,7 @@ export function useCalendarEvents() {
         }
       }
     )
-  }, [supabase, fetchEvents, setLoading, setError]);
+  }, [fetchEvents, setLoading, setError]);
 
   // Получение событий для определенной даты с фильтрацией по пользователю
   const getEventsForDate = useCallback((date: Date, userId?: string): CalendarEvent[] => {

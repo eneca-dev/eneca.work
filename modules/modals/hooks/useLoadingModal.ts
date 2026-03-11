@@ -10,7 +10,7 @@
  * - Валидация формы
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 
 /**
  * Breadcrumb item для отображения пути
@@ -129,19 +129,6 @@ function getDefaultFormData(): LoadingFormData {
 export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModalResult {
   const { mode, initialSectionId, initialEmployeeId, initialLoading } = options
 
-  console.log('🔍 [useLoadingModal] Hook called:', {
-    mode,
-    initialSectionId,
-    initialEmployeeId,
-    initialLoading: initialLoading ? {
-      id: initialLoading.id,
-      employee_id: initialLoading.employee_id,
-      start_date: initialLoading.start_date,
-      end_date: initialLoading.end_date,
-      rate: initialLoading.rate,
-    } : null,
-  })
-
   // Состояние навигации
   const [projectMode, setProjectMode] = useState<'my' | 'all'>('my')
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
@@ -175,7 +162,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
         comment: initialLoading.comment ?? '',
         decompositionStageId: '', // Будет установлено в LoadingModalNew на основе breadcrumbs
       }
-      console.log('✅ [useLoadingModal] Initializing form with edit data:', initialFormData)
       return initialFormData
     }
     // Режим создания - предзаполняем даты, ставку и employeeId если есть
@@ -183,7 +169,6 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     if (initialEmployeeId) {
       defaultForm.employeeId = initialEmployeeId
     }
-    console.log('✅ [useLoadingModal] Initializing form with default data:', defaultForm)
     return defaultForm
   })
 
@@ -265,8 +250,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     setSelectedBreadcrumbs(null)
   }, [])
 
-  // Проверка изменений в режиме редактирования
-  const hasChanges = useCallback((): boolean => {
+  // rerender-derived-state: useMemo вместо useCallback — мемоизируем результат, а не функцию
+  const hasChanges = useMemo((): boolean => {
     if (mode === 'create') {
       return true // В режиме создания кнопка всегда доступна (если валидация проходит)
     }
@@ -332,7 +317,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     errors,
     validateForm,
     resetForm,
-    hasChanges: hasChanges(),
+    hasChanges,
     isChangingStage,
     startChangingStage,
     cancelChangingStage,

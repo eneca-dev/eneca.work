@@ -24,32 +24,16 @@ export interface UseProjectsListOptions {
 export function useProjectsList(options: UseProjectsListOptions) {
   const { mode, userId, enabled = true } = options
 
-  console.log('🔍 useProjectsList debug:', {
-    mode,
-    userId,
-    enabled,
-    shouldQuery: enabled && Boolean(userId?.trim()),
-  })
-
   return useQuery({
     queryKey: queryKeys.projects.listForModal(mode, userId),
     queryFn: async () => {
-      const hookStartTime = performance.now()
-      console.log('📡 [useProjectsList] Запрос списка проектов:', { mode, userId })
       const input: FetchProjectsListInput = { mode, userId }
-
-      const fetchStartTime = performance.now()
       const result = await fetchProjectsListRPC(input)
-      const fetchEndTime = performance.now()
-      console.log(`⏱️ [useProjectsList] fetchProjectsListRPC took: ${(fetchEndTime - fetchStartTime).toFixed(2)}ms`)
 
       if (!result.success) {
-        console.error('❌ Ошибка загрузки проектов:', result.error)
         throw new Error(result.error)
       }
 
-      const totalHookTime = performance.now() - hookStartTime
-      console.log(`✅ [useProjectsList] Total hook time: ${totalHookTime.toFixed(2)}ms | Projects: ${result.data.length}`)
       return result.data
     },
     enabled: enabled && Boolean(userId?.trim()),

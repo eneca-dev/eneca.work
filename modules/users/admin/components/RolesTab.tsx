@@ -1,11 +1,11 @@
 "use client"
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -21,31 +21,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, Loader2, X, Save, Trash, AlertTriangle, Info, Key } from "lucide-react"
+import { Check, Loader2, X, Trash, AlertTriangle, Info, Key } from "lucide-react"
 import { useNotification } from "@/lib/notification-context"
-import { validateEntityName, validateRoleName, checkDuplicateName, getDuplicateErrorMessage } from "@/utils/validation"
+import { validateRoleName, checkDuplicateName, getDuplicateErrorMessage } from "@/utils/validation"
+import { useAdminRoles } from "../hooks/useAdminData"
 
 const ROLE_NAME_MAX_LENGTH = 20
 const ROLE_DESCRIPTION_MAX_LENGTH = 50
 const PROTECTED_ROLES = ['user', 'admin']
 const READ_ONLY = true // Вкладка только для просмотра: без создания/удаления/редактирования
-
-interface Role {
-  id: string
-  name: string
-  description?: string
-}
-
-interface Permission {
-  id: string
-  name: string
-  description?: string
-}
-
-interface RolePermission {
-  role_id: string
-  permission_id: string
-}
 
 interface PendingChange {
   roleId: string
@@ -58,9 +42,6 @@ function generateUUID(): string {
 }
 
 export default function RolesTab() {
-  const [roles, setRoles] = useState<Role[]>([])
-  const [permissions, setPermissions] = useState<Permission[]>([])
-  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([])
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
@@ -69,68 +50,17 @@ export default function RolesTab() {
   const [deleteRoleModalOpen, setDeleteRoleModalOpen] = useState(false)
   const [deleteConfirmModalOpen, setDeleteConfirmModalOpen] = useState(false)
   const [saveChangesModalOpen, setSaveChangesModalOpen] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+  const [selectedRole, setSelectedRole] = useState<{ id: string; name: string; description: string | null } | null>(null)
   const [selectedRoleId, setSelectedRoleId] = useState("")
 
   const [newRoleName, setNewRoleName] = useState("")
   const [newRoleDescription, setNewRoleDescription] = useState("")
-  const [roleValidation, setRoleValidation] = useState<{isValid: boolean, errors: string[], normalizedValue: string}>({isValid: true, errors: [], normalizedValue: ""})
 
   const notification = useNotification()
-  
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const supabase = createClient()
-      
-      const [rolesResult, permissionsResult, rolePermissionsResult] = await Promise.all([
-        supabase.from("roles").select("id, name, description").order("name"),
-        supabase.from("permissions").select("id, name, description").order("name"),
-        supabase.from("role_permissions").select("role_id, permission_id")
-      ])
-      
-      if (rolesResult.error) {
-        console.error('Ошибка при загрузке ролей:', rolesResult.error)
-        Sentry.captureException(rolesResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_roles', error_type: 'db_error' } })
-        notification.error("Ошибка загрузки ролей", rolesResult.error.message)
-        return
-      }
-      
-      if (permissionsResult.error) {
-        console.error('Ошибка при загрузке разрешений:', permissionsResult.error)
-        Sentry.captureException(permissionsResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_permissions', error_type: 'db_error' } })
-        notification.error("Ошибка загрузки разрешений", permissionsResult.error.message)
-        return
-      }
-      
-      if (rolePermissionsResult.error) {
-        console.error('Ошибка при загрузке связей роль-разрешение:', rolePermissionsResult.error)
-        Sentry.captureException(rolePermissionsResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_role_permissions', error_type: 'db_error' } })
-        notification.error("Ошибка загрузки связей", rolePermissionsResult.error.message)
-        return
-      }
-      
-      setRoles(rolesResult.data || [])
-      setPermissions(permissionsResult.data || [])
-      setRolePermissions(rolePermissionsResult.data || [])
-    } catch (error) {
-      console.error('Общая ошибка при загрузке данных:', error)
-      Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'fetch_data', error_type: 'unexpected' } })
-      notification.error("Ошибка загрузки данных", "Неизвестная ошибка")
-    } finally {
-      setLoading(false)
-    }
-  }, [notification])
+  const { roles, permissions, rolePermissions, isLoading: isDataLoading, refetch } = useAdminRoles()
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  // Живая валидация названия роли
-  useEffect(() => {
-    const validation = validateRoleName(newRoleName)
-    setRoleValidation(validation)
-  }, [newRoleName])
+  // Derived state — валидация вычисляется при рендере, не через useEffect
+  const roleValidation = useMemo(() => validateRoleName(newRoleName), [newRoleName])
 
   // Проверка дубликатов ролей
   const roleDuplicateError = useMemo(() => {
@@ -232,7 +162,6 @@ export default function RolesTab() {
   const handleCreateRole = useCallback(() => {
     setNewRoleName("")
     setNewRoleDescription("")
-    setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
     setCreateRoleModalOpen(true)
   }, [])
 
@@ -291,8 +220,7 @@ export default function RolesTab() {
       setCreateRoleModalOpen(false)
       setNewRoleName("")
       setNewRoleDescription("")
-      setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
-      await fetchData()
+      await refetch()
     } catch (error) {
       console.error('Error creating role:', error)
       Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'create_role', error_type: 'unexpected' } })
@@ -300,7 +228,7 @@ export default function RolesTab() {
     } finally {
       setLoading(false)
     }
-  }, [newRoleName, newRoleDescription, notification, fetchData, roles])
+  }, [newRoleName, newRoleDescription, notification, refetch, roles])
 
   const handleDeleteRoleConfirm = useCallback(() => {
     const role = roles.find(r => r.id === selectedRoleId)
@@ -336,7 +264,7 @@ export default function RolesTab() {
       notification.success("Роль удалена", `Роль "${selectedRole.name}" успешно удалена`)
       setDeleteConfirmModalOpen(false)
       setSelectedRole(null)
-      await fetchData()
+      await refetch()
     } catch (error) {
       console.error('Ошибка при удалении роли:', error)
       Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'delete_role', error_type: 'unexpected' }, extra: { role_id: selectedRole?.id, role_name: selectedRole?.name } })
@@ -344,7 +272,7 @@ export default function RolesTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedRole, notification, fetchData])
+  }, [selectedRole, notification, refetch])
 
   const handleSaveChangesExecute = useCallback(async () => {
     try {
@@ -404,7 +332,7 @@ export default function RolesTab() {
           }
         }
         
-        await fetchData()
+        await refetch()
         setPendingChanges([])
         setSaveChangesModalOpen(false)
         
@@ -443,7 +371,7 @@ export default function RolesTab() {
             "Не удалось откатить изменения. Обновите страницу и попробуйте снова.")
         }
         
-        await fetchData()
+        await refetch()
       }
       
     } catch (error) {
@@ -454,10 +382,10 @@ export default function RolesTab() {
     } finally {
       setLoading(false)
     }
-  }, [pendingChanges, notification, fetchData, rolePermissions])
+  }, [pendingChanges, notification, refetch, rolePermissions])
 
   const renderPermissionMatrix = () => {
-    if (loading) {
+    if (isDataLoading || loading) {
       return (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -475,12 +403,13 @@ export default function RolesTab() {
     }
 
     // Группируем permissions по категории (префикс до точки)
-    const groups = permissions.reduce((acc: Record<string, Permission[]>, p) => {
+    type Permission = (typeof permissions)[number]
+    const groups = permissions.reduce<Record<string, Permission[]>>((acc, p) => {
       const category = (p.name.includes('.') ? p.name.split('.')[0] : 'Общее') || 'Общее'
       if (!acc[category]) acc[category] = []
       acc[category].push(p)
       return acc
-    }, {} as Record<string, Permission[]>)
+    }, {})
 
     const orderedGroupEntries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]))
 
@@ -607,7 +536,6 @@ export default function RolesTab() {
       if (!open) {
         setNewRoleName("")
         setNewRoleDescription("")
-        setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
       }
     }}>
       <DialogContent className="sm:max-w-[425px]">

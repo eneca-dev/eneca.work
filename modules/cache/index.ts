@@ -106,6 +106,35 @@ export { useUsers, useCurrentUser } from './hooks/use-users'
 // Work Categories Hooks (pre-built)
 export { useWorkCategories } from './hooks/use-work-categories'
 
+// Reference Data Server Actions
+export {
+  getDepartments as getCachedDepartments,
+  getTeams as getCachedTeams,
+  getPositions as getCachedPositions,
+  getCategories as getCachedCategories,
+  getSubdivisions as getCachedSubdivisions,
+  getRoles as getCachedRoles,
+  getAllReferenceData,
+  type CachedDepartment,
+  type CachedTeam,
+  type CachedPosition,
+  type CachedCategory,
+  type CachedSubdivision,
+  type CachedRole,
+  type AllReferenceData,
+} from './actions/reference-data'
+
+// Reference Data Hooks (pre-built, staleTime: static)
+export {
+  useCachedDepartments,
+  useCachedTeams,
+  useCachedPositions,
+  useCachedCategories,
+  useCachedSubdivisions,
+  useCachedRoles,
+  useAllReferenceData,
+} from './hooks/use-reference-data'
+
 // Base action utilities
 export { safeAction } from './actions/base'
 

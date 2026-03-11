@@ -41,12 +41,15 @@ export function useUserPermissionsSync() {
         activeChannel = null
       }
       activeUserId = null
-      ensuredRoleForUserId = null
+      // НЕ сбрасываем ensuredRoleForUserId — StrictMode вызывает cleanup/remount,
+      // и без этого проверка ролей (view_user_roles) отправляется повторно.
+      // Сбрасывается только при реальном логауте (ниже).
     }
 
     // На логауте или отсутствии userId — отписываемся и очищаем глобальные ссылки
     if (!isAuthenticated || !userId) {
       cleanup()
+      ensuredRoleForUserId = null
       return cleanup
     }
 
@@ -82,9 +85,14 @@ export function useUserPermissionsSync() {
       .subscribe()
 
     // При первой авторизации/смене пользователя — если ролей нет, назначаем дефолтную роль "user"
+    // Маркер ставим СРАЗУ (синхронно), до await — иначе StrictMode remount запустит повторный запрос
+    if (ensuredRoleForUserId === userId) {
+      return cleanup
+    }
+    ensuredRoleForUserId = userId
+
     ;(async () => {
       try {
-        if (ensuredRoleForUserId === userId) return
         // Проверяем текущие роли пользователя
         const { data: existingRoles, error: rolesErr } = await supabase
           .from('view_user_roles')
@@ -123,8 +131,6 @@ export function useUserPermissionsSync() {
           // После назначения перезагружаем разрешения вручную
           reloadPermissions()
         }
-
-        ensuredRoleForUserId = userId
       } catch (e) {
         console.warn('PERMISSIONS Ошибка при обеспечении дефолтной роли:', e)
       }

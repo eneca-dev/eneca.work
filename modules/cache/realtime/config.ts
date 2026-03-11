@@ -190,6 +190,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'departments',
     invalidateKeys: [
       queryKeys.departments.all,
+      queryKeys.admin.departments(), // Admin панель — отделы
       queryKeys.departmentsTimeline.all, // Таймлайн отделов
       queryKeys.sectionsPage.all, // Страница разделов (группировка по отделам)
     ],
@@ -198,6 +199,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'teams',
     invalidateKeys: [
       queryKeys.teams.all,
+      queryKeys.admin.teams(), // Admin панель — команды
       queryKeys.departmentsTimeline.all, // Таймлайн отделов (команды внутри отделов)
     ],
   },
