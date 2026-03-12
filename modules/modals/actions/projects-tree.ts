@@ -126,11 +126,7 @@ export async function fetchProjectsList(
   input: FetchProjectsListInput
 ): Promise<ActionResult<ProjectListItem[]>> {
   try {
-    const startTime = performance.now()
-    console.log('📡 [fetchProjectsList] Начало запроса:', input)
     const supabase = await createClient()
-    const clientCreatedTime = performance.now()
-    console.log(`⏱️ [fetchProjectsList] Client created: ${(clientCreatedTime - startTime).toFixed(2)}ms`)
 
     // Получаем уникальные проекты из view (используем view_project_tree_optimized)
     // Фильтруем только узлы типа 'project' для получения списка проектов
@@ -147,18 +143,12 @@ export async function fetchProjectsList(
         return { success: false, error: 'User ID обязателен для режима "my"' }
       }
 
-      console.log('[fetchProjectsList] Фильтрация: проекты пользователя', input.userId)
-
       // Фильтруем по массиву involved_users (содержит менеджера, ответственных за разделы и пользователей с загрузками)
       // Используем оператор @> (contains) для проверки вхождения UUID в массив
       query = query.contains('involved_users', [input.userId])
     }
 
-    const queryStartTime = performance.now()
-    console.log(`⏱️ [fetchProjectsList] Starting query...`)
     const { data, error } = await query
-    const queryEndTime = performance.now()
-    console.log(`⏱️ [fetchProjectsList] Query completed: ${(queryEndTime - queryStartTime).toFixed(2)}ms`)
 
     if (error) {
       console.error('[fetchProjectsList] Supabase error:', error)
@@ -166,16 +156,6 @@ export async function fetchProjectsList(
         success: false,
         error: `Не удалось загрузить список проектов: ${error.message}`,
       }
-    }
-
-    console.log('[fetchProjectsList] Загружено строк:', data?.length || 0)
-
-    if (input.mode === 'my' && data && data.length > 0) {
-      console.log('[fetchProjectsList] Первые 3 проекта:', data.slice(0, 3).map(r => ({
-        project_id: r.project_id,
-        node_name: r.node_name,
-        involved_users: r.involved_users,
-      })))
     }
 
     // Маппинг данных из view в ProjectListItem
@@ -190,18 +170,6 @@ export async function fetchProjectsList(
       stage_type: row.stage_type,
     }))
 
-    if (projects.length > 0) {
-      console.log('[fetchProjectsList] Первые 3 уникальных проекта:', projects.slice(0, 3).map(p => ({
-        id: p.id,
-        name: p.name,
-        manager_id: p.managerId,
-      })))
-    } else {
-      console.warn('[fetchProjectsList] ⚠️ Нет проектов после дедупликации')
-    }
-
-    const totalTime = performance.now() - startTime
-    console.log(`✅ [fetchProjectsList] Total time: ${totalTime.toFixed(2)}ms | Projects: ${projects.length}`)
     return { success: true, data: projects }
   } catch (error) {
     console.error('[fetchProjectsList] Error:', error)
@@ -224,7 +192,6 @@ export async function fetchProjectTree(
   input: FetchProjectTreeInput
 ): Promise<ActionResult<ProjectTreeNode[]>> {
   try {
-    const startTime = performance.now()
     const supabase = await createClient()
 
     // Валидация
@@ -240,9 +207,6 @@ export async function fetchProjectTree(
       .order('hierarchy_level')
       .order('sort_path')
       .order('sort_order')
-
-    const queryTime = performance.now() - startTime
-    console.log(`⏱️ [fetchProjectTree] Query time: ${queryTime.toFixed(2)}ms for project ${input.projectId}`)
 
     if (error) {
       console.error('[fetchProjectTree] Supabase error:', error)
@@ -282,16 +246,6 @@ export async function fetchProjectTree(
       endDate: row.end_date,
       hasChildren: row.node_type !== 'decomposition_stage', // только decomposition_stage не имеет детей
     }))
-
-    const totalTime = performance.now() - startTime
-    console.log(`✅ [fetchProjectTree] Total time: ${totalTime.toFixed(2)}ms | Nodes: ${tree.length}`, {
-      projectId: input.projectId,
-      totalNodes: tree.length,
-      byLevel: tree.reduce((acc, node) => {
-        acc[node.level] = (acc[node.level] || 0) + 1
-        return acc
-      }, {} as Record<number, number>)
-    })
 
     return { success: true, data: tree }
   } catch (error) {

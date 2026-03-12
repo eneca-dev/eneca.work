@@ -182,6 +182,10 @@ export const openLoadingModalNewCreate = (data?: {
   sectionId?: string // ID раздела или этапа декомпозиции
   employeeId?: string
   projectId?: string
+  rate?: number
+  startDate?: string
+  endDate?: string
+  comment?: string
 }) => useModalStore.getState().openModal('loading-new-create', data)
 
 /**

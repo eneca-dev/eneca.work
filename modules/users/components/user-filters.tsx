@@ -6,8 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
 import { ChevronDown, ChevronUp, Filter, Building2, Home, Briefcase } from "lucide-react"
-import { useEffect, useState } from "react"
-import type { User } from "@/types/db"
+import { useMemo, useState } from "react"
+import type { UserPresentation as User } from "@/modules/users/lib/types"
 import * as Sentry from "@sentry/nextjs"
 
 // Обновим интерфейс UserFiltersProps, чтобы включить roles
@@ -31,13 +31,14 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [openWorkLocations, setOpenWorkLocations] = useState(true)
   const [openRoles, setOpenRoles] = useState(true) // Добавим состояние для ролей
 
-  const [departments, setDepartments] = useState<string[]>([])
-  const [teams, setTeams] = useState<string[]>([])
-  const [positions, setPositions] = useState<string[]>([])
-  const [categories, setCategories] = useState<string[]>([])
-  const [workLocations, setWorkLocations] = useState<string[]>([])
-  const [roles, setRoles] = useState<string[]>([]) // Добавим состояние для ролей
-  const [isLoading, setIsLoading] = useState(true)
+  // Derived state: уникальные значения фильтров из массива пользователей (rerender-derived-state-no-effect)
+  const departments = useMemo(() => [...new Set(users.map(u => u.department))].filter(Boolean).sort(), [users])
+  const teams = useMemo(() => [...new Set(users.map(u => u.team))].filter(Boolean).sort(), [users])
+  const positions = useMemo(() => [...new Set(users.map(u => u.position))].filter(Boolean).sort(), [users])
+  const categories = useMemo(() => [...new Set(users.map(u => u.category))].filter(Boolean).sort(), [users])
+  const workLocations = useMemo(() => [...new Set(users.map(u => u.workLocation))].filter(Boolean).sort() as string[], [users])
+  const roles = useMemo(() => [...new Set(users.map(u => u.role))].filter(Boolean).sort() as string[], [users])
+  const isLoading = users.length === 0
 
   // Состояние для выбранных фильтров
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
@@ -55,31 +56,7 @@ function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [searchRole, setSearchRole] = useState("")
   const [searchWorkLocation, setSearchWorkLocation] = useState("")
 
-  // Загрузка данных при монтировании компонента
-  useEffect(() => {
-    if (users && users.length > 0) {
-      setIsLoading(true)
-
-      // Получаем уникальные значения из пользователей
-      const uniqueDepartments = [...new Set(users.map((user) => user.department))].filter(Boolean).sort()
-      const uniqueTeams = [...new Set(users.map((user) => user.team))].filter(Boolean).sort()
-      const uniquePositions = [...new Set(users.map((user) => user.position))].filter(Boolean).sort()
-      const uniqueCategories = [...new Set(users.map((user) => user.category))].filter(Boolean).sort()
-      const uniqueWorkLocations = [...new Set(users.map((user) => user.workLocation))].filter(Boolean).sort()
-      const uniqueRoles = [...new Set(users.map((user) => user.role))].filter(Boolean).sort() as string[]
-
-      setDepartments(uniqueDepartments)
-      setTeams(uniqueTeams)
-      setPositions(uniquePositions)
-      setCategories(uniqueCategories)
-      setWorkLocations(uniqueWorkLocations as string[])
-      setRoles(uniqueRoles)
-
-      setIsLoading(false)
-    }
-  }, [users])
-
-  // Изменим обработчики фильтров, чтобы они сразу применялись при выборе
+  // Обработчики фильтров — сразу применяются при выборе
 
   // Обработчики изменения фильтров
   const handleDepartmentChange = (departmentName: string, checked: boolean) => {

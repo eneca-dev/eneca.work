@@ -1,42 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import AdminPanel from "@/modules/users/admin/AdminPanel"
-import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
 import { usePermissionsHook as usePermissions } from "@/modules/permissions"
-import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { Loader2, ShieldX } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import * as Sentry from "@sentry/nextjs"
 
 export default function AdminPage() {
-  const [isChecking, setIsChecking] = useState(true)
-  const [isAuthorized, setIsAuthorized] = useState(false)
   const { hasPermission, isLoading: permissionsLoading, error: permissionsError } = usePermissions()
   const router = useRouter()
 
-  useEffect(() => {
-    if (permissionsLoading) {
-      // Ждем загрузки разрешений
-      return
-    }
-    
-    // Если есть ошибка загрузки разрешений - блокируем доступ
-    if (permissionsError) {
-      console.error('❌ Ошибка загрузки разрешений в AdminPage:', permissionsError)
-      Sentry.captureException(permissionsError, { tags: { module: 'users', component: 'AdminPage', action: 'permissions_load', error_type: 'unexpected' } })
-      setIsAuthorized(false)
-      setIsChecking(false)
-      return
-    }
-    
-    const canViewAdminPanel = hasPermission('users.admin_panel')
-    setIsAuthorized(canViewAdminPanel)
-    setIsChecking(false)
-  }, [permissionsLoading, permissionsError, hasPermission])
+  // Derived state — no effect chain needed
+  const isChecking = permissionsLoading
+  const isAuthorized = !permissionsLoading && !permissionsError && hasPermission('users.admin_panel')
 
+  // Log permission errors to Sentry
+  useEffect(() => {
+    if (permissionsError) {
+      Sentry.captureException(permissionsError, { tags: { module: 'users', component: 'AdminPage', action: 'permissions_load', error_type: 'unexpected' } })
+    }
+  }, [permissionsError])
+
+  // Redirect if not authorized
   useEffect(() => {
     if (!isChecking && !isAuthorized) {
       router.push("/")

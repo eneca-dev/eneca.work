@@ -19,16 +19,24 @@ export function useChat() {
 
   const userId = useUserStore(state => state.id)
   const { collapsed } = useSidebarState()
-  const supabase = createClient()
+  // Стабильная ссылка на Supabase клиент (не пересоздаётся при ре-рендерах)
+  const supabaseRef = useRef(createClient())
+
+  // Защита от двойной инициализации при race condition persist middleware
+  const initUserIdRef = useRef<string | null>(null)
 
   // Загрузка или создание conversation
   useEffect(() => {
     if (!userId) return
 
+    // Дедупликация: если уже инициализировали для этого userId — пропускаем
+    if (initUserIdRef.current === userId) return
+    initUserIdRef.current = userId
+
     const initConversation = async () => {
       try {
         // Пытаемся найти активный conversation
-        const { data: existingConversation } = await supabase
+        const { data: existingConversation } = await supabaseRef.current
           .from('chat_conversations')
           .select('*')
           .eq('user_id', userId)
@@ -37,12 +45,15 @@ export function useChat() {
           .limit(1)
           .single()
 
+        // Проверяем что userId не изменился пока шёл запрос
+        if (initUserIdRef.current !== userId) return
+
         if (existingConversation) {
           setConversationId(existingConversation.id)
           await loadMessages(existingConversation.id)
         } else {
           // Создаём новый conversation
-          const { data: newConversation } = await supabase
+          const { data: newConversation } = await supabaseRef.current
             .from('chat_conversations')
             .insert({
               user_id: userId,
@@ -61,12 +72,12 @@ export function useChat() {
     }
 
     initConversation()
-  }, [userId, supabase])
+  }, [userId])
 
   // Загрузка истории сообщений
   const loadMessages = async (convId: string) => {
     try {
-      const { data } = await supabase
+      const { data } = await supabaseRef.current
         .from('chat_messages')
         .select('*')
         .eq('conversation_id', convId)
@@ -90,7 +101,7 @@ export function useChat() {
 
     // console.log('[Realtime] Creating subscription for conversation:', conversationId)
 
-    const channel = supabase
+    const channel = supabaseRef.current
       .channel(`chat:${conversationId}`)
       .on(
         'postgres_changes',
@@ -170,7 +181,7 @@ export function useChat() {
         clearTimeout(typingTimeoutRef.current)
       }
     }
-  }, [conversationId, userId, supabase])
+  }, [conversationId, userId])
 
   const toggleChat = useCallback(() => {
     setIsOpen(prev => !prev)
@@ -255,13 +266,13 @@ export function useChat() {
 
     try {
       // Записываем в БД - это триггернёт webhook на Python агент
-      const { data, error } = await supabase
+      const { data, error } = await supabaseRef.current
         .from('chat_messages')
         .insert({
           conversation_id: conversationId,
           user_id: userId,
-          role: 'user',
-          kind: 'message',
+          role: 'user' as const,
+          kind: 'message' as const,
           content,
           is_final: true
         })
@@ -307,14 +318,14 @@ export function useChat() {
       setIsLoading(false)
       setIsTyping(false)
     }
-  }, [userId, conversationId, isLoading, supabase])
+  }, [userId, conversationId, isLoading])
 
   const clearMessages = useCallback(async () => {
     if (!userId || !conversationId) return
 
     try {
       // Удаляем все сообщения из текущего conversation
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await supabaseRef.current
         .from('chat_messages')
         .delete()
         .eq('conversation_id', conversationId)
@@ -329,12 +340,10 @@ export function useChat() {
       // Сбрасываем состояние печати
       setIsTyping(false)
       setIsLoading(false)
-
-      // console.log('[clearMessages] Messages deleted for conversation:', conversationId)
     } catch (error) {
       console.error('[clearMessages] Error:', error)
     }
-  }, [userId, conversationId, supabase])
+  }, [userId, conversationId])
 
   return {
     messages,

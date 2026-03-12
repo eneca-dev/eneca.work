@@ -29,7 +29,7 @@ export const useAutoRefresh = (
           console.error('Ошибка автообновления дашборда:', error);
         }
       }
-    }, 30000); // 30 секунд
+    }, 5 * 60 * 1000); // 5 минут (было 30 сек — слишком агрессивно)
   }, [refetchFunction]);
 
   const stopAutoRefresh = useCallback(() => {

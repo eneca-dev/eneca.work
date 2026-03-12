@@ -1,10 +1,9 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
-import { createClient } from "@/utils/supabase/client"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Edit2 } from "lucide-react"
@@ -16,27 +15,10 @@ import DepartmentHeadModal from "./DepartmentHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import { useAdminSubdivisions, useAdminDepartments, type AdminDepartment } from "../hooks/useAdminData"
 import * as Sentry from "@sentry/nextjs"
 
-// Утилитарная функция для обновления данных с задержкой
-const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: number = 300) => {
-  // Небольшая задержка для завершения транзакции
-  await new Promise(resolve => setTimeout(resolve, initialDelay))
-  await fetchFn()
-}
-
-interface Department {
-  department_id: string
-  department_name: string
-  subdivision_id: string | null
-  subdivision_name?: string | null
-  department_head_id: string | null
-  head_first_name: string | null
-  head_last_name: string | null
-  head_full_name: string | null
-  head_email: string | null
-  head_avatar_url: string | null
-}
+type Department = AdminDepartment
 
 // Пропсы для ограничения видимости данных
 type DepartmentsTabProps =
@@ -48,8 +30,6 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
   const subdivisionId = 'subdivisionId' in props ? props.subdivisionId : null
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [subdivisions, setSubdivisions] = useState<Array<{ id: string; name: string }>>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -57,98 +37,31 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   const [removeHeadModalOpen, setRemoveHeadModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
   const perms = useAdminPermissions()
+  const { subdivisions: rawSubdivisions } = useAdminSubdivisions()
+  const { departments: allDepartments, isLoading, refetch: refetchDepartments } = useAdminDepartments()
+
+  // Список подразделений для dropdown-а (id + name)
+  const subdivisions = useMemo(
+    () => rawSubdivisions.map(s => ({ id: s.subdivision_id, name: s.subdivision_name })),
+    [rawSubdivisions]
+  )
+
+  // Применяем scope-фильтрацию поверх кешированных данных
+  const departments = useMemo(() => {
+    if (scope === 'department') {
+      return departmentId ? allDepartments.filter(d => d.department_id === departmentId) : []
+    }
+    if (scope === 'subdivision') {
+      return subdivisionId ? allDepartments.filter(d => d.subdivision_id === subdivisionId) : []
+    }
+    return allDepartments
+  }, [allDepartments, scope, departmentId, subdivisionId])
 
   // Определяем, должны ли быть видны элементы управления
   // subdivision_head может управлять отделами своего подразделения
   const showManagementControls = (perms.canManageDepartments && scope !== 'department') || (perms.canEditSubdivision && scope === 'subdivision')
-
-  // Загрузка подразделений для админа
-  const fetchSubdivisions = useCallback(async () => {
-    if (scope !== 'all') return // Загружаем только для админа
-
-    try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('view_subdivisions_with_heads')
-        .select('subdivision_id, subdivision_name')
-        .order('subdivision_name')
-
-      if (error) throw error
-
-      setSubdivisions(data?.map(s => ({ id: s.subdivision_id, name: s.subdivision_name })) || [])
-    } catch (error) {
-      console.error("Ошибка загрузки подразделений:", error)
-      Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'fetch_subdivisions', error_type: 'unexpected' } })
-    }
-  }, [scope])
-
-  // Загрузка отделов из представления
-  const fetchDepartments = useCallback(async () => {
-    return await Sentry.startSpan({
-      name: 'Users/DepartmentsTab fetchDepartments',
-      op: 'ui.load',
-      attributes: { scope, departmentId: departmentId || 'all' }
-    }, async () => {
-      try {
-        setIsLoading(true)
-        const supabase = createClient()
-        
-        // Принудительно очищаем кэш для получения свежих данных
-        const { data, error } = await supabase
-          .from("view_departments_with_heads")
-          .select("*")
-          .order("department_name")
-          .abortSignal(AbortSignal.timeout(10000)) // Таймаут 10 секунд
-        
-        if (error) {
-          console.error("Ошибка при загрузке отделов:", error)
-          Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'load_departments', error_type: 'db_error' } })
-          toast.error("Не удалось загрузить отделы")
-          return
-        }
-        
-        console.log("📊 Данные из view_departments_with_heads:", data)
-        console.log("📊 Количество записей:", data?.length)
-        
-        // Дедупликация данных на уровне состояния
-        const uniqueData = (data || []).reduce((acc: Department[], dept: Department) => {
-          if (!acc.find((d: Department) => d.department_id === dept.department_id)) {
-            acc.push(dept)
-          }
-          return acc
-        }, [] as Department[])
-        
-        console.log("📊 Уникальные отделы:", uniqueData)
-        // Применяем скоуп
-        let scoped = uniqueData
-        if (scope === 'department') {
-          scoped = departmentId
-            ? uniqueData.filter((d: Department) => d.department_id === departmentId)
-            : (() => {
-                console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
-                return []
-              })()
-        } else if (scope === 'subdivision') {
-          scoped = subdivisionId
-            ? uniqueData.filter((d: any) => d.subdivision_id === subdivisionId)
-            : (() => {
-                console.warn("⚠️ Предупреждение: subdivisionId отсутствует при scope='subdivision', возвращаем пустой массив")
-                return []
-              })()
-        }
-        setDepartments(scoped)
-      } catch (error) {
-        console.error("Ошибка при загрузке отделов:", error)
-        Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'fetch_departments', error_type: 'unexpected' } })
-        toast.error("Произошла ошибка при загрузке данных")
-      } finally {
-        setIsLoading(false)
-      }
-    })
-  }, [scope, departmentId, subdivisionId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -157,42 +70,18 @@ function DepartmentsTab(props: DepartmentsTabProps) {
       level: 'info',
       message: 'DepartmentsTab: forceRefresh clicked'
     })
-    console.log("🔄 Принудительное обновление данных...")
-    setIsLoading(true)
     try {
-      await Sentry.startSpan({ name: 'Users/DepartmentsTab forceRefresh', op: 'ui.action' }, async () => {
-        await fetchDepartments()
-      })
+      await refetchDepartments()
       toast.success("Данные обновлены")
     } catch (error) {
-      console.error("Ошибка при обновлении данных:", error)
       Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'force_refresh', error_type: 'unexpected' } })
       toast.error("Не удалось обновить данные")
-    } finally {
-      setIsLoading(false)
     }
-  }, [fetchDepartments])
+  }, [refetchDepartments])
 
-  useEffect(() => {
-    fetchSubdivisions()
-    fetchDepartments()
-  }, [fetchSubdivisions, fetchDepartments])
-
-  // Удалены автообновления (интервал, фокус окна, ввод в поиск).
-  // Данные обновляются при монтировании и явных действиях пользователя.
-
-  // Фильтрация отделов по поиску с дедупликацией
+  // Фильтрация отделов по поиску (дедупликация уже в хуке)
   const filteredDepartments = useMemo(() => {
-    // Сначала дедуплицируем данные по department_id
-    const uniqueDepartments = departments.reduce((acc: Department[], dept: Department) => {
-      if (!acc.find((d: Department) => d.department_id === dept.department_id)) {
-        acc.push(dept)
-      }
-      return acc
-    }, [] as Department[])
-    
-    // Затем фильтруем по поиску
-    return uniqueDepartments.filter(dept =>
+    return departments.filter(dept =>
       dept.department_name.toLowerCase().includes(search.toLowerCase()) ||
       (dept.head_full_name && dept.head_full_name.toLowerCase().includes(search.toLowerCase()))
     )
@@ -223,7 +112,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
     if (deptsInSubdivision === 1 && department.subdivision_id) {
       const subdivisionName = subdivisions.find(s => s.id === department.subdivision_id)?.name || 'подразделении'
       toast.error(
-        `Невозможно удалить отдел "${department.name}". Это последний отдел в подразделении "${subdivisionName}". Удалите всё подразделение, если необходимо.`,
+        `Невозможно удалить отдел "${department.department_name}". Это последний отдел в подразделении "${subdivisionName}". Удалите всё подразделение, если необходимо.`,
         { duration: 5000 }
       )
       return
@@ -556,7 +445,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         existingNames={departments.map(d => d.department_name)}
         entityType="department"
         onSuccess={async () => {
-          await refreshWithDelay(fetchDepartments, 500)
+          await refetchDepartments()
 
           // Показываем уведомление об успешном создании/редактировании
           if (modalMode === "create") {
@@ -590,7 +479,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
             }
           }}
           onSuccess={async () => {
-            await refreshWithDelay(fetchDepartments, 300)
+            await refetchDepartments()
 
             // Показываем уведомление об успешном удалении
             toast.success("Отдел успешно удален и данные обновлены")
@@ -605,7 +494,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
           onOpenChange={setHeadModalOpen}
           department={selectedDepartment}
           onSuccess={async () => {
-            await refreshWithDelay(fetchDepartments, 300)
+            await refetchDepartments()
 
             // Показываем уведомление об успешном назначении руководителя
             toast.success("Руководитель отдела успешно назначен и данные обновлены")
@@ -622,7 +511,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
           entityName={selectedDepartment.department_name}
           entityId={selectedDepartment.department_id}
           onSuccess={async () => {
-            await refreshWithDelay(fetchDepartments, 300)
+            await refetchDepartments()
 
             // Показываем уведомление об успешном удалении руководителя
             toast.success("Руководитель отдела успешно удален и данные обновлены")

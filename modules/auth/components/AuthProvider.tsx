@@ -40,6 +40,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const currentUserId = useRef<string | null>(null)
   const isLoadingProfile = useRef(false)
+  // Флаг: signOut() уже вызвал clearAllState(), пропускаем дублирующий SIGNED_OUT event
+  const isSigningOut = useRef(false)
 
   /**
    * Загрузка профиля пользователя из БД
@@ -122,6 +124,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     currentUserId.current = null
+    isLoadingProfile.current = false
   }, [])
 
   /**
@@ -130,6 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = useCallback(async () => {
     try {
       setIsLoading(true)
+      isSigningOut.current = true
 
       // Сначала очищаем состояние — пользователь сразу видит эффект
       clearAllState()
@@ -143,6 +147,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error("Ошибка при выходе:", error)
       Sentry.captureException(error)
     } finally {
+      isSigningOut.current = false
       setIsLoading(false)
     }
   }, [supabase, clearAllState, router])
@@ -188,11 +193,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         break
 
       case "SIGNED_OUT":
-        clearAllState()
-        setIsLoading(false)
-        if (!window.location.pathname.startsWith("/auth")) {
-          router.push("/auth/login")
+        // Если signOut() уже вызвал clearAllState() — пропускаем дубль,
+        // чтобы не затереть состояние нового SIGNED_IN при быстром re-login
+        if (!isSigningOut.current) {
+          clearAllState()
+          if (window.location.pathname.startsWith("/dashboard")) {
+            router.push("/auth/login")
+          }
         }
+        setIsLoading(false)
         break
 
       case "TOKEN_REFRESHED":

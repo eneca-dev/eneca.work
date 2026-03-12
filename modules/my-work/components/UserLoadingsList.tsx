@@ -4,7 +4,7 @@ import React from 'react'
 import { Calendar, TrendingUp, Layers, CheckSquare, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useProjectsStore } from '@/modules/projects/store'
-import type { UserLoading, UserTask, DecompositionItem } from '../types'
+import type { UserLoading, DecompositionItem } from '../types'
 
 // Utility функция для обрезания текста
 const truncateText = (text: string, maxLength: number): string => {
@@ -21,9 +21,6 @@ interface UserLoadingsListProps {
   decompositionItems?: DecompositionItem[]
   isDecompositionLoading?: boolean
   decompositionError?: string | null
-  tasks?: UserTask[]
-  isTasksLoading?: boolean
-  tasksError?: string | null
   onLoadingHover?: (loadingId: string | null) => void
   highlightedLoadingId?: string | null
   onOpenSection?: (sectionId: string) => void
@@ -37,9 +34,6 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
   decompositionItems = [],
   isDecompositionLoading = false,
   decompositionError = null,
-  tasks = [],
-  isTasksLoading = false,
-  tasksError = null,
   onLoadingHover,
   highlightedLoadingId,
   onOpenSection
@@ -204,41 +198,9 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                 )}
               </div>
 
-              {/* Задания */}
-              <div>
-                <div className="flex items-center gap-2 mb-3 animate-in fade-in-50 duration-200 delay-200">
-                  <CheckSquare className="h-4 w-4 text-primary" />
-                  <h4 className="text-sm font-medium text-primary">Задания</h4>
-                </div>
-                
-                {isTasksLoading ? (
-                  <div className="text-sm text-muted-foreground">Загрузка заданий...</div>
-                ) : tasksError ? (
-                  <div className="text-sm text-red-400">Ошибка: {tasksError}</div>
-                ) : tasks.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Нет заданий для данного раздела</div>
-                ) : (
-                  <div className="space-y-2">
-                    {tasks.map((task) => (
-                      <div key={task.task_id} className="flex items-center justify-between p-3 bg-muted rounded-lg backdrop-blur-sm border border-border">
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-foreground">{task.task_name}</div>
-                          <div className="text-xs text-muted-foreground">от {task.section_name}</div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white">
-                            {task.task_status === 'active' || task.task_status === 'in_progress' ? 'В работе' : 
-                             task.task_status === 'pending' ? 'Ожидание' : task.task_status}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {task.task_end_date ? formatDate(task.task_end_date) : '—'}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Задания временно убраны — запрос к assignments с JOIN на view_section_hierarchy
+                 возвращал 400 Bad Request (PostgREST не поддерживает JOIN с view через !hint).
+                 Будет восстановлено когда таблица assignments получит FK на sections. */}
             </div>
           )}
         </div>

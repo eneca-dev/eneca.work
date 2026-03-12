@@ -1,9 +1,8 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
-import { createClient } from "@/utils/supabase/client"
 import { Card, CardTitle, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -16,27 +15,12 @@ import SubdivisionHeadModal from "./SubdivisionHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import { useAdminSubdivisions, type AdminSubdivision } from "../hooks/useAdminData"
 import * as Sentry from "@sentry/nextjs"
 
-// Утилитарная функция для обновления данных с задержкой
-const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: number = 300) => {
-  await new Promise(resolve => setTimeout(resolve, initialDelay))
-  await fetchFn()
-}
-
-interface Subdivision {
-  subdivision_id: string
-  subdivision_name: string
-  subdivision_head_id: string | null
-  head_name: string | null
-  head_email: string | null
-  head_avatar_url: string | null
-  departments_count: number
-  employees_count: number
-}
+type Subdivision = AdminSubdivision
 
 function SubdivisionsTab() {
-  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -44,53 +28,13 @@ function SubdivisionsTab() {
   const [removeHeadModalOpen, setRemoveHeadModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedSubdivision, setSelectedSubdivision] = useState<Subdivision | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
   const perms = useAdminPermissions()
+  const { subdivisions, isLoading, refetch } = useAdminSubdivisions()
 
   // Только admin может управлять подразделениями (создавать, удалять, изменять, назначать руководителей)
   // subdivision_head может только просматривать
   const showManagementControls = perms.isAdmin
-
-  // Загрузка подразделений из представления
-  const fetchSubdivisions = useCallback(async () => {
-    return await Sentry.startSpan({
-      name: 'Users/SubdivisionsTab fetchSubdivisions',
-      op: 'ui.load'
-    }, async () => {
-      try {
-        setIsLoading(true)
-        const supabase = createClient()
-
-        const { data, error } = await supabase
-          .from("view_subdivisions_with_heads")
-          .select("*")
-          .order("subdivision_name")
-          .abortSignal(AbortSignal.timeout(10000))
-
-        if (error) {
-          console.error("Ошибка при загрузке подразделений:", error)
-          Sentry.captureException(error, {
-            tags: { module: 'users', component: 'SubdivisionsTab', action: 'load_subdivisions', error_type: 'db_error' }
-          })
-          toast.error("Не удалось загрузить подразделения")
-          return
-        }
-
-        console.log("📊 Данные из view_subdivisions_with_heads:", data)
-
-        setSubdivisions(data || [])
-      } catch (error) {
-        console.error("Ошибка при загрузке подразделений:", error)
-        Sentry.captureException(error, {
-          tags: { module: 'users', component: 'SubdivisionsTab', action: 'fetch_subdivisions', error_type: 'unexpected' }
-        })
-        toast.error("Произошла ошибка при загрузке данных")
-      } finally {
-        setIsLoading(false)
-      }
-    })
-  }, [])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -99,27 +43,16 @@ function SubdivisionsTab() {
       level: 'info',
       message: 'SubdivisionsTab: forceRefresh clicked'
     })
-    console.log("🔄 Принудительное обновление данных...")
-    setIsLoading(true)
     try {
-      await Sentry.startSpan({ name: 'Users/SubdivisionsTab forceRefresh', op: 'ui.action' }, async () => {
-        await fetchSubdivisions()
-      })
+      await refetch()
       toast.success("Данные обновлены")
     } catch (error) {
-      console.error("Ошибка при обновлении данных:", error)
       Sentry.captureException(error, {
         tags: { module: 'users', component: 'SubdivisionsTab', action: 'force_refresh', error_type: 'unexpected' }
       })
       toast.error("Не удалось обновить данные")
-    } finally {
-      setIsLoading(false)
     }
-  }, [fetchSubdivisions])
-
-  useEffect(() => {
-    fetchSubdivisions()
-  }, [fetchSubdivisions])
+  }, [refetch])
 
   // Фильтрация подразделений по поиску
   const filteredSubdivisions = useMemo(() => {
@@ -472,7 +405,7 @@ function SubdivisionsTab() {
         existingNames={subdivisions.map(s => s.subdivision_name)}
         entityType="subdivision"
         onSuccess={async () => {
-          await refreshWithDelay(fetchSubdivisions, 500)
+          await refetch()
 
           if (modalMode === "create") {
             toast.success("Подразделение успешно создано и данные обновлены")
@@ -509,7 +442,7 @@ function SubdivisionsTab() {
             }
           }}
           onSuccess={async () => {
-            await refreshWithDelay(fetchSubdivisions, 300)
+            await refetch()
             toast.success("Подразделение успешно удалено и данные обновлены")
           }}
         />
@@ -522,7 +455,7 @@ function SubdivisionsTab() {
           onOpenChange={setHeadModalOpen}
           subdivision={selectedSubdivision}
           onSuccess={async () => {
-            await refreshWithDelay(fetchSubdivisions, 300)
+            await refetch()
             toast.success("Руководитель подразделения успешно назначен и данные обновлены")
           }}
         />
@@ -537,7 +470,7 @@ function SubdivisionsTab() {
           entityName={selectedSubdivision.subdivision_name}
           entityId={selectedSubdivision.subdivision_id}
           onSuccess={async () => {
-            await refreshWithDelay(fetchSubdivisions, 300)
+            await refetch()
             toast.success("Руководитель подразделения успешно удален и данные обновлены")
           }}
         />

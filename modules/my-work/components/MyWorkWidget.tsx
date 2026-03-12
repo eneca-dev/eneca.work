@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Loader2, Calendar } from 'lucide-react'
 import { UserLoadingsList } from './UserLoadingsList'
 import { ResponsibilitiesBlock } from './ResponsibilitiesBlock'
@@ -8,17 +8,16 @@ import { WorkTasksChart } from './WorkTasksChart'
 import { DeadlinesBlock } from './DeadlinesBlock'
 import { useMyWorkData } from '../hooks/useMyWorkData'
 import { useDecompositionData } from '../hooks/useDecompositionData'
-import { useTasksData } from '../hooks/useTasksData'
 import { supabase } from '@/lib/supabase-client'
 import { useUserStore } from '@/stores/useUserStore'
 import type { UserLoading } from '../types'
 import { SectionPanel } from '@/components/modals'
 
 export const MyWorkWidget: React.FC = () => {
-  const userStore = useUserStore()
+  // rerender-derived-state: примитивный селектор — ре-рендер только при смене userId
+  const userId = useUserStore(state => state.id)
   const { data, isLoading, error } = useMyWorkData()
   const { decompositionItems, isLoading: isDecompositionLoading, error: decompositionError, fetchDecomposition } = useDecompositionData()
-  const { tasks, isLoading: isTasksLoading, error: tasksError, fetchTasksForSection } = useTasksData()
   const [selectedLoading, setSelectedLoading] = useState<UserLoading | null>(null)
   const [highlightedLoadingId, setHighlightedLoadingId] = useState<string | null>(null)
   const [loadingStatus, setLoadingStatus] = useState<'active' | 'archived'>('active')
@@ -62,36 +61,42 @@ export const MyWorkWidget: React.FC = () => {
       // Иначе открываем новую загрузку
       setSelectedLoading(loading)
       fetchDecomposition(loading.section_id)
-      fetchTasksForSection(loading.section_id)
     }
   }
 
-  const fetchLoadingsForDisplay = async (status: 'active' | 'archived') => {
-    if (!data) return
-    
+  // Загрузка архивных загрузок — единственный случай, когда нужен запрос к БД.
+  // Для active используем data.loadings из useMyWorkData (уже загружены).
+  const fetchArchivedLoadings = useCallback(async () => {
+    if (!userId) return
+
     try {
       const { data: loadingsData, error } = await supabase
         .from('view_sections_with_loadings_v2')
         .select('*')
-        .eq('loading_responsible', userStore.id)
-        .eq('loading_status', status)
+        .eq('loading_responsible', userId)
+        .eq('loading_status', 'archived')
         .not('loading_id', 'is', null)
 
       if (error) {
-        console.error('Ошибка загрузки загрузок для отображения:', error)
+        console.error('Ошибка загрузки архивных загрузок:', error)
         return
       }
 
       setDisplayedLoadings(loadingsData || [])
     } catch (error) {
-      console.error('Ошибка в fetchLoadingsForDisplay:', error)
+      console.error('Ошибка в fetchArchivedLoadings:', error)
     }
-  }
+  }, [userId])
 
   const handleStatusChange = (status: 'active' | 'archived') => {
     setLoadingStatus(status)
-    setSelectedLoading(null) // Сбрасываем выбранную загрузку при смене статуса
-    fetchLoadingsForDisplay(status)
+    setSelectedLoading(null)
+    if (status === 'active') {
+      // Активные загрузки уже есть в data.loadings — не нужен лишний запрос к БД
+      setDisplayedLoadings(data.loadings)
+    } else {
+      fetchArchivedLoadings()
+    }
   }
 
   const openSectionPanel = (sectionId: string) => {
@@ -99,19 +104,13 @@ export const MyWorkWidget: React.FC = () => {
     setIsSectionPanelOpen(true)
   }
 
-  // Эффект для инициализации отображаемых загрузок
+  // Синхронизация displayedLoadings с data.loadings при активном статусе
+  // rerender-derived-state-no-effect: обновляем только когда data.loadings меняется
   useEffect(() => {
-    if (data.loadings.length > 0 && loadingStatus === 'active') {
+    if (loadingStatus === 'active') {
       setDisplayedLoadings(data.loadings)
     }
-  }, [data.loadings])
-
-  // Эффект для загрузки архивных загрузок
-  useEffect(() => {
-    if (loadingStatus === 'archived') {
-      fetchLoadingsForDisplay('archived')
-    }
-  }, [loadingStatus])
+  }, [data.loadings, loadingStatus])
 
   // Эффект для пересчета высоты при изменениях
   useEffect(() => {
@@ -252,9 +251,6 @@ export const MyWorkWidget: React.FC = () => {
                   decompositionItems={decompositionItems}
                   isDecompositionLoading={isDecompositionLoading}
                   decompositionError={decompositionError}
-                  tasks={tasks}
-                  isTasksLoading={isTasksLoading}
-                  tasksError={tasksError}
                   onLoadingHover={setHighlightedLoadingId}
                   highlightedLoadingId={highlightedLoadingId || undefined}
                   onOpenSection={openSectionPanel}

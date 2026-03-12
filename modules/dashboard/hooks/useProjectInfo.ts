@@ -61,10 +61,9 @@ export const useProjectInfo = (projectId: string) => {
     queryKey: ['dashboard', 'project-info', projectId],
     queryFn: () => fetchProjectInfo(projectId),
     enabled: !!projectId,
-    staleTime: 5 * 60 * 1000, // 5 минут - данные редко меняются
-    refetchInterval: 5 * 60 * 1000, // Обновляем каждые 5 минут
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    staleTime: 10 * 60 * 1000, // 10 минут — информация о проекте редко меняется
+    // refetchInterval убран — polling каждые 5 мин создавал лишнюю нагрузку.
+    // Данные обновятся при навигации или инвалидации через Realtime.
     retry: (failureCount, error) => {
       if ((error as Error)?.name === 'NotFoundError' || (error as Error)?.message?.includes('Проект не найден')) {
         return false;

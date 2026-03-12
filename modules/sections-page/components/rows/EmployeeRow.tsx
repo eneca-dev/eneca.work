@@ -440,6 +440,9 @@ export function EmployeeRow({
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
     (loadingId: string, startDate: string, finishDate: string) => {
+      // Блокируем resize для оптимистичных записей с temp ID (ещё не сохранены в БД)
+      if (loadingId.startsWith('temp-')) return
+
       updateLoadingDates.mutate({
         loadingId,
         employeeId: employee.employeeId,

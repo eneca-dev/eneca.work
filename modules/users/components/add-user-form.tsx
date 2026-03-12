@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getDepartments, getTeams, getPositions, getCategories, getAvailableRoles, getSubdivisions } from "@/services/org-data-service"
 import { Country, City } from "country-state-city"
 import { createUserViaAPI } from "@/services/user-api"
-import type { Department, Team, Position, Category, Subdivision } from "@/types/db"
+import {
+  useAllReferenceData,
+} from "@/modules/cache"
 import { toast } from "sonner"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { UserPlus, AlertCircle } from "lucide-react"
@@ -56,94 +57,41 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     city: "",
   })
 
-  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([])
-  const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
-  const [positions, setPositions] = useState<Position[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
+  const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
+
+  // Справочные данные — 1 batch-запрос вместо 6 отдельных
+  const { subdivisions, departments, teams, positions, categories, roles: allRoles, isLoading: isRefLoading } = useAllReferenceData()
+  const isSubdivisionsLoading = isRefLoading
+  const isRolesLoading = isRefLoading
+
+  // Фильтруем роли: исключаем admin если нет разрешения
+  const roles = useMemo(() => {
+    if (canAddAdminRole) return allRoles
+    return allRoles.filter(role => role.name !== 'admin')
+  }, [allRoles, canAddAdminRole])
+
   const [isLoading, setIsLoading] = useState(false)
-  const [isDataLoaded, setIsDataLoaded] = useState(false)
-  
+  const isDataLoaded = !isSubdivisionsLoading && !isRolesLoading
+
   // Состояния для стран и городов
-  const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
-  const [cities, setCities] = useState<{ name: string }[]>([])
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
   const [countrySearch, setCountrySearch] = useState("")
   const [citySearch, setCitySearch] = useState("")
-  const [filteredCountries, setFilteredCountries] = useState<{ code: string; name: string }[]>([])
-  const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
   const [countrySelectOpen, setCountrySelectOpen] = useState(false)
   const [citySelectOpen, setCitySelectOpen] = useState(false)
 
-  const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
+  // Derived state: страны и города (country-state-city — синхронная in-memory библиотека)
+  const countries = useMemo(() => Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name })), [])
 
-  // Загрузка справочных данных
-  useEffect(() => {
-    async function loadReferenceData() {
-      try {
-        setIsLoading(true)
-        const [subs, depts, allTeams, pos, cats] = await Sentry.startSpan({ name: 'Users/AddUserForm loadReferenceData', op: 'ui.load' }, async () => Promise.all([
-          getSubdivisions(),
-          getDepartments(),
-          getTeams(),
-          getPositions(),
-          getCategories(),
-        ]))
+  const filteredCountries = useMemo(() => {
+    if (!countrySearch.trim()) return countries
+    const lc = countrySearch.toLowerCase()
+    return countries.filter(c => c.name.toLowerCase().includes(lc))
+  }, [countries, countrySearch])
 
-        setSubdivisions(subs)
-        setDepartments(depts)
-        setFilteredDepartments(depts)
-        setTeams(allTeams)
-        setPositions(pos)
-        setCategories(cats)
-
-        // Загружаем роли
-        const availableRoles = await Sentry.startSpan({ name: 'Users/AddUserForm loadAvailableRoles', op: 'ui.load', attributes: { canAddAdminRole } }, async () => getAvailableRoles(canAddAdminRole))
-        setRoles(availableRoles)
-
-        setIsDataLoaded(true)
-      } catch (error) {
-        console.error("Ошибка загрузки справочных данных:", error)
-        toast.error("Не удалось загрузить справочные данные")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadReferenceData()
-  }, [canAddAdminRole])
-
-  // Загрузка стран
-  useEffect(() => {
-    const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
-    setCountries(all)
-    setFilteredCountries(all)
-  }, [])
-
-  // Фильтрация стран по поиску
-  useEffect(() => {
-    if (!countrySearch.trim()) {
-      setFilteredCountries(countries)
-    } else {
-      const filtered = countries.filter(country =>
-        country.name.toLowerCase().includes(countrySearch.toLowerCase())
-      )
-      setFilteredCountries(filtered)
-    }
-  }, [countrySearch, countries])
-
-  // Загрузка городов при выборе страны
-  useEffect(() => {
-    if (!selectedCountryCode) {
-      setCities([])
-      setFilteredCities([])
-      return
-    }
+  const cities = useMemo(() => {
+    if (!selectedCountryCode) return []
     const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
-    // Дедупликация по названию города
     const seen = new Set<string>()
     const unique: { name: string }[] = []
     for (const c of loaded) {
@@ -152,57 +100,31 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
         unique.push({ name: c.name })
       }
     }
-    setCities(unique)
-    setFilteredCities(unique)
+    return unique
   }, [selectedCountryCode])
 
-  // Фильтрация городов по поиску
-  useEffect(() => {
-    if (!citySearch.trim()) {
-      setFilteredCities(cities)
-    } else {
-      const filtered = cities.filter(city =>
-        city.name.toLowerCase().includes(citySearch.toLowerCase())
-      )
-      setFilteredCities(filtered)
-    }
-  }, [citySearch, cities])
+  const filteredCities = useMemo(() => {
+    if (!citySearch.trim()) return cities
+    const lc = citySearch.toLowerCase()
+    return cities.filter(c => c.name.toLowerCase().includes(lc))
+  }, [cities, citySearch])
 
-  // Фильтрация отделов по выбранному подразделению
-  useEffect(() => {
+  // Фильтрация отделов по выбранному подразделению (derived state)
+  const filteredDepartments = useMemo(() => {
     if (formData.subdivision && formData.subdivision !== "") {
       const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
-      const filtered = departments.filter((d) => d.subdivisionId === subdivisionId)
-      setFilteredDepartments(filtered)
-
-      // Если выбранный отдел не принадлежит выбранному подразделению, сбрасываем его и команду
-      if (formData.department && formData.department !== "") {
-        const departmentExists = filtered.some((d) => d.name === formData.department)
-        if (!departmentExists) {
-          setFormData((prev) => ({ ...prev, department: "", team: "" }))
-        }
-      }
-    } else {
-      setFilteredDepartments(departments)
+      return departments.filter((d) => d.subdivisionId === subdivisionId)
     }
+    return departments
   }, [formData.subdivision, subdivisions, departments])
 
-  // Фильтрация команд по выбранному отделу
-  useEffect(() => {
+  // Фильтрация команд по выбранному отделу (derived state)
+  const filteredTeams = useMemo(() => {
     if (formData.department) {
       const departmentId = filteredDepartments.find((d) => d.name === formData.department)?.id
-      setFilteredTeams(teams.filter((t) => t.departmentId === departmentId))
-
-      // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
-      if (formData.team) {
-        const teamExists = filteredTeams.some((t) => t.id === formData.team)
-        if (!teamExists) {
-          setFormData((prev) => ({ ...prev, team: "" }))
-        }
-      }
-    } else {
-      setFilteredTeams([])
+      return teams.filter((t) => t.departmentId === departmentId)
     }
+    return []
   }, [formData.department, filteredDepartments, teams])
 
   const handleChange = (field: string, value: string) => {
@@ -275,8 +197,6 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     setIsLoading(true)
     
     try {
-      console.log("Создание пользователя с данными:", formData)
-      
       // Подготавливаем данные для создания пользователя
       const userData = {
         email: formData.email,
@@ -307,8 +227,10 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
         onUserAdded()
       }
     } catch (error) {
-      console.error("Ошибка при создании пользователя:", error)
-      
+      Sentry.captureException(error, {
+        tags: { module: 'users', component: 'AddUserForm', action: 'create_user' },
+      })
+
       let errorMessage = "Неизвестная ошибка"
       if (error instanceof Error) {
         if (error.message.includes("уже существует")) {

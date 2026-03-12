@@ -24,6 +24,17 @@ import { DateRangePicker } from './DateRangePicker'
 import { DecompositionStageSelector } from './DecompositionStageSelector'
 import type { LoadingFormData, BreadcrumbItem } from '../../hooks/useLoadingModal'
 
+// Маппинг типа элемента → иконка (hoisted: чистая функция, не нужно пересоздавать на каждом рендере)
+const BREADCRUMB_ICON_MAP = {
+  project: Folder,
+  object: Box,
+  section: CircleDashed,
+} as const
+
+function getBreadcrumbIcon(type: 'project' | 'object' | 'section') {
+  return BREADCRUMB_ICON_MAP[type] ?? Folder
+}
+
 function formatLocalDate(date: Date | null): string {
   if (!date) return ''
   const year = date.getFullYear()
@@ -64,20 +75,6 @@ export function LoadingForm({
   onChangeStage,
   isUpdating = false,
 }: LoadingFormProps) {
-  // Функция получения иконки по типу элемента
-  const getIcon = (type: 'project' | 'object' | 'section') => {
-    switch (type) {
-      case 'project':
-        return Folder
-      case 'object':
-        return Box
-      case 'section':
-        return CircleDashed
-      default:
-        return Folder
-    }
-  }
-
   // Извлекаем sectionId из breadcrumbs для загрузки этапов декомпозиции
   const sectionId = selectedBreadcrumbs?.find(b => b.type === 'section')?.id ?? null
 
@@ -101,7 +98,7 @@ export function LoadingForm({
                 {selectedBreadcrumbs
                   .filter(item => item.type !== 'decomposition_stage')
                   .map((item, index, filteredArray) => {
-                    const Icon = getIcon(item.type as 'project' | 'object' | 'section')
+                    const Icon = getBreadcrumbIcon(item.type as 'project' | 'object' | 'section')
                     return (
                       <div key={`${item.id}-${index}`} className="flex items-center gap-1">
                         <Icon className="h-3 w-3 shrink-0 text-foreground/60" />
