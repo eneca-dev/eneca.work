@@ -27,7 +27,7 @@ export default function AdminPage() {
   // Redirect if not authorized
   useEffect(() => {
     if (!isChecking && !isAuthorized) {
-      router.push("/dashboard")
+      router.push("/")
     }
   }, [isChecking, isAuthorized, router])
 
@@ -63,7 +63,7 @@ export default function AdminPage() {
             </div>
             <Button 
               variant="outline" 
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/")}
               className="mt-4"
             >
               Вернуться к панели управления

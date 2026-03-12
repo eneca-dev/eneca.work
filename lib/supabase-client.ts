@@ -182,11 +182,11 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | Stru
   }
 }
 
-// Обновляем функцию fetchLoadings для использования представления view_sections_with_loadings
+// Обновляем функцию fetchLoadings для использования представления view_sections_with_loadings_v2
 export async function fetchLoadings(sectionId: string, checkOnly = false): Promise<LoadingData[] | StructuredError> {
   try {
     let query = supabase
-      .from("view_sections_with_loadings")
+      .from("view_sections_with_loadings_v2")
       .select(`
         loading_id,
         loading_responsible,
@@ -275,7 +275,7 @@ export async function fetchSectionsWithLoadings(
       subdivisionId
     })
 
-    let query = supabase.from("view_sections_with_loadings").select("*")
+    let query = supabase.from("view_sections_with_loadings_v2").select("*")
 
     // Добавляем фильтр по проекту, если он указан
     if (projectId) {
@@ -378,7 +378,7 @@ export async function fetchSectionsWithLoadings(
     const { data, error } = await query
 
     if (error) {
-      console.error("Ошибка при загрузке данных из view_sections_with_loadings:", error)
+      console.error("Ошибка при загрузке данных из view_sections_with_loadings_v2:", error)
       return {
         success: false,
         error: "Не удалось загрузить данные разделов с загрузками",
@@ -783,7 +783,7 @@ export async function updateLoading(
 
     // После успешного обновления получаем актуальные данные о загрузке с информацией о проекте и разделе
     const { data: loadingData, error: fetchError } = await supabase
-      .from("view_sections_with_loadings")
+      .from("view_sections_with_loadings_v2")
       .select(`
         loading_id,
         section_id,
@@ -1218,7 +1218,7 @@ export async function fetchProjectObjects(
         hint: viewError.hint || 'Нет подсказки',
         originalError: JSON.stringify(viewError, null, 2)
       }
-      
+
       console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
       return {
         success: false,

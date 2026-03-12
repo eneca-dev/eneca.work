@@ -246,7 +246,7 @@ export async function fetchProjectHierarchy() {
       try {
         span.setAttribute("table", "view_section_hierarchy")
         span.setAttribute("operation", "fetch_hierarchy")
-        
+
         const { data, error } = await supabase
           .from('view_section_hierarchy')
           .select('*')

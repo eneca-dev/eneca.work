@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 
 export default function Page() {
   // Redirect to dashboard when trying to access reports page
-  redirect('/dashboard')
+  redirect('/')
 
   // return <ReportsPage />
 }
