@@ -4,6 +4,13 @@ import { NextResponse, type NextRequest } from "next/server"
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Редирект /dashboard* → / (route group (dashboard) не создаёт сегмент /dashboard)
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
   // Публичные роуты, которые не требуют авторизации
   const publicRoutes = [
     '/auth/login',
