@@ -65,11 +65,15 @@ export function resolveFilterScope(
   }
 
   // filters.scope.department
-  if (
-    permissions.includes('filters.scope.department') &&
-    context.headDepartmentId
-  ) {
-    departmentIds.add(context.headDepartmentId)
+  if (permissions.includes('filters.scope.department')) {
+    // Если назначен руководителем — используем его отдел
+    if (context.headDepartmentId) {
+      departmentIds.add(context.headDepartmentId)
+    }
+    // Fallback: если не назначен, но имеет permission — используем собственный отдел
+    else if (context.ownDepartmentId) {
+      departmentIds.add(context.ownDepartmentId)
+    }
   }
 
   // filters.scope.team
