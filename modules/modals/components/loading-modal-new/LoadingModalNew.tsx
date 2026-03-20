@@ -12,7 +12,7 @@
  * - EDIT: редактирование существующей загрузки
  */
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2, Copy } from 'lucide-react'
 import {
   Dialog,
@@ -22,9 +22,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLoadingModal, useLoadingMutations, useBreadcrumbs } from '../../hooks'
 import { openLoadingModalNewCreate, closeModal } from '../../stores/modal-store'
-import { useUsers } from '@/modules/cache'
+import { useUsers, queryKeys } from '@/modules/cache'
+import { createLoadingBatch } from '../../actions/loadings'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
 import { DeleteWarningDialog } from './DeleteWarningDialog'
@@ -133,6 +135,8 @@ export function LoadingModalNew({
     ? editData.projectId
     : loadedProjectId
 
+  const queryClient = useQueryClient()
+
   // Хук для мутаций
   const {
     create: createLoading,
@@ -171,6 +175,7 @@ export function LoadingModalNew({
       resetForm()
       setIsFormVisible(mode === 'edit')
       setHasAutoSelected(false)
+      setBatchProgress(null)
     }
   }, [open, resetForm, mode])
 
@@ -253,8 +258,11 @@ export function LoadingModalNew({
   // Текущие breadcrumbs для автораскрытия
   const currentBreadcrumbs = selectedBreadcrumbs || effectiveBreadcrumbs
 
+  // Прогресс batch-создания
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
+
   // Обработчик сохранения
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     // Валидация
     if (!validateForm()) {
       return
@@ -269,16 +277,48 @@ export function LoadingModalNew({
     const stageId = formData.decompositionStageId || selectedSectionId
 
     if (mode === 'create') {
-      // Создание новой загрузки
-      await createLoading.mutateAsync({
-        stageId,
-        sectionId: selectedSectionId,
-        employeeId: formData.employeeId,
-        rate: formData.rate,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        comment: formData.comment,
-      })
+      const employeeIds = formData.employeeIds
+
+      if (employeeIds.length === 1) {
+        // Одиночное создание — стандартный путь с optimistic update
+        await createLoading.mutateAsync({
+          stageId,
+          sectionId: selectedSectionId,
+          employeeId: employeeIds[0],
+          rate: formData.rate,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          comment: formData.comment,
+        })
+      } else if (employeeIds.length > 1) {
+        // Batch-создание — один INSERT + один revalidatePath + одна инвалидация кэшей
+        setBatchProgress({ current: 0, total: employeeIds.length })
+
+        const result = await createLoadingBatch({
+          stageId,
+          sectionId: selectedSectionId,
+          employeeIds,
+          rate: formData.rate,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          comment: formData.comment,
+        })
+
+        if (result.success && result.data.created > 0) {
+          setBatchProgress({ current: result.data.created, total: employeeIds.length })
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
+          ])
+          setBatchProgress(null)
+          onClose()
+        } else {
+          setBatchProgress(null)
+          console.error('[batch] Ошибка:', result.success ? 'нет созданных записей' : result.error)
+        }
+      }
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
       await updateLoading.mutateAsync({
@@ -291,9 +331,9 @@ export function LoadingModalNew({
         comment: formData.comment,
       })
     }
-  }
+  }, [validateForm, selectedSectionId, formData, mode, createLoading, updateLoading, editData, onClose, queryClient])
 
-  const isSaving = createLoading.isPending || updateLoading.isPending
+  const isSaving = createLoading.isPending || updateLoading.isPending || batchProgress !== null
 
   // Состояние для отслеживания optimistic update
   // Показываем индикатор загрузки только для update (для create используем обычный isSaving)
@@ -305,7 +345,7 @@ export function LoadingModalNew({
   }
 
   // Копирование загрузки: закрываем edit → открываем create с теми же данными
-  const handleCopyLoading = () => {
+  const handleCopyLoading = useCallback(() => {
     const sectionId = formData.decompositionStageId || selectedSectionId || undefined
     closeModal()
     // setTimeout чтобы modal store успел сброситься перед открытием нового
@@ -320,7 +360,7 @@ export function LoadingModalNew({
         comment: formData.comment,
       })
     }, 0)
-  }
+  }, [formData, selectedSectionId, effectiveProjectId])
 
   const handleArchiveButtonClick = () => {
     setIsArchiveConfirmOpen(true)
@@ -376,11 +416,16 @@ export function LoadingModalNew({
     ? editData.loading.rate
     : formData.rate
 
+  // В create mode проверяем employeeIds, в edit — employeeId
+  const hasEmployee = mode === 'create'
+    ? formData.employeeIds.length > 0
+    : !!formData.employeeId.trim()
+
   const canSave =
     !!selectedSectionId &&
     !!selectedBreadcrumbs &&
     selectedBreadcrumbs.length > 0 &&
-    !!formData.employeeId.trim() &&
+    hasEmployee &&
     formData.rate >= 0.01 &&
     formData.rate <= 2.0 &&
     !!formData.startDate.trim() &&
@@ -396,7 +441,7 @@ export function LoadingModalNew({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && !batchProgress && onClose()}>
         <DialogContent className="max-w-6xl h-[80vh] flex flex-col p-0">
         {/* Заголовок */}
         <DialogHeader className="px-6 py-4 border-b">
@@ -554,7 +599,13 @@ export function LoadingModalNew({
               </Button>
               <Button onClick={handleSave} disabled={!canSave}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {mode === 'create' ? 'Создать' : 'Сохранить'}
+                {batchProgress
+                  ? `Создание: ${batchProgress.current}/${batchProgress.total}`
+                  : mode === 'create'
+                    ? formData.employeeIds.length > 1
+                      ? `Создать (${formData.employeeIds.length})`
+                      : 'Создать'
+                    : 'Сохранить'}
               </Button>
             </div>
           </div>

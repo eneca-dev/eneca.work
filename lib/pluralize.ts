@@ -167,3 +167,22 @@ export function pluralizeReports(count: number): string {
   // 5-20, 25-30, 35-40... → "отчётов"
   return 'отчётов'
 }
+
+/**
+ * Склонение слова "сотрудник" в зависимости от числа
+ */
+export function pluralizeEmployees(count: number): string {
+  const lastDigit = count % 10
+  const lastTwoDigits = count % 100
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'сотрудников'
+  }
+  if (lastDigit === 1) {
+    return 'сотрудник'
+  }
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'сотрудника'
+  }
+  return 'сотрудников'
+}
