@@ -102,19 +102,21 @@ export function InlineFilter({
 
   // Генерируем подсказки
   const suggestions = useMemo(() => {
-    const items: Array<{ type: 'key' | 'value'; label: string; insertText: string; key?: string }> = []
+    const items: Array<{ type: 'key' | 'value'; label: string; insertText: string; key?: string; negated?: boolean }> = []
 
     if (inputContext.type === 'key' || inputContext.type === 'empty') {
       // Подсказки ключей
       const partial = inputContext.type === 'key' ? inputContext.partial.toLowerCase() : ''
+      const isNegated = inputContext.type === 'key' && inputContext.negated
       Object.entries(config.keys).forEach(([key, keyConfig]) => {
         const label = keyConfig.label ?? key
         if (!partial || key.toLowerCase().includes(partial) || label.toLowerCase().includes(partial)) {
           items.push({
             type: 'key',
-            label: key,
-            insertText: `${key}:`,
+            label: isNegated ? `-${key}` : key,
+            insertText: isNegated ? `-${key}:` : `${key}:`,
             key: key,
+            negated: isNegated || undefined,
           })
         }
       })
@@ -131,6 +133,7 @@ export function InlineFilter({
             label: opt.name,
             insertText: needsQuotes ? `"${opt.name}"` : opt.name,
             key: inputContext.key,
+            negated: inputContext.negated || undefined,
           })
         }
       })
@@ -263,11 +266,13 @@ export function InlineFilter({
       const keyPart = token.raw.slice(0, colonIndex + 1)
       const valuePart = token.raw.slice(colonIndex + 1)
 
-      // Простая подсветка: ключ цветной, значение обычное
+      // Подсветка: ключ цветной, значение обычное; для исключающих — перечёркнутое значение
+      const isNegated = token.negated
       parts.push(
         <span key={`token-${idx}`}>
-          <span className={color}>{keyPart}</span>
-          <span className="text-sky-300">{valuePart}</span>
+          {isNegated && <span className="text-red-400">-</span>}
+          <span className={isNegated ? 'text-red-400' : color}>{isNegated ? keyPart.replace(/^-/, '') : keyPart}</span>
+          <span className={isNegated ? 'text-red-300 line-through' : 'text-sky-300'}>{valuePart}</span>
         </span>
       )
 

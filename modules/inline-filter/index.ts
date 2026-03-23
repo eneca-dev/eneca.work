@@ -48,6 +48,7 @@ export {
   removeToken,
   hasActiveFilters,
   getValuesForKey,
+  getNegatedParams,
 } from './parser'
 
 // Components

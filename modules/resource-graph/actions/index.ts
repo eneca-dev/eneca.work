@@ -25,7 +25,7 @@ import type {
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
-import type { FilterQueryParams } from '@/modules/inline-filter'
+import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
 
@@ -111,34 +111,74 @@ export async function getResourceGraphData(
     }
 
     // Apply subdivision filter (фильтр по подразделению - по названию)
-    if (secureFilters?.subdivision_id && typeof secureFilters.subdivision_id === 'string') {
-      // Проверяем: это UUID или название?
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.subdivision_id)
+    if (secureFilters?.subdivision_id) {
+      const subdivisionId = Array.isArray(secureFilters.subdivision_id) ? secureFilters.subdivision_id[0] : secureFilters.subdivision_id
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(subdivisionId)
       if (isUuid) {
-        query = query.eq('section_subdivision_id', secureFilters.subdivision_id)
+        query = query.eq('section_subdivision_id', subdivisionId)
       } else {
-        // Фильтрация по названию (case-insensitive)
-        query = query.ilike('section_subdivision_name', secureFilters.subdivision_id)
+        query = query.ilike('section_subdivision_name', subdivisionId)
       }
     }
 
     // Apply department filter (фильтр по отделу - по названию)
-    if (secureFilters?.department_id && typeof secureFilters.department_id === 'string') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.department_id)
+    if (secureFilters?.department_id) {
+      const departmentId = Array.isArray(secureFilters.department_id) ? secureFilters.department_id[0] : secureFilters.department_id
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(departmentId)
       if (isUuid) {
-        query = query.eq('section_department_id', secureFilters.department_id)
+        query = query.eq('section_department_id', departmentId)
       } else {
-        query = query.ilike('section_department_name', secureFilters.department_id)
+        query = query.ilike('section_department_name', departmentId)
       }
     }
 
-    // Apply project filter (по названию или ID)
-    if (secureFilters?.project_id && typeof secureFilters.project_id === 'string') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secureFilters.project_id)
-      if (isUuid) {
-        query = query.eq('project_id', secureFilters.project_id)
+    // Apply project filter (по названию или ID, поддержка нескольких значений)
+    if (secureFilters?.project_id) {
+      const values = Array.isArray(secureFilters.project_id)
+        ? secureFilters.project_id
+        : [secureFilters.project_id]
+      const isUuidCheck = (v: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+      const uuids = values.filter(isUuidCheck)
+      const names = values.filter(v => !isUuidCheck(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        query = query.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        query = query.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        query = query.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры (-проект, -отдел, -подразделение)
+    for (const val of getNegatedParams(secureFilters, 'project_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('project_id', val)
       } else {
-        query = query.ilike('project_name', secureFilters.project_id)
+        query = query.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'department_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_department_id', val)
+      } else {
+        query = query.not('section_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'subdivision_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_subdivision_id', val)
+      } else {
+        query = query.not('section_subdivision_name', 'ilike', val)
       }
     }
 
@@ -148,8 +188,9 @@ export async function getResourceGraphData(
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = secureFilters?.team_id
-    if (teamId && typeof teamId === 'string') {
+    const teamIdRaw = secureFilters?.team_id
+    if (teamIdRaw) {
+      const teamId = Array.isArray(teamIdRaw) ? teamIdRaw[0] : teamIdRaw
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId)
 
       // Get team members from v_org_structure
@@ -184,8 +225,9 @@ export async function getResourceGraphData(
     }
 
     // Apply responsible filter (по имени или UUID)
-    const responsibleId = secureFilters?.responsible_id
-    if (responsibleId && typeof responsibleId === 'string') {
+    const responsibleIdRaw = secureFilters?.responsible_id
+    if (responsibleIdRaw) {
+      const responsibleId = Array.isArray(responsibleIdRaw) ? responsibleIdRaw[0] : responsibleIdRaw
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsibleId)
       if (isUuid) {
         query = query.eq('section_responsible_id', responsibleId)

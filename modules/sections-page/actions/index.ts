@@ -9,7 +9,7 @@
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
-import type { FilterQueryParams } from '@/modules/inline-filter'
+import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
 import type {
   Department,
@@ -173,16 +173,49 @@ export async function getSectionsHierarchy(
       }
     }
 
-    // Фильтр по проекту
+    // Фильтр по проекту (поддержка нескольких значений)
     if (effectiveFilters?.project_id) {
-      const projectId = Array.isArray(effectiveFilters.project_id)
-        ? effectiveFilters.project_id[0]
-        : effectiveFilters.project_id
+      const values = Array.isArray(effectiveFilters.project_id)
+        ? effectiveFilters.project_id
+        : [effectiveFilters.project_id]
 
-      if (isUuid(projectId)) {
-        query = query.eq('project_id', projectId)
+      const uuids = values.filter(isUuid)
+      const names = values.filter(v => !isUuid(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        query = query.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        query = query.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        query = query.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры (-проект, -отдел, -команда)
+    for (const val of getNegatedParams(effectiveFilters, 'project_id')) {
+      if (isUuid(val)) {
+        query = query.neq('project_id', val)
       } else {
-        query = query.ilike('project_name', projectId)
+        query = query.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(effectiveFilters, 'department_id')) {
+      if (isUuid(val)) {
+        query = query.neq('department_id', val).neq('employee_department_id', val)
+      } else {
+        query = query.not('department_name', 'ilike', val).not('employee_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(effectiveFilters, 'subdivision_id')) {
+      if (isUuid(val)) {
+        query = query.neq('subdivision_id', val).neq('employee_subdivision_id', val)
+      } else {
+        query = query.not('subdivision_name', 'ilike', val).not('employee_subdivision_name', 'ilike', val)
       }
     }
 

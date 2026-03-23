@@ -8,9 +8,13 @@
  * - role="option" для каждой подсказки
  * - aria-selected для выбранного элемента
  * - aria-activedescendant для keyboard navigation
+ *
+ * Для ключевых подсказок есть toggle-кнопка «исключить» (⊘) справа.
+ * При нажатии вставляется исключающий фильтр: -ключ:
  */
 
 import * as React from 'react'
+import { Ban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FilterConfig, FilterKeyColor } from '../types'
 
@@ -40,6 +44,7 @@ export interface FilterSuggestion {
   label: string
   insertText: string
   key?: string
+  negated?: boolean
 }
 
 export interface FilterSuggestionsProps {
@@ -94,38 +99,75 @@ export function FilterSuggestions({
           const IconComponent = keyConfig?.icon
           const isSelected = idx === selectedIndex
           const optionId = `${id}-option-${idx}`
+          const isKeySuggestion = suggestion.type === 'key'
 
           return (
-            <button
+            <div
               key={`${suggestion.type}-${idx}-${suggestion.label}`}
-              id={optionId}
-              type="button"
-              role="option"
-              aria-selected={isSelected}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                onSelect(suggestion)
-              }}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left',
+                'flex w-full items-center text-sm',
                 'transition-colors duration-75',
                 isSelected
                   ? 'bg-accent text-accent-foreground'
                   : 'hover:bg-accent/50'
               )}
             >
-              {suggestion.type === 'key' ? (
-                <>
-                  {IconComponent && <IconComponent className={cn('h-4 w-4', color)} />}
-                  <span className={cn('font-medium', color)}>{suggestion.label}:</span>
-                </>
-              ) : (
-                <>
-                  {IconComponent && <IconComponent className={cn('h-4 w-4', color)} />}
-                  <span className="truncate">{suggestion.label}</span>
-                </>
+              {/* Основная кнопка — выбор подсказки */}
+              <button
+                id={optionId}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  onSelect(suggestion)
+                }}
+                className="flex flex-1 items-center gap-2 px-3 py-1.5 text-left min-w-0"
+              >
+                {isKeySuggestion ? (
+                  <>
+                    {IconComponent && <IconComponent className={cn('h-4 w-4 shrink-0', suggestion.negated ? 'text-red-400' : color)} />}
+                    {suggestion.negated && <span className="text-red-400 font-medium text-xs shrink-0">НЕ</span>}
+                    <span className={cn('font-medium', suggestion.negated ? 'text-red-400' : color)}>
+                      {suggestion.negated ? suggestion.label.replace(/^-/, '') : suggestion.label}:
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {IconComponent && <IconComponent className={cn('h-4 w-4 shrink-0', suggestion.negated ? 'text-red-400' : color)} />}
+                    {suggestion.negated && <span className="text-red-400 font-medium text-xs shrink-0">НЕ</span>}
+                    <span className={cn('truncate', suggestion.negated && 'line-through text-muted-foreground')}>{suggestion.label}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Кнопка-toggle «Исключить» — только для ключей */}
+              {isKeySuggestion && (
+                <button
+                  type="button"
+                  title={suggestion.negated ? 'Включить' : 'Исключить'}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    // Создаём перевёрнутую версию подсказки
+                    const baseKey = suggestion.key ?? suggestion.label.replace(/^-/, '')
+                    const flipped: FilterSuggestion = suggestion.negated
+                      ? { ...suggestion, negated: false, label: baseKey, insertText: `${baseKey}:` }
+                      : { ...suggestion, negated: true, label: `-${baseKey}`, insertText: `-${baseKey}:` }
+                    onSelect(flipped)
+                  }}
+                  className={cn(
+                    'shrink-0 p-1.5 mr-1 rounded',
+                    'transition-colors duration-75',
+                    suggestion.negated
+                      ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                      : 'text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10'
+                  )}
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                </button>
               )}
-            </button>
+            </div>
           )
         })
       ) : (
