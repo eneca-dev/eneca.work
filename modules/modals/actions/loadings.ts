@@ -81,6 +81,23 @@ export interface LoadingResult {
   updatedAt: string | null
 }
 
+export interface CreateLoadingBatchInput {
+  /** ID этапа декомпозиции */
+  stageId: string
+  /** ID раздела */
+  sectionId: string
+  /** Массив ID сотрудников */
+  employeeIds: string[]
+  /** Дата начала */
+  startDate: string
+  /** Дата окончания */
+  endDate: string
+  /** Ставка загрузки */
+  rate: number
+  /** Комментарий (опционально) */
+  comment?: string
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -97,10 +114,29 @@ function isValidDate(dateString: string): boolean {
 }
 
 /**
- * Валидация ставки загрузки (0.0 - 1.0)
+ * Валидация ставки загрузки (0.01 - 2.0)
  */
 function isValidRate(rate: number): boolean {
   return rate >= 0.01 && rate <= 2.0
+}
+
+/**
+ * Общая валидация полей загрузки (без employee — он отличается в single/batch)
+ */
+function validateLoadingFields(input: {
+  stageId: string
+  startDate: string
+  endDate: string
+  rate: number
+}): string | null {
+  if (!input.stageId?.trim()) return 'ID этапа обязателен'
+  if (!isValidDate(input.startDate)) return 'Неверный формат даты начала'
+  if (!isValidDate(input.endDate)) return 'Неверный формат даты окончания'
+  if (new Date(input.startDate) > new Date(input.endDate)) {
+    return 'Дата начала не может быть позже даты окончания'
+  }
+  if (!isValidRate(input.rate)) return 'Ставка загрузки должна быть от 0.01 до 2.0'
+  return null
 }
 
 /**
@@ -134,35 +170,12 @@ export async function createLoading(
   try {
     const supabase = await createClient()
 
-    // Валидация входных данных
-    if (!input.stageId?.trim()) {
-      return { success: false, error: 'ID этапа обязателен' }
-    }
+    // Валидация общих полей
+    const validationError = validateLoadingFields(input)
+    if (validationError) return { success: false, error: validationError }
 
     if (!input.employeeId?.trim()) {
       return { success: false, error: 'ID сотрудника обязателен' }
-    }
-
-    if (!isValidDate(input.startDate)) {
-      return { success: false, error: 'Неверный формат даты начала' }
-    }
-
-    if (!isValidDate(input.endDate)) {
-      return { success: false, error: 'Неверный формат даты окончания' }
-    }
-
-    if (new Date(input.startDate) > new Date(input.endDate)) {
-      return {
-        success: false,
-        error: 'Дата начала не может быть позже даты окончания',
-      }
-    }
-
-    if (!isValidRate(input.rate)) {
-      return {
-        success: false,
-        error: 'Ставка загрузки должна быть от 0.01 до 2.0',
-      }
     }
 
     // Подготовка данных для вставки
@@ -207,6 +220,73 @@ export async function createLoading(
         error instanceof Error
           ? error.message
           : 'Произошла неизвестная ошибка при создании загрузки',
+    }
+  }
+}
+
+/**
+ * Batch-создание загрузок для нескольких сотрудников.
+ * Один INSERT в Supabase, один revalidatePath.
+ */
+export async function createLoadingBatch(
+  input: CreateLoadingBatchInput
+): Promise<ActionResult<{ created: number; total: number }>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация общих полей
+    const validationError = validateLoadingFields(input)
+    if (validationError) return { success: false, error: validationError }
+
+    if (!input.employeeIds || input.employeeIds.length === 0) {
+      return { success: false, error: 'Необходимо указать хотя бы одного сотрудника' }
+    }
+
+    const now = new Date().toISOString()
+
+    // Подготовка массива для batch insert
+    const rows: LoadingInsert[] = input.employeeIds.map((employeeId) => ({
+      loading_stage: input.stageId,
+      loading_section: input.sectionId,
+      loading_responsible: employeeId,
+      loading_start: input.startDate,
+      loading_finish: input.endDate,
+      loading_rate: input.rate,
+      loading_comment: input.comment || null,
+      loading_status: 'active' as const,
+      is_shortage: false,
+      loading_created: now,
+    }))
+
+    // Один INSERT для всех сотрудников (без .select() — нам не нужны возвращённые данные)
+    const { error } = await supabase
+      .from('loadings')
+      .insert(rows)
+
+    if (error) {
+      console.error('[createLoadingBatch] Supabase error:', error)
+      return {
+        success: false,
+        error: `Не удалось создать загрузки: ${error.message}`,
+      }
+    }
+
+    // Один revalidatePath
+    revalidatePath('/resource-graph')
+    revalidatePath('/tasks')
+
+    return {
+      success: true,
+      data: { created: rows.length, total: input.employeeIds.length },
+    }
+  } catch (error) {
+    console.error('[createLoadingBatch] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при создании загрузок',
     }
   }
 }

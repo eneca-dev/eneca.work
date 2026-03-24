@@ -47,8 +47,8 @@ export function FreshnessIndicator({
   // Определение цвета на основе количества дней
   const getColor = () => {
     if (daysSinceUpdate === undefined) return 'gray'
-    if (daysSinceUpdate < 3) return 'green'
-    if (daysSinceUpdate <= 5) return 'yellow'
+    if (daysSinceUpdate <= 1) return 'green'
+    if (daysSinceUpdate <= 3) return 'yellow'
     return 'red'
   }
 

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { differenceInBusinessDays } from 'date-fns'
 import { EmployeeSelector } from './EmployeeSelector'
+import { MultiEmployeeSelector } from './MultiEmployeeSelector'
 import { RateInput } from './RateInput'
 import { DateRangePicker } from './DateRangePicker'
 import { DecompositionStageSelector } from './DecompositionStageSelector'
@@ -143,16 +144,28 @@ export function LoadingForm({
 
       {/* Форма */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Сотрудник */}
+        {/* Сотрудник / Сотрудники */}
         <div>
-          <label className="block text-sm font-medium mb-2">Сотрудник <span className="text-muted-foreground">*</span></label>
-          <EmployeeSelector
-            value={formData.employeeId}
-            onChange={(value) => onFieldChange('employeeId', value)}
-            error={errors.employeeId}
-            disabled={disabled}
-            placeholder="Выберите сотрудника"
-          />
+          <label className="block text-sm font-medium mb-2">
+            {mode === 'create' ? 'Сотрудники' : 'Сотрудник'} <span className="text-muted-foreground">*</span>
+          </label>
+          {mode === 'create' ? (
+            <MultiEmployeeSelector
+              value={formData.employeeIds}
+              onChange={(ids) => onFieldChange('employeeIds', ids)}
+              error={errors.employeeId}
+              disabled={disabled}
+              placeholder="Выберите сотрудников"
+            />
+          ) : (
+            <EmployeeSelector
+              value={formData.employeeId}
+              onChange={(value) => onFieldChange('employeeId', value)}
+              error={errors.employeeId}
+              disabled={disabled}
+              placeholder="Выберите сотрудника"
+            />
+          )}
         </div>
 
         {/* Ставка загрузки */}
