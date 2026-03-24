@@ -14,7 +14,3 @@ export {
   DeleteConfirmationDialog,
   type DeleteConfirmationDialogProps,
 } from './DeleteConfirmationDialog'
-export {
-  ArchiveConfirmationDialog,
-  type ArchiveConfirmationDialogProps,
-} from './ArchiveConfirmationDialog'

@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2, Copy } from 'lucide-react'
+import { Loader2, Folder, Box, CircleDashed, ChevronRight, Trash2, Copy } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +29,7 @@ import { useUsers, queryKeys } from '@/modules/cache'
 import { createLoadingBatch } from '../../actions/loadings'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
-import { DeleteWarningDialog } from './DeleteWarningDialog'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
-import { ArchiveConfirmationDialog } from './ArchiveConfirmationDialog'
 import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 
 // Маппинг типа элемента → иконка (hoisted: чистая функция, не нужно пересоздавать на каждом рендере)
@@ -141,16 +139,12 @@ export function LoadingModalNew({
   const {
     create: createLoading,
     update: updateLoading,
-    archive: archiveLoading,
     remove: deleteLoading,
   } = useLoadingMutations({
     onCreateSuccess: () => {
       onClose()
     },
     onUpdateSuccess: () => {
-      onClose()
-    },
-    onArchiveSuccess: () => {
       onClose()
     },
     onDeleteSuccess: () => {
@@ -164,10 +158,8 @@ export function LoadingModalNew({
   // Состояние для отслеживания, был ли уже выполнен автовыбор в режиме редактирования
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
 
-  // Состояния для диалогов удаления и архивирования
-  const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false)
+  // Состояние для диалога удаления
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
-  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false)
 
   // Сброс формы при открытии/закрытии
   useEffect(() => {
@@ -341,7 +333,7 @@ export function LoadingModalNew({
 
   // Обработчики для диалогов
   const handleDeleteButtonClick = () => {
-    setIsDeleteWarningOpen(true)
+    setIsDeleteConfirmOpen(true)
   }
 
   // Копирование загрузки: закрываем edit → открываем create с теми же данными
@@ -361,27 +353,6 @@ export function LoadingModalNew({
       })
     }, 0)
   }, [formData, selectedSectionId, effectiveProjectId])
-
-  const handleArchiveButtonClick = () => {
-    setIsArchiveConfirmOpen(true)
-  }
-
-  const handleDeleteWarningDelete = () => {
-    setIsDeleteWarningOpen(false)
-    setIsDeleteConfirmOpen(true)
-  }
-
-  const handleDeleteWarningArchive = () => {
-    setIsDeleteWarningOpen(false)
-    setIsArchiveConfirmOpen(true)
-  }
-
-  const handleArchiveConfirm = async () => {
-    if (mode === 'edit' && editData?.loading) {
-      await archiveLoading.mutateAsync({ loadingId: editData.loading.id })
-      setIsArchiveConfirmOpen(false)
-    }
-  }
 
   const handleDeleteConfirm = async () => {
     if (mode === 'edit' && editData?.loading) {
@@ -558,30 +529,21 @@ export function LoadingModalNew({
         {/* Футер с кнопками */}
         <DialogFooter className="px-6 py-4 border-t">
           <div className="flex items-center justify-between w-full">
-            {/* Левая часть - кнопки архивирования и удаления (только в режиме edit) */}
+            {/* Левая часть - кнопки копирования и удаления (только в режиме edit) */}
             {mode === 'edit' ? (
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   onClick={handleCopyLoading}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
+                  disabled={isSaving || deleteLoading.isPending}
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   Копировать
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleArchiveButtonClick}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
-                  className="text-orange-600 hover:text-orange-600"
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  Архивировать
-                </Button>
-                <Button
-                  variant="outline"
                   onClick={handleDeleteButtonClick}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
+                  disabled={isSaving || deleteLoading.isPending}
                   className="text-red-600 hover:text-red-600"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -613,27 +575,7 @@ export function LoadingModalNew({
       </DialogContent>
     </Dialog>
 
-      {/* Диалоги подтверждения */}
-      <DeleteWarningDialog
-        open={isDeleteWarningOpen}
-        onClose={() => setIsDeleteWarningOpen(false)}
-        onDelete={handleDeleteWarningDelete}
-        onArchive={handleDeleteWarningArchive}
-      />
-
-      <ArchiveConfirmationDialog
-        open={isArchiveConfirmOpen}
-        onClose={() => setIsArchiveConfirmOpen(false)}
-        onConfirm={handleArchiveConfirm}
-        loading={archiveLoading.isPending}
-        employeeName={employeeName}
-        sectionName={sectionName}
-        stageName={stageName}
-        startDate={startDate}
-        endDate={endDate}
-        rate={rate}
-      />
-
+      {/* Диалог подтверждения удаления */}
       <DeleteConfirmationDialog
         open={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
