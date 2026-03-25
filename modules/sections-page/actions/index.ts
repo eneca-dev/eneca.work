@@ -243,6 +243,9 @@ export async function getSectionsHierarchy(
     // - dept scope (нач. отдела): только свой отдел (через ответственного или сотрудника)
     // - admin/subdivision scope: полное дублирование (отдел ответственного + отдел сотрудника)
     const departmentsMap = new Map<string, Department>()
+    // Трекеры уникальных сотрудников (department_id/project_id → Set<employee_id>)
+    const deptEmployeeIds = new Map<string, Set<string>>()
+    const projectEmployeeIds = new Map<string, Set<string>>()
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
@@ -327,7 +330,7 @@ export async function getSectionsHierarchy(
       for (const deptInfo of departmentIds) {
         const deptId = deptInfo.id
 
-        // Получаем или создаём отдел
+        // Получаем или создаём отдел (+ Set для уникальных сотрудников)
         let department = departmentsMap.get(deptId)
         if (!department) {
           department = {
@@ -343,10 +346,12 @@ export async function getSectionsHierarchy(
             totalProjects: 0,
             totalSections: 0,
             totalLoadings: 0,
+            totalEmployees: 0,
             dailyWorkloads: {},
             projects: [],
           }
           departmentsMap.set(deptId, department)
+          deptEmployeeIds.set(deptId, new Set())
         }
 
         // Получаем или создаём проект
@@ -365,10 +370,12 @@ export async function getSectionsHierarchy(
             stageType: null,
             totalSections: 0,
             totalLoadings: 0,
+            totalEmployees: 0,
             dailyWorkloads: {},
             objectSections: [],
           }
           department.projects.push(project)
+          projectEmployeeIds.set(`${deptId}:${project.id}`, new Set())
           department.totalProjects++
         }
 
@@ -450,7 +457,19 @@ dailyWorkloads: {},
           objectSection.totalLoadings = objectSection.loadings.length
           project.totalLoadings++
           department.totalLoadings++
+
+          // Track unique employees
+          projectEmployeeIds.get(`${deptId}:${project.id}`)!.add(row.employee_id)
+          deptEmployeeIds.get(deptId)!.add(row.employee_id)
         }
+      }
+    }
+
+    // Присваиваем totalEmployees из Set.size
+    for (const dept of departmentsMap.values()) {
+      dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
+      for (const project of dept.projects) {
+        project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
       }
     }
 
