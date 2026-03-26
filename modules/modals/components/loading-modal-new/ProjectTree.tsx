@@ -11,8 +11,8 @@
  * Этапы декомпозиции теперь не показываются в дереве - выбираются опционально в форме
  */
 
-import { useState, useMemo, useEffect } from 'react'
-import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, RefreshCw, X } from 'lucide-react'
+import { useState, useMemo, useEffect, useDeferredValue } from 'react'
+import { ChevronRight, ChevronDown, Folder, Box, CircleDashed, Search, Loader2, RefreshCw, X, Filter } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -44,6 +44,35 @@ function collectAllNodeIds(nodes: ProjectTreeNodeWithChildren[]): string[] {
     }
   }
   return ids
+}
+
+/** Рекурсивный фильтр узлов дерева по тексту (только по разделам) */
+function filterTreeNodes(
+  nodes: ProjectTreeNodeWithChildren[],
+  query: string
+): ProjectTreeNodeWithChildren[] {
+  if (!query) return nodes
+
+  const result: ProjectTreeNodeWithChildren[] = []
+
+  for (const node of nodes) {
+    if (node.type === 'decomposition_stage') continue
+
+    if (node.type === 'section') {
+      // Фильтруем только разделы по имени
+      if (node.name.toLowerCase().includes(query)) {
+        result.push(node)
+      }
+    } else if (node.children && node.children.length > 0) {
+      // Объекты — не матчим по имени, только проверяем детей
+      const filteredChildren = filterTreeNodes(node.children, query)
+      if (filteredChildren.length > 0) {
+        result.push({ ...node, children: filteredChildren })
+      }
+    }
+  }
+
+  return result
 }
 
 /** Цвет чипа стадии проекта */
@@ -100,9 +129,11 @@ interface ProjectItemProps {
   modalMode?: 'create' | 'edit'
   /** Callback для закрытия модалки */
   onClose?: () => void
+  /** Текстовый фильтр для дочерних узлов дерева */
+  subtaskFilter?: string
 }
 
-function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create', onClose }: ProjectItemProps) {
+function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoExpand, autoExpandBreadcrumbs, disabled = false, modalMode = 'create', onClose, subtaskFilter = '' }: ProjectItemProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [isProjectExpanded, setIsProjectExpanded] = useState(shouldAutoExpand || false)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
@@ -250,7 +281,7 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
       return null
     }
 
-    const isNodeExpanded = expandedNodes.has(node.id)
+    const isNodeExpanded = subtaskFilter ? true : expandedNodes.has(node.id)
 
     // Фильтруем детей: показываем только не-этапы
     const filteredChildren = node.children?.filter(child => child.type !== 'decomposition_stage') ?? []
@@ -325,6 +356,19 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
     )
   }
 
+  // Отфильтрованные дети дерева (мемоизировано)
+  const filteredTreeChildren = useMemo(() => {
+    const children: ProjectTreeNodeWithChildren[] = []
+    for (const node of tree) {
+      if (node.type === 'project' && node.children) {
+        children.push(...node.children)
+      } else {
+        children.push(node)
+      }
+    }
+    return subtaskFilter ? filterTreeNodes(children, subtaskFilter) : children
+  }, [tree, subtaskFilter])
+
   // При раскрытии проекта - автоматически разворачиваем всех детей (только один раз)
   useEffect(() => {
     if (!isLoading && tree.length > 0 && isProjectExpanded && !hasAutoExpandedAll) {
@@ -398,15 +442,16 @@ function ProjectItem({ project, selectedSectionId, onSectionSelect, shouldAutoEx
           )}
 
           {/* Рендерим узлы из view (только детей проекта, не сам проект) */}
-          {!isLoading && tree.length > 0 && (
+          {!isLoading && tree.length > 0 && filteredTreeChildren.length > 0 && (
             <div>
-              {tree.map((node) => {
-                // Пропускаем узел проекта, показываем только его детей
-                if (node.type === 'project' && node.children) {
-                  return node.children.map((child) => renderTreeNode(child, 0))
-                }
-                return renderTreeNode(node, 0)
-              })}
+              {filteredTreeChildren.map((child) => renderTreeNode(child, 0))}
+            </div>
+          )}
+
+          {/* Ничего не найдено по подфильтру */}
+          {!isLoading && tree.length > 0 && filteredTreeChildren.length === 0 && subtaskFilter && (
+            <div className="text-xs text-muted-foreground py-1" style={{ paddingLeft: '16px' }}>
+              Ничего не найдено
             </div>
           )}
 
@@ -464,7 +509,7 @@ export function ProjectTree({
   onClose,
 }: ProjectTreeProps) {
   const [search, setSearch] = useState('')
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [subtaskSearch, setSubtaskSearch] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [hasAutoSwitched, setHasAutoSwitched] = useState(false)
 
@@ -532,6 +577,10 @@ export function ProjectTree({
     return projects.filter((project) => project.name.toLowerCase().includes(query))
   }, [projects, search])
 
+  // Строка подфильтра для разделов внутри дерева (deferred для плавного ввода)
+  const subtaskFilter = useMemo(() => subtaskSearch.trim().toLowerCase(), [subtaskSearch])
+  const deferredSubtaskFilter = useDeferredValue(subtaskFilter)
+
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Переключатель "Мои проекты" / "Все проекты" */}
@@ -562,8 +611,8 @@ export function ProjectTree({
         </div>
       </div>
 
-      {/* Поиск */}
-      <div className="p-4 border-b">
+      {/* Поиск проекта */}
+      <div className="px-4 pt-4 pb-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -578,6 +627,31 @@ export function ProjectTree({
             <button
               type="button"
               onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+              title="Очистить"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Подфильтр по разделам */}
+      <div className="px-4 pb-4 border-b">
+        <div className="relative">
+          <Filter className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Фильтр по разделам..."
+            value={subtaskSearch}
+            onChange={(e) => !disabled && setSubtaskSearch(e.target.value)}
+            className="pl-8 pr-8 h-8 text-xs"
+            disabled={disabled}
+          />
+          {subtaskSearch && !disabled && (
+            <button
+              type="button"
+              onClick={() => setSubtaskSearch('')}
               className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
               title="Очистить"
             >
@@ -628,6 +702,7 @@ export function ProjectTree({
                 disabled={disabled}
                 modalMode={modalMode}
                 onClose={onClose}
+                subtaskFilter={deferredSubtaskFilter}
               />
             ))}
         </div>
