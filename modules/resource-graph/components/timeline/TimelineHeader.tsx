@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { format, getDay, getWeek, addDays } from 'date-fns'
+import { format, getDay, getWeek, addDays, differenceInDays } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
-import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
+import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk, parseMinskDate } from '@/lib/timezone-utils'
+import { TimelineDatePopover, type CustomDateRange } from './TimelineDatePopover'
 
 export interface DayCell {
   date: Date
@@ -25,6 +26,32 @@ export interface DayCell {
   isWorkday: boolean
   isTransferredWorkday: boolean
   isTransferredDayOff: boolean
+}
+
+interface CalculateTimelineRangeOptions {
+  daysBefore: number
+  daysAfter: number
+}
+
+/**
+ * Вычисляет диапазон дат таймлайна.
+ * При наличии customRange — использует его, иначе — daysBefore/daysAfter от сегодня.
+ */
+export function resolveTimelineRange(
+  customRange: CustomDateRange | null | undefined,
+  options: CalculateTimelineRangeOptions
+): TimelineRange {
+  if (customRange) {
+    const start = parseMinskDate(customRange.startDate)
+    const end = parseMinskDate(customRange.endDate)
+    const totalDays = differenceInDays(end, start) + 1
+    return { start, end, totalDays }
+  }
+  const today = getTodayMinsk()
+  const start = addDays(today, -options.daysBefore)
+  const end = addDays(today, options.daysAfter - 1)
+  const totalDays = options.daysBefore + options.daysAfter
+  return { start, end, totalDays }
 }
 
 /**
@@ -77,15 +104,26 @@ export function generateDayCells(
   return cells
 }
 
+interface TimelineDatePopoverConfig {
+  customRange: CustomDateRange | null
+  onRangeChange: (range: CustomDateRange | null) => void
+  onScrollToToday: () => void
+  defaultDaysBefore: number
+  defaultDaysAfter: number
+}
+
 interface TimelineHeaderProps {
   dayCells: DayCell[]
+  /** Simple scroll-to-today button (legacy) */
   onScrollToToday?: () => void
+  /** Full date range popover config (replaces onScrollToToday when provided) */
+  datePopoverConfig?: TimelineDatePopoverConfig
 }
 
 /**
  * Заголовок timeline с неделями и днями
  */
-export function TimelineHeader({ dayCells, onScrollToToday }: TimelineHeaderProps) {
+export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }: TimelineHeaderProps) {
   // Группировка по неделям (с нумерацией от начала года)
   const weeks = useMemo(() => {
     const result: { weekNum: number; startIdx: number; daysCount: number }[] = []
@@ -167,18 +205,22 @@ export function TimelineHeader({ dayCells, onScrollToToday }: TimelineHeaderProp
             {month.daysCount >= MIN_DAYS_FOR_MONTH_NAME && month.name}
           </div>
         ))}
-        {/* Кнопка "Перейти к сегодня" */}
-        {onScrollToToday && (
+        {/* Кнопка настройки дат / перехода к сегодня */}
+        {(datePopoverConfig || onScrollToToday) && (
           <div className="sticky right-0 ml-auto flex items-center pr-2 bg-card z-10 border-l border-border/50">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5"
-              onClick={onScrollToToday}
-              title="Перейти к сегодняшней дате"
-            >
-              <Calendar className="h-3.5 w-3.5" />
-            </Button>
+            {datePopoverConfig ? (
+              <TimelineDatePopover {...datePopoverConfig} />
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                onClick={onScrollToToday}
+                title="Перейти к сегодняшней дате"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         )}
       </div>
