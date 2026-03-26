@@ -26,6 +26,7 @@ export interface DayCell {
   isWorkday: boolean
   isTransferredWorkday: boolean
   isTransferredDayOff: boolean
+  monthIndex: number
 }
 
 interface CalculateTimelineRangeOptions {
@@ -71,6 +72,9 @@ export function generateDayCells(
   // Build calendar map for fast lookup
   const calendarMap = buildCalendarMap(calendarEvents)
 
+  let monthIdx = -1
+  let prevMonth = -1
+
   for (let i = 0; i < range.totalDays; i++) {
     const date = addDays(range.start, i)
     // Используем день недели в часовом поясе Минска
@@ -83,6 +87,13 @@ export function generateDayCells(
     // Используем день месяца в часовом поясе Минска
     const dayOfMonth = getMinskDate(date)
     const dateKey = formatMinskDate(date)
+
+    // Track month changes for alternating colors
+    const month = date.getMonth()
+    if (month !== prevMonth) {
+      prevMonth = month
+      monthIdx++
+    }
 
     cells.push({
       date,
@@ -98,6 +109,7 @@ export function generateDayCells(
       isWorkday: dayInfo.isWorkday,
       isTransferredWorkday: dayInfo.isTransferredWorkday,
       isTransferredDayOff: dayInfo.isTransferredDayOff,
+      monthIndex: monthIdx,
     })
   }
 
@@ -156,34 +168,52 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
     return result
   }, [dayCells])
 
-  // Группировка по месяцам
+  // Группировка по месяцам (используем monthIndex вместо format() для производительности)
   const months = useMemo(() => {
     const result: { name: string; daysCount: number }[] = []
-    let currentMonth = ''
-    let currentCount = 0
+    let prevIndex = -1
 
     dayCells.forEach((cell) => {
-      const monthKey = format(cell.date, 'yyyy-MM')
-      if (monthKey !== currentMonth) {
-        if (currentMonth) {
-          result.push({ name: currentMonth, daysCount: currentCount })
-        }
-        currentMonth = monthKey
-        currentCount = 1
+      if (cell.monthIndex !== prevIndex) {
+        prevIndex = cell.monthIndex
+        result.push({ name: cell.monthName, daysCount: 1 })
       } else {
-        currentCount++
+        result[result.length - 1].daysCount++
       }
     })
 
-    if (currentCount > 0) {
-      result.push({ name: currentMonth, daysCount: currentCount })
-    }
-
-    return result.map((m) => ({
-      ...m,
-      name: format(new Date(m.name + '-01'), 'LLLL yyyy', { locale: ru }),
-    }))
+    return result
   }, [dayCells])
+
+  // Позиции месяцев для фоновых полос чередования
+  const monthSpans = useMemo(() => {
+    let left = 0
+    return months.map((month, i) => {
+      const span = { left, width: month.daysCount * DAY_CELL_WIDTH, isOdd: i % 2 === 1 }
+      left += span.width
+      return span
+    })
+  }, [months])
+
+  // Фоновые полосы чередования месяцев (переиспользуется в 3 строках header)
+  const monthAlternationBg = useMemo(() => (
+    <>
+      {monthSpans.map((span, i) => span.isOdd ? (
+        <div
+          key={`month-bg-${i}`}
+          className="absolute top-0 bottom-0 bg-black/[0.03] dark:bg-white/[0.035] pointer-events-none"
+          style={{ left: span.left, width: span.width }}
+        />
+      ) : null)}
+      {monthSpans.slice(1).map((span, i) => (
+        <div
+          key={`month-border-${i}`}
+          className="absolute top-0 bottom-0 w-px bg-border/50 pointer-events-none"
+          style={{ left: span.left }}
+        />
+      ))}
+    </>
+  ), [monthSpans])
 
   // Общая ширина timeline
   const totalWidth = dayCells.length * DAY_CELL_WIDTH
@@ -196,10 +226,11 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
     <div className="flex flex-col bg-card border-b border-border" style={{ width: totalWidth }}>
       {/* Месяцы */}
       <div className="flex h-7 border-b border-border/50 relative">
+        {monthAlternationBg}
         {months.map((month, i) => (
           <div
             key={i}
-            className="flex items-center justify-center text-xs font-medium text-muted-foreground capitalize overflow-hidden"
+            className="flex items-center justify-center text-xs font-medium text-muted-foreground capitalize overflow-hidden relative z-[1]"
             style={{ width: month.daysCount * DAY_CELL_WIDTH }}
           >
             {month.daysCount >= MIN_DAYS_FOR_MONTH_NAME && month.name}
@@ -226,12 +257,13 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
       </div>
 
       {/* Недели */}
-      <div className="flex h-5 border-b border-border/50">
+      <div className="flex h-5 border-b border-border/50 relative">
+        {monthAlternationBg}
         {weeks.map((week, i) => (
           <div
             key={i}
             className={cn(
-              'flex items-center justify-center text-[10px] text-muted-foreground overflow-hidden',
+              'flex items-center justify-center text-[10px] text-muted-foreground overflow-hidden relative z-[1]',
               i < weeks.length - 1 && 'border-r border-border/30'
             )}
             style={{ width: week.daysCount * DAY_CELL_WIDTH }}
@@ -242,7 +274,8 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
       </div>
 
       {/* Дни */}
-      <div className="flex h-10">
+      <div className="flex h-10 relative">
+        {monthAlternationBg}
         {dayCells.map((cell, i) => {
           // Логика цветов выходных:
           // - Праздники и дополнительные выходные (переносы) → желтоватый
@@ -254,7 +287,7 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
             <div
               key={i}
               className={cn(
-                'flex flex-col items-center justify-center text-[10px]',
+                'flex flex-col items-center justify-center text-[10px] relative z-[1]',
                 // Сегодня - высший приоритет
                 cell.isToday && 'bg-green-50 dark:bg-green-700/40',
                 // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
