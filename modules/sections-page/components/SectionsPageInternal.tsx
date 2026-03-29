@@ -22,6 +22,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
+import { ScissorsToggle } from '@/components/shared/timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import { DepartmentRow } from './rows/DepartmentRow'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -263,6 +264,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Отделы / Проекты / Разделы
                   </span>
+                  <ScissorsToggle />
                   {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                   <TooltipProvider>
                     <div className="flex items-center gap-1">

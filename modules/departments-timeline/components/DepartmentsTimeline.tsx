@@ -21,6 +21,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
+import { ScissorsToggle } from '@/components/shared/timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { DepartmentRow } from './timeline/DepartmentRow'
@@ -213,6 +214,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Отделы / Команды
                 </span>
+                <ScissorsToggle />
                 {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                 <TooltipProvider>
                   <div className="flex items-center gap-1">
