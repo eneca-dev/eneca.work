@@ -35,6 +35,9 @@ import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../consta
 import type { Employee, DayCell, Loading, TimelineRange } from '../../types'
 import type { TimelineUnit, Loading as PlanningLoading } from '@/types/planning'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
+import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
+import { useScissorsModeStore } from '@/stores'
+import { useLoadingMutations } from '@/modules/modals/hooks/useLoadingMutations'
 import { useUpdateLoadingDates } from '../../hooks'
 
 interface EmployeeRowProps {
@@ -54,6 +57,7 @@ interface LoadingBarWithResizeProps {
   timelineRange: TimelineRange
   onLoadingClick: (loading: Loading) => void
   onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
+  onSplitLoading: (loadingId: string, splitDate: string) => void
 }
 
 function LoadingBarWithResize({
@@ -63,6 +67,7 @@ function LoadingBarWithResize({
   timelineRange,
   onLoadingClick,
   onLoadingResize,
+  onSplitLoading,
 }: LoadingBarWithResizeProps) {
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
@@ -100,12 +105,25 @@ function LoadingBarWithResize({
     disabled: !canResize,
   })
 
+  // Scissors mode
+  const isScissorsActive = useScissorsModeStore((s) => s.isActive)
+
+  const scissors = useScissorsInteraction({
+    loadingId: bar.period.id,
+    startDate: startDateString,
+    endDate: endDateString,
+    dayCellWidth: DAY_CELL_WIDTH,
+    isActive: isScissorsActive && bar.period.type === 'loading',
+    onSplit: onSplitLoading,
+  })
+
   const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
   const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
 
   // Обработчик клика с проверкой wasRecentlyDragging
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
+    if (isScissorsActive) return // Scissors mode — не открываем модалку
 
     // Не открываем модалку если только что закончили drag
     if (wasRecentlyDragging()) return
@@ -113,7 +131,7 @@ function LoadingBarWithResize({
     // BarPeriod содержит все необходимые поля Loading; startDate/endDate - Date объекты,
     // модал (useLoadingModal) обрабатывает оба варианта (string и Date)
     onLoadingClick(bar.period as unknown as Loading)
-  }, [bar.period, onLoadingClick, wasRecentlyDragging])
+  }, [bar.period, onLoadingClick, wasRecentlyDragging, isScissorsActive])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
@@ -154,7 +172,8 @@ function LoadingBarWithResize({
         className={cn(
           'absolute pointer-events-auto flex items-center',
           !isResizing && 'transition-all duration-200',
-          bar.period.type === 'loading' && 'cursor-pointer hover:brightness-110',
+          bar.period.type === 'loading' && !isScissorsActive && 'cursor-pointer hover:brightness-110',
+          isScissorsActive && bar.period.type === 'loading' && 'cursor-col-resize',
           isResizing && 'ring-2 ring-primary/50 z-50'
         )}
         style={{
@@ -175,10 +194,26 @@ function LoadingBarWithResize({
           borderBottomRightRadius: bar.period.comment ? 0 : 4,
         }}
         title={formatBarTooltip(bar.period)}
-        onClick={handleClick}
+        onClick={isScissorsActive ? scissors.handlers.onClick : handleClick}
+        onMouseMove={scissors.handlers.onMouseMove}
+        onMouseLeave={scissors.handlers.onMouseLeave}
       >
-        {/* Resize handles */}
-        {canResize && (
+        {/* Scissors cut line */}
+        {scissors.cutLinePosition !== null && (
+          <div
+            className="absolute top-0 bottom-0 pointer-events-none"
+            style={{
+              left: scissors.cutLinePosition,
+              width: 2,
+              backgroundColor: scissors.isValidCut ? 'rgba(239, 68, 68, 0.9)' : 'rgba(156, 163, 175, 0.5)',
+              borderLeft: scissors.isValidCut ? '1px dashed rgba(239, 68, 68, 0.6)' : 'none',
+              borderRight: scissors.isValidCut ? '1px dashed rgba(239, 68, 68, 0.6)' : 'none',
+              zIndex: 30,
+            }}
+          />
+        )}
+        {/* Resize handles (скрыты в режиме ножниц) */}
+        {canResize && !isScissorsActive && (
           <>
             {/* Left handle */}
             {!isClippedLeft && (
@@ -381,6 +416,9 @@ export function EmployeeRow({
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
 
+  // Mutation hook для разрезания загрузки
+  const { split: splitMutation } = useLoadingMutations()
+
   // Timeline range для useTimelineResize
   const timelineRange = useMemo(() => calculateTimelineRange(dayCells), [dayCells])
 
@@ -398,6 +436,15 @@ export function EmployeeRow({
       })
     },
     [employee.id, updateLoadingDates]
+  )
+
+  // Обработчик разрезания загрузки (ножницы)
+  const handleSplitLoading = useCallback(
+    (loadingId: string, splitDate: string) => {
+      if (loadingId.startsWith('temp-')) return
+      splitMutation.mutate({ loadingId, splitDate })
+    },
+    [splitMutation]
   )
 
   // Обработчик клика на loading bar для открытия модалки редактирования
@@ -615,6 +662,7 @@ export function EmployeeRow({
                 timelineRange={timelineRange}
                 onLoadingClick={handleLoadingClick}
                 onLoadingResize={handleLoadingResize}
+                onSplitLoading={handleSplitLoading}
               />
             ))}
           </div>

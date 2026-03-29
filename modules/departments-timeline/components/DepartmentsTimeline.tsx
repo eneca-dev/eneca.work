@@ -9,7 +9,7 @@
 
 import { useMemo, useCallback, useRef, useEffect } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
-import { addDays } from 'date-fns'
+import { differenceInDays } from 'date-fns'
 import { getTodayMinsk } from '@/lib/timezone-utils'
 import { useDepartmentsData, useTeamsFreshness, useCompanyCalendarEvents } from '../hooks'
 import { useDepartmentsTimelineUIStore } from '../stores'
@@ -20,19 +20,12 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { TimelineHeader, generateDayCells } from '@/modules/resource-graph/components/timeline'
-import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY, TOTAL_DAYS } from '../constants'
-import type { TimelineRange } from '../types'
+import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
+import { ScissorsToggle } from '@/components/shared/timeline'
+import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { DepartmentRow } from './timeline/DepartmentRow'
 import { Skeleton } from '@/components/ui/skeleton'
-
-function calculateTimelineRange(): TimelineRange {
-  const today = getTodayMinsk()
-  const start = addDays(today, -DAYS_BEFORE_TODAY)
-  const end = addDays(today, DAYS_AFTER_TODAY - 1)
-  return { start, end, totalDays: TOTAL_DAYS }
-}
 
 // ============================================================================
 // Internal Props (for embedding in TasksView)
@@ -89,20 +82,26 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
     }
   }, [])
 
+  // UI state (individual selectors to avoid full-store subscription)
+  const collapseAll = useDepartmentsTimelineUIStore((s) => s.collapseAll)
+  const expandAll = useDepartmentsTimelineUIStore((s) => s.expandAll)
+  const customDateRange = useDepartmentsTimelineUIStore((s) => s.customDateRange)
+  const setCustomDateRange = useDepartmentsTimelineUIStore((s) => s.setCustomDateRange)
+
   // Load company calendar events (holidays and transfers) - cached for 24h
   const { data: calendarEvents = [] } = useCompanyCalendarEvents()
 
   // Timeline range and cells
-  const range = useMemo(() => calculateTimelineRange(), [])
+  const range = useMemo(
+    () => resolveTimelineRange(customDateRange, { daysBefore: DAYS_BEFORE_TODAY, daysAfter: DAYS_AFTER_TODAY }),
+    [customDateRange]
+  )
   const dayCells = useMemo(
     () => generateDayCells(range, calendarEvents),
     [range, calendarEvents]
   )
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
-
-  // UI state
-  const { collapseAll, expandAll } = useDepartmentsTimelineUIStore()
 
   // Data fetching with external query params
   const { data: departments, isLoading, error } = useDepartmentsData(
@@ -141,26 +140,32 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
     collapseAll()
   }, [collapseAll])
 
-  // Scroll to show today with 30 days before it
-  const handleScrollToToday = useCallback(() => {
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
-    contentScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
-    headerScrollRef.current?.scrollTo({ left: scrollLeft, behavior: 'smooth' })
-  }, [])
+  // Calculate "today" offset in pixels from the start of the timeline
+  const todayOffsetDays = useMemo(() => {
+    const today = getTodayMinsk()
+    return differenceInDays(today, range.start)
+  }, [range.start])
 
-  // Scroll header to today-30 as soon as it renders (fires when shouldFetchData becomes true)
+  // Scroll to show today with a small margin (7 days) to maximize forward view
+  const handleScrollToToday = useCallback(() => {
+    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
+    if (contentScrollRef.current) contentScrollRef.current.scrollLeft = scrollLeft
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = scrollLeft
+  }, [todayOffsetDays])
+
+  // Scroll header to today as soon as it renders (fires when shouldFetchData becomes true)
   useEffect(() => {
     if (!shouldFetchData || !headerScrollRef.current) return
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
     headerScrollRef.current.scrollLeft = scrollLeft
-  }, [shouldFetchData])
+  }, [shouldFetchData, todayOffsetDays])
 
-  // Scroll content to today-30 when data finishes loading
+  // Scroll content to today-7 when data finishes loading
   useEffect(() => {
     if (isLoading || !contentScrollRef.current) return
-    const scrollLeft = (DAYS_BEFORE_TODAY - 30) * DAY_CELL_WIDTH
+    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
     contentScrollRef.current.scrollLeft = scrollLeft
-  }, [isLoading])
+  }, [isLoading, todayOffsetDays])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -209,6 +214,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Отделы / Команды
                 </span>
+                <ScissorsToggle />
                 {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                 <TooltipProvider>
                   <div className="flex items-center gap-1">
@@ -243,7 +249,16 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 */}
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader dayCells={dayCells} onScrollToToday={handleScrollToToday} />
+              <TimelineHeader
+                dayCells={dayCells}
+                datePopoverConfig={{
+                  customRange: customDateRange,
+                  onRangeChange: setCustomDateRange,
+                  onScrollToToday: handleScrollToToday,
+                  defaultDaysBefore: DAYS_BEFORE_TODAY,
+                  defaultDaysAfter: DAYS_AFTER_TODAY,
+                }}
+              />
             </div>
           </div>
         </header>

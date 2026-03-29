@@ -3,3 +3,5 @@
 
 export { FreshnessIndicator } from './FreshnessIndicator'
 export * from './loading-bars-utils'
+export { getCellDayType } from './cell-utils'
+export { ScissorsToggle } from './ScissorsToggle'

@@ -37,6 +37,9 @@ import type { SectionLoading, DayCell, TimelineRange } from '../../types'
 import type { TimelineUnit } from '@/types/planning'
 import { getCellClassNames } from '../../utils/cell-utils'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
+import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
+import { useScissorsModeStore } from '@/stores'
+import { useLoadingMutations } from '@/modules/modals/hooks/useLoadingMutations'
 
 interface EmployeeRowProps {
   employee: {
@@ -83,6 +86,7 @@ interface LoadingBarProps {
   timelineRange: TimelineRange
   onLoadingClick: (loading: SectionLoading) => void
   onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
+  onSplitLoading: (loadingId: string, splitDate: string) => void
 }
 
 function LoadingBar({
@@ -92,6 +96,7 @@ function LoadingBar({
   timelineRange,
   onLoadingClick,
   onLoadingResize,
+  onSplitLoading,
 }: LoadingBarProps) {
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
@@ -124,18 +129,31 @@ function LoadingBar({
     disabled: false,
   })
 
+  // Scissors mode
+  const isScissorsActive = useScissorsModeStore((s) => s.isActive)
+
+  const scissors = useScissorsInteraction({
+    loadingId: bar.period.id,
+    startDate: startDateString,
+    endDate: endDateString,
+    dayCellWidth: DAY_CELL_WIDTH,
+    isActive: isScissorsActive && bar.period.type === 'loading',
+    onSplit: onSplitLoading,
+  })
+
   const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
   const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
 
   // Handle click with wasRecentlyDragging check
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
+    if (isScissorsActive) return // Scissors mode — don't open modal
 
     // Don't open modal if just finished dragging
     if (wasRecentlyDragging()) return
 
     onLoadingClick(bar.period.loading)
-  }, [bar.period, onLoadingClick, wasRecentlyDragging])
+  }, [bar.period, onLoadingClick, wasRecentlyDragging, isScissorsActive])
 
   // Use preview position if resizing, otherwise original
   const displayLeft = previewPosition?.left ?? bar.left
@@ -222,7 +240,8 @@ function LoadingBar({
         className={cn(
           'absolute pointer-events-auto flex items-center',
           !isResizing && 'transition-all duration-200',
-          bar.period.type === 'loading' && 'cursor-pointer hover:brightness-110',
+          bar.period.type === 'loading' && !isScissorsActive && 'cursor-pointer hover:brightness-110',
+          isScissorsActive && bar.period.type === 'loading' && 'cursor-col-resize',
           isResizing && 'ring-2 ring-primary/50 z-50'
         )}
         style={{
@@ -243,10 +262,27 @@ function LoadingBar({
           borderBottomRightRadius: bar.period.comment ? 0 : 4,
         }}
         title={formatBarTooltip(bar.period)}
-        onClick={handleClick}
+        onClick={isScissorsActive ? scissors.handlers.onClick : handleClick}
+        onMouseMove={scissors.handlers.onMouseMove}
+        onMouseLeave={scissors.handlers.onMouseLeave}
       >
-        {/* Resize handles */}
-        <>
+        {/* Scissors cut line */}
+        {scissors.cutLinePosition !== null && (
+          <div
+            className="absolute top-0 bottom-0 pointer-events-none"
+            style={{
+              left: scissors.cutLinePosition,
+              width: 2,
+              backgroundColor: scissors.isValidCut ? 'rgba(239, 68, 68, 0.9)' : 'rgba(156, 163, 175, 0.5)',
+              borderLeft: scissors.isValidCut ? '1px dashed rgba(239, 68, 68, 0.6)' : 'none',
+              borderRight: scissors.isValidCut ? '1px dashed rgba(239, 68, 68, 0.6)' : 'none',
+              zIndex: 30,
+            }}
+          />
+        )}
+
+        {/* Resize handles (hidden in scissors mode) */}
+        {!isScissorsActive && <>
           {/* Left handle */}
           {!isClippedLeft && (
             <div
@@ -263,7 +299,7 @@ function LoadingBar({
               style={{ zIndex: 20 }}
             />
           )}
-        </>
+        </>}
 
         {/* Sticky rate badge (always visible, vertically centered) */}
         <div
@@ -409,6 +445,9 @@ export function EmployeeRow({
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
 
+  // Mutation hook для разрезания загрузки
+  const { split: splitMutation } = useLoadingMutations()
+
   // Timeline range для useTimelineResize
   const timelineRange = useMemo(() => calculateTimelineRange(dayCells), [dayCells])
 
@@ -451,6 +490,15 @@ export function EmployeeRow({
       })
     },
     [employee.employeeId, updateLoadingDates]
+  )
+
+  // Обработчик разрезания загрузки (ножницы)
+  const handleSplitLoading = useCallback(
+    (loadingId: string, splitDate: string) => {
+      if (loadingId.startsWith('temp-')) return
+      splitMutation.mutate({ loadingId, splitDate })
+    },
+    [splitMutation]
   )
 
   // Обработчик создания новой загрузки для сотрудника
@@ -584,6 +632,7 @@ export function EmployeeRow({
                 timelineRange={timelineRange}
                 onLoadingClick={handleLoadingClick}
                 onLoadingResize={handleLoadingResize}
+                onSplitLoading={handleSplitLoading}
               />
             ))}
           </div>

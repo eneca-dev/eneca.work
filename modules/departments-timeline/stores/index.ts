@@ -7,6 +7,9 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import type { TreeNodeType } from '../types'
+import type { CustomDateRange } from '@/modules/resource-graph/components/timeline'
+
+export type { CustomDateRange }
 
 // ============================================================================
 // UI State Store
@@ -22,6 +25,10 @@ interface UIState {
   selectedItemId: string | null
   /** Тип выбранного элемента */
   selectedItemType: TreeNodeType | null
+  /** Кастомный диапазон дат таймлайна (null = дефолтный 150+150) */
+  customDateRange: CustomDateRange | null
+  /** Установить кастомный диапазон */
+  setCustomDateRange: (range: CustomDateRange | null) => void
 
   // Check operations
   isExpanded: (type: TreeNodeType, id: string) => boolean
@@ -74,6 +81,8 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         expandedNodes: createEmptyExpandedNodes(),
         selectedItemId: null,
         selectedItemType: null,
+        customDateRange: null,
+        setCustomDateRange: (range) => set({ customDateRange: range }),
 
         isExpanded: (type, id) => get().expandedNodes[type].has(id),
 
@@ -198,6 +207,7 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         name: 'departments-timeline-ui-state',
         partialize: (state) => ({
           expandedNodes: state.expandedNodes,
+          customDateRange: state.customDateRange,
         }),
         storage: {
           getItem: (name) => {

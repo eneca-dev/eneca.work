@@ -91,6 +91,7 @@ export interface Project {
   // Агрегированные данные
   totalSections: number
   totalLoadings: number
+  totalEmployees: number
   dailyWorkloads?: Record<string, number>
   objectSections: ObjectSection[]
 }
@@ -111,6 +112,7 @@ export interface Department {
   totalProjects: number
   totalSections: number
   totalLoadings: number
+  totalEmployees: number
   dailyWorkloads?: Record<string, number>
   projects: Project[]
 }

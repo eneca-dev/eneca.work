@@ -31,19 +31,8 @@ export {
   type BarLabelParts,
 } from '@/components/shared/timeline/loading-bars-utils'
 
-// ============================================================================
-// Cell Helpers - DRY utilities for timeline cells
-// ============================================================================
-
-/**
- * Определяет тип дня (выходной, праздник и т.д.)
- */
-export function getCellDayType(cell: DayCell) {
-  return {
-    isWeekend: cell.isWeekend && !cell.isWorkday,
-    isSpecialDayOff: cell.isHoliday || cell.isTransferredDayOff,
-  }
-}
+// Re-export shared cell utils
+export { getCellDayType } from '@/components/shared/timeline/cell-utils'
 
 /**
  * Генерирует CSS классы для ячейки дня на таймлайне
@@ -53,6 +42,7 @@ export function getCellClassNames(cell: DayCell, additionalClasses?: string) {
 
   return cn(
     'border-r border-border/50 relative',
+    cell.monthIndex % 2 === 1 && 'bg-black/[0.03] dark:bg-white/[0.035]',
     !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
     !cell.isToday && isWeekend && 'bg-muted/50',
     // Сегодня - применяется последним, но за загрузками

@@ -18,7 +18,7 @@ import { useProjectReports, useSaveProjectReport, useDeleteProjectReport } from 
 import type { ProjectReport } from '../types'
 import type { DayCell } from '@/modules/resource-graph/components/timeline/TimelineHeader'
 import type { TimelineRange } from '@/modules/resource-graph/types'
-import { TimelineGrid } from '@/modules/resource-graph/components/timeline/TimelineRow'
+import { TimelineGrid } from '@/modules/resource-graph/components/timeline/shared'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { getInitials } from '../utils'
 

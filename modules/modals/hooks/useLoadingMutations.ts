@@ -20,12 +20,15 @@ import {
   updateLoading,
   archiveLoading,
   deleteLoading,
+  splitLoading,
 } from '../actions/loadings'
 import type {
   CreateLoadingInput,
   UpdateLoadingInput,
   ArchiveLoadingInput,
   DeleteLoadingInput,
+  SplitLoadingInput,
+  SplitLoadingResult,
   LoadingResult,
 } from '../actions/loadings'
 
@@ -38,6 +41,8 @@ export interface UseLoadingMutationsOptions {
   onArchiveSuccess?: (data: LoadingResult) => void
   /** Callback при успешном удалении */
   onDeleteSuccess?: (id: string) => void
+  /** Callback при успешном разрезании */
+  onSplitSuccess?: (data: SplitLoadingResult) => void
   /** Callback при ошибке */
   onError?: (error: Error) => void
 }
@@ -930,11 +935,244 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     },
   })
 
+  // ==========================================================================
+  // SPLIT - Разрезание загрузки на две части с optimistic update
+  // ==========================================================================
+  const split = useMutation({
+    mutationFn: async (input: SplitLoadingInput) => {
+      if (isTempLoadingId(input.loadingId)) {
+        throw new Error('Загрузка ещё сохраняется. Попробуйте позже.')
+      }
+
+      const result = await splitLoading(input)
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      return result.data
+    },
+
+    onMutate: async (input: SplitLoadingInput): Promise<OptimisticContext> => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.sectionsPage.all }),
+      ])
+
+      const previousDepartmentsData = queryClient.getQueriesData({
+        queryKey: queryKeys.departmentsTimeline.all,
+      })
+      const previousResourceGraphData = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+      const previousSectionsPageData = queryClient.getQueriesData({
+        queryKey: queryKeys.sectionsPage.all,
+      })
+
+      const tempId = `temp-${Date.now()}-${Math.random()}`
+
+      // Вычисляем дату окончания первой части (splitDate - 1 день)
+      const splitDateObj = new Date(input.splitDate)
+      splitDateObj.setDate(splitDateObj.getDate() - 1)
+      const originalNewEnd = splitDateObj.toISOString().split('T')[0]
+
+      // Optimistic update: departments timeline
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.departmentsTimeline.lists() },
+        (old: any) => {
+          if (!old) return old
+
+          const isDirectArray = Array.isArray(old)
+          const departments = isDirectArray ? old : old?.data
+
+          if (!departments || !Array.isArray(departments) || departments.length === 0) {
+            return old
+          }
+
+          const updatedDepartments = departments.map((dept: any) => ({
+            ...dept,
+            teams: dept.teams.map((team: any) => ({
+              ...team,
+              employees: team.employees.map((emp: any) => {
+                const originalLoading = emp.loadings?.find((l: any) => l.id === input.loadingId)
+                if (!originalLoading) return emp
+
+                const updatedLoadings = emp.loadings.map((l: any) => {
+                  if (l.id !== input.loadingId) return l
+                  return { ...l, endDate: originalNewEnd, _optimistic: true }
+                })
+
+                // Добавляем вторую часть
+                updatedLoadings.push({
+                  ...originalLoading,
+                  id: tempId,
+                  startDate: input.splitDate,
+                  _optimistic: true,
+                })
+
+                return {
+                  ...emp,
+                  loadings: updatedLoadings,
+                  loadingsCount: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+
+          return isDirectArray ? updatedDepartments : { ...old, data: updatedDepartments }
+        }
+      )
+
+      // Optimistic update: resourceGraph
+      const allResourceGraphLoadings = queryClient.getQueriesData({
+        queryKey: queryKeys.resourceGraph.all,
+      })
+
+      allResourceGraphLoadings.forEach(([queryKey, data]) => {
+        const isLoadingsCache = Array.isArray(queryKey) && queryKey.includes('loadings')
+        if (!isLoadingsCache || !data || !Array.isArray(data)) return
+
+        const originalLoading = data.find((l: any) => l.id === input.loadingId)
+        if (!originalLoading) return
+
+        const updatedLoadings = data.map((l: any) => {
+          if (l.id !== input.loadingId) return l
+          return { ...l, endDate: originalNewEnd, finishDate: originalNewEnd, _optimistic: true }
+        })
+
+        updatedLoadings.push({
+          ...originalLoading,
+          id: tempId,
+          startDate: input.splitDate,
+          finishDate: originalLoading.endDate || originalLoading.finishDate,
+          _optimistic: true,
+        })
+
+        queryClient.setQueryData(queryKey, updatedLoadings)
+      })
+
+      // Optimistic update: sectionsPage
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sectionsPage.lists() },
+        (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+
+          return old.map((dept: any) => ({
+            ...dept,
+            projects: dept.projects.map((project: any) => ({
+              ...project,
+              objectSections: project.objectSections.map((objectSection: any) => {
+                const originalLoading = objectSection.loadings?.find(
+                  (l: any) => l.id === input.loadingId
+                )
+                if (!originalLoading) return objectSection
+
+                const updatedLoadings = objectSection.loadings.map((l: any) => {
+                  if (l.id !== input.loadingId) return l
+                  return { ...l, endDate: originalNewEnd, _optimistic: true }
+                })
+
+                updatedLoadings.push({
+                  ...originalLoading,
+                  id: tempId,
+                  startDate: input.splitDate,
+                  _optimistic: true,
+                })
+
+                return {
+                  ...objectSection,
+                  loadings: updatedLoadings,
+                  totalLoadings: updatedLoadings.length,
+                }
+              }),
+            })),
+          }))
+        }
+      )
+
+      return {
+        previousDepartmentsData,
+        previousResourceGraphData,
+        previousSectionsPageData,
+        tempId,
+      }
+    },
+
+    onSuccess: async (data, _variables, context) => {
+      // Заменяем temp ID на реальный UUID
+      const oldTempId = context?.tempId
+      if (oldTempId && data.created) {
+        const replaceTempId = (obj: any): any => {
+          if (!obj) return obj
+          if (Array.isArray(obj)) return obj.map(replaceTempId)
+          if (typeof obj === 'object') {
+            const result: any = {}
+            for (const key of Object.keys(obj)) {
+              if (key === 'id' && obj[key] === oldTempId) {
+                result[key] = data.created.id
+              } else {
+                result[key] = replaceTempId(obj[key])
+              }
+            }
+            return result
+          }
+          return obj
+        }
+
+        for (const key of [
+          queryKeys.departmentsTimeline.all,
+          queryKeys.resourceGraph.all,
+          queryKeys.sectionsPage.all,
+        ]) {
+          const queriesData = queryClient.getQueriesData({ queryKey: key })
+          queriesData.forEach(([queryKey, queryData]) => {
+            if (queryData) {
+              queryClient.setQueryData(queryKey, replaceTempId(queryData))
+            }
+          })
+        }
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
+      ])
+
+      options.onSplitSuccess?.(data)
+    },
+
+    onError: (error: Error, _variables, context: OptimisticContext | undefined) => {
+      console.error('❌ Ошибка разрезания загрузки, откатываем optimistic update')
+
+      if (context?.previousDepartmentsData) {
+        context.previousDepartmentsData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousResourceGraphData) {
+        context.previousResourceGraphData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      if (context?.previousSectionsPageData) {
+        context.previousSectionsPageData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      options.onError?.(error)
+    },
+  })
+
   return {
     create,
     update,
     archive,
     remove,
+    split,
   }
 }
 
@@ -943,5 +1181,7 @@ export type {
   UpdateLoadingInput,
   ArchiveLoadingInput,
   DeleteLoadingInput,
+  SplitLoadingInput,
+  SplitLoadingResult,
   LoadingResult,
 }

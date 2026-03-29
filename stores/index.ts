@@ -3,3 +3,4 @@ export { useUiStore } from './useUiStore'
 export { useSettingsStore } from './useSettingsStore' 
 export { useCalendarStore } from '@/modules/calendar/store'
 export { useNotificationsUiStore } from "./useNotificationsUiStore"
+export { useScissorsModeStore } from './useScissorsModeStore'
