@@ -25,15 +25,17 @@ export const MAX_FILTER_STRING_LENGTH = 2000
 /**
  * Регулярное выражение для парсинга токенов
  * Матчит: ключ:"значение с пробелами" или ключ:значение
+ * Также поддерживает исключающий префикс: -ключ:"значение"
  *
  * Группы:
- * 1 - ключ (все символы до двоеточия)
- * 2 - значение в кавычках (без кавычек)
- * 3 - значение без кавычек
+ * 1 - опциональный минус (исключающий фильтр)
+ * 2 - ключ (все символы до двоеточия)
+ * 3 - значение в кавычках (без кавычек)
+ * 4 - значение без кавычек
  *
  * @internal Используется только внутри модуля
  */
-const TOKEN_REGEX = /([^\s:]+):(?:"([^"]+)"|([^\s]+))/g
+const TOKEN_REGEX = /(-?)([^\s:]+):(?:"([^"]+)"|([^\s]+))/g
 
 // ============================================================================
 // Вспомогательные функции
@@ -93,8 +95,9 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
     // Лимит на количество токенов
     if (tokens.length >= MAX_TOKENS) break
 
-    const key = match[1]
-    const rawValue = match[2] ?? match[3] // Значение в кавычках или без
+    const negated = match[1] === '-'
+    const key = match[2]
+    const rawValue = match[3] ?? match[4] // Значение в кавычках или без
     // Разэкранируем значение для правильного round-trip
     const value = rawValue ? unescapeFilterValue(rawValue) : ''
 
@@ -112,6 +115,7 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
       key,
       value,
       raw: match[0],
+      negated,
     })
   }
 
@@ -141,16 +145,17 @@ export function serializeFilter(tokens: ParsedToken[]): string {
       const hasSpaces = token.value.includes(' ')
       const hasQuotes = token.value.includes('"')
       const hasBackslash = token.value.includes('\\')
+      const prefix = token.negated ? '-' : ''
 
       // Нужны кавычки если есть пробелы или спецсимволы
       const needsQuotes = hasSpaces || hasQuotes || hasBackslash
 
       if (needsQuotes) {
         const escapedValue = escapeFilterValue(token.value)
-        return `${token.key}:"${escapedValue}"`
+        return `${prefix}${token.key}:"${escapedValue}"`
       }
 
-      return `${token.key}:${token.value}`
+      return `${prefix}${token.key}:${token.value}`
     })
     .join(' ')
 }
@@ -174,20 +179,16 @@ export function tokensToQueryParams(
     const keyConfig = config.keys[token.key]
     if (!keyConfig) continue
 
-    const field = keyConfig.field
+    // Исключающие фильтры используют префикс "!" в ключе параметра
+    const field = token.negated ? `!${keyConfig.field}` : keyConfig.field
 
-    if (keyConfig.multiple) {
-      // Для множественных значений собираем в массив
-      const existing = params[field]
-      if (Array.isArray(existing)) {
-        existing.push(token.value)
-      } else if (typeof existing === 'string') {
-        params[field] = [existing, token.value]
-      } else {
-        params[field] = [token.value]
-      }
+    const existing = params[field]
+    if (existing !== undefined) {
+      // Уже есть значение — собираем в массив (иммутабельно)
+      params[field] = Array.isArray(existing)
+        ? [...existing, token.value]
+        : [existing, token.value]
     } else {
-      // Для одиночных значений перезаписываем (последнее значение побеждает)
       params[field] = token.value
     }
   }
@@ -202,21 +203,24 @@ export function addOrUpdateToken(
   currentFilter: string,
   key: string,
   value: string,
-  config: FilterConfig
+  config: FilterConfig,
+  negated?: boolean,
 ): string {
   const parsed = parseFilterString(currentFilter, config)
   const keyConfig = config.keys[key]
 
   if (!keyConfig) return currentFilter
 
+  const isNegated = negated ?? false
+
   if (keyConfig.multiple) {
     // Для множественных — добавляем новый токен
-    const newToken: ParsedToken = { key, value, raw: '' }
+    const newToken: ParsedToken = { key, value, raw: '', negated: isNegated }
     return serializeFilter([...parsed.tokens, newToken])
   } else {
-    // Для одиночных — заменяем существующий или добавляем
-    const existingIndex = parsed.tokens.findIndex((t) => t.key === key)
-    const newToken: ParsedToken = { key, value, raw: '' }
+    // Для одиночных — заменяем существующий с тем же negated или добавляем
+    const existingIndex = parsed.tokens.findIndex((t) => t.key === key && !!t.negated === isNegated)
+    const newToken: ParsedToken = { key, value, raw: '', negated: isNegated }
 
     if (existingIndex >= 0) {
       const newTokens = [...parsed.tokens]
@@ -268,4 +272,36 @@ export function getValuesForKey(
 ): string[] {
   const parsed = parseFilterString(input, config)
   return parsed.tokens.filter((t) => t.key === key).map((t) => t.value)
+}
+
+/**
+ * Извлекает значение исключающего фильтра из query params (первое значение)
+ *
+ * @example
+ * getNegatedParam(params, 'project_id') // → 'uuid' | undefined
+ */
+export function getNegatedParam(
+  params: FilterQueryParams | undefined,
+  field: string
+): string | undefined {
+  if (!params) return undefined
+  const val = params[`!${field}`]
+  if (!val) return undefined
+  return Array.isArray(val) ? val[0] : val
+}
+
+/**
+ * Извлекает ВСЕ значения исключающего фильтра из query params
+ *
+ * @example
+ * getNegatedParams(params, 'department_id') // → ['КР гражд', 'БИМ отдел'] | []
+ */
+export function getNegatedParams(
+  params: FilterQueryParams | undefined,
+  field: string
+): string[] {
+  if (!params) return []
+  const val = params[`!${field}`]
+  if (!val) return []
+  return Array.isArray(val) ? val : [val]
 }

@@ -3,7 +3,8 @@
  */
 
 export { ResourceGraphTimeline } from './ResourceGraphTimeline'
-export { TimelineHeader, generateDayCells, type DayCell } from './TimelineHeader'
+export { TimelineHeader, generateDayCells, resolveTimelineRange, type DayCell } from './TimelineHeader'
+export { TimelineDatePopover, type CustomDateRange } from './TimelineDatePopover'
 export { TimelineBar, calculateBarPosition } from './TimelineBar'
 export { ProjectRow } from './rows'
 export { TimelineGrid } from './shared'

@@ -9,7 +9,7 @@
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
-import type { FilterQueryParams } from '@/modules/inline-filter'
+import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
 import type {
   Department,
@@ -173,16 +173,49 @@ export async function getSectionsHierarchy(
       }
     }
 
-    // Фильтр по проекту
+    // Фильтр по проекту (поддержка нескольких значений)
     if (effectiveFilters?.project_id) {
-      const projectId = Array.isArray(effectiveFilters.project_id)
-        ? effectiveFilters.project_id[0]
-        : effectiveFilters.project_id
+      const values = Array.isArray(effectiveFilters.project_id)
+        ? effectiveFilters.project_id
+        : [effectiveFilters.project_id]
 
-      if (isUuid(projectId)) {
-        query = query.eq('project_id', projectId)
+      const uuids = values.filter(isUuid)
+      const names = values.filter(v => !isUuid(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        query = query.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        query = query.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        query = query.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры (-проект, -отдел, -команда)
+    for (const val of getNegatedParams(effectiveFilters, 'project_id')) {
+      if (isUuid(val)) {
+        query = query.neq('project_id', val)
       } else {
-        query = query.ilike('project_name', projectId)
+        query = query.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(effectiveFilters, 'department_id')) {
+      if (isUuid(val)) {
+        query = query.neq('department_id', val).neq('employee_department_id', val)
+      } else {
+        query = query.not('department_name', 'ilike', val).not('employee_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(effectiveFilters, 'subdivision_id')) {
+      if (isUuid(val)) {
+        query = query.neq('subdivision_id', val).neq('employee_subdivision_id', val)
+      } else {
+        query = query.not('subdivision_name', 'ilike', val).not('employee_subdivision_name', 'ilike', val)
       }
     }
 
@@ -210,6 +243,9 @@ export async function getSectionsHierarchy(
     // - dept scope (нач. отдела): только свой отдел (через ответственного или сотрудника)
     // - admin/subdivision scope: полное дублирование (отдел ответственного + отдел сотрудника)
     const departmentsMap = new Map<string, Department>()
+    // Трекеры уникальных сотрудников (department_id/project_id → Set<employee_id>)
+    const deptEmployeeIds = new Map<string, Set<string>>()
+    const projectEmployeeIds = new Map<string, Set<string>>()
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
@@ -294,7 +330,7 @@ export async function getSectionsHierarchy(
       for (const deptInfo of departmentIds) {
         const deptId = deptInfo.id
 
-        // Получаем или создаём отдел
+        // Получаем или создаём отдел (+ Set для уникальных сотрудников)
         let department = departmentsMap.get(deptId)
         if (!department) {
           department = {
@@ -310,10 +346,12 @@ export async function getSectionsHierarchy(
             totalProjects: 0,
             totalSections: 0,
             totalLoadings: 0,
+            totalEmployees: 0,
             dailyWorkloads: {},
             projects: [],
           }
           departmentsMap.set(deptId, department)
+          deptEmployeeIds.set(deptId, new Set())
         }
 
         // Получаем или создаём проект
@@ -332,10 +370,12 @@ export async function getSectionsHierarchy(
             stageType: null,
             totalSections: 0,
             totalLoadings: 0,
+            totalEmployees: 0,
             dailyWorkloads: {},
             objectSections: [],
           }
           department.projects.push(project)
+          projectEmployeeIds.set(`${deptId}:${project.id}`, new Set())
           department.totalProjects++
         }
 
@@ -417,7 +457,19 @@ dailyWorkloads: {},
           objectSection.totalLoadings = objectSection.loadings.length
           project.totalLoadings++
           department.totalLoadings++
+
+          // Track unique employees
+          projectEmployeeIds.get(`${deptId}:${project.id}`)!.add(row.employee_id)
+          deptEmployeeIds.get(deptId)!.add(row.employee_id)
         }
+      }
+    }
+
+    // Присваиваем totalEmployees из Set.size
+    for (const dept of departmentsMap.values()) {
+      dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
+      for (const project of dept.projects) {
+        project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
       }
     }
 

@@ -11,8 +11,21 @@ import { useShallow } from 'zustand/react/shallow'
 import { persist } from 'zustand/middleware'
 import { eachDayOfInterval } from 'date-fns'
 import { parseMinskDate, formatMinskDate } from '@/lib/timezone-utils'
+import type { CustomDateRange } from '@/modules/resource-graph/components/timeline'
+
+export type { CustomDateRange }
 
 interface SectionsPageUIState {
+  // ============================================================================
+  // Timeline Date Range
+  // ============================================================================
+
+  /** Кастомный диапазон дат таймлайна (null = дефолтный 150+150) */
+  customDateRange: CustomDateRange | null
+
+  /** Установить кастомный диапазон */
+  setCustomDateRange: (range: CustomDateRange | null) => void
+
   // ============================================================================
   // Expand/Collapse State
   // ============================================================================
@@ -114,6 +127,13 @@ export function useRowExpanded(type: string, id: string) {
 export const useSectionsPageUIStore = create<SectionsPageUIState>()(
   persist(
     (set, get) => ({
+      // ============================================================================
+      // Timeline Date Range
+      // ============================================================================
+
+      customDateRange: null,
+      setCustomDateRange: (range) => set({ customDateRange: range }),
+
       // ============================================================================
       // Expand/Collapse Implementation
       // ============================================================================
@@ -243,6 +263,7 @@ export const useSectionsPageUIStore = create<SectionsPageUIState>()(
       partialize: (state) => ({
         expandedNodes: state.expandedNodes,
         capacityOverrides: state.capacityOverrides,
+        customDateRange: state.customDateRange,
       }),
     }
   )

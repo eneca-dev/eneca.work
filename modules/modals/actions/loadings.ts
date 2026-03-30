@@ -12,6 +12,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
+import { addDays, format, parseISO } from 'date-fns'
 import type { ActionResult } from '@/modules/cache'
 import type { Database } from '@/types/db'
 
@@ -81,6 +82,23 @@ export interface LoadingResult {
   updatedAt: string | null
 }
 
+export interface CreateLoadingBatchInput {
+  /** ID этапа декомпозиции */
+  stageId: string
+  /** ID раздела */
+  sectionId: string
+  /** Массив ID сотрудников */
+  employeeIds: string[]
+  /** Дата начала */
+  startDate: string
+  /** Дата окончания */
+  endDate: string
+  /** Ставка загрузки */
+  rate: number
+  /** Комментарий (опционально) */
+  comment?: string
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -97,10 +115,29 @@ function isValidDate(dateString: string): boolean {
 }
 
 /**
- * Валидация ставки загрузки (0.0 - 1.0)
+ * Валидация ставки загрузки (0.01 - 2.0)
  */
 function isValidRate(rate: number): boolean {
   return rate >= 0.01 && rate <= 2.0
+}
+
+/**
+ * Общая валидация полей загрузки (без employee — он отличается в single/batch)
+ */
+function validateLoadingFields(input: {
+  stageId: string
+  startDate: string
+  endDate: string
+  rate: number
+}): string | null {
+  if (!input.stageId?.trim()) return 'ID этапа обязателен'
+  if (!isValidDate(input.startDate)) return 'Неверный формат даты начала'
+  if (!isValidDate(input.endDate)) return 'Неверный формат даты окончания'
+  if (new Date(input.startDate) > new Date(input.endDate)) {
+    return 'Дата начала не может быть позже даты окончания'
+  }
+  if (!isValidRate(input.rate)) return 'Ставка загрузки должна быть от 0.01 до 2.0'
+  return null
 }
 
 /**
@@ -134,35 +171,12 @@ export async function createLoading(
   try {
     const supabase = await createClient()
 
-    // Валидация входных данных
-    if (!input.stageId?.trim()) {
-      return { success: false, error: 'ID этапа обязателен' }
-    }
+    // Валидация общих полей
+    const validationError = validateLoadingFields(input)
+    if (validationError) return { success: false, error: validationError }
 
     if (!input.employeeId?.trim()) {
       return { success: false, error: 'ID сотрудника обязателен' }
-    }
-
-    if (!isValidDate(input.startDate)) {
-      return { success: false, error: 'Неверный формат даты начала' }
-    }
-
-    if (!isValidDate(input.endDate)) {
-      return { success: false, error: 'Неверный формат даты окончания' }
-    }
-
-    if (new Date(input.startDate) > new Date(input.endDate)) {
-      return {
-        success: false,
-        error: 'Дата начала не может быть позже даты окончания',
-      }
-    }
-
-    if (!isValidRate(input.rate)) {
-      return {
-        success: false,
-        error: 'Ставка загрузки должна быть от 0.01 до 2.0',
-      }
     }
 
     // Подготовка данных для вставки
@@ -207,6 +221,73 @@ export async function createLoading(
         error instanceof Error
           ? error.message
           : 'Произошла неизвестная ошибка при создании загрузки',
+    }
+  }
+}
+
+/**
+ * Batch-создание загрузок для нескольких сотрудников.
+ * Один INSERT в Supabase, один revalidatePath.
+ */
+export async function createLoadingBatch(
+  input: CreateLoadingBatchInput
+): Promise<ActionResult<{ created: number; total: number }>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация общих полей
+    const validationError = validateLoadingFields(input)
+    if (validationError) return { success: false, error: validationError }
+
+    if (!input.employeeIds || input.employeeIds.length === 0) {
+      return { success: false, error: 'Необходимо указать хотя бы одного сотрудника' }
+    }
+
+    const now = new Date().toISOString()
+
+    // Подготовка массива для batch insert
+    const rows: LoadingInsert[] = input.employeeIds.map((employeeId) => ({
+      loading_stage: input.stageId,
+      loading_section: input.sectionId,
+      loading_responsible: employeeId,
+      loading_start: input.startDate,
+      loading_finish: input.endDate,
+      loading_rate: input.rate,
+      loading_comment: input.comment || null,
+      loading_status: 'active' as const,
+      is_shortage: false,
+      loading_created: now,
+    }))
+
+    // Один INSERT для всех сотрудников (без .select() — нам не нужны возвращённые данные)
+    const { error } = await supabase
+      .from('loadings')
+      .insert(rows)
+
+    if (error) {
+      console.error('[createLoadingBatch] Supabase error:', error)
+      return {
+        success: false,
+        error: `Не удалось создать загрузки: ${error.message}`,
+      }
+    }
+
+    // Один revalidatePath
+    revalidatePath('/resource-graph')
+    revalidatePath('/tasks')
+
+    return {
+      success: true,
+      data: { created: rows.length, total: input.employeeIds.length },
+    }
+  } catch (error) {
+    console.error('[createLoadingBatch] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при создании загрузок',
     }
   }
 }
@@ -573,6 +654,144 @@ export async function deleteLoading(
         error instanceof Error
           ? error.message
           : 'Произошла неизвестная ошибка при удалении загрузки',
+    }
+  }
+}
+
+// ============================================================================
+// Split Loading
+// ============================================================================
+
+export interface SplitLoadingInput {
+  /** ID загрузки для разрезания */
+  loadingId: string
+  /** Дата начала ВТОРОЙ части (YYYY-MM-DD) */
+  splitDate: string
+}
+
+export interface SplitLoadingResult {
+  /** Обновлённый оригинал (endDate = splitDate - 1) */
+  original: LoadingResult
+  /** Новая загрузка (startDate = splitDate) */
+  created: LoadingResult
+}
+
+/**
+ * Разрезание загрузки на две части
+ *
+ * Оригинальная загрузка обновляется: endDate = splitDate - 1 день.
+ * Создаётся новая загрузка: startDate = splitDate, endDate = original endDate.
+ * Все остальные поля (employee, section, stage, rate, comment) копируются.
+ */
+export async function splitLoading(
+  input: SplitLoadingInput
+): Promise<ActionResult<SplitLoadingResult>> {
+  try {
+    const supabase = await createClient()
+
+    // Валидация
+    if (!input.loadingId?.trim()) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+    if (!isValidDate(input.splitDate)) {
+      return { success: false, error: 'Неверный формат даты разреза' }
+    }
+
+    // Получаем оригинальную загрузку
+    const { data: original, error: fetchError } = await supabase
+      .from('loadings')
+      .select('*')
+      .eq('loading_id', input.loadingId)
+      .single()
+
+    if (fetchError || !original) {
+      return { success: false, error: 'Загрузка не найдена' }
+    }
+
+    if (original.loading_status !== 'active') {
+      return { success: false, error: 'Можно разрезать только активную загрузку' }
+    }
+
+    const splitDate = parseISO(input.splitDate)
+    const startDate = parseISO(original.loading_start)
+    const finishDate = parseISO(original.loading_finish)
+
+    // splitDate должна быть строго между start и finish
+    if (splitDate <= startDate || splitDate > finishDate) {
+      return {
+        success: false,
+        error: 'Дата разреза должна быть строго внутри диапазона загрузки',
+      }
+    }
+
+    const originalNewEnd = format(addDays(splitDate, -1), 'yyyy-MM-dd')
+    const now = new Date().toISOString()
+
+    // UPDATE оригинал: сокращаем endDate
+    const { data: updatedOriginal, error: updateError } = await supabase
+      .from('loadings')
+      .update({
+        loading_finish: originalNewEnd,
+        loading_updated: now,
+      })
+      .eq('loading_id', input.loadingId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('[splitLoading] Update error:', updateError)
+      return { success: false, error: `Не удалось обновить оригинал: ${updateError.message}` }
+    }
+
+    // INSERT новая загрузка: копия с новыми датами
+    const insertData: LoadingInsert = {
+      loading_stage: original.loading_stage,
+      loading_section: original.loading_section,
+      loading_responsible: original.loading_responsible,
+      loading_start: input.splitDate,
+      loading_finish: original.loading_finish,
+      loading_rate: original.loading_rate,
+      loading_comment: original.loading_comment,
+      loading_status: 'active',
+      is_shortage: original.is_shortage ?? false,
+      loading_created: now,
+    }
+
+    const { data: newLoading, error: insertError } = await supabase
+      .from('loadings')
+      .insert(insertData)
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('[splitLoading] Insert error:', insertError)
+      // Откат: восстановить оригинальную дату окончания
+      await supabase
+        .from('loadings')
+        .update({ loading_finish: original.loading_finish, loading_updated: now })
+        .eq('loading_id', input.loadingId)
+
+      return { success: false, error: `Не удалось создать вторую часть: ${insertError.message}` }
+    }
+
+    revalidatePath('/resource-graph')
+    revalidatePath('/tasks')
+
+    return {
+      success: true,
+      data: {
+        original: mapLoadingToResult(updatedOriginal),
+        created: mapLoadingToResult(newLoading),
+      },
+    }
+  } catch (error) {
+    console.error('[splitLoading] Error:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Произошла неизвестная ошибка при разрезании загрузки',
     }
   }
 }

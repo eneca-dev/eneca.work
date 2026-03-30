@@ -24,8 +24,10 @@ export interface BreadcrumbItem {
 }
 
 export interface LoadingFormData {
-  /** ID сотрудника */
+  /** ID сотрудника (используется в edit mode) */
   employeeId: string
+  /** Массив ID сотрудников (используется в create mode для мультивыбора) */
+  employeeIds: string[]
   /** Дата начала (YYYY-MM-DD) */
   startDate: string
   /** Дата окончания (YYYY-MM-DD) */
@@ -115,6 +117,7 @@ function getDateInDays(daysFromNow: number): string {
 function getDefaultFormData(): LoadingFormData {
   return {
     employeeId: '',
+    employeeIds: [],
     startDate: getDateInDays(0), // Сегодня
     endDate: getDateInDays(7), // Через неделю
     rate: 1.0,
@@ -153,6 +156,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
 
       const initialFormData = {
         employeeId: initialLoading.employee_id,
+        employeeIds: [initialLoading.employee_id],
         startDate,
         endDate,
         rate: initialLoading.rate,
@@ -165,6 +169,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
     const defaultForm = getDefaultFormData()
     if (initialEmployeeId) {
       defaultForm.employeeId = initialEmployeeId
+      defaultForm.employeeIds = [initialEmployeeId]
     }
     // Применяем предзаполненные значения (для копирования загрузки)
     if (initialFormValues) {
@@ -210,7 +215,11 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
   const validateForm = useCallback((): boolean => {
     const newErrors: Partial<Record<keyof LoadingFormData, string>> = {}
 
-    if (!formData.employeeId.trim()) {
+    if (mode === 'create') {
+      if (formData.employeeIds.length === 0) {
+        newErrors.employeeId = 'Выберите хотя бы одного сотрудника'
+      }
+    } else if (!formData.employeeId.trim()) {
       newErrors.employeeId = 'Выберите сотрудника'
     }
 

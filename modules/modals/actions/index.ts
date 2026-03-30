@@ -81,6 +81,8 @@ export {
   type UpdateLoadingInput,
   type ArchiveLoadingInput,
   type DeleteLoadingInput,
+  type SplitLoadingInput,
+  type SplitLoadingResult,
   type LoadingResult,
 } from './loadings'
 

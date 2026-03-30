@@ -18,8 +18,8 @@ import type { FilterConfig } from '../types'
 
 export type FilterInputContext =
   | { type: 'empty' }
-  | { type: 'key'; partial: string }
-  | { type: 'value'; key: string; partialValue: string }
+  | { type: 'key'; partial: string; negated?: boolean }
+  | { type: 'value'; key: string; partialValue: string; negated?: boolean }
 
 // ============================================================================
 // Хук
@@ -55,20 +55,23 @@ export function useFilterContext({
   return useMemo(() => {
     const beforeCursor = value.slice(0, cursorPosition)
 
-    // Ищем ключ с двоеточием (даже без значения) - "ключ:" или "ключ:частичное"
-    const keyWithColonMatch = beforeCursor.match(/(\S+):(?:"([^"]*)|(\S*))?$/)
+    // Ищем ключ с двоеточием (даже без значения) - "ключ:" или "-ключ:частичное"
+    const keyWithColonMatch = beforeCursor.match(/(-?)(\S+):(?:"([^"]*)|(\S*))?$/)
     if (keyWithColonMatch) {
-      const key = keyWithColonMatch[1]
-      const partialValue = keyWithColonMatch[2] ?? keyWithColonMatch[3] ?? ''
+      const negated = keyWithColonMatch[1] === '-'
+      const key = keyWithColonMatch[2]
+      const partialValue = keyWithColonMatch[3] ?? keyWithColonMatch[4] ?? ''
       if (config.keys[key]) {
-        return { type: 'value', key, partialValue }
+        return { type: 'value', key, partialValue, negated }
       }
     }
 
-    // Ищем частичный ключ (без двоеточия)
-    const partialKey = beforeCursor.match(/(\S+)$/)
+    // Ищем частичный ключ (без двоеточия), включая "-частичный"
+    const partialKey = beforeCursor.match(/(-?)(\S+)$/)
     if (partialKey && !partialKey[0].includes(':')) {
-      return { type: 'key', partial: partialKey[1] }
+      const negated = partialKey[1] === '-'
+      const partial = partialKey[2]
+      return { type: 'key', partial, negated }
     }
 
     return { type: 'empty' }

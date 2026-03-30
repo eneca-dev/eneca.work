@@ -12,8 +12,8 @@
  * - EDIT: редактирование существующей загрузки
  */
 
-import { useEffect, useState, useMemo } from 'react'
-import { Loader2, Folder, Box, CircleDashed, ChevronRight, Archive, Trash2, Copy } from 'lucide-react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import { Loader2, Folder, Box, CircleDashed, ChevronRight, Trash2, Copy } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -22,14 +22,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLoadingModal, useLoadingMutations, useBreadcrumbs } from '../../hooks'
 import { openLoadingModalNewCreate, closeModal } from '../../stores/modal-store'
-import { useUsers } from '@/modules/cache'
+import { useUsers, queryKeys } from '@/modules/cache'
+import { createLoadingBatch } from '../../actions/loadings'
 import { ProjectTree } from './ProjectTree'
 import { LoadingForm } from './LoadingForm'
-import { DeleteWarningDialog } from './DeleteWarningDialog'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
-import { ArchiveConfirmationDialog } from './ArchiveConfirmationDialog'
 import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 
 // Маппинг типа элемента → иконка (hoisted: чистая функция, не нужно пересоздавать на каждом рендере)
@@ -133,20 +133,18 @@ export function LoadingModalNew({
     ? editData.projectId
     : loadedProjectId
 
+  const queryClient = useQueryClient()
+
   // Хук для мутаций
   const {
     create: createLoading,
     update: updateLoading,
-    archive: archiveLoading,
     remove: deleteLoading,
   } = useLoadingMutations({
     onCreateSuccess: () => {
       onClose()
     },
     onUpdateSuccess: () => {
-      onClose()
-    },
-    onArchiveSuccess: () => {
       onClose()
     },
     onDeleteSuccess: () => {
@@ -160,10 +158,8 @@ export function LoadingModalNew({
   // Состояние для отслеживания, был ли уже выполнен автовыбор в режиме редактирования
   const [hasAutoSelected, setHasAutoSelected] = useState(false)
 
-  // Состояния для диалогов удаления и архивирования
-  const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false)
+  // Состояние для диалога удаления
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
-  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false)
 
   // Сброс формы при открытии/закрытии
   useEffect(() => {
@@ -171,6 +167,7 @@ export function LoadingModalNew({
       resetForm()
       setIsFormVisible(mode === 'edit')
       setHasAutoSelected(false)
+      setBatchProgress(null)
     }
   }, [open, resetForm, mode])
 
@@ -253,8 +250,11 @@ export function LoadingModalNew({
   // Текущие breadcrumbs для автораскрытия
   const currentBreadcrumbs = selectedBreadcrumbs || effectiveBreadcrumbs
 
+  // Прогресс batch-создания
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
+
   // Обработчик сохранения
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     // Валидация
     if (!validateForm()) {
       return
@@ -269,16 +269,48 @@ export function LoadingModalNew({
     const stageId = formData.decompositionStageId || selectedSectionId
 
     if (mode === 'create') {
-      // Создание новой загрузки
-      await createLoading.mutateAsync({
-        stageId,
-        sectionId: selectedSectionId,
-        employeeId: formData.employeeId,
-        rate: formData.rate,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        comment: formData.comment,
-      })
+      const employeeIds = formData.employeeIds
+
+      if (employeeIds.length === 1) {
+        // Одиночное создание — стандартный путь с optimistic update
+        await createLoading.mutateAsync({
+          stageId,
+          sectionId: selectedSectionId,
+          employeeId: employeeIds[0],
+          rate: formData.rate,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          comment: formData.comment,
+        })
+      } else if (employeeIds.length > 1) {
+        // Batch-создание — один INSERT + один revalidatePath + одна инвалидация кэшей
+        setBatchProgress({ current: 0, total: employeeIds.length })
+
+        const result = await createLoadingBatch({
+          stageId,
+          sectionId: selectedSectionId,
+          employeeIds,
+          rate: formData.rate,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          comment: formData.comment,
+        })
+
+        if (result.success && result.data.created > 0) {
+          setBatchProgress({ current: result.data.created, total: employeeIds.length })
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
+          ])
+          setBatchProgress(null)
+          onClose()
+        } else {
+          setBatchProgress(null)
+          console.error('[batch] Ошибка:', result.success ? 'нет созданных записей' : result.error)
+        }
+      }
     } else if (mode === 'edit' && editData?.loading) {
       // Редактирование существующей загрузки
       await updateLoading.mutateAsync({
@@ -291,9 +323,9 @@ export function LoadingModalNew({
         comment: formData.comment,
       })
     }
-  }
+  }, [validateForm, selectedSectionId, formData, mode, createLoading, updateLoading, editData, onClose, queryClient])
 
-  const isSaving = createLoading.isPending || updateLoading.isPending
+  const isSaving = createLoading.isPending || updateLoading.isPending || batchProgress !== null
 
   // Состояние для отслеживания optimistic update
   // Показываем индикатор загрузки только для update (для create используем обычный isSaving)
@@ -301,11 +333,11 @@ export function LoadingModalNew({
 
   // Обработчики для диалогов
   const handleDeleteButtonClick = () => {
-    setIsDeleteWarningOpen(true)
+    setIsDeleteConfirmOpen(true)
   }
 
   // Копирование загрузки: закрываем edit → открываем create с теми же данными
-  const handleCopyLoading = () => {
+  const handleCopyLoading = useCallback(() => {
     const sectionId = formData.decompositionStageId || selectedSectionId || undefined
     closeModal()
     // setTimeout чтобы modal store успел сброситься перед открытием нового
@@ -320,28 +352,7 @@ export function LoadingModalNew({
         comment: formData.comment,
       })
     }, 0)
-  }
-
-  const handleArchiveButtonClick = () => {
-    setIsArchiveConfirmOpen(true)
-  }
-
-  const handleDeleteWarningDelete = () => {
-    setIsDeleteWarningOpen(false)
-    setIsDeleteConfirmOpen(true)
-  }
-
-  const handleDeleteWarningArchive = () => {
-    setIsDeleteWarningOpen(false)
-    setIsArchiveConfirmOpen(true)
-  }
-
-  const handleArchiveConfirm = async () => {
-    if (mode === 'edit' && editData?.loading) {
-      await archiveLoading.mutateAsync({ loadingId: editData.loading.id })
-      setIsArchiveConfirmOpen(false)
-    }
-  }
+  }, [formData, selectedSectionId, effectiveProjectId])
 
   const handleDeleteConfirm = async () => {
     if (mode === 'edit' && editData?.loading) {
@@ -376,11 +387,16 @@ export function LoadingModalNew({
     ? editData.loading.rate
     : formData.rate
 
+  // В create mode проверяем employeeIds, в edit — employeeId
+  const hasEmployee = mode === 'create'
+    ? formData.employeeIds.length > 0
+    : !!formData.employeeId.trim()
+
   const canSave =
     !!selectedSectionId &&
     !!selectedBreadcrumbs &&
     selectedBreadcrumbs.length > 0 &&
-    !!formData.employeeId.trim() &&
+    hasEmployee &&
     formData.rate >= 0.01 &&
     formData.rate <= 2.0 &&
     !!formData.startDate.trim() &&
@@ -396,7 +412,7 @@ export function LoadingModalNew({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && !batchProgress && onClose()}>
         <DialogContent className="max-w-6xl h-[80vh] flex flex-col p-0">
         {/* Заголовок */}
         <DialogHeader className="px-6 py-4 border-b">
@@ -513,30 +529,21 @@ export function LoadingModalNew({
         {/* Футер с кнопками */}
         <DialogFooter className="px-6 py-4 border-t">
           <div className="flex items-center justify-between w-full">
-            {/* Левая часть - кнопки архивирования и удаления (только в режиме edit) */}
+            {/* Левая часть - кнопки копирования и удаления (только в режиме edit) */}
             {mode === 'edit' ? (
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   onClick={handleCopyLoading}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
+                  disabled={isSaving || deleteLoading.isPending}
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   Копировать
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleArchiveButtonClick}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
-                  className="text-orange-600 hover:text-orange-600"
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  Архивировать
-                </Button>
-                <Button
-                  variant="outline"
                   onClick={handleDeleteButtonClick}
-                  disabled={isSaving || archiveLoading.isPending || deleteLoading.isPending}
+                  disabled={isSaving || deleteLoading.isPending}
                   className="text-red-600 hover:text-red-600"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -554,7 +561,13 @@ export function LoadingModalNew({
               </Button>
               <Button onClick={handleSave} disabled={!canSave}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {mode === 'create' ? 'Создать' : 'Сохранить'}
+                {batchProgress
+                  ? `Создание: ${batchProgress.current}/${batchProgress.total}`
+                  : mode === 'create'
+                    ? formData.employeeIds.length > 1
+                      ? `Создать (${formData.employeeIds.length})`
+                      : 'Создать'
+                    : 'Сохранить'}
               </Button>
             </div>
           </div>
@@ -562,27 +575,7 @@ export function LoadingModalNew({
       </DialogContent>
     </Dialog>
 
-      {/* Диалоги подтверждения */}
-      <DeleteWarningDialog
-        open={isDeleteWarningOpen}
-        onClose={() => setIsDeleteWarningOpen(false)}
-        onDelete={handleDeleteWarningDelete}
-        onArchive={handleDeleteWarningArchive}
-      />
-
-      <ArchiveConfirmationDialog
-        open={isArchiveConfirmOpen}
-        onClose={() => setIsArchiveConfirmOpen(false)}
-        onConfirm={handleArchiveConfirm}
-        loading={archiveLoading.isPending}
-        employeeName={employeeName}
-        sectionName={sectionName}
-        stageName={stageName}
-        startDate={startDate}
-        endDate={endDate}
-        rate={rate}
-      />
-
+      {/* Диалог подтверждения удаления */}
       <DeleteConfirmationDialog
         open={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}

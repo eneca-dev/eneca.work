@@ -15,13 +15,14 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { useUsers, type CachedUser } from '@/modules/cache'
+import { useUsers } from '@/modules/cache'
 import { Avatar } from '@/modules/projects/components/Avatar'
+import { useEmployeeSearch } from './useEmployeeSearch'
+import { EmployeeCommandItem } from './EmployeeCommandItem'
 
 export interface EmployeeSelectorProps {
   /** Выбранный ID сотрудника */
@@ -48,18 +49,7 @@ export function EmployeeSelector({
 
   // Загрузка списка пользователей
   const { data: users = [], isLoading } = useUsers()
-
-  // Фильтрация по поисковому запросу
-  const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users
-
-    const query = search.toLowerCase()
-    return users.filter(
-      (user) =>
-        user.full_name?.toLowerCase().includes(query) ||
-        user.email?.toLowerCase().includes(query)
-    )
-  }, [users, search])
+  const filteredUsers = useEmployeeSearch(users, search)
 
   // Найти выбранного пользователя
   const selectedUser = users.find((u) => u.user_id === value)
@@ -125,37 +115,19 @@ export function EmployeeSelector({
               <CommandEmpty>Сотрудники не найдены</CommandEmpty>
               <CommandGroup>
                 {filteredUsers.map((user) => (
-                  <CommandItem
+                  <EmployeeCommandItem
                     key={user.user_id}
-                    value={user.user_id}
+                    user={user}
                     onSelect={handleSelect}
-                    className="px-2 py-2 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 w-full min-w-0">
-                      <Avatar
-                        name={user.full_name}
-                        avatarUrl={user.avatar_url}
-                        size="sm"
-                        className="shrink-0"
-                      />
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="font-medium truncate">
-                          {user.full_name || 'Без имени'}
-                        </span>
-                        {user.email && (
-                          <span className="text-xs text-muted-foreground truncate">
-                            {user.email}
-                          </span>
-                        )}
-                      </div>
+                    indicator={
                       <Check
                         className={cn(
                           'h-4 w-4 shrink-0',
                           value === user.user_id ? 'opacity-100' : 'opacity-0'
                         )}
                       />
-                    </div>
-                  </CommandItem>
+                    }
+                  />
                 ))}
               </CommandGroup>
             </CommandList>

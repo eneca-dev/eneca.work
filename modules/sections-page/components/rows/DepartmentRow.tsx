@@ -111,7 +111,7 @@ export function DepartmentRow({
             {/* Right: metrics */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                {department.totalProjects} пр. · {department.totalSections} разд. · {department.totalLoadings} загр.
+                {department.totalProjects} пр. · {department.totalSections} разд. · {department.totalEmployees} сотр.
               </div>
             </div>
           </div>

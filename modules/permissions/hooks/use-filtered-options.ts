@@ -203,10 +203,10 @@ export function getLockedFilters(
       break
 
     case 'department':
-      if (filterContext.headDepartmentName) {
+      if (filterContext.headDepartmentName || filterContext.ownDepartmentName) {
         locked.push({
           key: 'отдел',
-          displayName: filterContext.headDepartmentName,
+          displayName: filterContext.headDepartmentName || filterContext.ownDepartmentName,
         })
       }
       break

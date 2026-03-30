@@ -9,7 +9,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult, PaginatedActionResult } from '@/modules/cache'
-import type { FilterQueryParams } from '@/modules/inline-filter'
+import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import type { KanbanSection, KanbanStage, StageStatus } from '../types'
 import { transformRowsToKanbanSections } from '../utils/transform-rows-to-kanban'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
@@ -112,8 +112,9 @@ export async function getKanbanSections(
     }
 
     // Apply subdivision filter (by name or UUID)
-    const subdivisionId = secureFilters?.['subdivision_id']
-    if (subdivisionId && typeof subdivisionId === 'string') {
+    const subdivisionIdRaw = secureFilters?.['subdivision_id']
+    if (subdivisionIdRaw) {
+      const subdivisionId = Array.isArray(subdivisionIdRaw) ? subdivisionIdRaw[0] : subdivisionIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           subdivisionId
@@ -126,8 +127,9 @@ export async function getKanbanSections(
     }
 
     // Apply department filter (by name or UUID)
-    const departmentId = secureFilters?.['department_id']
-    if (departmentId && typeof departmentId === 'string') {
+    const departmentIdRaw = secureFilters?.['department_id']
+    if (departmentIdRaw) {
+      const departmentId = Array.isArray(departmentIdRaw) ? departmentIdRaw[0] : departmentIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           departmentId
@@ -140,8 +142,9 @@ export async function getKanbanSections(
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = secureFilters?.['team_id']
-    if (teamId && typeof teamId === 'string') {
+    const teamIdRaw = secureFilters?.['team_id']
+    if (teamIdRaw) {
+      const teamId = Array.isArray(teamIdRaw) ? teamIdRaw[0] : teamIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           teamId
@@ -179,8 +182,9 @@ export async function getKanbanSections(
     }
 
     // Apply responsible filter (by name or UUID)
-    const responsibleId = secureFilters?.['responsible_id']
-    if (responsibleId && typeof responsibleId === 'string') {
+    const responsibleIdRaw = secureFilters?.['responsible_id']
+    if (responsibleIdRaw) {
+      const responsibleId = Array.isArray(responsibleIdRaw) ? responsibleIdRaw[0] : responsibleIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           responsibleId
@@ -192,17 +196,61 @@ export async function getKanbanSections(
       }
     }
 
-    // Apply project filter (by name or UUID)
-    const projectId = secureFilters?.['project_id']
-    if (projectId && typeof projectId === 'string') {
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          projectId
-        )
-      if (isUuid) {
-        query = query.eq('project_id', projectId)
+    // Apply project filter (by name or UUID, supports multiple values)
+    const projectIdRaw = secureFilters?.['project_id']
+    if (projectIdRaw) {
+      const values = Array.isArray(projectIdRaw) ? projectIdRaw : [projectIdRaw]
+      const isUuidCheck = (v: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+      const uuids = values.filter(isUuidCheck)
+      const names = values.filter(v => !isUuidCheck(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        query = query.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        query = query.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        query = query.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры (-проект, -отдел, -подразделение, -ответственный)
+    for (const val of getNegatedParams(secureFilters, 'project_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('project_id', val)
       } else {
-        query = query.ilike('project_name', projectId)
+        query = query.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'department_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_department_id', val)
+      } else {
+        query = query.not('section_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'subdivision_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_subdivision_id', val)
+      } else {
+        query = query.not('section_subdivision_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_responsible_id', val)
+      } else {
+        query = query.not('section_responsible_name', 'ilike', val)
       }
     }
 
@@ -326,8 +374,9 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply subdivision filter (by name or UUID)
-    const subdivisionId = secureFilters?.['subdivision_id']
-    if (subdivisionId && typeof subdivisionId === 'string') {
+    const subdivisionIdRaw = secureFilters?.['subdivision_id']
+    if (subdivisionIdRaw) {
+      const subdivisionId = Array.isArray(subdivisionIdRaw) ? subdivisionIdRaw[0] : subdivisionIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           subdivisionId
@@ -340,8 +389,9 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply department filter (by name or UUID)
-    const departmentId = secureFilters?.['department_id']
-    if (departmentId && typeof departmentId === 'string') {
+    const departmentIdRaw = secureFilters?.['department_id']
+    if (departmentIdRaw) {
+      const departmentId = Array.isArray(departmentIdRaw) ? departmentIdRaw[0] : departmentIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           departmentId
@@ -354,8 +404,9 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply team filter (requires subquery to get team members)
-    const teamId = secureFilters?.['team_id']
-    if (teamId && typeof teamId === 'string') {
+    const teamIdRaw = secureFilters?.['team_id']
+    if (teamIdRaw) {
+      const teamId = Array.isArray(teamIdRaw) ? teamIdRaw[0] : teamIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           teamId
@@ -397,8 +448,9 @@ export async function getKanbanSectionsPaginated(
     }
 
     // Apply responsible filter (by name or UUID)
-    const responsibleId = secureFilters?.['responsible_id']
-    if (responsibleId && typeof responsibleId === 'string') {
+    const responsibleIdRaw = secureFilters?.['responsible_id']
+    if (responsibleIdRaw) {
+      const responsibleId = Array.isArray(responsibleIdRaw) ? responsibleIdRaw[0] : responsibleIdRaw
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           responsibleId
@@ -410,17 +462,61 @@ export async function getKanbanSectionsPaginated(
       }
     }
 
-    // Apply project filter (by name or UUID)
-    const projectId = secureFilters?.['project_id']
-    if (projectId && typeof projectId === 'string') {
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          projectId
-        )
-      if (isUuid) {
-        query = query.eq('project_id', projectId)
+    // Apply project filter (by name or UUID, supports multiple values)
+    const projectIdRaw = secureFilters?.['project_id']
+    if (projectIdRaw) {
+      const values = Array.isArray(projectIdRaw) ? projectIdRaw : [projectIdRaw]
+      const isUuidCheck = (v: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+      const uuids = values.filter(isUuidCheck)
+      const names = values.filter(v => !isUuidCheck(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        query = query.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        query = query.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        query = query.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры (-проект, -отдел, -подразделение, -ответственный)
+    for (const val of getNegatedParams(secureFilters, 'project_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('project_id', val)
       } else {
-        query = query.ilike('project_name', projectId)
+        query = query.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'department_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_department_id', val)
+      } else {
+        query = query.not('section_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'subdivision_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_subdivision_id', val)
+      } else {
+        query = query.not('section_subdivision_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
+      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+      if (isExcludeUuid) {
+        query = query.neq('section_responsible_id', val)
+      } else {
+        query = query.not('section_responsible_name', 'ilike', val)
       }
     }
 

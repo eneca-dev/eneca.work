@@ -48,6 +48,8 @@ export interface ParsedToken {
   value: string
   /** Исходная строка токена ('подразделение:"ОВ"') */
   raw: string
+  /** Исключающий фильтр (-проект:"Название" → исключить этот проект) */
+  negated?: boolean
 }
 
 /**

@@ -12,7 +12,7 @@ import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { Department, Team, Employee, Loading, TeamFreshness } from '../types'
 import { formatMinskDate } from '@/lib/timezone-utils'
-import type { FilterQueryParams } from '@/modules/inline-filter'
+import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
 
@@ -163,6 +163,25 @@ export async function getDepartmentsData(
       }
     }
 
+    // Исключающие фильтры для орг. структуры
+    const excludeDepts = getNegatedParams(secureFilters, 'department_id')
+    for (const val of excludeDepts) {
+      if (isUuid(val)) {
+        orgQuery = orgQuery.neq('department_id', val)
+      } else {
+        orgQuery = orgQuery.not('department_name', 'ilike', val)
+      }
+    }
+
+    const excludeTeams = getNegatedParams(secureFilters, 'team_id')
+    for (const val of excludeTeams) {
+      if (isUuid(val)) {
+        orgQuery = orgQuery.neq('team_id', val)
+      } else {
+        orgQuery = orgQuery.not('team_name', 'ilike', val)
+      }
+    }
+
     const { data: orgData, error: orgError } = await orgQuery
 
     if (orgError) {
@@ -202,6 +221,62 @@ export async function getDepartmentsData(
 
       if (isUuid(teamId)) {
         employeeQuery = employeeQuery.eq('final_team_id', teamId)
+      }
+    }
+
+    // Применяем фильтр по проекту (поддержка нескольких значений)
+    if (secureFilters?.project_id) {
+      const values = Array.isArray(secureFilters.project_id)
+        ? secureFilters.project_id
+        : [secureFilters.project_id]
+
+      const uuids = values.filter(isUuid)
+      const names = values.filter(v => !isUuid(v))
+
+      if (uuids.length > 0 && names.length === 0) {
+        employeeQuery = employeeQuery.in('project_id', uuids)
+      } else if (names.length > 0 && uuids.length === 0) {
+        // Несколько имён — OR через ilike
+        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        employeeQuery = employeeQuery.or(orClause)
+      } else if (uuids.length > 0 && names.length > 0) {
+        // Смешанный: UUID через in + имена через ilike
+        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        employeeQuery = employeeQuery.or(parts.join(','))
+      }
+    }
+
+    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный)
+    for (const val of getNegatedParams(secureFilters, 'project_id')) {
+      if (isUuid(val)) {
+        employeeQuery = employeeQuery.neq('project_id', val)
+      } else {
+        employeeQuery = employeeQuery.not('project_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'department_id')) {
+      if (isUuid(val)) {
+        employeeQuery = employeeQuery.neq('final_department_id', val)
+      } else {
+        employeeQuery = employeeQuery.not('final_department_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'team_id')) {
+      if (isUuid(val)) {
+        employeeQuery = employeeQuery.neq('final_team_id', val)
+      } else {
+        employeeQuery = employeeQuery.not('final_team_name', 'ilike', val)
+      }
+    }
+
+    for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
+      if (isUuid(val)) {
+        employeeQuery = employeeQuery.neq('user_id', val)
+      } else {
+        employeeQuery = employeeQuery.not('full_name', 'ilike', `%${val}%`)
       }
     }
 
@@ -373,6 +448,21 @@ export async function getDepartmentsData(
       const allEmployees = department.teams.flatMap(t => t.employees)
       department.dailyWorkloads = aggregateDailyWorkloads(allEmployees)
     })
+
+    // Если применён фильтр по проекту или ответственному — убираем пустые команды/отделы,
+    // т.к. org structure возвращает ВСЮ иерархию, а employee query — только релевантных
+    const hasEmployeeOnlyFilters = secureFilters?.project_id
+      || secureFilters?.responsible_id
+      || secureFilters?.['!project_id']
+      || secureFilters?.['!responsible_id']
+    if (hasEmployeeOnlyFilters) {
+      departmentsMap.forEach((department, deptId) => {
+        department.teams = department.teams.filter(t => t.employees.length > 0)
+        if (department.teams.length === 0) {
+          departmentsMap.delete(deptId)
+        }
+      })
+    }
 
     // Преобразуем Map в массив и сортируем
     const departments = Array.from(departmentsMap.values())
