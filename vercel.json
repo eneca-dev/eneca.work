@@ -1,13 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "app/**/*.ts": {
+    "app/api/**/*.ts": {
       "memory": 128,
-      "maxDuration": 10
+      "maxDuration": 15
     },
     "app/**/*.tsx": {
       "memory": 128,
-      "maxDuration": 10
+      "maxDuration": 30
     }
   }
 }
