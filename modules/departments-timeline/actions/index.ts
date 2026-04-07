@@ -198,10 +198,14 @@ export async function getDepartmentsData(
     }
 
     // 2. Загружаем данные о сотрудниках с их загрузками
+    // Скоупим выборку отделами из org-запроса, чтобы не тянуть все отделы
+    const orgDepartmentIds = [...new Set(orgData.map(o => o.department_id).filter(Boolean))]
+
     let employeeQuery = supabase
       .from('view_employee_workloads')
       .select('*')
       .or('loading_status.eq.active,loading_status.is.null')
+      .in('final_department_id', orgDepartmentIds)
 
     // Применяем те же фильтры для сотрудников
     if (secureFilters?.department_id) {
@@ -211,6 +215,8 @@ export async function getDepartmentsData(
 
       if (isUuid(departmentId)) {
         employeeQuery = employeeQuery.eq('final_department_id', departmentId)
+      } else {
+        employeeQuery = employeeQuery.ilike('final_department_name', departmentId)
       }
     }
 
@@ -221,6 +227,8 @@ export async function getDepartmentsData(
 
       if (isUuid(teamId)) {
         employeeQuery = employeeQuery.eq('final_team_id', teamId)
+      } else {
+        employeeQuery = employeeQuery.ilike('final_team_name', teamId)
       }
     }
 
