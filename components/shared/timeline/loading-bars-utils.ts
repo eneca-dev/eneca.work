@@ -76,74 +76,65 @@ export interface BarRender {
 /**
  * Генерирует стабильный цвет на основе комбинации проекта и раздела
  */
+// Палитры на уровне модуля — избегаем пересоздания массивов при каждом вызове
+const DARK_COLORS = [
+  "rgb(59, 130, 246)",  // blue-500
+  "rgb(34, 197, 94)",   // green-500
+  "rgb(168, 85, 247)",  // purple-500
+  "rgb(249, 115, 22)",  // orange-500
+  "rgb(236, 72, 153)",  // pink-500
+  "rgb(99, 102, 241)",  // indigo-500
+  "rgb(20, 184, 166)",  // teal-500
+  "rgb(234, 179, 8)",   // yellow-500
+  "rgb(239, 68, 68)",   // red-500
+  "rgb(14, 165, 233)",  // sky-500
+]
+
+const LIGHT_COLORS = [
+  "rgb(37, 99, 235)",   // blue-600
+  "rgb(22, 163, 74)",   // green-600
+  "rgb(147, 51, 234)",  // purple-600
+  "rgb(234, 88, 12)",   // orange-600
+  "rgb(219, 39, 119)",  // pink-600
+  "rgb(79, 70, 229)",   // indigo-600
+  "rgb(13, 148, 136)",  // teal-600
+  "rgb(202, 138, 4)",   // yellow-600
+  "rgb(220, 38, 38)",   // red-600
+  "rgb(2, 132, 199)",   // sky-600
+]
+
+/** Простой хеш строки в 32-bit integer */
+function simpleHash(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash = hash & hash
+  }
+  return Math.abs(hash)
+}
+
+/** Кеш результатов — цвет детерминирован, нет смысла пересчитывать */
+const colorCache = new Map<string, string>()
+
 export function getSectionColor(
   projectId: string | undefined,
   sectionId: string | null | undefined,
   stageId: string | undefined,
   isDark: boolean
 ): string {
-  // Палитра цветов для загрузок (яркие, насыщенные цвета)
-  const darkColors = [
-    "rgb(59, 130, 246)",  // blue-500
-    "rgb(34, 197, 94)",   // green-500
-    "rgb(168, 85, 247)",  // purple-500
-    "rgb(249, 115, 22)",  // orange-500
-    "rgb(236, 72, 153)",  // pink-500
-    "rgb(99, 102, 241)",  // indigo-500
-    "rgb(20, 184, 166)",  // teal-500
-    "rgb(234, 179, 8)",   // yellow-500
-    "rgb(239, 68, 68)",   // red-500
-    "rgb(14, 165, 233)",  // sky-500
-  ]
+  const colors = isDark ? DARK_COLORS : LIGHT_COLORS
 
-  const lightColors = [
-    "rgb(37, 99, 235)",   // blue-600
-    "rgb(22, 163, 74)",   // green-600
-    "rgb(147, 51, 234)",  // purple-600
-    "rgb(234, 88, 12)",   // orange-600
-    "rgb(219, 39, 119)",  // pink-600
-    "rgb(79, 70, 229)",   // indigo-600
-    "rgb(13, 148, 136)",  // teal-600
-    "rgb(202, 138, 4)",   // yellow-600
-    "rgb(220, 38, 38)",   // red-600
-    "rgb(2, 132, 199)",   // sky-600
-  ]
+  // Приоритет: projectId → sectionId → stageId
+  const hashString = projectId || sectionId || stageId
+  if (!hashString) return colors[0]
 
-  const colors = isDark ? darkColors : lightColors
+  const cacheKey = `s_${hashString}_${isDark}`
+  const cached = colorCache.get(cacheKey)
+  if (cached) return cached
 
-  // Определяем строку для хеширования по приоритету:
-  // 1. projectId + sectionId (наивысший приоритет)
-  // 2. sectionId
-  // 3. projectId
-  // 4. stageId (fallback для обратной совместимости)
-  let hashString = ""
-
-  if (projectId && sectionId) {
-    // Комбинация проект + раздел (основной случай)
-    hashString = `${projectId}-${sectionId}`
-  } else if (sectionId) {
-    // Только раздел
-    hashString = sectionId
-  } else if (projectId) {
-    // Только проект
-    hashString = projectId
-  } else if (stageId) {
-    // Fallback на этап
-    hashString = stageId
-  } else {
-    // Если ничего нет, возвращаем первый цвет (синий)
-    return colors[0]
-  }
-
-  // Простой хеш от строки
-  let hash = 0
-  for (let i = 0; i < hashString.length; i++) {
-    hash = ((hash << 5) - hash) + hashString.charCodeAt(i)
-    hash = hash & hash // Convert to 32bit integer
-  }
-
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
+  const color = colors[simpleHash(hashString) % colors.length]
+  colorCache.set(cacheKey, color)
+  return color
 }
 
 /**
@@ -558,48 +549,16 @@ export function formatBarTooltip(period: BarPeriod): string {
  * Генерирует стабильный цвет на основе команды
  */
 export function getTeamColor(teamName: string | undefined, isDark: boolean): string {
-  // Палитра цветов для команд
-  const darkColors = [
-    "rgb(59, 130, 246)",  // blue-500
-    "rgb(34, 197, 94)",   // green-500
-    "rgb(168, 85, 247)",  // purple-500
-    "rgb(249, 115, 22)",  // orange-500
-    "rgb(236, 72, 153)",  // pink-500
-    "rgb(99, 102, 241)",  // indigo-500
-    "rgb(20, 184, 166)",  // teal-500
-    "rgb(234, 179, 8)",   // yellow-500
-    "rgb(239, 68, 68)",   // red-500
-    "rgb(14, 165, 233)",  // sky-500
-  ]
+  const colors = isDark ? DARK_COLORS : LIGHT_COLORS
+  if (!teamName) return colors[0]
 
-  const lightColors = [
-    "rgb(37, 99, 235)",   // blue-600
-    "rgb(22, 163, 74)",   // green-600
-    "rgb(147, 51, 234)",  // purple-600
-    "rgb(234, 88, 12)",   // orange-600
-    "rgb(219, 39, 119)",  // pink-600
-    "rgb(79, 70, 229)",   // indigo-600
-    "rgb(13, 148, 136)",  // teal-600
-    "rgb(202, 138, 4)",   // yellow-600
-    "rgb(220, 38, 38)",   // red-600
-    "rgb(2, 132, 199)",   // sky-600
-  ]
+  const cacheKey = `t_${teamName}_${isDark}`
+  const cached = colorCache.get(cacheKey)
+  if (cached) return cached
 
-  const colors = isDark ? darkColors : lightColors
-
-  if (!teamName) {
-    return colors[0]
-  }
-
-  // Простой хеш от названия команды
-  let hash = 0
-  for (let i = 0; i < teamName.length; i++) {
-    hash = ((hash << 5) - hash) + teamName.charCodeAt(i)
-    hash = hash & hash
-  }
-
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
+  const color = colors[simpleHash(teamName) % colors.length]
+  colorCache.set(cacheKey, color)
+  return color
 }
 
 /**
