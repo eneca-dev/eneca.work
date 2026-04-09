@@ -25,7 +25,7 @@ import { LoadingModalContainer, LoadingModalNewContainer } from "@/modules/modal
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
+      <ThemeProvider attribute="class" defaultTheme="dark">
         <NoSSR>
           {/* AuthProvider ПЕРВЫЙ — слушает auth события и синхронизирует store */}
           <AuthProvider>
