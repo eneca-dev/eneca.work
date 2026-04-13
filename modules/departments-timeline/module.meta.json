@@ -51,10 +51,23 @@
       "name": "useConfirmTeamActivity",
       "description": "Mutation для подтверждения актуальности данных команды",
       "file": "hooks/index.ts"
+    },
+    {
+      "name": "useBulkShiftLoadings",
+      "description": "Mutation для массового сдвига загрузок отдела по проекту",
+      "file": "hooks/index.ts"
     }
   ],
 
-  "actions": [],
+  "actions": [
+    {
+      "name": "bulkShiftLoadings",
+      "description": "Массовый сдвиг дат загрузок отдела по проекту на N дней",
+      "file": "actions/index.ts",
+      "input": "BulkShiftLoadingsInput { departmentId, projectId, shiftDays }",
+      "returns": "ActionResult<BulkShiftLoadingsResult>"
+    }
+  ],
 
   "stores": [
     {
@@ -76,9 +89,15 @@
     },
     {
       "name": "DepartmentRow",
-      "description": "Строка отдела с индикатором свежести",
+      "description": "Строка отдела с индикатором свежести и массовым сдвигом загрузок",
       "file": "components/timeline/DepartmentRow.tsx",
       "props": ["department", "freshness"]
+    },
+    {
+      "name": "BulkShiftPopover",
+      "description": "Попover для массового сдвига загрузок отдела по проекту",
+      "file": "components/timeline/BulkShiftPopover.tsx",
+      "props": ["department"]
     },
     {
       "name": "TeamRow",
@@ -197,6 +216,11 @@
       "version": "1.0.0",
       "date": "2025-01-01",
       "changes": ["Initial release", "Иерархия отделов", "Индикаторы свежести данных"]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-04-09",
+      "changes": ["Массовый сдвиг загрузок отдела по проекту на N дней (BulkShiftPopover)"]
     }
   ]
 }

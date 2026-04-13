@@ -13,6 +13,7 @@ import { formatMinskDate } from '@/lib/timezone-utils'
 import { useDepartmentsTimelineUIStore, useRowExpanded } from '../../stores'
 import { useConfirmTeamActivity, useConfirmMultipleTeamsActivity } from '../../hooks'
 import { FreshnessIndicator } from '@/components/shared/timeline'
+import { BulkShiftPopover } from './BulkShiftPopover'
 import { TeamRow } from './TeamRow'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import type { Department, TeamFreshness, DayCell } from '../../types'
@@ -127,8 +128,9 @@ export function DepartmentRow({
               </div>
             </div>
 
-            {/* Right: capacity + freshness indicator */}
+            {/* Right: capacity + bulk shift + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              <BulkShiftPopover department={department} />
               {totalDepartmentCapacity > 0 && (
                 <span
                   className="text-xs font-medium text-muted-foreground tabular-nums"
