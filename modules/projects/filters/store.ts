@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase-client'
+import { usePermissionsStore } from '@/modules/permissions'
 
 export type FilterType = 'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'
 
@@ -206,10 +207,13 @@ export const useProjectFilterStore = create<FilterStore>()(
         loadProjects: async (managerId?: string | null) => {
           set({ isLoadingProjects: true })
           try {
+            // 🔒 Скрываем restricted-проекты от не-админов (читаем из permissions store)
+            const isAdmin = usePermissionsStore.getState().permissions.includes('hierarchy.is_admin')
             let query = supabase
               .from('projects')
               .select('project_id, project_name, project_manager')
               .order('project_name')
+            if (!isAdmin) query = query.eq('is_restricted', false)
             if (managerId) query = query.eq('project_manager', managerId)
             const { data, error } = await query
             if (error) throw error

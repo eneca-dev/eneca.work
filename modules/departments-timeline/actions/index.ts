@@ -16,6 +16,7 @@ import { addDays } from 'date-fns'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
 // Helper Functions
@@ -88,10 +89,19 @@ export async function getDepartmentsData(
   try {
     const supabase = await createClient()
 
-    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContextResult = await getFilterContext()
+    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    // React.cache на getRestrictedProjectIds дедуплицирует в рамках request.
+    const [filterContextResult, allRestrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
+    const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
+
+    // Для админа фильтрация не нужна — используется пустой массив.
+    const restrictedProjectIds = isAdmin ? [] : allRestrictedIds
 
     // 1. Загружаем организационную структуру
     let orgQuery = supabase.from('view_organizational_structure').select('*')
@@ -208,6 +218,16 @@ export async function getDepartmentsData(
       .or('loading_status.eq.active,loading_status.is.null')
       .in('final_department_id', orgDepartmentIds)
 
+    // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
+    // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
+    // .or() с is.null сохраняет строки сотрудников без загрузок (project_id IS NULL) —
+    // иначе PostgreSQL NOT IN отбросил бы их (NULL NOT IN = NULL = отфильтровано).
+    if (restrictedProjectIds.length > 0) {
+      employeeQuery = employeeQuery.or(
+        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
+      )
+    }
+
     // Применяем те же фильтры для сотрудников
     if (secureFilters?.department_id) {
       const departmentId = Array.isArray(secureFilters.department_id)
@@ -256,13 +276,22 @@ export async function getDepartmentsData(
       }
     }
 
-    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный)
-    for (const val of getNegatedParams(secureFilters, 'project_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('project_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('project_name', 'ilike', val)
-      }
+    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный).
+    // Для project_id/project_name используем .or() с is.null — иначе сотрудники
+    // без загрузок (project_id IS NULL) отфильтровываются из-за 3-значной логики SQL.
+    // UUID-исключения собираем в один NOT IN, ilike-паттерны — каждый в свой .or()
+    // (их нельзя комбинировать в один NOT IN).
+    const negatedProjects = getNegatedParams(secureFilters, 'project_id')
+    const negatedProjectUuids = negatedProjects.filter(isUuid)
+    const negatedProjectNames = negatedProjects.filter(v => !isUuid(v))
+
+    if (negatedProjectUuids.length > 0) {
+      employeeQuery = employeeQuery.or(
+        `project_id.is.null,project_id.not.in.(${negatedProjectUuids.join(',')})`
+      )
+    }
+    for (const val of negatedProjectNames) {
+      employeeQuery = employeeQuery.or(`project_name.is.null,project_name.not.ilike.${val}`)
     }
 
     for (const val of getNegatedParams(secureFilters, 'department_id')) {
@@ -707,6 +736,29 @@ export async function updateLoadingDates(
       return { success: false, error: 'Необходима авторизация' }
     }
 
+    // 🔒 Defense-in-depth: не-админ не может править загрузки по restricted-проектам.
+    // Параллельно: контекст + список restricted + project_id загрузки — 3 независимых запроса.
+    const [ctx, restrictedIds, loadingRowResult] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+      supabase
+        .from('view_employee_workloads')
+        .select('project_id')
+        .eq('loading_id', loadingId)
+        .limit(1)
+        .maybeSingle(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      const projectId = loadingRowResult.data?.project_id
+      if (projectId && restrictedIds.includes(projectId)) {
+        return { success: false, error: 'Загрузка не найдена' }
+      }
+    }
+
     // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
     const { error } = await supabase
       .from('loadings')
@@ -830,6 +882,20 @@ export async function bulkShiftLoadings(
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // 🔒 Defense-in-depth: не-админ не может bulk-шифтить restricted-проект.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [bulkCtx, bulkRestrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const bulkIsAdmin = bulkCtx.success && bulkCtx.data
+      ? bulkCtx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!bulkIsAdmin && bulkRestrictedIds.includes(input.projectId)) {
+      return { success: false, error: 'Проект не найден' }
     }
 
     // 1. Находим все подходящие загрузки через view_employee_workloads

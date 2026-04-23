@@ -8,6 +8,8 @@
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
 import type { ProjectListItem, FetchProjectsListInput } from './projects-tree'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 /**
  * Загрузка списка проектов через RPC функцию (быстрее чем через view)
@@ -18,11 +20,20 @@ export async function fetchProjectsListRPC(
   try {
     const supabase = await createClient()
 
-    // Вызов RPC функции
-    const { data, error } = await supabase.rpc('get_projects_list', {
-      p_mode: input.mode,
-      p_user_id: input.userId,
-    })
+    // 🔒 Скрываем restricted-проекты от не-админов (RPC не принимает этот параметр).
+    // Параллельно: RPC + контекст + список restricted — все 3 запроса независимы.
+    const [rpcResult, ctx, restrictedIds] = await Promise.all([
+      supabase.rpc('get_projects_list', {
+        p_mode: input.mode,
+        p_user_id: input.userId,
+      }),
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const { data, error } = rpcResult
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
 
     if (error) {
       console.error('[fetchProjectsListRPC] Supabase error:', error)
@@ -32,8 +43,15 @@ export async function fetchProjectsListRPC(
       }
     }
 
+    // Фильтрация restricted-проектов из результата RPC (для не-админов)
+    let rows = data || []
+    if (!isAdmin && restrictedIds.length > 0) {
+      const restrictedSet = new Set(restrictedIds)
+      rows = rows.filter((row) => !restrictedSet.has(row.project_id))
+    }
+
     // Маппинг данных из RPC в ProjectListItem
-    const projects: ProjectListItem[] = (data || []).map((row) => ({
+    const projects: ProjectListItem[] = rows.map((row) => ({
       id: row.project_id,
       name: row.node_name || 'Неизвестный проект',
       status: row.project_status || 'unknown',

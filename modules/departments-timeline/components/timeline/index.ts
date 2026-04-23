@@ -5,3 +5,4 @@
 export { DepartmentRow } from './DepartmentRow'
 export { TeamRow } from './TeamRow'
 export { EmployeeRow } from './EmployeeRow'
+export { DepartmentGroupDivider } from './DepartmentGroupDivider'

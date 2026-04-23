@@ -43,23 +43,23 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
         backgroundSize: `${DAY_CELL_WIDTH}px 100%`,
       }}
     >
-      {/* Чередование фона по месяцам */}
+      {/* Чередование фона по месяцам — явный контраст для визуального разделения */}
       {monthSpans.map((span, i) => span.isOdd ? (
         <div
           key={`month-${i}`}
-          className="absolute top-0 bottom-0 bg-black/[0.03] dark:bg-white/[0.035]"
+          className="absolute top-0 bottom-0 bg-black/[0.07] dark:bg-white/[0.06]"
           style={{
             left: span.startIdx * DAY_CELL_WIDTH,
             width: span.count * DAY_CELL_WIDTH,
           }}
         />
       ) : null)}
-      {/* Границы месяцев (жирнее обычных разделителей) */}
+      {/* Границы месяцев (2px + полный border — чётко видны в обеих темах) */}
       {monthSpans.slice(1).map((span, i) => (
         <div
           key={`month-border-${i}`}
-          className="absolute top-0 bottom-0 w-px bg-border/60"
-          style={{ left: span.startIdx * DAY_CELL_WIDTH }}
+          className="absolute top-0 bottom-0 w-0.5 bg-border"
+          style={{ left: span.startIdx * DAY_CELL_WIDTH - 1 }}
         />
       ))}
       {/* Фоновые подсветки (только для дней с особым фоном) */}
@@ -77,7 +77,7 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
               'absolute top-0 bottom-0',
               !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/5',
               !cell.isToday && isRegularWeekend && 'bg-muted/30 dark:bg-muted/15',
-              cell.isToday && 'bg-green-50 dark:bg-green-800 z-10'
+              cell.isToday && 'bg-green-300 dark:bg-green-800 z-10'
             )}
             style={{
               left: i * DAY_CELL_WIDTH,

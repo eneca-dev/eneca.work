@@ -15,6 +15,88 @@ import { createClient } from '@/utils/supabase/server'
 import { addDays, format, parseISO } from 'date-fns'
 import type { ActionResult } from '@/modules/cache'
 import type { Database } from '@/types/db'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
+
+// ============================================================================
+// Restricted-project guard
+// ============================================================================
+
+/**
+ * Возвращает project_id для данного sectionId.
+ * Использует v_cache_projects (1 запрос вместо двух к sections + objects).
+ */
+async function getProjectIdForSection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sectionId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('v_cache_projects')
+    .select('project_id')
+    .eq('section_id', sectionId)
+    .limit(1)
+    .maybeSingle()
+  return data?.project_id ?? null
+}
+
+/**
+ * Возвращает project_id для данного decomposition_stage_id.
+ * Использует v_resource_graph (1 запрос вместо трёх к stages + sections + objects).
+ */
+async function getProjectIdForStage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  stageId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('v_resource_graph')
+    .select('project_id')
+    .eq('decomposition_stage_id', stageId)
+    .limit(1)
+    .maybeSingle()
+  return data?.project_id ?? null
+}
+
+/**
+ * Возвращает project_id для загрузки по её loadingId.
+ * Берёт связь через view_employee_workloads — view уже джойнит цепочку.
+ */
+async function getProjectIdForLoading(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  loadingId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('view_employee_workloads')
+    .select('project_id')
+    .eq('loading_id', loadingId)
+    .limit(1)
+    .maybeSingle()
+  return data?.project_id ?? null
+}
+
+/**
+ * Проверяет, может ли текущий пользователь мутировать загрузку по данному sectionId.
+ * Возвращает сообщение об ошибке, если доступ запрещён, иначе null.
+ * Все 3 независимых запроса (ctx, restrictedIds, projectId) выполняются параллельно.
+ */
+async function assertNotRestrictedBySection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sectionId: string
+): Promise<string | null> {
+  const [ctx, restrictedIds, projectId] = await Promise.all([
+    getFilterContext(),
+    getRestrictedProjectIds(),
+    getProjectIdForSection(supabase, sectionId),
+  ])
+  const isAdmin = ctx.success && ctx.data
+    ? ctx.data.permissions.includes('hierarchy.is_admin')
+    : false
+  if (isAdmin) return null
+  if (restrictedIds.length === 0) return null
+  if (projectId && restrictedIds.includes(projectId)) {
+    return 'Недостаточно прав для операции с этим проектом'
+  }
+  return null
+}
 
 // ============================================================================
 // Types
@@ -179,6 +261,10 @@ export async function createLoading(
       return { success: false, error: 'ID сотрудника обязателен' }
     }
 
+    // 🔒 Блокировка создания на restricted-проектах для не-админов
+    const restrictedError = await assertNotRestrictedBySection(supabase, input.sectionId)
+    if (restrictedError) return { success: false, error: restrictedError }
+
     // Подготовка данных для вставки
     const insertData: LoadingInsert = {
       loading_stage: input.stageId,
@@ -243,6 +329,10 @@ export async function createLoadingBatch(
       return { success: false, error: 'Необходимо указать хотя бы одного сотрудника' }
     }
 
+    // 🔒 Блокировка batch-создания на restricted-проектах для не-админов
+    const restrictedError = await assertNotRestrictedBySection(supabase, input.sectionId)
+    if (restrictedError) return { success: false, error: restrictedError }
+
     const now = new Date().toISOString()
 
     // Подготовка массива для batch insert
@@ -304,6 +394,28 @@ export async function updateLoading(
     // Валидация ID загрузки
     if (!input.loadingId?.trim()) {
       return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    // 🔒 Блокировка правки restricted-загрузок и перевода загрузки на restricted-stage.
+    // Параллельно: ctx + restrictedIds + project_id текущей загрузки + (опц.) проект нового stage.
+    // Все 4 запроса независимы — Promise.all сводит их к одному round-trip.
+    const [ctx, restrictedIds, currentProjectId, newProjectId] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+      getProjectIdForLoading(supabase, input.loadingId),
+      input.stageId ? getProjectIdForStage(supabase, input.stageId) : Promise.resolve(null),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      if (currentProjectId && restrictedIds.includes(currentProjectId)) {
+        return { success: false, error: 'Загрузка не найдена' }
+      }
+      if (newProjectId && restrictedIds.includes(newProjectId)) {
+        return { success: false, error: 'Недостаточно прав для операции с этим проектом' }
+      }
     }
 
     // Подготовка данных для обновления

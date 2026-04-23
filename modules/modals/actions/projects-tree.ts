@@ -12,6 +12,8 @@
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
 import type { Database } from '@/types/db'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
 // Types
@@ -128,6 +130,16 @@ export async function fetchProjectsList(
   try {
     const supabase = await createClient()
 
+    // 🔒 Скрываем restricted-проекты от не-админов.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
     // Получаем уникальные проекты из view (используем view_project_tree_optimized)
     // Фильтруем только узлы типа 'project' для получения списка проектов
     let query = supabase
@@ -135,6 +147,10 @@ export async function fetchProjectsList(
       .select('project_id, node_name, stage_type, project_status, manager_id, manager_name, manager_avatar, is_favorite, involved_users')
       .eq('node_type', 'project')
       .order('node_name')
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
 
     // Фильтрация "Мои проекты"
     if (input.mode === 'my') {
@@ -197,6 +213,20 @@ export async function fetchProjectTree(
     // Валидация
     if (!input.projectId?.trim()) {
       return { success: false, error: 'ID проекта обязателен' }
+    }
+
+    // 🔒 Защита: не-админ не может запросить дерево restricted-проекта.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!isAdmin && restrictedIds.includes(input.projectId)) {
+      return { success: false, error: 'Проект не найден или не имеет данных' }
     }
 
     // Загрузка всей иерархии проекта одним запросом через оптимизированный view

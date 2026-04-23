@@ -84,6 +84,19 @@ export const WORK_LOG_WIDTH = 32
 /** Количество месяцев для отображения по умолчанию */
 export const DEFAULT_MONTHS_RANGE = 3
 
+// ============================================================================
+// Monthly Scale Constants
+// ============================================================================
+
+/** Ширина ячейки месяца в пикселях */
+export const MONTH_CELL_WIDTH = 200
+
+/** Месяцев до текущего на таймлайне */
+export const MONTHLY_MONTHS_BEFORE = 36
+
+/** Месяцев после текущего (включая текущий) */
+export const MONTHLY_MONTHS_AFTER = 36
+
 /** Настройки отображения по умолчанию */
 export const DEFAULT_DISPLAY_SETTINGS = {
   scale: 'week' as TimelineScale,

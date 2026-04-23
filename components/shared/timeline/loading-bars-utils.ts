@@ -103,6 +103,25 @@ const LIGHT_COLORS = [
   "rgb(2, 132, 199)",   // sky-600
 ]
 
+/**
+ * Фиксированные цвета для системных проектов.
+ * Серые оттенки намеренно ВНЕ DARK_COLORS/LIGHT_COLORS — хэш-функция выбирает
+ * только из 10-цветной палитры, так что обычный проект никогда не попадёт в
+ * этот цвет. Серый выдаётся только по явному совпадению project_id.
+ */
+const SYSTEM_PROJECT_COLORS: Record<string, { dark: string; light: string }> = {
+  // "Непроектные загрузки"
+  'c47b96cd-7535-467d-94b0-c7fdd5b1b888': {
+    dark: 'rgb(107, 114, 128)',   // gray-500
+    light: 'rgb(156, 163, 175)',  // gray-400
+  },
+  // "Отпуск"
+  '80bea5b8-1ecc-4ace-8d73-91f26e67b898': {
+    dark: 'rgb(75, 85, 99)',      // gray-600
+    light: 'rgb(107, 114, 128)',  // gray-500
+  },
+}
+
 /** Простой хеш строки в 32-bit integer */
 function simpleHash(str: string): number {
   let hash = 0
@@ -122,6 +141,12 @@ export function getSectionColor(
   stageId: string | undefined,
   isDark: boolean
 ): string {
+  // 🎨 Системные проекты — фиксированный серый, не попадает в случайную палитру
+  if (projectId) {
+    const system = SYSTEM_PROJECT_COLORS[projectId]
+    if (system) return isDark ? system.dark : system.light
+  }
+
   const colors = isDark ? DARK_COLORS : LIGHT_COLORS
 
   // Приоритет: projectId → sectionId → stageId
@@ -155,28 +180,6 @@ function periodsOverlap(period1: BarPeriod, period2: BarPeriod): boolean {
   const end2 = new Date(period2.endDate).getTime()
 
   return start1 <= end2 && start2 <= end1
-}
-
-/**
- * Находит первый свободный слой для размещения периода с учетом перекрытий
- */
-function findFreeLayer(period: BarPeriod, placedPeriods: Array<{ period: BarPeriod; layer: number }>): number {
-  const occupiedLayers = new Set<number>()
-
-  // Проверяем все уже размещенные периоды
-  for (const placed of placedPeriods) {
-    if (periodsOverlap(period, placed.period)) {
-      occupiedLayers.add(placed.layer)
-    }
-  }
-
-  // Находим первый свободный слой
-  let layer = 0
-  while (occupiedLayers.has(layer)) {
-    layer++
-  }
-
-  return layer
 }
 
 /**
@@ -227,22 +230,100 @@ export function calculateBarTop(
 }
 
 /**
- * Вычисляет слои для всех периодов с учетом перекрытий
+ * Вычисляет слои для всех периодов с учетом перекрытий.
+ *
+ * Периоды группируются по stageId (с fallback на sectionId) — все части одной
+ * разрезанной загрузки шарят stageId и ложатся на один слой. Если внутри группы
+ * есть перекрытие (редкий случай), группа распадается на одиночные периоды.
  */
 export function calculateLayers(periods: BarPeriod[]): number[] {
-  const layers: number[] = []
-  const placedPeriods: Array<{ period: BarPeriod; layer: number }> = []
+  const n = periods.length
+  const layers: number[] = new Array(n)
+  if (n === 0) return layers
 
-  // Сортируем периоды по дате начала
-  const sortedIndices = periods
-    .map((period, index) => ({ period, index }))
-    .sort((a, b) => new Date(a.period.startDate).getTime() - new Date(b.period.startDate).getTime())
+  // Пред-вычисляем start/end в мс один раз — потом переиспользуем везде.
+  const starts = new Array<number>(n)
+  const ends = new Array<number>(n)
+  for (let i = 0; i < n; i++) {
+    starts[i] = new Date(periods[i].startDate).getTime()
+    ends[i] = new Date(periods[i].endDate).getTime()
+  }
+  const overlaps = (a: number, b: number): boolean =>
+    starts[a] <= ends[b] && starts[b] <= ends[a]
 
-  // Для каждого периода находим свободный слой
-  for (const { period, index } of sortedIndices) {
-    const layer = findFreeLayer(period, placedPeriods)
-    layers[index] = layer
-    placedPeriods.push({ period, layer })
+  // Ключ группировки: stageId → sectionId → уникальный id. Разрезанные части шарят stageId.
+  const groupKey = (p: BarPeriod): string =>
+    p.stageId ? `stage:${p.stageId}` : p.sectionId ? `section:${p.sectionId}` : `solo:${p.id}`
+
+  // Собираем группы индексов
+  const groupsMap = new Map<string, number[]>()
+  for (let i = 0; i < n; i++) {
+    const key = groupKey(periods[i])
+    const list = groupsMap.get(key)
+    if (list) list.push(i)
+    else groupsMap.set(key, [i])
+  }
+
+  // Внутри одного stageId-блока разбиваем на цепочки (chains), где внутри цепочки
+  // ни один период не перекрывает другой. Каждая цепочка становится отдельной
+  // группой и попадает на свой слой. Split-куски, не перекрывающие друг друга,
+  // естественным образом попадают в одну цепочку → один слой.
+  // Оптимизация: сортируем по start и проверяем только последний член цепочки
+  // (с наибольшим end) — если не перекрывает, значит не перекрывает и остальные.
+  const groups: number[][] = []
+  for (const indices of groupsMap.values()) {
+    indices.sort((a, b) => starts[a] - starts[b])
+    const chains: number[][] = []
+    // maxEnd[c] = max end среди всех индексов в chains[c] — O(1) проверка fit
+    const maxEnds: number[] = []
+    for (const idx of indices) {
+      let placed = false
+      for (let c = 0; c < chains.length; c++) {
+        // Достаточно проверить, что текущий start > maxEnd цепочки
+        if (starts[idx] > maxEnds[c]) {
+          chains[c].push(idx)
+          if (ends[idx] > maxEnds[c]) maxEnds[c] = ends[idx]
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        chains.push([idx])
+        maxEnds.push(ends[idx])
+      }
+    }
+    groups.push(...chains)
+  }
+
+  // Пред-вычисляем minStart каждой группы — избегаем пересчёта в компараторе сортировки
+  const groupMinStart = groups.map((g) => {
+    let min = starts[g[0]]
+    for (let i = 1; i < g.length; i++) if (starts[g[i]] < min) min = starts[g[i]]
+    return min
+  })
+  const groupOrder = groups.map((_, i) => i).sort((a, b) => groupMinStart[a] - groupMinStart[b])
+
+  // Размещаем группы на слоях. Храним placed по слою в Map — O(1) lookup вместо O(n).
+  const placedByLayer = new Map<number, number[]>()
+  for (const gIdx of groupOrder) {
+    const indices = groups[gIdx]
+    let layer = 0
+    while (layer < 1000) {
+      const placedHere = placedByLayer.get(layer)
+      if (!placedHere || !indices.some((idx) => placedHere.some((pIdx) => overlaps(idx, pIdx)))) {
+        break
+      }
+      layer++
+    }
+    let bucket = placedByLayer.get(layer)
+    if (!bucket) {
+      bucket = []
+      placedByLayer.set(layer, bucket)
+    }
+    for (const idx of indices) {
+      layers[idx] = layer
+      bucket.push(idx)
+    }
   }
 
   return layers

@@ -608,3 +608,11 @@ export {
   updateSectionDates as updateSectionDatesInHierarchy,
   type HierarchyLevel,
 } from './hierarchy'
+
+// ============================================================================
+// Monthly Cell Utilities
+//
+// NOTE: monthly-cell-utils.ts imports buildCalendarMap/getDayInfo from this file,
+// so it CANNOT be re-exported here to avoid circular dependency.
+// Import directly: import { ... } from '@/modules/resource-graph/utils/monthly-cell-utils'
+// ============================================================================

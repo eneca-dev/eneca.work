@@ -28,6 +28,7 @@ import { formatMinskDate, getTodayMinsk } from '@/lib/timezone-utils'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
 // Query Actions
@@ -48,15 +49,25 @@ export async function getResourceGraphData(
   try {
     const supabase = await createClient()
 
-    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContextResult = await getFilterContext()
+    // 🔒 Получаем контекст разрешений и applicable фильтры.
+    // Параллельно: контекст + restricted-список — экономит round-trip.
+    const [filterContextResult, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
+    const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
 
     // Build query
     let query = supabase
       .from('v_resource_graph')
       .select('*')
+
+    // 🔒 Скрываем restricted-проекты от не-админов (v_resource_graph не проксирует is_restricted)
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
 
     // Apply tag filter first (requires subquery to get project IDs)
     // Метки передаются как названия, нужно сначала найти их ID
@@ -519,9 +530,25 @@ export async function getProjectStructure(): Promise<ActionResult<{
   try {
     const supabase = await createClient()
 
-    const { data, error } = await supabase
+    // 🔒 Скрываем restricted-проекты от не-админов.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    let query = supabase
       .from('v_project_structure')
       .select('*')
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('[getProjectStructure] Supabase error:', error)
