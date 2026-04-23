@@ -19,7 +19,7 @@ interface OnboardingState {
   clearHighlight: () => void
 }
 
-const TOTAL_PAGES = 10
+const TOTAL_PAGES = 11
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
