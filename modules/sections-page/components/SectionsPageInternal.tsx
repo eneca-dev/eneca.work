@@ -150,6 +150,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     () => generateDayCells(range, calendarEvents),
     [range, calendarEvents]
   )
+
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 

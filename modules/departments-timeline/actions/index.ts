@@ -12,9 +12,11 @@ import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { Department, Team, Employee, Loading, TeamFreshness } from '../types'
 import { formatMinskDate } from '@/lib/timezone-utils'
+import { addDays } from 'date-fns'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
 // Helper Functions
@@ -87,10 +89,19 @@ export async function getDepartmentsData(
   try {
     const supabase = await createClient()
 
-    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры
-    const filterContextResult = await getFilterContext()
+    // 🔒 Получаем контекст разрешений и применяем обязательные фильтры.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    // React.cache на getRestrictedProjectIds дедуплицирует в рамках request.
+    const [filterContextResult, allRestrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
+    const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
+
+    // Для админа фильтрация не нужна — используется пустой массив.
+    const restrictedProjectIds = isAdmin ? [] : allRestrictedIds
 
     // 1. Загружаем организационную структуру
     let orgQuery = supabase.from('view_organizational_structure').select('*')
@@ -198,10 +209,24 @@ export async function getDepartmentsData(
     }
 
     // 2. Загружаем данные о сотрудниках с их загрузками
+    // Скоупим выборку отделами из org-запроса, чтобы не тянуть все отделы
+    const orgDepartmentIds = [...new Set(orgData.map(o => o.department_id).filter(Boolean))]
+
     let employeeQuery = supabase
       .from('view_employee_workloads')
       .select('*')
       .or('loading_status.eq.active,loading_status.is.null')
+      .in('final_department_id', orgDepartmentIds)
+
+    // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
+    // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
+    // .or() с is.null сохраняет строки сотрудников без загрузок (project_id IS NULL) —
+    // иначе PostgreSQL NOT IN отбросил бы их (NULL NOT IN = NULL = отфильтровано).
+    if (restrictedProjectIds.length > 0) {
+      employeeQuery = employeeQuery.or(
+        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
+      )
+    }
 
     // Применяем те же фильтры для сотрудников
     if (secureFilters?.department_id) {
@@ -211,6 +236,8 @@ export async function getDepartmentsData(
 
       if (isUuid(departmentId)) {
         employeeQuery = employeeQuery.eq('final_department_id', departmentId)
+      } else {
+        employeeQuery = employeeQuery.ilike('final_department_name', departmentId)
       }
     }
 
@@ -221,6 +248,8 @@ export async function getDepartmentsData(
 
       if (isUuid(teamId)) {
         employeeQuery = employeeQuery.eq('final_team_id', teamId)
+      } else {
+        employeeQuery = employeeQuery.ilike('final_team_name', teamId)
       }
     }
 
@@ -247,13 +276,22 @@ export async function getDepartmentsData(
       }
     }
 
-    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный)
-    for (const val of getNegatedParams(secureFilters, 'project_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('project_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('project_name', 'ilike', val)
-      }
+    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный).
+    // Для project_id/project_name используем .or() с is.null — иначе сотрудники
+    // без загрузок (project_id IS NULL) отфильтровываются из-за 3-значной логики SQL.
+    // UUID-исключения собираем в один NOT IN, ilike-паттерны — каждый в свой .or()
+    // (их нельзя комбинировать в один NOT IN).
+    const negatedProjects = getNegatedParams(secureFilters, 'project_id')
+    const negatedProjectUuids = negatedProjects.filter(isUuid)
+    const negatedProjectNames = negatedProjects.filter(v => !isUuid(v))
+
+    if (negatedProjectUuids.length > 0) {
+      employeeQuery = employeeQuery.or(
+        `project_id.is.null,project_id.not.in.(${negatedProjectUuids.join(',')})`
+      )
+    }
+    for (const val of negatedProjectNames) {
+      employeeQuery = employeeQuery.or(`project_name.is.null,project_name.not.ilike.${val}`)
     }
 
     for (const val of getNegatedParams(secureFilters, 'department_id')) {
@@ -698,6 +736,29 @@ export async function updateLoadingDates(
       return { success: false, error: 'Необходима авторизация' }
     }
 
+    // 🔒 Defense-in-depth: не-админ не может править загрузки по restricted-проектам.
+    // Параллельно: контекст + список restricted + project_id загрузки — 3 независимых запроса.
+    const [ctx, restrictedIds, loadingRowResult] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+      supabase
+        .from('view_employee_workloads')
+        .select('project_id')
+        .eq('loading_id', loadingId)
+        .limit(1)
+        .maybeSingle(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      const projectId = loadingRowResult.data?.project_id
+      if (projectId && restrictedIds.includes(projectId)) {
+        return { success: false, error: 'Загрузка не найдена' }
+      }
+    }
+
     // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
     const { error } = await supabase
       .from('loadings')
@@ -729,6 +790,230 @@ export async function updateLoadingDates(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
+    }
+  }
+  }) // end Sentry.startSpan
+}
+
+// ============================================================================
+// Bulk Shift Loadings
+// ============================================================================
+
+/**
+ * Входные данные для массового сдвига загрузок
+ */
+export type BulkShiftMode = 'both' | 'start' | 'end' | 'set'
+
+export interface BulkShiftLoadingsInput {
+  departmentId: string
+  projectId: string
+  shiftDays: number // положительное = вперёд, отрицательное = назад (для mode both/start/end)
+  shiftMode: BulkShiftMode
+  // Для mode 'set' — конкретные даты (YYYY-MM-DD)
+  setStartDate?: string
+  setEndDate?: string
+}
+
+/**
+ * Результат массового сдвига загрузок
+ */
+export interface BulkShiftLoadingsResult {
+  shiftedCount: number
+  skippedCount: number // пропущены из-за невалидных дат (начало > конца)
+  totalFound: number
+}
+
+/**
+ * Массовый сдвиг дат всех загрузок отдела по конкретному проекту
+ *
+ * Находит все активные загрузки сотрудников отдела для указанного проекта
+ * и сдвигает даты начала и окончания на указанное количество дней.
+ *
+ * Путь связи: loadings → view_employee_workloads (join через sections → objects → projects)
+ *
+ * @param input - departmentId, projectId, shiftDays
+ * @returns Количество обновлённых загрузок
+ */
+export async function bulkShiftLoadings(
+  input: BulkShiftLoadingsInput
+): Promise<ActionResult<BulkShiftLoadingsResult>> {
+  return Sentry.startSpan(
+    {
+      name: 'bulkShiftLoadings',
+      op: 'db.mutation',
+      attributes: {
+        'department.id': input.departmentId,
+        'project.id': input.projectId,
+        'shift.days': input.shiftDays,
+      },
+    },
+    async () => {
+  try {
+    // Валидация
+    if (!input.departmentId || !input.projectId) {
+      return { success: false, error: 'ID отдела и проекта обязательны' }
+    }
+    if (!isUuid(input.departmentId) || !isUuid(input.projectId)) {
+      return { success: false, error: 'Некорректный формат ID' }
+    }
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+    if (input.shiftMode === 'set') {
+      if (!input.setStartDate || !input.setEndDate) {
+        return { success: false, error: 'Даты начала и конца обязательны' }
+      }
+      if (!dateRegex.test(input.setStartDate) || !dateRegex.test(input.setEndDate)) {
+        return { success: false, error: 'Некорректный формат даты (ожидается YYYY-MM-DD)' }
+      }
+      if (input.setStartDate > input.setEndDate) {
+        return { success: false, error: 'Дата начала не может быть позже даты конца' }
+      }
+    } else {
+      if (input.shiftDays === 0) {
+        return { success: false, error: 'Количество дней для сдвига должно быть не равно 0' }
+      }
+      if (Math.abs(input.shiftDays) > 3650) {
+        return { success: false, error: 'Сдвиг не может превышать 10 лет' }
+      }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // 🔒 Defense-in-depth: не-админ не может bulk-шифтить restricted-проект.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [bulkCtx, bulkRestrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const bulkIsAdmin = bulkCtx.success && bulkCtx.data
+      ? bulkCtx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!bulkIsAdmin && bulkRestrictedIds.includes(input.projectId)) {
+      return { success: false, error: 'Проект не найден' }
+    }
+
+    // 1. Находим все подходящие загрузки через view_employee_workloads
+    const { data: matchingLoadings, error: queryError } = await supabase
+      .from('view_employee_workloads')
+      .select('loading_id, loading_start, loading_finish')
+      .eq('final_department_id', input.departmentId)
+      .eq('project_id', input.projectId)
+      .eq('loading_status', 'active')
+      .not('loading_id', 'is', null)
+
+    if (queryError) {
+      console.error('[bulkShiftLoadings] Query error:', queryError)
+      Sentry.captureException(new Error(queryError.message), {
+        tags: { module: 'departments-timeline', action: 'bulkShiftLoadings', error_type: 'db_error', user_facing: 'true' },
+        extra: { input },
+      })
+      return { success: false, error: queryError.message }
+    }
+
+    if (!matchingLoadings || matchingLoadings.length === 0) {
+      return { success: true, data: { shiftedCount: 0, skippedCount: 0, totalFound: 0 } }
+    }
+
+    // Дедупликация (view может вернуть дубликаты loading_id)
+    const uniqueLoadings = new Map<string, { loading_id: string; loading_start: string; loading_finish: string }>()
+    for (const l of matchingLoadings) {
+      if (l.loading_id && !uniqueLoadings.has(l.loading_id)) {
+        uniqueLoadings.set(l.loading_id, l as { loading_id: string; loading_start: string; loading_finish: string })
+      }
+    }
+
+    const totalFound = uniqueLoadings.size
+
+    // 2. Обновляем каждую загрузку с новыми датами (addDays из date-fns — DST-safe)
+    let shiftedCount = 0
+    let skippedCount = 0
+    const errors: string[] = []
+
+    // Батчим по 10 параллельных запросов
+    const entries = Array.from(uniqueLoadings.values())
+    const batchSize = 10
+
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize)
+      const results = await Promise.all(
+        batch.map(async (loading) => {
+          let finalStart: string
+          let finalFinish: string
+
+          if (input.shiftMode === 'set') {
+            finalStart = input.setStartDate!
+            finalFinish = input.setEndDate!
+          } else {
+            finalStart = input.shiftMode !== 'end'
+              ? formatMinskDate(addDays(new Date(loading.loading_start), input.shiftDays))
+              : loading.loading_start
+            finalFinish = input.shiftMode !== 'start'
+              ? formatMinskDate(addDays(new Date(loading.loading_finish), input.shiftDays))
+              : loading.loading_finish
+          }
+
+          // Пропускаем если начало оказывается позже конца
+          if (finalStart > finalFinish) {
+            return { loadingId: loading.loading_id, skipped: true, error: null }
+          }
+
+          const updateData: Record<string, string> = {}
+          if (finalStart !== loading.loading_start) updateData.loading_start = finalStart
+          if (finalFinish !== loading.loading_finish) updateData.loading_finish = finalFinish
+
+          // Нечего обновлять — даты уже совпадают
+          if (Object.keys(updateData).length === 0) {
+            return { loadingId: loading.loading_id, skipped: true, error: null }
+          }
+
+          const { error } = await supabase
+            .from('loadings')
+            .update(updateData as { loading_start?: string; loading_finish?: string })
+            .eq('loading_id', loading.loading_id)
+
+          return { loadingId: loading.loading_id, skipped: false, error }
+        })
+      )
+
+      for (const result of results) {
+        if (result.skipped) {
+          skippedCount++
+        } else if (result.error) {
+          errors.push(`${result.loadingId}: ${result.error.message}`)
+        } else {
+          shiftedCount++
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      console.error('[bulkShiftLoadings] Partial errors:', errors)
+      Sentry.captureMessage(`bulkShiftLoadings partial errors: ${errors.length}/${totalFound}`, {
+        level: 'warning',
+        tags: { module: 'departments-timeline', action: 'bulkShiftLoadings' },
+        extra: { errors, input },
+      })
+    }
+
+    return {
+      success: true,
+      data: { shiftedCount, skippedCount, totalFound },
+    }
+  } catch (error) {
+    console.error('[bulkShiftLoadings] Unexpected error:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'departments-timeline', action: 'bulkShiftLoadings', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { input },
+    })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка массового сдвига загрузок',
     }
   }
   }) // end Sentry.startSpan

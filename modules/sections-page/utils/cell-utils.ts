@@ -21,6 +21,6 @@ export function getCellClassNames(cell: DayCell): string {
     !cell.isToday && isWeekend && 'bg-muted/20',
     !cell.isToday && isSpecialDayOff && 'bg-red-50/30 dark:bg-red-950/10',
     // Сегодня - применяется последним, но за загрузками
-    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25'
+    cell.isToday && 'bg-green-300/60 dark:bg-green-700/25'
   )
 }

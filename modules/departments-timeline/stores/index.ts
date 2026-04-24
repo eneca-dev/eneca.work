@@ -8,8 +8,10 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import type { TreeNodeType } from '../types'
 import type { CustomDateRange } from '@/modules/resource-graph/components/timeline'
+import type { TimelineScaleMode } from '@/components/shared/timeline'
 
 export type { CustomDateRange }
+export type { TimelineScaleMode }
 
 // ============================================================================
 // UI State Store
@@ -29,6 +31,15 @@ interface UIState {
   customDateRange: CustomDateRange | null
   /** Установить кастомный диапазон */
   setCustomDateRange: (range: CustomDateRange | null) => void
+
+  /** Масштаб таймлайна: день или месяц */
+  timelineScale: TimelineScaleMode
+  /** Установить масштаб */
+  setTimelineScale: (scale: TimelineScaleMode) => void
+  /** Сдвиг месяцев от центра (0 = текущий) */
+  monthlyOffset: number
+  /** Установить сдвиг месяцев */
+  setMonthlyOffset: (offset: number) => void
 
   // Check operations
   isExpanded: (type: TreeNodeType, id: string) => boolean
@@ -83,6 +94,11 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         selectedItemType: null,
         customDateRange: null,
         setCustomDateRange: (range) => set({ customDateRange: range }),
+
+        timelineScale: 'day',
+        setTimelineScale: (scale) => set({ timelineScale: scale }),
+        monthlyOffset: 0,
+        setMonthlyOffset: (offset) => set({ monthlyOffset: offset }),
 
         isExpanded: (type, id) => get().expandedNodes[type].has(id),
 
@@ -208,6 +224,8 @@ export const useDepartmentsTimelineUIStore = create<UIState>()(
         partialize: (state) => ({
           expandedNodes: state.expandedNodes,
           customDateRange: state.customDateRange,
+          timelineScale: state.timelineScale,
+          monthlyOffset: state.monthlyOffset,
         }),
         storage: {
           getItem: (name) => {

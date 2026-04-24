@@ -20,7 +20,10 @@ import {
   confirmTeamActivity,
   confirmMultipleTeamsActivity,
   updateLoadingDates,
+  bulkShiftLoadings,
 } from '../actions'
+import type { BulkShiftLoadingsInput, BulkShiftLoadingsResult, BulkShiftMode } from '../actions'
+export type { BulkShiftMode }
 
 import type { Department, TeamFreshness } from '../types'
 import type { FilterQueryParams } from '@/modules/inline-filter'
@@ -200,5 +203,24 @@ export const useUpdateLoadingDates = createCacheMutation<
 
   // Инвалидируем departments timeline + sections page после успешного обновления
   // Это важно т.к. staleTime: Infinity и данные обновляются только через Realtime или invalidation
+  invalidateKeys: [queryKeys.departmentsTimeline.all, queryKeys.sectionsPage.all],
+})
+
+// ============================================================================
+// Bulk Shift Loadings
+// ============================================================================
+
+/**
+ * Мутация для массового сдвига загрузок отдела по проекту
+ *
+ * @example
+ * const mutation = useBulkShiftLoadings()
+ * mutation.mutate({ departmentId: 'xxx', projectId: 'yyy', shiftDays: 7 })
+ */
+export const useBulkShiftLoadings = createCacheMutation<
+  BulkShiftLoadingsInput,
+  BulkShiftLoadingsResult
+>({
+  mutationFn: bulkShiftLoadings,
   invalidateKeys: [queryKeys.departmentsTimeline.all, queryKeys.sectionsPage.all],
 })

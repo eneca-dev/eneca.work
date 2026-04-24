@@ -18,6 +18,7 @@ const TUTORIAL_TOPICS = [
   { page: 7, title: 'Загрузка на сотрудника или раздел' },
   { page: 8, title: 'Настройка вкладок и фильтров' },
   { page: 9, title: 'Перетаскивание дат в календаре' },
+  { page: 10, title: 'Куда вносить «Прочие работы»' },
 ] as const
 
 export default function DashboardPage() {
@@ -61,7 +62,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Обучение</h2>
-                <p className="text-xs text-muted-foreground">10 уроков по работе с системой</p>
+                <p className="text-xs text-muted-foreground">11 уроков по работе с системой</p>
               </div>
             </div>
             <Button size="sm" onClick={() => openOnboarding()} className="gap-1.5">

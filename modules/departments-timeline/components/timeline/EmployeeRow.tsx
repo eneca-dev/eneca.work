@@ -39,12 +39,19 @@ import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
 import { useScissorsModeStore } from '@/stores'
 import { useLoadingMutations } from '@/modules/modals/hooks/useLoadingMutations'
 import { useUpdateLoadingDates } from '../../hooks'
+import { MonthlyLoadingBars, calculateMonthlyBarsRowHeight } from '@/components/shared/timeline'
+import type { MonthlyBarLoading } from '@/components/shared/timeline'
+import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
+import type { TimelineScaleMode } from '@/components/shared/timeline'
 
 interface EmployeeRowProps {
   employee: Employee
   employeeIndex: number
   dayCells: DayCell[]
   isTeamLead: boolean
+  timelineScale: TimelineScaleMode
+  monthCells: MonthCell[]
+  monthCellWidth: number
 }
 
 /**
@@ -410,7 +417,11 @@ export function EmployeeRow({
   employeeIndex,
   dayCells,
   isTeamLead,
+  timelineScale,
+  monthCells,
+  monthCellWidth,
 }: EmployeeRowProps) {
+  const isMonthlyMode = timelineScale === 'month'
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
 
   // Mutation hook для обновления дат загрузки
@@ -559,7 +570,34 @@ export function EmployeeRow({
     return Math.max(EMPLOYEE_ROW_HEIGHT, maxBottom + 8)
   }, [barRenders])
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  // Monthly mode: convert loadings to MonthlyBarLoading format
+  const monthlyBarLoadings = useMemo((): MonthlyBarLoading[] => {
+    if (!isMonthlyMode || !employee.loadings) return []
+    return employee.loadings.map((l) => ({
+      id: l.id,
+      startDate: l.startDate,
+      endDate: l.endDate,
+      rate: l.rate,
+      projectId: l.projectId,
+      projectName: l.projectName,
+      sectionId: l.sectionId,
+      sectionName: l.sectionName,
+      stageId: l.stageId,
+      stageName: l.stageName,
+      comment: l.comment,
+      employeeId: l.employeeId,
+    }))
+  }, [isMonthlyMode, employee.loadings])
+
+  // Monthly row height based on bar layout
+  const monthlyRowHeight = useMemo(() => {
+    if (!isMonthlyMode) return EMPLOYEE_ROW_HEIGHT
+    return calculateMonthlyBarsRowHeight(monthlyBarLoadings, monthCells, monthCellWidth)
+  }, [isMonthlyMode, monthlyBarLoadings, monthCells])
+
+  const timelineWidth = isMonthlyMode
+    ? monthCells.length * monthCellWidth
+    : dayCells.length * DAY_CELL_WIDTH
 
   // Get initials for avatar
   const getInitials = (name?: string) => {
@@ -571,25 +609,29 @@ export function EmployeeRow({
     return name[0]?.toUpperCase() || '?'
   }
 
+  const rowHeight = isMonthlyMode ? monthlyRowHeight : actualRowHeight
+
   return (
     <div className="group/employee min-w-full relative border-b border-border/50">
       <div
         className="flex transition-colors"
-        style={{ height: actualRowHeight }}
+        style={{ height: rowHeight }}
       >
         {/* Sidebar - sticky left */}
         <div
           className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
-          style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
+          style={{ width: SIDEBAR_WIDTH, height: rowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
-          <button
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
-            onClick={handleCreateLoading}
-          >
-            <UserPlus className="w-3 h-3" />
-            <span>Загрузка</span>
-          </button>
+          {!isMonthlyMode && (
+            <button
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+              onClick={handleCreateLoading}
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>Загрузка</span>
+            </button>
+          )}
 
           {/* Left: avatar + name (indented more) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
@@ -649,46 +691,74 @@ export function EmployeeRow({
           </div>
         </div>
 
-        {/* Timeline cells with loading bars */}
+        {/* Timeline cells */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
-          {/* Loading bars overlay */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
-            {barRenders.map((bar, idx) => (
-              <LoadingBarWithResize
-                key={`${bar.period.id}-${idx}`}
-                bar={bar}
-                barRenders={barRenders}
-                timeUnits={timeUnits}
-                timelineRange={timelineRange}
-                onLoadingClick={handleLoadingClick}
-                onLoadingResize={handleLoadingResize}
-                onSplitLoading={handleSplitLoading}
-              />
-            ))}
-          </div>
-
-          {/* Background cells */}
-          {dayCells.map((cell, i) => {
-            const isWeekend = cell.isWeekend && !cell.isWorkday
-            const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
-
-            return (
-              <div
-                key={i}
-                className={cn(
-                  'border-r border-border/30 relative',
-                  !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
-                  !cell.isToday && isWeekend && 'bg-muted/50',
-                  // Сегодня - применяется последним, но за загрузками
-                  cell.isToday && 'bg-green-50/50 dark:bg-green-700/25',
-                )}
-                style={{
-                  width: DAY_CELL_WIDTH,
-                  height: actualRowHeight,
+          {isMonthlyMode ? (
+            <>
+              {/* Monthly loading bars overlay */}
+              <MonthlyLoadingBars
+                loadings={monthlyBarLoadings}
+                monthCells={monthCells}
+                monthCellWidth={monthCellWidth}
+                onLoadingClick={(loadingId) => {
+                  const loading = employee.loadings?.find((l) => l.id === loadingId)
+                  if (loading) handleLoadingClick(loading)
                 }}
               />
-            )
-          })}
+              {/* Background month cells */}
+              {monthCells.map((mc, i) => (
+                <div
+                  key={`${mc.year}-${mc.month}`}
+                  className={cn(
+                    'border-r border-border/30',
+                    i % 2 === 1 && 'bg-black/[0.02] dark:bg-white/[0.02]',
+                    mc.isCurrentMonth && 'bg-primary/[0.03]'
+                  )}
+                  style={{ width: monthCellWidth, height: rowHeight }}
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Loading bars overlay */}
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
+                {barRenders.map((bar, idx) => (
+                  <LoadingBarWithResize
+                    key={`${bar.period.id}-${idx}`}
+                    bar={bar}
+                    barRenders={barRenders}
+                    timeUnits={timeUnits}
+                    timelineRange={timelineRange}
+                    onLoadingClick={handleLoadingClick}
+                    onLoadingResize={handleLoadingResize}
+                    onSplitLoading={handleSplitLoading}
+                  />
+                ))}
+              </div>
+
+              {/* Background cells */}
+              {dayCells.map((cell, i) => {
+                const isWeekend = cell.isWeekend && !cell.isWorkday
+                const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'border-r border-border/30 relative',
+                      !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
+                      !cell.isToday && isWeekend && 'bg-muted/50',
+                      cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
+                    )}
+                    style={{
+                      width: DAY_CELL_WIDTH,
+                      height: rowHeight,
+                    }}
+                  />
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>

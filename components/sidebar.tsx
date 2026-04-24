@@ -261,7 +261,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
 
           {collapsed ? (
             <div className="mt-4 flex flex-col items-center space-y-2">
-              {/* <ThemeToggle /> */}
+              <ThemeToggle />
 
               <Link href="/users">
                 <Button
@@ -280,7 +280,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
           ) : (
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
-                {/* <ThemeToggle /> */}
+                <ThemeToggle />
 
                 <Link href="/users">
                   <Button

@@ -7,7 +7,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, FolderKanban } from 'lucide-react'
 import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, PROJECT_ROW_HEIGHT } from '../../constants'
@@ -119,7 +118,6 @@ export function ProjectRow({
 
           {/* Timeline cells with aggregation when collapsed */}
           <div className="flex relative z-0" style={{ width: timelineWidth }}>
-            {/* Show aggregated bars when collapsed */}
             {!isExpanded && allProjectLoadings.length > 0 && (
               <AggregatedBarsOverlay
                 loadings={allProjectLoadings}

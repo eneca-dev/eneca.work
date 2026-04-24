@@ -4,6 +4,8 @@ import { createClient } from '@/utils/supabase/server'
 import { z } from 'zod'
 import type { ActionResult, ProjectStatusEnum, CacheProjectViewRow } from '../types'
 import type { ProjectFilters } from '../keys/query-keys'
+import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
 // Types
@@ -115,6 +117,12 @@ export async function getProjects(
   try {
     const supabase = await createClient()
 
+    // 🔒 Скрываем restricted-проекты от не-админов
+    const ctx = await getFilterContext()
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
     let query = supabase
       .from('projects')
       .select(`
@@ -131,6 +139,10 @@ export async function getProjects(
         )
       `)
       .order('project_created', { ascending: false })
+
+    if (!isAdmin) {
+      query = query.eq('is_restricted', false)
+    }
 
     // Применяем фильтры
     if (filters?.status) {
@@ -205,6 +217,12 @@ export async function getProjectById(
   try {
     const supabase = await createClient()
 
+    // 🔒 Проверяем роль — restricted проекты доступны только админам
+    const ctx = await getFilterContext()
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
     const { data, error } = await supabase
       .from('projects')
       .select(`
@@ -214,6 +232,7 @@ export async function getProjectById(
         project_status,
         project_created,
         project_updated,
+        is_restricted,
         manager:profiles!projects_project_manager_fkey (
           user_id,
           first_name,
@@ -240,6 +259,11 @@ export async function getProjectById(
     }
 
     if (!data) {
+      return { success: false, error: 'Проект не найден' }
+    }
+
+    // Не-админ получает 404 на restricted проект — защита от обхода
+    if (!isAdmin && data.is_restricted) {
       return { success: false, error: 'Проект не найден' }
     }
 
@@ -285,10 +309,24 @@ export async function getProjectsWithCounts(
   try {
     const supabase = await createClient()
 
+    // 🔒 Скрываем restricted-проекты от не-админов (view не проксирует is_restricted).
+    // Параллельно: проверка админа + список restricted — экономит round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
     // Получаем данные из view
     let query = supabase
       .from('v_cache_projects')
       .select('*')
+
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
 
     // Применяем фильтры
     if (filters?.status) {
@@ -383,6 +421,22 @@ export async function getProjectStructure(
 ): Promise<ActionResult<ProjectStructure>> {
   try {
     const supabase = await createClient()
+
+    // 🔒 Проверяем роль — restricted проекты доступны только админам.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    if (!isAdmin) {
+      if (restrictedIds.includes(projectId)) {
+        return { success: false, error: 'Проект не найден' }
+      }
+    }
 
     const { data, error } = await supabase
       .from('v_cache_projects')
@@ -525,6 +579,20 @@ export async function updateProject(
     }
 
     const supabase = await createClient()
+
+    // 🔒 Defense-in-depth: не-админ не может обновлять restricted-проект
+    // (проект и так не виден ему в UI, но защищаемся от прямого вызова action).
+    // Параллельно: контекст + список restricted — 1 round-trip.
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+    if (!isAdmin && restrictedIds.includes(project_id)) {
+      return { success: false, error: 'Проект не найден' }
+    }
 
     // Обновляем проект
     const { data, error } = await supabase

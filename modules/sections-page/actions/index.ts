@@ -11,6 +11,7 @@ import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
+import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 import type {
   Department,
   Project,
@@ -57,10 +58,15 @@ export async function getSectionsHierarchy(
       return { success: false, error: 'Unauthorized' }
     }
 
-    // Получаем filter context для permissions
-    const filterContextResult = await getFilterContext()
+    // Получаем filter context для permissions.
+    // Параллельно: контекст + список restricted — экономит round-trip.
+    const [filterContextResult, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
+    const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
 
     // Для project_manager (scope.level === 'projects') убираем обязательный project_id фильтр,
     // чтобы менеджер видел все разделы — как на вкладке "Отделы" (там project_id не обрабатывается).
@@ -72,6 +78,12 @@ export async function getSectionsHierarchy(
 
     // Запрос к view
     let query = supabase.from('view_departments_sections_loadings').select('*')
+
+    // 🔒 Скрываем restricted-проекты от не-админов (view не проксирует is_restricted).
+    // Автоматически исключает загрузки по этим проектам из агрегации ниже.
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
 
     // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
     // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже)
