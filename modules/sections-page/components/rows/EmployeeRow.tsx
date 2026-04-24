@@ -543,19 +543,19 @@ export function EmployeeRow({
   }, [barRenders])
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
-
+  const rowHeight = actualRowHeight
   const employmentRate = employee.employeeEmploymentRate ?? 1
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">
       <div
         className="flex transition-colors"
-        style={{ height: actualRowHeight }}
+        style={{ height: rowHeight }}
       >
         {/* Sidebar - sticky left */}
         <div
           className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-20"
-          style={{ width: SIDEBAR_WIDTH, height: actualRowHeight }}
+          style={{ width: SIDEBAR_WIDTH, height: rowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
           <button
@@ -644,7 +644,7 @@ export function EmployeeRow({
               className={getCellClassNames(cell)}
               style={{
                 width: DAY_CELL_WIDTH,
-                height: actualRowHeight,
+                height: rowHeight,
               }}
             />
           ))}

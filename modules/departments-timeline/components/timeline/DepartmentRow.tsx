@@ -13,15 +13,23 @@ import { formatMinskDate } from '@/lib/timezone-utils'
 import { useDepartmentsTimelineUIStore, useRowExpanded } from '../../stores'
 import { useConfirmTeamActivity, useConfirmMultipleTeamsActivity } from '../../hooks'
 import { FreshnessIndicator } from '@/components/shared/timeline'
+import { BulkShiftPopover } from './BulkShiftPopover'
 import { TeamRow } from './TeamRow'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import type { Department, TeamFreshness, DayCell } from '../../types'
+import type { DayInfo } from '@/modules/resource-graph/types'
+import { aggregateMonthlyWorkload, type MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
+import type { TimelineScaleMode } from '@/components/shared/timeline'
 
 interface DepartmentRowProps {
   department: Department
   departmentIndex: number
   dayCells: DayCell[]
   freshnessData?: Record<string, TeamFreshness>
+  timelineScale: TimelineScaleMode
+  monthCells: MonthCell[]
+  monthCellWidth: number
+  calendarMap?: Map<string, Partial<DayInfo>>
 }
 
 export function DepartmentRow({
@@ -29,7 +37,12 @@ export function DepartmentRow({
   departmentIndex,
   dayCells,
   freshnessData,
+  timelineScale,
+  monthCells,
+  monthCellWidth,
+  calendarMap,
 }: DepartmentRowProps) {
+  const isMonthlyMode = timelineScale === 'month'
   const { isExpanded, toggle } = useRowExpanded('department', department.id)
 
   // Mutations for freshness
@@ -89,7 +102,9 @@ export function DepartmentRow({
   const formatWorkload = (value: number) =>
     parseFloat(value.toFixed(2)).toString()
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const timelineWidth = isMonthlyMode
+    ? monthCells.length * monthCellWidth
+    : dayCells.length * DAY_CELL_WIDTH
 
   return (
     <>
@@ -127,8 +142,9 @@ export function DepartmentRow({
               </div>
             </div>
 
-            {/* Right: capacity + freshness indicator */}
+            {/* Right: capacity + bulk shift + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              {!isMonthlyMode && <BulkShiftPopover department={department} />}
               {totalDepartmentCapacity > 0 && (
                 <span
                   className="text-xs font-medium text-muted-foreground tabular-nums"
@@ -156,86 +172,154 @@ export function DepartmentRow({
 
           {/* Timeline cells */}
           <div className="flex relative z-0" style={{ width: timelineWidth }}>
-            {dayCells.map((cell, i) => {
-              const isWeekend = cell.isWeekend && !cell.isWorkday
-              const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
-
-              // Get workload for this day
-              const dateKey = formatMinskDate(cell.date)
-              const departmentWorkload = department.dailyWorkloads?.[dateKey] || 0
-
-              // Calculate load percentage
-              const loadPercentage =
-                !isWeekend && !isSpecialDayOff && totalDepartmentCapacity > 0
-                  ? Math.round((departmentWorkload / totalDepartmentCapacity) * 100)
+            {isMonthlyMode ? (
+              /* Monthly mode: aggregated workload bars per month */
+              monthCells.map((cell, i) => {
+                const monthWorkload = aggregateMonthlyWorkload(department.dailyWorkloads, cell, calendarMap)
+                const loadPercentage = totalDepartmentCapacity > 0
+                  ? Math.round((monthWorkload / totalDepartmentCapacity) * 100)
                   : 0
 
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    'border-r border-border/50 relative',
-                    !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
-                    !cell.isToday && isWeekend && 'bg-muted/50',
-                    // Сегодня - применяется последним, но за загрузками
-                    cell.isToday && 'bg-green-50/50 dark:bg-green-700/25',
-                  )}
-                  style={{
-                    width: DAY_CELL_WIDTH,
-                    height: DEPARTMENT_ROW_HEIGHT,
-                  }}
-                >
-                  {/* Workload bar */}
-                  {loadPercentage > 0 && (
-                    <div
-                      className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
-                      title={`Загрузка: ${loadPercentage}%`}
-                    >
+                return (
+                  <div
+                    key={`${cell.year}-${cell.month}`}
+                    className={cn(
+                      'border-r border-border/30 relative',
+                      i % 2 === 1 && 'bg-black/[0.02] dark:bg-white/[0.02]',
+                      cell.isCurrentMonth && 'bg-primary/[0.03]'
+                    )}
+                    style={{ width: monthCellWidth, height: DEPARTMENT_ROW_HEIGHT }}
+                  >
+                    {loadPercentage > 0 && (
                       <div
-                        className={cn(
-                          'w-full rounded-sm border relative overflow-hidden',
-                          loadPercentage > 100
-                            ? 'border-red-500'
-                            : loadPercentage >= 90
-                              ? 'border-primary'
-                              : 'border-amber-500'
-                        )}
-                        style={{ height: DEPARTMENT_ROW_HEIGHT - 12 }}
+                        className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
+                        title={`Загрузка: ${loadPercentage}%`}
                       >
                         <div
                           className={cn(
-                            'absolute bottom-0 left-0 right-0 rounded-sm',
+                            'w-full rounded-sm border relative overflow-hidden',
                             loadPercentage > 100
-                              ? 'bg-red-500'
+                              ? 'border-red-500'
                               : loadPercentage >= 90
-                                ? 'bg-primary'
-                                : 'bg-amber-500'
+                                ? 'border-primary'
+                                : 'border-amber-500'
                           )}
-                          style={{
-                            height: `${Math.min(loadPercentage, 100)}%`,
-                            opacity: 0.6,
-                          }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center z-10">
-                          <span
+                          style={{ height: DEPARTMENT_ROW_HEIGHT - 12 }}
+                        >
+                          <div
                             className={cn(
-                              'text-[8px] font-semibold leading-none',
+                              'absolute bottom-0 left-0 right-0 rounded-sm',
                               loadPercentage > 100
-                                ? 'text-red-700 dark:text-red-300'
+                                ? 'bg-red-500'
                                 : loadPercentage >= 90
-                                  ? 'text-primary'
-                                  : 'text-amber-700 dark:text-amber-400'
+                                  ? 'bg-primary'
+                                  : 'bg-amber-500'
                             )}
-                          >
-                            {formatWorkload(departmentWorkload)}
-                          </span>
+                            style={{
+                              height: `${Math.min(loadPercentage, 100)}%`,
+                              opacity: 0.6,
+                            }}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center z-10">
+                            <span
+                              className={cn(
+                                'text-[9px] font-semibold leading-none',
+                                loadPercentage > 100
+                                  ? 'text-red-700 dark:text-red-300'
+                                  : loadPercentage >= 90
+                                    ? 'text-primary'
+                                    : 'text-amber-700 dark:text-amber-400'
+                              )}
+                            >
+                              {formatWorkload(monthWorkload)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    )}
+                  </div>
+                )
+              })
+            ) : (
+              dayCells.map((cell, i) => {
+                const isWeekend = cell.isWeekend && !cell.isWorkday
+                const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+
+                // Get workload for this day
+                const dateKey = formatMinskDate(cell.date)
+                const departmentWorkload = department.dailyWorkloads?.[dateKey] || 0
+
+                // Calculate load percentage
+                const loadPercentage =
+                  !isWeekend && !isSpecialDayOff && totalDepartmentCapacity > 0
+                    ? Math.round((departmentWorkload / totalDepartmentCapacity) * 100)
+                    : 0
+
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'border-r border-border/50 relative',
+                      !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
+                      !cell.isToday && isWeekend && 'bg-muted/50',
+                      cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
+                    )}
+                    style={{
+                      width: DAY_CELL_WIDTH,
+                      height: DEPARTMENT_ROW_HEIGHT,
+                    }}
+                  >
+                    {loadPercentage > 0 && (
+                      <div
+                        className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
+                        title={`Загрузка: ${loadPercentage}%`}
+                      >
+                        <div
+                          className={cn(
+                            'w-full rounded-sm border relative overflow-hidden',
+                            loadPercentage > 100
+                              ? 'border-red-500'
+                              : loadPercentage >= 90
+                                ? 'border-primary'
+                                : 'border-amber-500'
+                          )}
+                          style={{ height: DEPARTMENT_ROW_HEIGHT - 12 }}
+                        >
+                          <div
+                            className={cn(
+                              'absolute bottom-0 left-0 right-0 rounded-sm',
+                              loadPercentage > 100
+                                ? 'bg-red-500'
+                                : loadPercentage >= 90
+                                  ? 'bg-primary'
+                                  : 'bg-amber-500'
+                            )}
+                            style={{
+                              height: `${Math.min(loadPercentage, 100)}%`,
+                              opacity: 0.6,
+                            }}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center z-10">
+                            <span
+                              className={cn(
+                                'text-[8px] font-semibold leading-none',
+                                loadPercentage > 100
+                                  ? 'text-red-700 dark:text-red-300'
+                                  : loadPercentage >= 90
+                                    ? 'text-primary'
+                                    : 'text-amber-700 dark:text-amber-400'
+                              )}
+                            >
+                              {formatWorkload(departmentWorkload)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
           </div>
         </div>
       </div>
@@ -250,6 +334,10 @@ export function DepartmentRow({
               dayCells={dayCells}
               freshnessData={freshnessData}
               onConfirmActivity={handleConfirmActivity}
+              timelineScale={timelineScale}
+              monthCells={monthCells}
+              monthCellWidth={monthCellWidth}
+              calendarMap={calendarMap}
             />
           ))}
         </>

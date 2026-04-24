@@ -76,74 +76,90 @@ export interface BarRender {
 /**
  * Генерирует стабильный цвет на основе комбинации проекта и раздела
  */
+// Палитры на уровне модуля — избегаем пересоздания массивов при каждом вызове
+const DARK_COLORS = [
+  "rgb(59, 130, 246)",  // blue-500
+  "rgb(34, 197, 94)",   // green-500
+  "rgb(168, 85, 247)",  // purple-500
+  "rgb(249, 115, 22)",  // orange-500
+  "rgb(236, 72, 153)",  // pink-500
+  "rgb(99, 102, 241)",  // indigo-500
+  "rgb(20, 184, 166)",  // teal-500
+  "rgb(234, 179, 8)",   // yellow-500
+  "rgb(239, 68, 68)",   // red-500
+  "rgb(14, 165, 233)",  // sky-500
+]
+
+const LIGHT_COLORS = [
+  "rgb(37, 99, 235)",   // blue-600
+  "rgb(22, 163, 74)",   // green-600
+  "rgb(147, 51, 234)",  // purple-600
+  "rgb(234, 88, 12)",   // orange-600
+  "rgb(219, 39, 119)",  // pink-600
+  "rgb(79, 70, 229)",   // indigo-600
+  "rgb(13, 148, 136)",  // teal-600
+  "rgb(202, 138, 4)",   // yellow-600
+  "rgb(220, 38, 38)",   // red-600
+  "rgb(2, 132, 199)",   // sky-600
+]
+
+/**
+ * Фиксированные цвета для системных проектов.
+ * Серые оттенки намеренно ВНЕ DARK_COLORS/LIGHT_COLORS — хэш-функция выбирает
+ * только из 10-цветной палитры, так что обычный проект никогда не попадёт в
+ * этот цвет. Серый выдаётся только по явному совпадению project_id.
+ */
+const SYSTEM_PROJECT_COLORS: Record<string, { dark: string; light: string }> = {
+  // "Непроектные загрузки"
+  'c47b96cd-7535-467d-94b0-c7fdd5b1b888': {
+    dark: 'rgb(107, 114, 128)',   // gray-500
+    light: 'rgb(156, 163, 175)',  // gray-400
+  },
+  // "Отпуск"
+  '80bea5b8-1ecc-4ace-8d73-91f26e67b898': {
+    dark: 'rgb(75, 85, 99)',      // gray-600
+    light: 'rgb(107, 114, 128)',  // gray-500
+  },
+}
+
+/** Простой хеш строки в 32-bit integer */
+function simpleHash(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash = hash & hash
+  }
+  return Math.abs(hash)
+}
+
+/** Кеш результатов — цвет детерминирован, нет смысла пересчитывать */
+const colorCache = new Map<string, string>()
+
 export function getSectionColor(
   projectId: string | undefined,
   sectionId: string | null | undefined,
   stageId: string | undefined,
   isDark: boolean
 ): string {
-  // Палитра цветов для загрузок (яркие, насыщенные цвета)
-  const darkColors = [
-    "rgb(59, 130, 246)",  // blue-500
-    "rgb(34, 197, 94)",   // green-500
-    "rgb(168, 85, 247)",  // purple-500
-    "rgb(249, 115, 22)",  // orange-500
-    "rgb(236, 72, 153)",  // pink-500
-    "rgb(99, 102, 241)",  // indigo-500
-    "rgb(20, 184, 166)",  // teal-500
-    "rgb(234, 179, 8)",   // yellow-500
-    "rgb(239, 68, 68)",   // red-500
-    "rgb(14, 165, 233)",  // sky-500
-  ]
-
-  const lightColors = [
-    "rgb(37, 99, 235)",   // blue-600
-    "rgb(22, 163, 74)",   // green-600
-    "rgb(147, 51, 234)",  // purple-600
-    "rgb(234, 88, 12)",   // orange-600
-    "rgb(219, 39, 119)",  // pink-600
-    "rgb(79, 70, 229)",   // indigo-600
-    "rgb(13, 148, 136)",  // teal-600
-    "rgb(202, 138, 4)",   // yellow-600
-    "rgb(220, 38, 38)",   // red-600
-    "rgb(2, 132, 199)",   // sky-600
-  ]
-
-  const colors = isDark ? darkColors : lightColors
-
-  // Определяем строку для хеширования по приоритету:
-  // 1. projectId + sectionId (наивысший приоритет)
-  // 2. sectionId
-  // 3. projectId
-  // 4. stageId (fallback для обратной совместимости)
-  let hashString = ""
-
-  if (projectId && sectionId) {
-    // Комбинация проект + раздел (основной случай)
-    hashString = `${projectId}-${sectionId}`
-  } else if (sectionId) {
-    // Только раздел
-    hashString = sectionId
-  } else if (projectId) {
-    // Только проект
-    hashString = projectId
-  } else if (stageId) {
-    // Fallback на этап
-    hashString = stageId
-  } else {
-    // Если ничего нет, возвращаем первый цвет (синий)
-    return colors[0]
+  // 🎨 Системные проекты — фиксированный серый, не попадает в случайную палитру
+  if (projectId) {
+    const system = SYSTEM_PROJECT_COLORS[projectId]
+    if (system) return isDark ? system.dark : system.light
   }
 
-  // Простой хеш от строки
-  let hash = 0
-  for (let i = 0; i < hashString.length; i++) {
-    hash = ((hash << 5) - hash) + hashString.charCodeAt(i)
-    hash = hash & hash // Convert to 32bit integer
-  }
+  const colors = isDark ? DARK_COLORS : LIGHT_COLORS
 
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
+  // Приоритет: projectId → sectionId → stageId
+  const hashString = projectId || sectionId || stageId
+  if (!hashString) return colors[0]
+
+  const cacheKey = `s_${hashString}_${isDark}`
+  const cached = colorCache.get(cacheKey)
+  if (cached) return cached
+
+  const color = colors[simpleHash(hashString) % colors.length]
+  colorCache.set(cacheKey, color)
+  return color
 }
 
 /**
@@ -164,28 +180,6 @@ function periodsOverlap(period1: BarPeriod, period2: BarPeriod): boolean {
   const end2 = new Date(period2.endDate).getTime()
 
   return start1 <= end2 && start2 <= end1
-}
-
-/**
- * Находит первый свободный слой для размещения периода с учетом перекрытий
- */
-function findFreeLayer(period: BarPeriod, placedPeriods: Array<{ period: BarPeriod; layer: number }>): number {
-  const occupiedLayers = new Set<number>()
-
-  // Проверяем все уже размещенные периоды
-  for (const placed of placedPeriods) {
-    if (periodsOverlap(period, placed.period)) {
-      occupiedLayers.add(placed.layer)
-    }
-  }
-
-  // Находим первый свободный слой
-  let layer = 0
-  while (occupiedLayers.has(layer)) {
-    layer++
-  }
-
-  return layer
 }
 
 /**
@@ -236,22 +230,100 @@ export function calculateBarTop(
 }
 
 /**
- * Вычисляет слои для всех периодов с учетом перекрытий
+ * Вычисляет слои для всех периодов с учетом перекрытий.
+ *
+ * Периоды группируются по stageId (с fallback на sectionId) — все части одной
+ * разрезанной загрузки шарят stageId и ложатся на один слой. Если внутри группы
+ * есть перекрытие (редкий случай), группа распадается на одиночные периоды.
  */
 export function calculateLayers(periods: BarPeriod[]): number[] {
-  const layers: number[] = []
-  const placedPeriods: Array<{ period: BarPeriod; layer: number }> = []
+  const n = periods.length
+  const layers: number[] = new Array(n)
+  if (n === 0) return layers
 
-  // Сортируем периоды по дате начала
-  const sortedIndices = periods
-    .map((period, index) => ({ period, index }))
-    .sort((a, b) => new Date(a.period.startDate).getTime() - new Date(b.period.startDate).getTime())
+  // Пред-вычисляем start/end в мс один раз — потом переиспользуем везде.
+  const starts = new Array<number>(n)
+  const ends = new Array<number>(n)
+  for (let i = 0; i < n; i++) {
+    starts[i] = new Date(periods[i].startDate).getTime()
+    ends[i] = new Date(periods[i].endDate).getTime()
+  }
+  const overlaps = (a: number, b: number): boolean =>
+    starts[a] <= ends[b] && starts[b] <= ends[a]
 
-  // Для каждого периода находим свободный слой
-  for (const { period, index } of sortedIndices) {
-    const layer = findFreeLayer(period, placedPeriods)
-    layers[index] = layer
-    placedPeriods.push({ period, layer })
+  // Ключ группировки: stageId → sectionId → уникальный id. Разрезанные части шарят stageId.
+  const groupKey = (p: BarPeriod): string =>
+    p.stageId ? `stage:${p.stageId}` : p.sectionId ? `section:${p.sectionId}` : `solo:${p.id}`
+
+  // Собираем группы индексов
+  const groupsMap = new Map<string, number[]>()
+  for (let i = 0; i < n; i++) {
+    const key = groupKey(periods[i])
+    const list = groupsMap.get(key)
+    if (list) list.push(i)
+    else groupsMap.set(key, [i])
+  }
+
+  // Внутри одного stageId-блока разбиваем на цепочки (chains), где внутри цепочки
+  // ни один период не перекрывает другой. Каждая цепочка становится отдельной
+  // группой и попадает на свой слой. Split-куски, не перекрывающие друг друга,
+  // естественным образом попадают в одну цепочку → один слой.
+  // Оптимизация: сортируем по start и проверяем только последний член цепочки
+  // (с наибольшим end) — если не перекрывает, значит не перекрывает и остальные.
+  const groups: number[][] = []
+  for (const indices of groupsMap.values()) {
+    indices.sort((a, b) => starts[a] - starts[b])
+    const chains: number[][] = []
+    // maxEnd[c] = max end среди всех индексов в chains[c] — O(1) проверка fit
+    const maxEnds: number[] = []
+    for (const idx of indices) {
+      let placed = false
+      for (let c = 0; c < chains.length; c++) {
+        // Достаточно проверить, что текущий start > maxEnd цепочки
+        if (starts[idx] > maxEnds[c]) {
+          chains[c].push(idx)
+          if (ends[idx] > maxEnds[c]) maxEnds[c] = ends[idx]
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        chains.push([idx])
+        maxEnds.push(ends[idx])
+      }
+    }
+    groups.push(...chains)
+  }
+
+  // Пред-вычисляем minStart каждой группы — избегаем пересчёта в компараторе сортировки
+  const groupMinStart = groups.map((g) => {
+    let min = starts[g[0]]
+    for (let i = 1; i < g.length; i++) if (starts[g[i]] < min) min = starts[g[i]]
+    return min
+  })
+  const groupOrder = groups.map((_, i) => i).sort((a, b) => groupMinStart[a] - groupMinStart[b])
+
+  // Размещаем группы на слоях. Храним placed по слою в Map — O(1) lookup вместо O(n).
+  const placedByLayer = new Map<number, number[]>()
+  for (const gIdx of groupOrder) {
+    const indices = groups[gIdx]
+    let layer = 0
+    while (layer < 1000) {
+      const placedHere = placedByLayer.get(layer)
+      if (!placedHere || !indices.some((idx) => placedHere.some((pIdx) => overlaps(idx, pIdx)))) {
+        break
+      }
+      layer++
+    }
+    let bucket = placedByLayer.get(layer)
+    if (!bucket) {
+      bucket = []
+      placedByLayer.set(layer, bucket)
+    }
+    for (const idx of indices) {
+      layers[idx] = layer
+      bucket.push(idx)
+    }
   }
 
   return layers
@@ -558,48 +630,16 @@ export function formatBarTooltip(period: BarPeriod): string {
  * Генерирует стабильный цвет на основе команды
  */
 export function getTeamColor(teamName: string | undefined, isDark: boolean): string {
-  // Палитра цветов для команд
-  const darkColors = [
-    "rgb(59, 130, 246)",  // blue-500
-    "rgb(34, 197, 94)",   // green-500
-    "rgb(168, 85, 247)",  // purple-500
-    "rgb(249, 115, 22)",  // orange-500
-    "rgb(236, 72, 153)",  // pink-500
-    "rgb(99, 102, 241)",  // indigo-500
-    "rgb(20, 184, 166)",  // teal-500
-    "rgb(234, 179, 8)",   // yellow-500
-    "rgb(239, 68, 68)",   // red-500
-    "rgb(14, 165, 233)",  // sky-500
-  ]
+  const colors = isDark ? DARK_COLORS : LIGHT_COLORS
+  if (!teamName) return colors[0]
 
-  const lightColors = [
-    "rgb(37, 99, 235)",   // blue-600
-    "rgb(22, 163, 74)",   // green-600
-    "rgb(147, 51, 234)",  // purple-600
-    "rgb(234, 88, 12)",   // orange-600
-    "rgb(219, 39, 119)",  // pink-600
-    "rgb(79, 70, 229)",   // indigo-600
-    "rgb(13, 148, 136)",  // teal-600
-    "rgb(202, 138, 4)",   // yellow-600
-    "rgb(220, 38, 38)",   // red-600
-    "rgb(2, 132, 199)",   // sky-600
-  ]
+  const cacheKey = `t_${teamName}_${isDark}`
+  const cached = colorCache.get(cacheKey)
+  if (cached) return cached
 
-  const colors = isDark ? darkColors : lightColors
-
-  if (!teamName) {
-    return colors[0]
-  }
-
-  // Простой хеш от названия команды
-  let hash = 0
-  for (let i = 0; i < teamName.length; i++) {
-    hash = ((hash << 5) - hash) + teamName.charCodeAt(i)
-    hash = hash & hash
-  }
-
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
+  const color = colors[simpleHash(teamName) % colors.length]
+  colorCache.set(cacheKey, color)
+  return color
 }
 
 /**

@@ -195,21 +195,22 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
     })
   }, [months])
 
-  // Фоновые полосы чередования месяцев (переиспользуется в 3 строках header)
+  // Фоновые полосы чередования месяцев (переиспользуется в 3 строках header).
+  // Контраст повышен vs исходных 3% — чтобы переход между месяцами был явным.
   const monthAlternationBg = useMemo(() => (
     <>
       {monthSpans.map((span, i) => span.isOdd ? (
         <div
           key={`month-bg-${i}`}
-          className="absolute top-0 bottom-0 bg-black/[0.03] dark:bg-white/[0.035] pointer-events-none"
+          className="absolute top-0 bottom-0 bg-black/[0.07] dark:bg-white/[0.06] pointer-events-none"
           style={{ left: span.left, width: span.width }}
         />
       ) : null)}
       {monthSpans.slice(1).map((span, i) => (
         <div
           key={`month-border-${i}`}
-          className="absolute top-0 bottom-0 w-px bg-border/50 pointer-events-none"
-          style={{ left: span.left }}
+          className="absolute top-0 bottom-0 w-0.5 bg-border pointer-events-none"
+          style={{ left: span.left - 1 }}
         />
       ))}
     </>
@@ -289,7 +290,7 @@ export function TimelineHeader({ dayCells, onScrollToToday, datePopoverConfig }:
               className={cn(
                 'flex flex-col items-center justify-center text-[10px] relative z-[1]',
                 // Сегодня - высший приоритет
-                cell.isToday && 'bg-green-50 dark:bg-green-700/40',
+                cell.isToday && 'bg-green-300 dark:bg-green-700/40',
                 // Праздники и дополнительные выходные - желтоватый фон (сохраняем amber акцент)
                 !cell.isToday && isSpecialDayOff && 'bg-amber-500/10 dark:bg-amber-500/10',
                 // Стандартные выходные (Сб/Вс) - нейтральный серый фон

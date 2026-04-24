@@ -20,11 +20,16 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
-import { ScissorsToggle } from '@/components/shared/timeline'
+import { TimelineHeader, generateDayCells, resolveTimelineRange, MonthlyHeader } from '@/modules/resource-graph/components/timeline'
+import { ScissorsToggle, ScaleToggle } from '@/components/shared/timeline'
+import { generateMonthCells } from '@/modules/resource-graph/utils/monthly-cell-utils'
+import { buildCalendarMap } from '@/modules/resource-graph/utils'
+import { MONTH_CELL_WIDTH, MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER } from '@/modules/resource-graph/constants'
+import { useIsAdmin } from '@/modules/permissions'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { DepartmentRow } from './timeline/DepartmentRow'
+import { DepartmentGroupDivider } from './timeline/DepartmentGroupDivider'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // ============================================================================
@@ -87,6 +92,11 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   const expandAll = useDepartmentsTimelineUIStore((s) => s.expandAll)
   const customDateRange = useDepartmentsTimelineUIStore((s) => s.customDateRange)
   const setCustomDateRange = useDepartmentsTimelineUIStore((s) => s.setCustomDateRange)
+  const timelineScale = useDepartmentsTimelineUIStore((s) => s.timelineScale)
+  const setTimelineScale = useDepartmentsTimelineUIStore((s) => s.setTimelineScale)
+
+  const isAdmin = useIsAdmin()
+  const isMonthlyMode = timelineScale === 'month'
 
   // Load company calendar events (holidays and transfers) - cached for 24h
   const { data: calendarEvents = [] } = useCompanyCalendarEvents()
@@ -100,14 +110,81 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
     () => generateDayCells(range, calendarEvents),
     [range, calendarEvents]
   )
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+
+  // Calendar map for monthly workload filtering (skip weekends/holidays)
+  const calendarMap = useMemo(
+    () => buildCalendarMap(calendarEvents),
+    [calendarEvents]
+  )
+
+  // Monthly cells (computed only in monthly mode)
+  const monthCells = useMemo(() => {
+    if (!isMonthlyMode) return []
+    return generateMonthCells(
+      0,
+      MONTHLY_MONTHS_BEFORE,
+      MONTHLY_MONTHS_AFTER,
+      calendarEvents
+    )
+  }, [isMonthlyMode, calendarEvents])
+
+  // Width calculations depend on scale
+  const timelineWidth = isMonthlyMode
+    ? monthCells.length * MONTH_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
+
+  // Index of current month for auto-scroll
+  const currentMonthIndex = useMemo(
+    () => monthCells.findIndex((c) => c.isCurrentMonth),
+    [monthCells]
+  )
 
   // Data fetching with external query params
   const { data: departments, isLoading, error } = useDepartmentsData(
     filtersApplied ? queryParams : {},
     { enabled: shouldFetchData }
   )
+
+  // Group departments: «гражд» → общие → «пром».
+  // Внутри каждой группы сохраняем порядок из исходных данных (алфавит с сервера).
+  const groupedDepartments = useMemo(() => {
+    if (!departments || departments.length === 0) {
+      return { grazhd: [], general: [], prom: [] }
+    }
+    const grazhd: typeof departments = []
+    const prom: typeof departments = []
+    const general: typeof departments = []
+    for (const d of departments) {
+      const name = d.name.toLowerCase()
+      if (name.includes('гражд')) grazhd.push(d)
+      else if (name.includes('пром')) prom.push(d)
+      else general.push(d)
+    }
+    return { grazhd, general, prom }
+  }, [departments])
+
+  // В месячном режиме дополнительно показываем отдел ВК с фильтрацией по командам.
+  // Команды пересчитываются — department-level dailyWorkloads агрегируются заново
+  // только из оставшихся команд, чтобы суммы не включали отфильтрованные.
+  const monthlyFilteredVK = useMemo(() => {
+    if (!isMonthlyMode || !departments) return null
+    const vk = departments.find((d) => d.name === 'ВК')
+    if (!vk) return null
+    const allowedTeams = new Set(['ВК - 1', 'ВК - 3', 'ВК - 4'])
+    const filteredTeams = vk.teams.filter((t) => allowedTeams.has(t.name))
+    if (filteredTeams.length === 0) return null
+
+    // Пересчитываем агрегат отдела из отфильтрованных команд
+    const aggregated: Record<string, number> = {}
+    for (const team of filteredTeams) {
+      if (!team.dailyWorkloads) continue
+      for (const [date, value] of Object.entries(team.dailyWorkloads)) {
+        aggregated[date] = (aggregated[date] || 0) + value
+      }
+    }
+    return { ...vk, teams: filteredTeams, dailyWorkloads: aggregated }
+  }, [departments, isMonthlyMode])
 
   // Load freshness data
   const { data: freshnessData } = useTeamsFreshness()
@@ -156,16 +233,27 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   // Scroll header to today as soon as it renders (fires when shouldFetchData becomes true)
   useEffect(() => {
     if (!shouldFetchData || !headerScrollRef.current) return
-    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-    headerScrollRef.current.scrollLeft = scrollLeft
-  }, [shouldFetchData, todayOffsetDays])
+    if (isMonthlyMode) {
+      // Scroll to current month (1 month margin left)
+      const scrollLeft = Math.max(0, (currentMonthIndex - 1) * MONTH_CELL_WIDTH)
+      headerScrollRef.current.scrollLeft = scrollLeft
+    } else {
+      const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
+      headerScrollRef.current.scrollLeft = scrollLeft
+    }
+  }, [shouldFetchData, todayOffsetDays, isMonthlyMode, currentMonthIndex])
 
-  // Scroll content to today-7 when data finishes loading
+  // Scroll content to today when data finishes loading
   useEffect(() => {
     if (isLoading || !contentScrollRef.current) return
-    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-    contentScrollRef.current.scrollLeft = scrollLeft
-  }, [isLoading, todayOffsetDays])
+    if (isMonthlyMode) {
+      const scrollLeft = Math.max(0, (currentMonthIndex - 1) * MONTH_CELL_WIDTH)
+      contentScrollRef.current.scrollLeft = scrollLeft
+    } else {
+      const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
+      contentScrollRef.current.scrollLeft = scrollLeft
+    }
+  }, [isLoading, todayOffsetDays, isMonthlyMode, currentMonthIndex])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -214,7 +302,12 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Отделы / Команды
                 </span>
-                <ScissorsToggle />
+                <div className="flex items-center gap-1.5">
+                  {isAdmin && (
+                    <ScaleToggle value={timelineScale} onChange={setTimelineScale} />
+                  )}
+                  {!isMonthlyMode && <ScissorsToggle />}
+                </div>
                 {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                 <TooltipProvider>
                   <div className="flex items-center gap-1">
@@ -249,16 +342,23 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 */}
               </div>
               {/* Timeline header with dates */}
-              <TimelineHeader
-                dayCells={dayCells}
-                datePopoverConfig={{
-                  customRange: customDateRange,
-                  onRangeChange: setCustomDateRange,
-                  onScrollToToday: handleScrollToToday,
-                  defaultDaysBefore: DAYS_BEFORE_TODAY,
-                  defaultDaysAfter: DAYS_AFTER_TODAY,
-                }}
-              />
+              {isMonthlyMode ? (
+                <MonthlyHeader
+                  monthCells={monthCells}
+                  monthCellWidth={MONTH_CELL_WIDTH}
+                />
+              ) : (
+                <TimelineHeader
+                  dayCells={dayCells}
+                  datePopoverConfig={{
+                    customRange: customDateRange,
+                    onRangeChange: setCustomDateRange,
+                    onScrollToToday: handleScrollToToday,
+                    defaultDaysBefore: DAYS_BEFORE_TODAY,
+                    defaultDaysAfter: DAYS_AFTER_TODAY,
+                  }}
+                />
+              )}
             </div>
           </div>
         </header>
@@ -305,15 +405,56 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
             className="overflow-auto h-full"
           >
             <div style={{ minWidth: totalWidth }}>
-              {departments.map((department, index) => (
-                <DepartmentRow
-                  key={department.id}
-                  department={department}
-                  departmentIndex={index}
-                  dayCells={dayCells}
-                  freshnessData={freshnessData}
-                />
-              ))}
+              {(() => {
+                const { grazhd, general, prom } = groupedDepartments
+                // Группы в желаемом порядке: гражд → общие → пром.
+                // Разделитель с лейблом показываем перед каждой непустой группой,
+                // включая первую — чтобы юзер видел названия всех разделов.
+                // В месячном режиме показываем: гражд (без «УП - Гражд») + ВК (только 1/3/4).
+                const monthlyGrazhd = isMonthlyMode
+                  ? grazhd.filter((d) => d.name !== 'УП - Гражд')
+                  : grazhd
+                const groups: Array<{ key: string; label: string; items: typeof departments }> = isMonthlyMode
+                  ? [
+                      { key: 'grazhd', label: 'Гражданское направление', items: monthlyGrazhd },
+                      ...(monthlyFilteredVK
+                        ? [{ key: 'vk', label: 'ВК (команды 1, 3, 4)', items: [monthlyFilteredVK] }]
+                        : []),
+                    ]
+                  : [
+                      { key: 'grazhd', label: 'Гражданское направление', items: grazhd },
+                      { key: 'general', label: 'Общие отделы', items: general },
+                      { key: 'prom', label: 'Промышленное направление', items: prom },
+                    ]
+                let flatIndex = 0
+                const nodes: React.ReactNode[] = []
+                for (const group of groups) {
+                  if (group.items.length === 0) continue
+                  nodes.push(
+                    <DepartmentGroupDivider
+                      key={`divider-${group.key}`}
+                      label={group.label}
+                      width={totalWidth}
+                    />
+                  )
+                  for (const dept of group.items) {
+                    nodes.push(
+                      <DepartmentRow
+                        key={dept.id}
+                        department={dept}
+                        departmentIndex={flatIndex++}
+                        dayCells={dayCells}
+                        freshnessData={freshnessData}
+                        timelineScale={timelineScale}
+                        monthCells={monthCells}
+                        monthCellWidth={MONTH_CELL_WIDTH}
+                        calendarMap={calendarMap}
+                      />
+                    )
+                  }
+                }
+                return nodes
+              })()}
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,8 @@ interface PageConfig {
   imageAlt?: string
   // true — сначала скриншот, потом видео (по умолчанию: сначала видео)
   imageFirst?: boolean
+  // Богатый контент для уроков без видео/скриншота (заменяет description, если задан)
+  content?: ReactNode
 }
 
 const PAGES: PageConfig[] = [
@@ -78,6 +80,66 @@ const PAGES: PageConfig[] = [
     title: "Перетаскивание дат в календаре",
     description: "Можно зажать дату и перетащить её на новую — тем самым вы не выбираете новый диапазон, а сдвигаете уже существующий.",
     videoId: "2CfUxkwi4B0",
+  },
+  {
+    title: "Куда вносить «Прочие работы»",
+    description: "«Прочие работы» — общий проект для задач. Ниже — когда именно вносить загрузку сюда, а не в конкретный проект.",
+    content: (
+      <div className="text-sm text-foreground leading-relaxed space-y-4">
+        <p className="text-muted-foreground">
+          «Прочие работы» — общий проект для задач.
+          Ниже — примеры, когда именно вносить загрузку сюда, а не в конкретный проект.
+        </p>
+
+        <div>
+          <h3 className="font-semibold mb-1.5">1. «Хвосты» по архивным проектам</h3>
+          <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+            <li>Исправление мелких замечаний по проектам, которые уже сданы и перенесены в архив.</li>
+            <li>Поиск и выгрузка документации по старым объектам по запросу.</li>
+            <li>Финальное подписание актов или корректировка чертежей после закрытия проекта.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="font-semibold mb-1.5">2. АН и доделки</h3>
+          <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+            <li>Внесение правок в рабочую документацию по результатам выезда на объект (если этап проектирования закрыт).</li>
+            <li>Консультации строителей или заказчика по «завершённым» этапам.</li>
+            <li>Любые доработки, возникшие на этапе реализации объекта, когда проектная задача в системе уже не активна.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="font-semibold mb-1.5">3. Перспективные проекты</h3>
+          <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+            <li>Подготовка предварительных расчётов, смет или коммерческих предложений.</li>
+            <li>Ознакомление с ТЗ и исходными данными по объектам, которые ещё официально не запущены.</li>
+            <li>Участие в предпроектных совещаниях и тендерах.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="font-semibold mb-1.5">4. Запросы от ГУП (внепроектные)</h3>
+          <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+            <li>Подготовка справок, ответов на письма и официальных отчётов по запросу ведомства.</li>
+            <li>Выполнение разовых поручений от ГУП, не привязанных к конкретному текущему контракту.</li>
+            <li>Сбор статистики или данных по объектам прошлых лет.</li>
+          </ul>
+        </div>
+
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-6">
+          <h3 className="font-semibold mb-2">Как заполнять комментарий к загрузке</h3>
+          <p className="text-muted-foreground mb-2">
+            Чтобы руководителю было понятно, на что ушло время — в комментарии лучше указывать категорию и контекст:
+          </p>
+          <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+            <li><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Архив: [Название объекта] — доработка спецификации</span></li>
+            <li><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Перспектива: [Адрес/Название] — расчёт объёмов</span></li>
+            <li><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Запрос ГУП: подготовка данных по письму №123</span></li>
+          </ul>
+        </div>
+      </div>
+    ),
   },
 ]
 
@@ -209,8 +271,12 @@ export function OnboardingModal() {
             </>
           )}
 
-          {page.description && (
-            <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
+          {page.content ? (
+            page.content
+          ) : (
+            page.description && (
+              <p className="text-sm text-muted-foreground leading-relaxed">{page.description}</p>
+            )
           )}
         </div>
 
@@ -232,11 +298,10 @@ export function OnboardingModal() {
             <button
               key={i}
               onClick={() => goToPage(i)}
-              className={`rounded-full transition-all duration-200 ${
-                i === currentPage
+              className={`rounded-full transition-all duration-200 ${i === currentPage
                   ? "w-4 h-2 bg-primary"
                   : "w-2 h-2 bg-muted-foreground/30 hover:bg-muted-foreground/60"
-              }`}
+                }`}
               aria-label={`Перейти к шагу ${i + 1}`}
             />
           ))}

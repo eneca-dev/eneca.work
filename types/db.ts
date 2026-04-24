@@ -10001,6 +10001,7 @@ export type Database = {
           external_id: string | null
           external_source: string | null
           external_updated_at: string | null
+          is_restricted: boolean
           project_created: string | null
           project_description: string | null
           project_id: string
@@ -10018,6 +10019,7 @@ export type Database = {
           external_id?: string | null
           external_source?: string | null
           external_updated_at?: string | null
+          is_restricted?: boolean
           project_created?: string | null
           project_description?: string | null
           project_id?: string
@@ -10035,6 +10037,7 @@ export type Database = {
           external_id?: string | null
           external_source?: string | null
           external_updated_at?: string | null
+          is_restricted?: boolean
           project_created?: string | null
           project_description?: string | null
           project_id?: string
