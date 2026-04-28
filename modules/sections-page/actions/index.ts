@@ -22,6 +22,7 @@ import type {
   CapacityInput,
   SectionCapacity,
 } from '../types'
+import { compareProjectsByGup } from '../utils/sort-projects'
 
 // ============================================================================
 // Helper Functions
@@ -477,12 +478,13 @@ dailyWorkloads: {},
       }
     }
 
-    // Присваиваем totalEmployees из Set.size
+    // Присваиваем totalEmployees из Set.size и сортируем проекты по ГУП-нумерации
     for (const dept of departmentsMap.values()) {
       dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
       for (const project of dept.projects) {
         project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
       }
+      dept.projects.sort(compareProjectsByGup)
     }
 
     // Преобразуем Map в массив
