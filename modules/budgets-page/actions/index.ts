@@ -39,3 +39,9 @@ export {
   type SyncResult,
   type SyncEntityStats,
 } from './sync-actions'
+
+// Loading Money — расчётный бюджет из loadings (см. docs/production/budgets-calc-from-loadings.md)
+export {
+  getSectionCalcBudgets,
+  type SectionCalcBudget,
+} from './loading-money'

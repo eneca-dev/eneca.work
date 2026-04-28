@@ -25,5 +25,6 @@ export function useAdminPermissions(): AdminPermissions {
     canManageTeamLead: hasPermission('users.manage.team_lead'),
     canChangeRoles: hasPermission('users.assign_roles'),
     canAddAdminRole: hasPermission('users.assign_admin_role'),
+    canEditBudgetSettings: hasPermission('budgets.settings.edit'),
   }
-} 
+}

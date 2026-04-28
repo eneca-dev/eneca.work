@@ -13,6 +13,7 @@ import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import DepartmentHeadModal from "./DepartmentHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
+import { DepartmentRateCell } from "./DepartmentRateCell"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
 import { useAdminSubdivisions, useAdminDepartments, type AdminDepartment } from "../hooks/useAdminData"
@@ -304,6 +305,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
                 <TableHead className="text-base">Название отдела</TableHead>
                 <TableHead className="text-base">Подразделение</TableHead>
                 <TableHead className="text-base">Руководитель</TableHead>
+                <TableHead className="text-base">Ставка для бюджета</TableHead>
                 <TableHead className="w-64 text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
@@ -387,6 +389,12 @@ function DepartmentsTab(props: DepartmentsTabProps) {
                         </div>
                       )}
                     </TableCell>
+                    <TableCell className="text-base">
+                      <DepartmentRateCell
+                        departmentId={department.department_id}
+                        canEdit={perms.canEditBudgetSettings}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {showManagementControls && (
@@ -413,7 +421,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4}>
+                  <TableCell colSpan={5}>
                     <EmptyState
                       message={
                         search
