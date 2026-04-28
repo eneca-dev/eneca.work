@@ -189,8 +189,7 @@ export function BulkShiftPopover({ department }: BulkShiftPopoverProps) {
               type="button"
               className={cn(
                 'p-1 rounded-sm transition-colors',
-                'text-muted-foreground hover:text-foreground hover:bg-accent',
-                'opacity-0 group-hover/row:opacity-100 focus:opacity-100'
+                'text-muted-foreground hover:text-foreground hover:bg-accent'
               )}
               onClick={(e) => e.stopPropagation()}
             >
