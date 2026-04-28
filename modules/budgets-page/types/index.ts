@@ -103,10 +103,25 @@ export interface HierarchyNode {
   budgets: BudgetInfo[]
   /** Агрегированные бюджеты по типам (для прогресс-баров) */
   aggregatedBudgets: AggregatedBudgetsByType[]
-  /** Плановые часы (для этапов/разделов/items) */
+  /**
+   * @deprecated since 2026-04-28 — заменено на loadingHours/calcBudgetFromLoadings.
+   * См. docs/deprecated/budgets-planned-hours.md.
+   * Поле остаётся для исторических данных и потенциального возврата к ручному вводу часов.
+   */
   plannedHours?: number
   /** Фактические часы (из work_logs) */
   actualHours?: number
+  /**
+   * Часы из назначенных loadings (рассчитываются на section через v_cache_section_calc_budget,
+   * агрегируются вверх для object/project через children). Источник истины для нового расчётного бюджета.
+   */
+  loadingHours?: number
+  /** Расчётный бюджет = loadingHours × ставка отдела (агрегируется снизу вверх) */
+  calcBudgetFromLoadings?: number
+  /** Количество loadings (для tooltip) — на section это собственные, на object/project — сумма children */
+  loadingCount?: number
+  /** Кол-во loadings с ошибками (no_department / no_rate) — для warning в tooltip */
+  loadingErrorsCount?: number
   /** Дочерние узлы */
   children: HierarchyNode[]
   /** Entity type для создания бюджета */

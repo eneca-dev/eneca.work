@@ -20,6 +20,15 @@ import type {
 } from '../types'
 import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph'
 import type { BudgetCurrent } from '@/modules/budgets'
+import { useSectionCalcBudgets } from './use-section-calc-budgets'
+
+/** Агрегат расчёта по разделу из v_cache_section_calc_budget */
+interface SectionCalcSummary {
+  loadingHours: number
+  calcBudget: number
+  loadingCount: number
+  errorsCount: number
+}
 
 // ============================================================================
 // Budget Transformation Helpers
@@ -195,16 +204,20 @@ function transformDecompositionStage(
  */
 function transformSection(
   section: Section,
-  budgetsMap: Map<string, BudgetInfo[]>
+  budgetsMap: Map<string, BudgetInfo[]>,
+  calcMap: Map<string, SectionCalcSummary>
 ): HierarchyNode {
   const children = section.decompositionStages.map(stage =>
     transformDecompositionStage(stage, budgetsMap)
   )
 
-  // Плановые часы = сумма часов всех этапов
+  // Плановые часы (deprecated) = сумма часов всех items декомпозиции
   const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
 
   const nodeBudgets = budgetsMap.get(`section:${section.id}`) || []
+
+  // Новый расчёт из loadings (v_cache_section_calc_budget)
+  const calc = calcMap.get(section.id)
 
   const node: HierarchyNode = {
     id: section.id,
@@ -213,6 +226,10 @@ function transformSection(
     budgets: nodeBudgets,
     aggregatedBudgets: [], // Будет вычислено ниже
     plannedHours,
+    loadingHours: calc?.loadingHours ?? 0,
+    calcBudgetFromLoadings: calc?.calcBudget ?? 0,
+    loadingCount: calc?.loadingCount ?? 0,
+    loadingErrorsCount: calc?.errorsCount ?? 0,
     children,
     entityType: 'section',
     hourlyRate: section.hourlyRate,
@@ -229,13 +246,20 @@ function transformSection(
  */
 function transformObject(
   object: ProjectObject,
-  budgetsMap: Map<string, BudgetInfo[]>
+  budgetsMap: Map<string, BudgetInfo[]>,
+  calcMap: Map<string, SectionCalcSummary>
 ): HierarchyNode {
   const children = object.sections.map(section =>
-    transformSection(section, budgetsMap)
+    transformSection(section, budgetsMap, calcMap)
   )
 
   const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
+
+  // Агрегация по children (sections и ниже)
+  const loadingHours = children.reduce((sum, c) => sum + (c.loadingHours || 0), 0)
+  const calcBudgetFromLoadings = children.reduce((sum, c) => sum + (c.calcBudgetFromLoadings || 0), 0)
+  const loadingCount = children.reduce((sum, c) => sum + (c.loadingCount || 0), 0)
+  const loadingErrorsCount = children.reduce((sum, c) => sum + (c.loadingErrorsCount || 0), 0)
 
   const nodeBudgets = budgetsMap.get(`object:${object.id}`) || []
 
@@ -246,6 +270,10 @@ function transformObject(
     budgets: nodeBudgets,
     aggregatedBudgets: [],
     plannedHours,
+    loadingHours,
+    calcBudgetFromLoadings,
+    loadingCount,
+    loadingErrorsCount,
     children,
     entityType: 'object',
   }
@@ -261,14 +289,19 @@ function transformObject(
  */
 function transformProject(
   project: Project,
-  budgetsMap: Map<string, BudgetInfo[]>
+  budgetsMap: Map<string, BudgetInfo[]>,
+  calcMap: Map<string, SectionCalcSummary>
 ): HierarchyNode {
   // Объекты напрямую под проектом (без промежуточного уровня Stage)
   const children = project.objects.map(object =>
-    transformObject(object, budgetsMap)
+    transformObject(object, budgetsMap, calcMap)
   )
 
   const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
+  const loadingHours = children.reduce((sum, c) => sum + (c.loadingHours || 0), 0)
+  const calcBudgetFromLoadings = children.reduce((sum, c) => sum + (c.calcBudgetFromLoadings || 0), 0)
+  const loadingCount = children.reduce((sum, c) => sum + (c.loadingCount || 0), 0)
+  const loadingErrorsCount = children.reduce((sum, c) => sum + (c.loadingErrorsCount || 0), 0)
 
   const nodeBudgets = budgetsMap.get(`project:${project.id}`) || []
 
@@ -286,6 +319,10 @@ function transformProject(
     budgets: nodeBudgets,
     aggregatedBudgets: [],
     plannedHours,
+    loadingHours,
+    calcBudgetFromLoadings,
+    loadingCount,
+    loadingErrorsCount,
     children,
     entityType: 'project',
   }
@@ -454,11 +491,34 @@ export function useBudgetsHierarchy(
     refetch: refetchBudgets,
   } = useBudgets({ is_active: true }, { enabled })
 
+  // Собираем все section_id из иерархии для запроса расчётных бюджетов из loadings
+  const sectionIds = useMemo(() => {
+    if (!projects) return [] as string[]
+    const ids: string[] = []
+    for (const project of projects) {
+      for (const object of project.objects) {
+        for (const section of object.sections) {
+          ids.push(section.id)
+        }
+      }
+    }
+    return ids
+  }, [projects])
+
+  // Расчётный бюджет по разделам (новая формула: loadings × ставка отдела)
+  const {
+    data: sectionCalcs,
+    isLoading: sectionCalcsLoading,
+    error: sectionCalcsError,
+    refetch: refetchSectionCalcs,
+  } = useSectionCalcBudgets(sectionIds)
+
   // Функция для обновления всех данных
   const refetch = useCallback(() => {
     refetchProjects()
     refetchBudgets()
-  }, [refetchProjects, refetchBudgets])
+    refetchSectionCalcs()
+  }, [refetchProjects, refetchBudgets, refetchSectionCalcs])
 
   // Создаём Map для быстрого поиска бюджетов по entity
   const budgetsMap = useMemo(() => {
@@ -475,6 +535,22 @@ export function useBudgetsHierarchy(
 
     return map
   }, [budgets])
+
+  // Map: section_id → агрегат расчётного бюджета из loadings
+  const calcMap = useMemo(() => {
+    const map = new Map<string, SectionCalcSummary>()
+    if (!sectionCalcs) return map
+    for (const row of sectionCalcs) {
+      if (!row.section_id) continue
+      map.set(row.section_id, {
+        loadingHours: Number(row.total_hours ?? 0),
+        calcBudget: Number(row.calc_budget ?? 0),
+        loadingCount: row.loading_count ?? 0,
+        errorsCount: row.errors_count ?? 0,
+      })
+    }
+    return map
+  }, [sectionCalcs])
 
   // Трансформируем иерархию
   const { nodes, analytics } = useMemo(() => {
@@ -496,7 +572,7 @@ export function useBudgetsHierarchy(
     }
 
     const transformedNodes = projects.map(project =>
-      transformProject(project, budgetsMap)
+      transformProject(project, budgetsMap, calcMap)
     )
 
     const calculatedAnalytics = calculateAnalytics(transformedNodes)
@@ -505,13 +581,13 @@ export function useBudgetsHierarchy(
       nodes: transformedNodes,
       analytics: calculatedAnalytics,
     }
-  }, [projects, budgetsMap])
+  }, [projects, budgetsMap, calcMap])
 
   return {
     nodes,
     analytics,
-    isLoading: projectsLoading || budgetsLoading,
-    error: projectsError || budgetsError || null,
+    isLoading: projectsLoading || budgetsLoading || sectionCalcsLoading,
+    error: projectsError || budgetsError || sectionCalcsError || null,
     refetch,
   }
 }

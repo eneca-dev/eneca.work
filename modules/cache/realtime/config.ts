@@ -83,6 +83,15 @@ export const realtimeSubscriptions: TableSubscription[] = [
       [...queryKeys.resourceGraph.all, 'loadings'],
       queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
       queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
+      queryKeys.budgets.calc(), // Расчётный бюджет из loadings (страница бюджетов)
+    ],
+  },
+  // Настройки ставок отделов — влияют на расчётный бюджет
+  {
+    table: 'department_budget_settings',
+    invalidateKeys: [
+      queryKeys.budgets.departmentSettings(),
+      queryKeys.budgets.calc(),
     ],
   },
   {

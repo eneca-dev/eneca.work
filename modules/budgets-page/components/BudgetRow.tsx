@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
 import { ItemDifficultySelect } from './ItemDifficultySelect'
 import { DeleteObjectModal, ObjectCreateModal, SectionCreateModal, DeleteSectionModal, ProjectQuickEditModal } from '@/modules/modals'
@@ -19,6 +20,8 @@ import { BudgetRowBadges } from './BudgetRowBadges'
 import { BudgetRowHours } from './BudgetRowHours'
 import { BudgetRowActions } from './BudgetRowActions'
 import { SectionRateEdit } from './SectionRateEdit'
+// DEPRECATED: используются только для часов декомпозиции и fallback ставки в SectionRateEdit.
+// Удалить после полного перехода на calcBudgetFromLoadings (см. docs/deprecated/budgets-planned-hours.md).
 import { MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR } from '../config/constants'
 import { formatNumber } from '../utils'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
@@ -141,19 +144,27 @@ export const BudgetRow = React.memo(function BudgetRow({
   const isItem = node.type === 'decomposition_item'
   const isTopLevel = node.type === 'project' || node.type === 'object'
 
-  // Плановые часы
+  // Старая формула расчётного бюджета — DEPRECATED since 2026-04-28.
+  // Расчётный бюджет теперь приходит через node.calcBudgetFromLoadings (см. ниже).
+  // Эти переменные оставлены ТОЛЬКО для:
+  //   - BudgetRowHours (отображение и редактирование ручных часов в декомпозиции)
+  //   - SectionRateEdit (fallback при отсутствии node.hourlyRate)
+  //   - вычисления % часов от родителя (информационно)
+  // См. docs/deprecated/budgets-planned-hours.md.
   const plannedHours = node.plannedHours || 0
-
-  // Приведённые часы = плановые * К
   const adjustedHours = plannedHours * HOURS_ADJUSTMENT_FACTOR
-
-  // Эффективная ставка: для раздела берём из node.hourlyRate, для детей - наследуем от родителя
   const effectiveRate = isSection
     ? (node.hourlyRate ?? MOCK_HOURLY_RATE)
     : hourlyRate
 
-  // Расчётный бюджет = приведённые часы * ставка
-  const calcBudget = adjustedHours > 0 ? adjustedHours * effectiveRate : null
+  // Новый расчётный бюджет — из loadings × ставка отдела
+  // (для section: из v_cache_section_calc_budget; для object/project: агрегация в use-budgets-hierarchy)
+  const calcBudget = node.calcBudgetFromLoadings && node.calcBudgetFromLoadings > 0
+    ? node.calcBudgetFromLoadings
+    : null
+  const loadingHours = node.loadingHours ?? 0
+  const loadingCount = node.loadingCount ?? 0
+  const loadingErrorsCount = node.loadingErrorsCount ?? 0
 
   // Выделенный бюджет (сумма planned_amount всех бюджетов)
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
@@ -322,15 +333,32 @@ export const BudgetRow = React.memo(function BudgetRow({
         {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Израсходовано / Выделенный ===== */}
         <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
           <div className="w-full flex items-center">
-            {/* Расчётный */}
+            {/* Расчётный — из loadings × ставка отдела */}
             <div className="w-[80px] px-1 text-right">
               {calcBudget !== null && calcBudget > 0 ? (
-                <span className={cn(
-                  'text-[12px] tabular-nums text-primary',
-                  (isSection || isTopLevel) && 'font-medium'
-                )}>
-                  {formatNumber(calcBudget)}
-                </span>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn(
+                        'text-[12px] tabular-nums text-primary cursor-help',
+                        (isSection || isTopLevel) && 'font-medium',
+                        loadingErrorsCount > 0 && 'underline decoration-dotted decoration-amber-500'
+                      )}>
+                        {formatNumber(calcBudget)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="space-y-0.5">
+                        <div>{formatNumber(loadingHours)} ч / {loadingCount} загрузок</div>
+                        {loadingErrorsCount > 0 && (
+                          <div className="text-amber-500">
+                            ⚠ {loadingErrorsCount} без отдела или ставки
+                          </div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ) : (
                 <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
               )}

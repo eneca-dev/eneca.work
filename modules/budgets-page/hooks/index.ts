@@ -14,3 +14,5 @@ export type { DifficultyLevel, WorkCategory } from './use-reference-data'
 
 export { useWorkToWsSync } from './use-work-to-ws-sync'
 export type { UseWorkToWsSyncResult, SyncStatus } from './use-work-to-ws-sync'
+
+export { useSectionCalcBudgets } from './use-section-calc-budgets'
