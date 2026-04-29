@@ -8,13 +8,13 @@
  * Сохранение: по Enter или при потере фокуса (blur).
  * Отмена: по Escape.
  *
- * Включает кнопку для открытия BudgetPartsEditor (управление частями бюджета).
+ * Inline редактор суммы и процента от родительского бюджета.
  */
 
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Loader2, PieChart } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount } from '@/modules/budgets'
 import {
@@ -22,16 +22,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { BudgetPartsEditor } from './BudgetPartsEditor'
 import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
 
-// Debug logging (отключить в production)
-const DEBUG = false
-const log = (action: string, data?: Record<string, unknown>) => {
-  if (DEBUG) {
-    console.log(`[AmountEdit] ${action}`, data ?? '')
-  }
-}
 
 // ============================================================================
 // Types
@@ -298,25 +290,6 @@ export function BudgetAmountEdit({
 
       {/* Spacer для прижатия прогресс-бара к правому краю */}
       <div className="flex-1" />
-
-      {/* Parts editor button */}
-      <BudgetPartsEditor
-        budgetId={budgetId}
-        totalAmount={currentAmount}
-        trigger={
-          <button
-            className={cn(
-              'p-1 rounded text-muted-foreground hover:text-foreground',
-              'hover:bg-muted transition-colors',
-              'opacity-0 group-hover:opacity-100'
-            )}
-            title="Управление частями"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PieChart className="w-3 h-3" />
-          </button>
-        }
-      />
 
       {/* Mini progress bar - прижат к правому краю */}
       <Tooltip delayDuration={200}>

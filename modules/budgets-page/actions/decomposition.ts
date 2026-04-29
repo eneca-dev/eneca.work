@@ -112,29 +112,19 @@ async function requireAuth() {
 export async function createDecompositionStage(
   input: CreateStageInput
 ): Promise<ActionResult<CreatedStage>> {
-  console.log('[createDecompositionStage] Starting with input:', JSON.stringify(input))
-
   try {
-    // Валидация
     const parsed = CreateStageSchema.safeParse(input)
     if (!parsed.success) {
-      console.log('[createDecompositionStage] Validation failed:', parsed.error.errors[0].message)
       return { success: false, error: parsed.error.errors[0].message }
     }
 
-    // Авторизация
-    console.log('[createDecompositionStage] Checking auth...')
     const auth = await requireAuth()
     if (auth.error || !auth.supabase) {
-      console.log('[createDecompositionStage] Auth failed:', auth.error)
       return { success: false, error: auth.error ?? 'Не авторизован' }
     }
-    console.log('[createDecompositionStage] Auth OK, user:', auth.user?.id)
 
     const { sectionId, name } = parsed.data
 
-    // Получаем максимальный order
-    console.log('[createDecompositionStage] Getting max order for section:', sectionId)
     const { data: maxOrderData, error: orderError } = await auth.supabase
       .from('decomposition_stages')
       .select('decomposition_stage_order')
@@ -143,14 +133,11 @@ export async function createDecompositionStage(
       .limit(1)
 
     if (orderError) {
-      console.log('[createDecompositionStage] Order query error:', orderError)
+      console.error('[createDecompositionStage] Order query error:', orderError)
     }
 
     const nextOrder = (maxOrderData?.[0]?.decomposition_stage_order ?? -1) + 1
-    console.log('[createDecompositionStage] Next order:', nextOrder)
 
-    // Создаём этап
-    console.log('[createDecompositionStage] Inserting stage...')
     const { data, error } = await auth.supabase
       .from('decomposition_stages')
       .insert({
@@ -166,7 +153,6 @@ export async function createDecompositionStage(
       return { success: false, error: error.message }
     }
 
-    console.log('[createDecompositionStage] Success, created ID:', data?.decomposition_stage_id)
     return { success: true, data }
   } catch (error) {
     console.error('[createDecompositionStage] Unexpected error:', error)
@@ -411,23 +397,18 @@ export async function updateItemCategory(
 export async function updateItemDifficulty(
   input: UpdateItemDifficultyInput
 ): Promise<ActionResult<null>> {
-  console.log('[updateItemDifficulty] Input:', JSON.stringify(input))
   try {
-    // Валидация
     const parsed = UpdateItemDifficultySchema.safeParse(input)
     if (!parsed.success) {
-      console.log('[updateItemDifficulty] Validation failed:', parsed.error.errors[0].message)
       return { success: false, error: parsed.error.errors[0].message }
     }
 
-    // Авторизация
     const auth = await requireAuth()
     if (auth.error || !auth.supabase) {
       return { success: false, error: auth.error ?? 'Не авторизован' }
     }
 
     const { itemId, difficultyId } = parsed.data
-    console.log('[updateItemDifficulty] Parsed data:', { itemId, difficultyId })
 
     const { error } = await auth.supabase
       .from('decomposition_items')
@@ -439,7 +420,6 @@ export async function updateItemDifficulty(
       return { success: false, error: error.message }
     }
 
-    console.log('[updateItemDifficulty] Success!')
     return { success: true, data: null }
   } catch (error) {
     console.error('[updateItemDifficulty] Error:', error)

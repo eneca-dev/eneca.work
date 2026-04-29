@@ -28,15 +28,15 @@ export type SectionCalcBudget = ViewRow<'v_cache_section_calc_budget'>
 // ============================================================================
 
 /**
- * Получить расчётные бюджеты по списку разделов
+ * Получить расчётные бюджеты по всем разделам.
+ *
+ * Загружаем весь view целиком (≤~1200 строк — только разделы с загрузками).
+ * Фильтрация по конкретным разделам происходит на клиенте в use-budgets-hierarchy через calcMap.
+ *
+ * Почему не используем .in(section_id, sectionIds):
+ * При загрузке всех проектов в URL попадает 3000+ UUID (~140KB) → PostgREST возвращает 400 Bad Request.
  */
-export async function getSectionCalcBudgets(
-  sectionIds: string[]
-): Promise<ActionResult<SectionCalcBudget[]>> {
-  if (sectionIds.length === 0) {
-    return { success: true, data: [] }
-  }
-
+export async function getSectionCalcBudgets(): Promise<ActionResult<SectionCalcBudget[]>> {
   const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -47,7 +47,6 @@ export async function getSectionCalcBudgets(
   const { data, error } = await supabase
     .from('v_cache_section_calc_budget')
     .select('section_id, calc_budget, total_hours, loading_count, valid_loading_count, errors_count')
-    .in('section_id', sectionIds)
 
   if (error) {
     return { success: false, error: error.message }

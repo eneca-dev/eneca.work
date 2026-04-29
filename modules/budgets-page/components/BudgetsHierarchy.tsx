@@ -1,8 +1,8 @@
 /**
  * Budgets Hierarchy Component
  *
- * Отображает полную иерархию проектов с бюджетами.
- * Табличный вид с группами колонок и sticky заголовками.
+ * Отображает иерархию проектов с бюджетами.
+ * Колонки: Наименование / Расчётный / Распред. / Израсх. / Выделенный.
  * Состояние раскрытости сохраняется в localStorage.
  */
 
@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BudgetRow } from './BudgetRow'
 import { useExpandedState } from '../hooks/use-expanded-state'
-import { useWorkToWsSync } from '../hooks/use-work-to-ws-sync'
 import type { HierarchyNode } from '../types'
 
 // ============================================================================
@@ -22,13 +21,9 @@ import type { HierarchyNode } from '../types'
 // ============================================================================
 
 interface BudgetsHierarchyProps {
-  /** Узлы иерархии (корневые проекты) */
   nodes: HierarchyNode[]
-  /** CSS класс контейнера */
   className?: string
-  /** Callback для обновления данных после удаления */
   onRefresh?: () => void
-  /** ID раздела для подсветки (из URL параметров) */
   highlightSectionId?: string | null
 }
 
@@ -41,24 +36,14 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
   const headerRef = useRef<HTMLDivElement>(null)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
 
-  // Состояние раскрытости с persistence в localStorage
   const {
     expanded,
     toggle: handleToggle,
     expandMultiple: handleExpandAll,
-    expandMultiple: handleAutoExpand,
     expandWithParents,
     expandAll,
     collapseAll,
   } = useExpandedState({ nodes })
-
-  // Хук синхронизации с Worksection
-  const { sync, status: syncStatus, syncingProjectId } = useWorkToWsSync()
-
-  // Callback для автоматического раскрытия узла при создании дочернего элемента
-  const handleAutoExpandNode = useCallback((nodeId: string) => {
-    handleAutoExpand([nodeId])
-  }, [handleAutoExpand])
 
   // Синхронизация горизонтального скролла
   const handleScroll = useCallback(() => {
@@ -67,12 +52,10 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
     }
   }, [])
 
-  // Функция для поиска узла и его родителей в дереве
+  // Поиск узла и его родителей в дереве
   const findNodePath = useCallback((targetId: string, currentNodes: HierarchyNode[], path: string[] = []): string[] | null => {
     for (const node of currentNodes) {
-      if (node.id === targetId) {
-        return path
-      }
+      if (node.id === targetId) return path
       if (node.children && node.children.length > 0) {
         const result = findNodePath(targetId, node.children, [...path, node.id])
         if (result) return result
@@ -81,34 +64,16 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
     return null
   }, [])
 
-  // Автоматическое разворачивание и прокрутка при highlightSectionId
+  // Авто-раскрытие и прокрутка к подсвеченному разделу
   useEffect(() => {
-    console.log('[BudgetsHierarchy] Effect triggered:', {
-      highlightSectionId,
-      hasAutoExpanded,
-      nodesLength: nodes.length,
-    })
-
     if (highlightSectionId && !hasAutoExpanded && nodes.length > 0) {
-      // Находим путь к разделу
       const parentIds = findNodePath(highlightSectionId, nodes)
-
-      console.log('[BudgetsHierarchy] Found parent IDs:', parentIds)
-
       if (parentIds) {
-        // Раскрываем все родительские узлы
         expandWithParents(highlightSectionId, parentIds)
         setHasAutoExpanded(true)
-
-        console.log('[BudgetsHierarchy] Expanded parents, waiting for scroll...')
-
-        // Прокручиваем к элементу через небольшую задержку
         setTimeout(() => {
-          const element = document.getElementById(`section-${highlightSectionId}`)
-          console.log('[BudgetsHierarchy] Looking for element:', `section-${highlightSectionId}`, element)
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }
+          document.getElementById(`section-${highlightSectionId}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 300)
       }
     }
@@ -125,34 +90,14 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
   return (
     <TooltipProvider delayDuration={200}>
       <div className={cn('flex flex-col h-full bg-background', className)}>
-        {/* Column headers - sticky with horizontal scroll sync */}
+        {/* Sticky заголовки */}
         <div
           ref={headerRef}
           className="overflow-x-hidden border-b bg-card sticky top-0 z-10"
         >
-          {/* Group headers row */}
+          {/* Группы колонок */}
           <div className="flex items-center min-w-max border-b">
-            {/* Наименование + Категория */}
             <div className="min-w-[400px] w-[400px] shrink-0" />
-            <div className="w-10 shrink-0" />
-
-            {/* ТРУДОЗАТРАТЫ */}
-            <div className="flex items-center shrink-0 border-l border-border/30">
-              <div className="w-[196px] py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Трудозатраты
-                </span>
-              </div>
-            </div>
-
-            {/* СТАВКА */}
-            <div className="flex items-center shrink-0 border-l border-border/30">
-              <div className="w-[72px] py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Ставка
-                </span>
-              </div>
-            </div>
 
             {/* БЮДЖЕТЫ */}
             <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
@@ -164,9 +109,9 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
             </div>
           </div>
 
-          {/* Subheaders row */}
+          {/* Подзаголовки */}
           <div className="flex items-center min-w-max">
-            {/* Наименование + кнопки */}
+            {/* Наименование */}
             <div className="min-w-[400px] w-[400px] px-2 py-1 shrink-0 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">
                 Наименование
@@ -186,41 +131,6 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
                   <ChevronRight className="h-3 w-3" />
                   Скрыть
                 </button>
-              </div>
-            </div>
-
-            {/* Категория */}
-            <div className="w-10 py-1.5 text-center shrink-0">
-              <span className="text-[10px] text-muted-foreground">
-                Кат.
-              </span>
-            </div>
-
-            {/* ТРУДОЗАТРАТЫ subheaders */}
-            <div className="flex items-center shrink-0 border-l border-border/30">
-              <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-muted-foreground">
-                  План, ч
-                </span>
-              </div>
-              <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-muted-foreground">
-                  С К, ч
-                </span>
-              </div>
-              <div className="w-[52px] py-1.5 px-1 text-right">
-                <span className="text-[10px] text-muted-foreground" title="% от родителя">
-                  % род.
-                </span>
-              </div>
-            </div>
-
-            {/* СТАВКА subheaders */}
-            <div className="flex items-center shrink-0 border-l border-border/30">
-              <div className="w-[72px] py-1.5 px-2 text-right">
-                <span className="text-[10px] text-muted-foreground">
-                  BYN/ч
-                </span>
               </div>
             </div>
 
@@ -245,7 +155,7 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
           </div>
         </div>
 
-        {/* Scrollable content */}
+        {/* Прокручиваемый контент */}
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
@@ -261,10 +171,6 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
                 onToggle={handleToggle}
                 onExpandAll={handleExpandAll}
                 onRefresh={onRefresh}
-                onAutoExpand={handleAutoExpandNode}
-                onProjectSync={sync}
-                syncStatus={syncStatus}
-                syncingProjectId={syncingProjectId}
                 highlightSectionId={highlightSectionId}
               />
             ))}

@@ -11,20 +11,12 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Loader2, Plus, PieChart } from 'lucide-react'
+import { Loader2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
 import type { BudgetInfo, BudgetPageEntityType } from '../types'
-import { BudgetPartsEditor } from './BudgetPartsEditor'
 import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
 
-// Debug logging (отключить в production)
-const DEBUG = false
-const log = (action: string, data?: Record<string, unknown>) => {
-  if (DEBUG) {
-    console.log(`[InlineEdit] ${action}`, data ?? '')
-  }
-}
 
 // ============================================================================
 // Types
@@ -78,7 +70,6 @@ export function BudgetInlineEdit({
   // isPending = true означает оптимистичный рендер — показываем локальное значение
   useEffect(() => {
     if (!isEditing && !isUpdating && budget) {
-      log('SYNC from server', { budgetId: budget.budget_id, amount: budget.planned_amount })
       setLocalAmount(formatNumber(budget.planned_amount))
       if (hasParent) {
         setLocalPercent(calculatePercentage(budget.planned_amount, parentAmount).toString())
@@ -94,19 +85,16 @@ export function BudgetInlineEdit({
 
     // Сохраняем только если значение изменилось
     if (newAmount >= 0 && newAmount !== budget.planned_amount) {
-      log('SAVE to server', { budgetId: budget.budget_id, amount: newAmount })
       updateAmount({
         budget_id: budget.budget_id,
         total_amount: newAmount,
       })
     } else {
-      log('SKIP save (no change)', { newAmount, serverAmount: budget.planned_amount })
     }
   }, [budget, localAmount, updateAmount])
 
   // Фокус на поле суммы
   const handleAmountFocus = useCallback(() => {
-    log('FOCUS amount')
     setIsEditing(true)
   }, [])
 
@@ -155,7 +143,6 @@ export function BudgetInlineEdit({
 
   // Потеря фокуса → сохранение
   const handleBlur = useCallback(() => {
-    log('BLUR → save')
     saveToServer()
     setIsEditing(false)
   }, [saveToServer])
@@ -174,11 +161,9 @@ export function BudgetInlineEdit({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      log('ENTER → save & blur')
       ;(e.target as HTMLInputElement).blur() // blur вызовет handleBlur → saveToServer
     } else if (e.key === 'Escape') {
       e.preventDefault()
-      log('ESCAPE → revert')
       // Отмена: возвращаем серверное значение без сохранения
       if (budget) {
         setLocalAmount(formatNumber(budget.planned_amount))
@@ -276,24 +261,6 @@ export function BudgetInlineEdit({
         </div>
       )}
 
-      {/* Кнопка частей */}
-      <BudgetPartsEditor
-        budgetId={budget.budget_id}
-        totalAmount={budget.planned_amount}
-        trigger={
-          <button
-            className={cn(
-              'p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground',
-              'hover:bg-muted transition-colors',
-              'opacity-0 group-hover:opacity-100'
-            )}
-            title="Части бюджета"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PieChart className="w-3 h-3" />
-          </button>
-        }
-      />
     </div>
   )
 }

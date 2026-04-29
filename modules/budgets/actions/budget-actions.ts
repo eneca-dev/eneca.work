@@ -4,15 +4,11 @@ import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
 import type {
   BudgetCurrent,
-  BudgetFull,
   BudgetFilters,
   CreateBudgetInput,
   UpdateBudgetAmountInput,
-  SectionBudgetSummary,
   BudgetEntityType,
   EntityHierarchy,
-  CreateBudgetPartInput,
-  UpdateBudgetPartInput,
   CreateExpenseInput,
   ApproveExpenseInput,
   BudgetExpense,
@@ -47,24 +43,6 @@ const UpdateBudgetAmountSchema = z.object({
   comment: z.string().max(500).optional(),
 })
 
-const CreateBudgetPartSchema = z.object({
-  budget_id: z.string().uuid('Некорректный ID бюджета'),
-  part_type: z.enum(['main', 'premium', 'custom']),
-  custom_name: z.string().max(100).optional(),
-  fixed_amount: z.number().min(0).optional(),
-  percentage: z.number().min(0).max(100, 'Процент должен быть от 0 до 100').optional(),
-  requires_approval: z.boolean().optional(),
-  approval_threshold: z.number().min(0).optional(),
-  color: z.string().max(20).optional(),
-})
-
-const UpdateBudgetPartSchema = z.object({
-  part_id: z.string().uuid('Некорректный ID части'),
-  fixed_amount: z.number().min(0).optional(),
-  percentage: z.number().min(0).max(100, 'Процент должен быть от 0 до 100').optional(),
-  requires_approval: z.boolean().optional(),
-  approval_threshold: z.number().min(0).optional(),
-})
 
 const CreateExpenseSchema = z.object({
   budget_id: z.string().uuid('Некорректный ID бюджета'),
@@ -88,8 +66,9 @@ const ApproveExpenseSchema = z.object({
 /**
  * Получить список бюджетов с фильтрами (из v_cache_budgets)
  *
- * ВАЖНО: PostgREST имеет серверный лимит ~3000 записей.
- * Используем pagination для загрузки всех данных.
+ * Загружает все страницы параллельно: сначала первая страница + count,
+ * затем все остальные страницы одновременно через Promise.all.
+ * Это в ~30x быстрее последовательной пагинации при большом числе записей.
  */
 export async function getBudgets(
   filters?: BudgetFilters
@@ -97,42 +76,48 @@ export async function getBudgets(
   try {
     const supabase = await createClient()
     const PAGE_SIZE = 1000
-    let allData: BudgetCurrent[] = []
-    let page = 0
-    let hasMore = true
 
-    while (hasMore) {
-      let query = supabase.from('v_cache_budgets').select('*')
+    // count передаётся в первый .select() — вызывать .select() дважды нельзя,
+    // это ломает получение count (он становится null).
+    const buildQuery = (withCount = false) => {
+      let q = supabase
+        .from('v_cache_budgets')
+        .select('*', withCount ? { count: 'exact' } : undefined)
+      if (filters?.entity_type) q = q.eq('entity_type', filters.entity_type)
+      if (filters?.entity_id)   q = q.eq('entity_id', filters.entity_id)
+      if (filters?.is_active !== undefined) q = q.eq('is_active', filters.is_active)
+      return q.order('created_at', { ascending: false })
+    }
 
-      if (filters?.entity_type) {
-        query = query.eq('entity_type', filters.entity_type)
-      }
+    // Шаг 1: первая страница + точный count за один запрос
+    const { data: firstPage, count, error: firstError } = await buildQuery(true)
+      .range(0, PAGE_SIZE - 1)
 
-      if (filters?.entity_id) {
-        query = query.eq('entity_id', filters.entity_id)
-      }
+    if (firstError) {
+      console.error('[getBudgets] Supabase error:', firstError)
+      return { success: false, error: firstError.message }
+    }
 
-      if (filters?.is_active !== undefined) {
-        query = query.eq('is_active', filters.is_active)
-      }
+    const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+    // Шаг 2: все оставшиеся страницы параллельно
+    const remainingResults = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) =>
+        buildQuery(false).range((i + 1) * PAGE_SIZE, (i + 2) * PAGE_SIZE - 1)
+      )
+    )
 
-      if (error) {
-        console.error('[getBudgets] Supabase error:', error)
-        return { success: false, error: error.message }
-      }
-
-      if (data && data.length > 0) {
-        allData = allData.concat(data as BudgetCurrent[])
-        page++
-        hasMore = data.length === PAGE_SIZE
-      } else {
-        hasMore = false
+    for (const result of remainingResults) {
+      if (result.error) {
+        console.error('[getBudgets] Page error:', result.error)
+        return { success: false, error: result.error.message }
       }
     }
+
+    const allData: BudgetCurrent[] = [
+      ...(firstPage ?? []) as BudgetCurrent[],
+      ...remainingResults.flatMap(r => (r.data ?? []) as BudgetCurrent[]),
+    ]
 
     return { success: true, data: allData }
   } catch (error) {
@@ -188,39 +173,6 @@ export async function getBudgetById(
   }
 }
 
-/**
- * Получить полную информацию о бюджете с частями (из v_budgets_full)
- */
-export async function getBudgetFull(
-  budgetId: string
-): Promise<ActionResult<BudgetFull>> {
-  try {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('v_budgets_full')
-      .select('*')
-      .eq('budget_id', budgetId)
-      .maybeSingle()
-
-    if (error) {
-      console.error('[getBudgetFull] Supabase error:', error)
-      return { success: false, error: error.message }
-    }
-
-    if (!data) {
-      return { success: false, error: 'Бюджет не найден' }
-    }
-
-    return { success: true, data: data as BudgetFull }
-  } catch (error) {
-    console.error('[getBudgetFull] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
 
 /**
  * Получить историю изменений бюджета
@@ -282,37 +234,6 @@ export async function getBudgetExpenses(
   }
 }
 
-/**
- * Получить сводку бюджетов по разделам
- */
-export async function getSectionBudgetSummary(
-  projectId?: string
-): Promise<ActionResult<SectionBudgetSummary[]>> {
-  try {
-    const supabase = await createClient()
-
-    let query = supabase.from('v_cache_section_budget_summary').select('*')
-
-    if (projectId) {
-      query = query.eq('section_project_id', projectId)
-    }
-
-    const { data, error } = await query.order('section_name')
-
-    if (error) {
-      console.error('[getSectionBudgetSummary] Supabase error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as SectionBudgetSummary[] }
-  } catch (error) {
-    console.error('[getSectionBudgetSummary] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
 
 
 /**
@@ -594,166 +515,6 @@ export async function updateBudgetAmount(
     return getBudgetById(input.budget_id)
   } catch (error) {
     console.error('[updateBudgetAmount] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Добавить часть к бюджету (premium или custom)
- */
-export async function addBudgetPart(
-  input: CreateBudgetPartInput
-): Promise<ActionResult<BudgetFull>> {
-  try {
-    // Валидация входных данных
-    const validated = CreateBudgetPartSchema.safeParse(input)
-    if (!validated.success) {
-      return { success: false, error: validated.error.errors[0]?.message || 'Ошибка валидации' }
-    }
-
-    const supabase = await createClient()
-
-    // Проверка авторизации
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    const { error } = await supabase
-      .from('budget_parts')
-      .insert({
-        budget_id: input.budget_id,
-        part_type: input.part_type,
-        custom_name: input.custom_name,
-        fixed_amount: input.fixed_amount,
-        percentage: input.percentage,
-        requires_approval: input.requires_approval ?? (input.part_type === 'premium'),
-        approval_threshold: input.approval_threshold,
-        color: input.color ?? (input.part_type === 'premium' ? '#F59E0B' : '#6b7280'),
-      })
-
-    if (error) {
-      console.error('[addBudgetPart] Insert error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return getBudgetFull(input.budget_id)
-  } catch (error) {
-    console.error('[addBudgetPart] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Обновить часть бюджета
- *
- * Важно: constraint требует либо percentage (fixed_amount = NULL),
- * либо fixed_amount (percentage = NULL). Нельзя оба сразу.
- */
-export async function updateBudgetPart(
-  input: UpdateBudgetPartInput
-): Promise<ActionResult<{ success: boolean }>> {
-  try {
-    // Валидация входных данных
-    const validated = UpdateBudgetPartSchema.safeParse(input)
-    if (!validated.success) {
-      return { success: false, error: validated.error.errors[0]?.message || 'Ошибка валидации' }
-    }
-
-    const supabase = await createClient()
-
-    // Проверка авторизации
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    const updateData: Record<string, unknown> = {}
-
-    // Если задаём percentage, то fixed_amount должен быть NULL
-    if (input.percentage !== undefined) {
-      updateData.percentage = input.percentage
-      updateData.fixed_amount = null
-    }
-    // Если задаём fixed_amount, то percentage должен быть NULL
-    else if (input.fixed_amount !== undefined) {
-      updateData.fixed_amount = input.fixed_amount
-      updateData.percentage = null
-    }
-
-    if (input.requires_approval !== undefined) updateData.requires_approval = input.requires_approval
-    if (input.approval_threshold !== undefined) updateData.approval_threshold = input.approval_threshold
-
-    const { error } = await supabase
-      .from('budget_parts')
-      .update(updateData)
-      .eq('part_id', input.part_id)
-
-    if (error) {
-      console.error('[updateBudgetPart] Update error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: { success: true } }
-  } catch (error) {
-    console.error('[updateBudgetPart] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Удалить часть бюджета
- */
-export async function deleteBudgetPart(
-  partId: string
-): Promise<ActionResult<{ success: boolean }>> {
-  try {
-    // Валидация входных данных
-    if (!partId || !z.string().uuid().safeParse(partId).success) {
-      return { success: false, error: 'Некорректный ID части' }
-    }
-
-    const supabase = await createClient()
-
-    // Проверка авторизации
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    // Проверяем что это не main часть
-    const { data: part } = await supabase
-      .from('budget_parts')
-      .select('part_type')
-      .eq('part_id', partId)
-      .single()
-
-    if (part?.part_type === 'main') {
-      return { success: false, error: 'Нельзя удалить основную часть бюджета' }
-    }
-
-    const { error } = await supabase
-      .from('budget_parts')
-      .delete()
-      .eq('part_id', partId)
-
-    if (error) {
-      console.error('[deleteBudgetPart] Delete error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: { success: true } }
-  } catch (error) {
-    console.error('[deleteBudgetPart] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',

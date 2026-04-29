@@ -39,7 +39,6 @@ interface SectionCalcSummary {
  * Note: PostgreSQL numeric приходит как string, поэтому явно конвертируем в number
  */
 function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
-  // Helper для безопасной конвертации numeric -> number
   const toNumber = (val: number | string | null | undefined): number => {
     if (val === null || val === undefined) return 0
     return typeof val === 'string' ? parseFloat(val) || 0 : val
@@ -48,23 +47,10 @@ function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
   return {
     budget_id: budget.budget_id,
     name: budget.name,
-    // Основные суммы (конвертируем из string в number)
     planned_amount: toNumber(budget.total_amount),
     spent_amount: toNumber(budget.total_spent),
     remaining_amount: toNumber(budget.remaining_amount),
     spent_percentage: toNumber(budget.spent_percentage),
-    // Части бюджета (V2)
-    main_part_id: budget.main_part_id,
-    main_amount: budget.main_amount !== null ? toNumber(budget.main_amount) : null,
-    main_spent: toNumber(budget.main_spent),
-    premium_part_id: budget.premium_part_id,
-    premium_amount: budget.premium_amount !== null ? toNumber(budget.premium_amount) : null,
-    premium_spent: toNumber(budget.premium_spent),
-    // Deprecated fields (для обратной совместимости)
-    type_id: budget.main_part_id, // Используем main_part_id
-    type_name: 'Основной', // Всегда показываем основную часть
-    type_color: '#1E7260', // Основной цвет
-    // Родитель
     parent_budget_id: budget.parent_budget_id,
     parent_planned_amount: toNumber(budget.parent_total_amount),
     is_active: budget.is_active,
@@ -491,27 +477,14 @@ export function useBudgetsHierarchy(
     refetch: refetchBudgets,
   } = useBudgets({ is_active: true }, { enabled })
 
-  // Собираем все section_id из иерархии для запроса расчётных бюджетов из loadings
-  const sectionIds = useMemo(() => {
-    if (!projects) return [] as string[]
-    const ids: string[] = []
-    for (const project of projects) {
-      for (const object of project.objects) {
-        for (const section of object.sections) {
-          ids.push(section.id)
-        }
-      }
-    }
-    return ids
-  }, [projects])
-
-  // Расчётный бюджет по разделам (новая формула: loadings × ставка отдела)
+  // Расчётный бюджет по всем разделам (loadings × ставка отдела).
+  // Загружаем весь v_cache_section_calc_budget — фильтрация по section_id происходит ниже через calcMap.
   const {
     data: sectionCalcs,
     isLoading: sectionCalcsLoading,
     error: sectionCalcsError,
     refetch: refetchSectionCalcs,
-  } = useSectionCalcBudgets(sectionIds)
+  } = useSectionCalcBudgets()
 
   // Функция для обновления всех данных
   const refetch = useCallback(() => {
