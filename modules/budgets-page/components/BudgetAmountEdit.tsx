@@ -81,7 +81,6 @@ export function BudgetAmountEdit({
   // isPending = true означает оптимистичный рендер — показываем локальное значение
   useEffect(() => {
     if (!isEditing && !isPending) {
-      log('SYNC from server', { budgetId, amount: currentAmount })
       setLocalAmount(formatNumber(currentAmount))
       setLocalPercent(
         hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
@@ -95,13 +94,11 @@ export function BudgetAmountEdit({
 
     // Сохраняем только если значение изменилось
     if (newAmount >= 0 && newAmount !== currentAmount) {
-      log('SAVE to server', { budgetId, amount: newAmount })
       updateAmount({
         budget_id: budgetId,
         total_amount: newAmount,
       })
     } else {
-      log('SKIP save (no change)', { newAmount, serverAmount: currentAmount })
     }
   }, [budgetId, localAmount, currentAmount, updateAmount])
 
@@ -111,7 +108,6 @@ export function BudgetAmountEdit({
 
   // Фокус на поле суммы
   const handleAmountFocus = useCallback(() => {
-    log('FOCUS amount')
     setIsEditing(true)
   }, [])
 
@@ -162,7 +158,6 @@ export function BudgetAmountEdit({
 
   // Потеря фокуса → сохранение
   const handleBlur = useCallback(() => {
-    log('BLUR → save')
     saveToServer()
     setIsEditing(false)
   }, [saveToServer])
@@ -172,11 +167,9 @@ export function BudgetAmountEdit({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        log('ENTER → save & blur')
         ;(e.target as HTMLInputElement).blur() // blur вызовет handleBlur → saveToServer
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        log('ESCAPE → revert')
         // Отмена: возвращаем серверное значение без сохранения
         setLocalAmount(formatNumber(currentAmount))
         setLocalPercent(

@@ -116,21 +116,40 @@ export const useCreateBudget = createCacheMutation<CreateBudgetInput, BudgetCurr
   invalidateKeys: (input) => [
     queryKeys.budgets.lists(),
     queryKeys.budgets.byEntity(input.entity_type, input.entity_id),
-  ],
+  ] as unknown as unknown[][],
 })
 
 export const useUpdateBudgetAmount = createCacheMutation<UpdateBudgetAmountInput, BudgetCurrent>({
   mutationFn: updateBudgetAmount,
+  optimisticUpdate: {
+    // Обновляем плоский список бюджетов мгновенно, не ждём ответа сервера.
+    // useBudgetsHierarchy пересчитает иерархию через useMemo автоматически.
+    queryKey: queryKeys.budgets.lists(),
+    updater: (oldData, input) =>
+      (oldData ?? []).map(b => {
+        if (b.budget_id !== input.budget_id) return b
+        const newTotal = input.total_amount
+        const spent = Number(b.total_spent) || 0
+        return {
+          ...b,
+          total_amount: newTotal,
+          remaining_amount: newTotal - spent,
+          spent_percentage: newTotal > 0 ? Math.round((spent / newTotal) * 100) : 0,
+        }
+      }),
+  },
+  // lists() инвалидируем чтобы parent_planned_amount обновился в дочерних бюджетах.
+  // Без этого поле "%" у дочерних строк не появляется пока не обновить страницу.
+  // Optimistic update всё равно даёт мгновенный отклик — lists() перезагружается фоном.
   invalidateKeys: (input) => [
     queryKeys.budgets.lists(),
     queryKeys.budgets.detail(input.budget_id),
-    queryKeys.budgets.history(input.budget_id),
-  ],
+  ] as unknown as unknown[][],
 })
 
 export const useDeactivateBudget = createCacheMutation<string, { success: boolean; warning?: string }>({
   mutationFn: deactivateBudget,
-  invalidateKeys: () => [queryKeys.budgets.all],
+  invalidateKeys: () => [queryKeys.budgets.all] as unknown as unknown[][],
 })
 
 export const useClearBudget = createCacheMutation<
@@ -142,5 +161,5 @@ export const useClearBudget = createCacheMutation<
     queryKeys.budgets.lists(),
     queryKeys.budgets.detail(input.budgetId),
     queryKeys.budgets.history(input.budgetId),
-  ],
+  ] as unknown as unknown[][],
 })

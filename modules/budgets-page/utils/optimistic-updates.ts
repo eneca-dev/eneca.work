@@ -135,7 +135,6 @@ export function createOptimisticStage(
     entityType: 'decomposition_stage',
     children: [],
     budgets: [createOptimisticBudget(`temp-budget-${operationId}`)],
-    aggregatedBudgets: [],
     plannedHours: 0,
   }
 }
@@ -155,7 +154,6 @@ export function createOptimisticItem(
     entityType: 'decomposition_item',
     children: [],
     budgets: [createOptimisticBudget(`temp-budget-${operationId}`)],
-    aggregatedBudgets: [],
     plannedHours: 0,
   }
 }

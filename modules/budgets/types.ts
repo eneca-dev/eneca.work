@@ -47,6 +47,8 @@ export interface BudgetCurrent {
   spent_percentage: number
   parent_name: string | null
   parent_total_amount: number | null
+  /** ID проекта — вычисляется через JOIN, null для осиротевших сущностей */
+  project_id: string | null
 }
 
 /**
@@ -98,6 +100,8 @@ export interface CreateBudgetInput {
 export interface UpdateBudgetAmountInput {
   budget_id: string
   total_amount: number
+  /** Предыдущая сумма — передаётся с клиента чтобы избежать лишнего SELECT в server action */
+  previous_amount?: number
   comment?: string
 }
 
@@ -134,4 +138,6 @@ export interface BudgetFilters {
   entity_type?: BudgetEntityType
   entity_id?: string
   is_active?: boolean
+  /** Фильтр по проектам — загружает только бюджеты указанных проектов */
+  project_ids?: string[]
 }

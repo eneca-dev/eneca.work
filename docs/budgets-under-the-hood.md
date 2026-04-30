@@ -1502,36 +1502,32 @@ FROM v_cache_loading_money  -- зависит от loading_money
 
 ### Выполнено (2026-04-29)
 
-| # | Задача | Статус |
-|---|--------|--------|
-| ✅ S1.2 | Индексы: добавлен idx_budget_expenses_approved, удалены дубли | выполнено |
-| ✅ S1.2 | Удалены триггеры recalculate_budget_total и validate_budget_parts_percentage | выполнено |
-| ✅ S3.3 | v_cache_budgets переписан через CTE (1 скан budget_expenses вместо 3) | выполнено |
-| ✅ OPT-4 | v_cache_loading_money переписан через JOIN (1 проход вместо 3650 подзапросов) | выполнено |
-| ✅ S3.2 | while-loop в getBudgets заменён на параллельную пагинацию | выполнено |
-| ✅ | Bad Request исправлен: useSectionCalcBudgets загружает весь view без .in() | выполнено |
-| ✅ | v_budgets_full и v_cache_section_budget_summary удалены из БД | выполнено |
-| ✅ | Мёртвый код удалён, db.ts регенерирован | выполнено |
+Полный детальный план: `docs/plans/budgets-release-plan.md`
 
-### Следующий шаг — оптимизация кода (блок 6)
-
-Детальный план: `docs/plans/budgets-release-plan.md`
-
-| # | Задача | Эффект |
-|---|--------|--------|
-| **F1** | Optimistic update для `useUpdateBudgetAmount` | Мгновенный отклик при изменении суммы |
-| **F2** | Убрать лишний `getBudgetById` в `updateBudgetAmount` | –1 DB запрос per update |
-| **F3** | Optimistic insert для `useCreateBudget` | Мгновенное появление нового бюджета |
-| **F4** | Убрать `budget_parts` запрос из `createExpense` | –1 DB запрос per expense |
-| **F5** | `placeholderData: keepPreviousData` в `useBudgets` | Нет мигания при смене фильтров |
-| **F6** | Убрать мёртвый `onRefresh` из `BudgetRow` | Чистота кода |
-| **OPT-6** | Серверная фильтрация по проектам из InlineFilter | Загружать только видимые бюджеты |
+| Задача | Статус |
+|--------|--------|
+| ✅ Индексы: `idx_budget_expenses_approved` добавлен, дубли удалены | БД |
+| ✅ Триггеры `recalculate_budget_total` и `validate_budget_parts_percentage` удалены | БД |
+| ✅ `v_cache_budgets` переписан через CTE (1 скан `budget_expenses` вместо 3) | БД |
+| ✅ `v_cache_loading_money` переписан через JOIN (1 проход вместо 3650 подзапросов) | БД |
+| ✅ `project_id` добавлен в `v_cache_budgets` через JOIN по PK-индексам | БД |
+| ✅ `v_budgets_full` и `v_cache_section_budget_summary` удалены из БД | БД |
+| ✅ Параллельная пагинация `getBudgets` (count + параллельные страницы) | код |
+| ✅ Optimistic update для `useUpdateBudgetAmount` + `lists()` в invalidateKeys | код |
+| ✅ Убран лишний `getBudgetById` в `updateBudgetAmount`, `previous_amount` с клиента | код |
+| ✅ Убран запрос к `budget_parts` из `createExpense` | код |
+| ✅ `keepPreviousData` в `useBudgets`, `onRefresh` удалён | код |
+| ✅ Серверная фильтрация по проектам: `project_ids` фильтр через `project_id` в view | код + БД |
+| ✅ Система частей (premium/custom) полностью удалена из UI, кода и БД | код + БД |
+| ✅ Убраны: панель аналитики, колонка «Израсходовано», кнопки структур, WS sync | UI |
+| ✅ Поле `%` изменено с редактируемого на read-only | UI + баг |
+| ✅ `types/db.ts` регенерирован, мёртвые компоненты и типы удалены | код |
+| ✅ Bad Request и баг пагинации исправлены | баги |
 
 ### Отложено
 
 - `budget_parts` — не удаляем до координации с `DeleteObjectModal` + `npm run db:types`
 - Materialized views — не нужны при текущем объёме (~3.6K загрузок)
-- O(n²) агрегация — низкий приоритет
 
 ---
 

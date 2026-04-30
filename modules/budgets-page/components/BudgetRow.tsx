@@ -29,7 +29,6 @@ interface BudgetRowProps {
   onExpandAll?: (nodeIds: string[]) => void
   insideSection?: boolean
   parentAllocatedBudget?: number
-  onRefresh?: () => void
   highlightSectionId?: string | null
 }
 
@@ -46,15 +45,6 @@ function collectChildIds(node: HierarchyNode): string[] {
   return ids
 }
 
-function collectSpentFromAllDescendants(node: HierarchyNode): number {
-  let total = 0
-  for (const child of node.children) {
-    total += child.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
-    total += collectSpentFromAllDescendants(child)
-  }
-  return total
-}
-
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -67,7 +57,6 @@ export const BudgetRow = React.memo(function BudgetRow({
   onExpandAll,
   insideSection = false,
   parentAllocatedBudget = 0,
-  onRefresh,
   highlightSectionId,
 }: BudgetRowProps) {
   const hasChildren = node.children.length > 0
@@ -96,14 +85,8 @@ export const BudgetRow = React.memo(function BudgetRow({
     ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
     : allocatedBudget
 
-  // Израсходовано (рекурсивно по потомкам)
-  const spentBudgetChildren = node.children.length > 0
-    ? collectSpentFromAllDescendants(node)
-    : node.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
-
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
   const isOverDistributed = distributedBudget > allocatedBudget
-  const isOverSpent = spentBudgetChildren > distributedBudget
 
   const INDENT_MAP: Record<HierarchyNodeType, number> = {
     project: 0,
@@ -175,8 +158,8 @@ export const BudgetRow = React.memo(function BudgetRow({
           </span>
         </div>
 
-        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Израсходовано / Выделенный ===== */}
-        <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
+        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный ===== */}
+        <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
           <div className="w-full flex items-center">
             {/* Расчётный */}
             <div className="w-[80px] px-1 text-right">
@@ -228,23 +211,6 @@ export const BudgetRow = React.memo(function BudgetRow({
             <div className="w-[10px] text-center">
               <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
-            {/* Израсходовано */}
-            <div className="w-[80px] px-1 text-center">
-              {spentBudgetChildren > 0 ? (
-                <span className={cn(
-                  'text-[12px] tabular-nums',
-                  isOverSpent ? 'text-destructive' : 'text-foreground/80',
-                  (isSection || isTopLevel) && 'font-medium'
-                )}>
-                  {formatNumber(spentBudgetChildren)}
-                </span>
-              ) : (
-                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
-              )}
-            </div>
-            <div className="w-[10px] text-center">
-              <span className="text-[11px] text-muted-foreground/30">/</span>
-            </div>
             {/* Выделенный - inline редактирование */}
             <div className="flex-1 px-1">
               <BudgetInlineEdit
@@ -271,7 +237,6 @@ export const BudgetRow = React.memo(function BudgetRow({
             onExpandAll={onExpandAll}
             insideSection={isSection || insideSection}
             parentAllocatedBudget={allocatedBudget}
-            onRefresh={onRefresh}
             highlightSectionId={highlightSectionId}
           />
         ))}

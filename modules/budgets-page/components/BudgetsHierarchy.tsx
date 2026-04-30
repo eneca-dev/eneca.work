@@ -23,7 +23,6 @@ import type { HierarchyNode } from '../types'
 interface BudgetsHierarchyProps {
   nodes: HierarchyNode[]
   className?: string
-  onRefresh?: () => void
   highlightSectionId?: string | null
 }
 
@@ -31,7 +30,7 @@ interface BudgetsHierarchyProps {
 // Main Component
 // ============================================================================
 
-export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSectionId }: BudgetsHierarchyProps) {
+export function BudgetsHierarchy({ nodes, className, highlightSectionId }: BudgetsHierarchyProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
@@ -100,10 +99,10 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
             <div className="min-w-[400px] w-[400px] shrink-0" />
 
             {/* БЮДЖЕТЫ */}
-            <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
+            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
               <div className="w-full py-1.5 text-center">
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Расчётный / Распред. / Израсх. / Выделенный
+                  Расчётный / Распред. / Выделенный
                 </span>
               </div>
             </div>
@@ -135,17 +134,13 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
             </div>
 
             {/* БЮДЖЕТЫ subheaders */}
-            <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
+            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
               <div className="w-[80px] py-1.5 px-1 text-right">
                 <span className="text-[10px] text-primary">Расчётн.</span>
               </div>
               <div className="w-[10px]" />
               <div className="w-[80px] py-1.5 px-1 text-center">
                 <span className="text-[10px] text-muted-foreground">Распред.</span>
-              </div>
-              <div className="w-[10px]" />
-              <div className="w-[80px] py-1.5 px-1 text-center">
-                <span className="text-[10px] text-muted-foreground">Израсх.</span>
               </div>
               <div className="w-[10px]" />
               <div className="flex-1 py-1.5 px-1 text-left">
@@ -170,7 +165,6 @@ export function BudgetsHierarchy({ nodes, className, onRefresh, highlightSection
                 expanded={expanded}
                 onToggle={handleToggle}
                 onExpandAll={handleExpandAll}
-                onRefresh={onRefresh}
                 highlightSectionId={highlightSectionId}
               />
             ))}

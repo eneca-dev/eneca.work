@@ -17762,6 +17762,7 @@ export type Database = {
           premium_amount: number | null
           premium_part_id: string | null
           premium_spent: number | null
+          project_id: string | null
           remaining_amount: number | null
           spent_percentage: number | null
           total_amount: number | null

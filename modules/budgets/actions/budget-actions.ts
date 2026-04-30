@@ -40,6 +40,7 @@ const CreateBudgetSchema = z.object({
 const UpdateBudgetAmountSchema = z.object({
   budget_id: z.string().uuid('Некорректный ID бюджета'),
   total_amount: z.number().min(0, 'Сумма не может быть отрицательной'),
+  previous_amount: z.number().optional(),
   comment: z.string().max(500).optional(),
 })
 
@@ -86,6 +87,7 @@ export async function getBudgets(
       if (filters?.entity_type) q = q.eq('entity_type', filters.entity_type)
       if (filters?.entity_id)   q = q.eq('entity_id', filters.entity_id)
       if (filters?.is_active !== undefined) q = q.eq('is_active', filters.is_active)
+      if (filters?.project_ids?.length) q = q.in('project_id', filters.project_ids)
       return q.order('created_at', { ascending: false })
     }
 
@@ -462,7 +464,6 @@ export async function updateBudgetAmount(
   input: UpdateBudgetAmountInput
 ): Promise<ActionResult<BudgetCurrent>> {
   try {
-    // Валидация входных данных
     const validated = UpdateBudgetAmountSchema.safeParse(input)
     if (!validated.success) {
       return { success: false, error: validated.error.errors[0]?.message || 'Ошибка валидации' }
@@ -470,27 +471,15 @@ export async function updateBudgetAmount(
 
     const supabase = await createClient()
 
-    // Получаем текущего пользователя
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
       return { success: false, error: 'Пользователь не авторизован' }
     }
 
-    // Получаем текущее состояние
-    const currentResult = await getBudgetById(input.budget_id)
-    if (!currentResult.success) {
-      return currentResult
-    }
-
-    const previousAmount = currentResult.data.total_amount
-
-    // 1. Обновляем total_amount бюджета
+    // Обновляем сумму
     const { error: updateError } = await supabase
       .from('budgets')
-      .update({
-        total_amount: input.total_amount,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ total_amount: input.total_amount, updated_at: new Date().toISOString() })
       .eq('budget_id', input.budget_id)
 
     if (updateError) {
@@ -498,20 +487,17 @@ export async function updateBudgetAmount(
       return { success: false, error: updateError.message }
     }
 
-    // Примечание: части бюджета пересчитываются автоматически через триггер
-    // когда total_amount меняется, calculated_amount частей обновляется
-
-    // 3. Записываем в историю
+    // Записываем в историю.
+    // previous_amount передаётся с клиента (он уже есть в кэше) — не делаем лишний SELECT.
     await supabase.from('budget_history').insert({
       budget_id: input.budget_id,
       change_type: 'amount_changed',
-      previous_state: { total_amount: previousAmount },
+      previous_state: { total_amount: input.previous_amount ?? null },
       new_state: { total_amount: input.total_amount },
       comment: input.comment,
       changed_by: user.id,
     })
 
-    // 4. Возвращаем обновлённый бюджет
     return getBudgetById(input.budget_id)
   } catch (error) {
     console.error('[updateBudgetAmount] Error:', error)
@@ -542,53 +528,19 @@ export async function createExpense(
       return { success: false, error: 'Пользователь не авторизован' }
     }
 
-    // Определяем статус и часть
-    let status: 'pending' | 'approved' = 'approved'
-    let partId = input.part_id
-
-    // Если часть не указана, используем main
-    if (!partId) {
-      const { data: mainPart } = await supabase
-        .from('budget_parts')
-        .select('part_id, requires_approval, approval_threshold')
-        .eq('budget_id', input.budget_id)
-        .eq('part_type', 'main')
-        .single()
-
-      if (mainPart) {
-        partId = mainPart.part_id
-        // Проверяем нужно ли согласование
-        if (mainPart.requires_approval) {
-          if (!mainPart.approval_threshold || input.amount >= mainPart.approval_threshold) {
-            status = 'pending'
-          }
-        }
-      }
-    } else {
-      // Проверяем требования согласования для указанной части
-      const { data: part } = await supabase
-        .from('budget_parts')
-        .select('requires_approval, approval_threshold')
-        .eq('part_id', partId)
-        .single()
-
-      if (part?.requires_approval) {
-        if (!part.approval_threshold || input.amount >= part.approval_threshold) {
-          status = 'pending'
-        }
-      }
-    }
-
+    // Система согласования через budget_parts не используется:
+    // requires_approval = false для всех частей, только 3 из 19K расходов имели part_id.
+    // Расходы создаются автоматически из work_logs (status='approved') или вручную.
     const { data, error } = await supabase
       .from('budget_expenses')
       .insert({
         budget_id: input.budget_id,
-        part_id: partId,
+        part_id: input.part_id ?? null,
         amount: input.amount,
         description: input.description,
         expense_date: input.expense_date || new Date().toISOString().split('T')[0],
         work_log_id: input.work_log_id,
-        status,
+        status: 'approved',
         created_by: user.id,
       })
       .select()

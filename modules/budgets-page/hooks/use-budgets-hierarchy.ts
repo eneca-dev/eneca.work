@@ -8,6 +8,7 @@
 'use client'
 
 import { useMemo, useCallback } from 'react'
+import { keepPreviousData } from '@tanstack/react-query'
 import { useResourceGraphData } from '@/modules/resource-graph'
 import { useBudgets } from '@/modules/budgets'
 import type { FilterQueryParams } from '@/modules/inline-filter'
@@ -15,8 +16,6 @@ import type {
   HierarchyNode,
   HierarchyNodeType,
   BudgetInfo,
-  AggregatedBudgetsByType,
-  BudgetsAnalyticsData,
 } from '../types'
 import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph'
 import type { BudgetCurrent } from '@/modules/budgets'
@@ -57,70 +56,6 @@ function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
   }
 }
 
-/**
- * Агрегирует бюджеты по типам для прогресс-баров
- */
-function aggregateBudgetsByType(budgets: BudgetInfo[]): AggregatedBudgetsByType[] {
-  const byType = new Map<string, AggregatedBudgetsByType>()
-
-  for (const budget of budgets) {
-    if (!budget.type_id || !budget.type_name) continue
-
-    const existing = byType.get(budget.type_id)
-    if (existing) {
-      existing.total_planned += budget.planned_amount
-      existing.total_spent += budget.spent_amount
-    } else {
-      byType.set(budget.type_id, {
-        type_id: budget.type_id,
-        type_name: budget.type_name,
-        type_color: budget.type_color || '#6b7280',
-        total_planned: budget.planned_amount,
-        total_spent: budget.spent_amount,
-        percentage: 0,
-      })
-    }
-  }
-
-  // Вычисляем проценты
-  const result = Array.from(byType.values())
-  for (const item of result) {
-    item.percentage = item.total_planned > 0
-      ? Math.round((item.total_spent / item.total_planned) * 100)
-      : 0
-  }
-
-  return result
-}
-
-/**
- * Рекурсивно агрегирует бюджеты вверх по иерархии
- */
-function aggregateBudgetsUpward(node: HierarchyNode): AggregatedBudgetsByType[] {
-  // Начинаем с собственных бюджетов
-  const allBudgets = [...node.budgets]
-
-  // Добавляем бюджеты всех детей рекурсивно
-  for (const child of node.children) {
-    // Рекурсивно получаем бюджеты ребёнка
-    const childBudgets = collectAllBudgets(child)
-    allBudgets.push(...childBudgets)
-  }
-
-  return aggregateBudgetsByType(allBudgets)
-}
-
-/**
- * Собирает все бюджеты из узла и всех его потомков
- */
-function collectAllBudgets(node: HierarchyNode): BudgetInfo[] {
-  const result: BudgetInfo[] = [...node.budgets]
-  for (const child of node.children) {
-    result.push(...collectAllBudgets(child))
-  }
-  return result
-}
-
 // ============================================================================
 // Hierarchy Transformation
 // ============================================================================
@@ -139,7 +74,6 @@ function transformDecompositionItem(
     name: item.description,
     type: 'decomposition_item',
     budgets: nodeBudgets,
-    aggregatedBudgets: aggregateBudgetsByType(nodeBudgets),
     plannedHours: item.plannedHours,
     children: [],
     entityType: 'decomposition_item',
@@ -173,14 +107,10 @@ function transformDecompositionStage(
     name: stage.name,
     type: 'decomposition_stage',
     budgets: nodeBudgets,
-    aggregatedBudgets: [],
     plannedHours,
     children,
     entityType: 'decomposition_stage',
   }
-
-  // Агрегируем бюджеты вверх (включая детей)
-  node.aggregatedBudgets = aggregateBudgetsUpward(node)
 
   return node
 }
@@ -210,7 +140,6 @@ function transformSection(
     name: section.name,
     type: 'section',
     budgets: nodeBudgets,
-    aggregatedBudgets: [], // Будет вычислено ниже
     plannedHours,
     loadingHours: calc?.loadingHours ?? 0,
     calcBudgetFromLoadings: calc?.calcBudget ?? 0,
@@ -220,9 +149,6 @@ function transformSection(
     entityType: 'section',
     hourlyRate: section.hourlyRate,
   }
-
-  // Агрегируем бюджеты вверх (включая детей)
-  node.aggregatedBudgets = aggregateBudgetsUpward(node)
 
   return node
 }
@@ -254,7 +180,6 @@ function transformObject(
     name: object.name,
     type: 'object',
     budgets: nodeBudgets,
-    aggregatedBudgets: [],
     plannedHours,
     loadingHours,
     calcBudgetFromLoadings,
@@ -263,8 +188,6 @@ function transformObject(
     children,
     entityType: 'object',
   }
-
-  node.aggregatedBudgets = aggregateBudgetsUpward(node)
 
   return node
 }
@@ -303,7 +226,6 @@ function transformProject(
       color: tag.color || '#6b7280',
     })),
     budgets: nodeBudgets,
-    aggregatedBudgets: [],
     plannedHours,
     loadingHours,
     calcBudgetFromLoadings,
@@ -313,116 +235,7 @@ function transformProject(
     entityType: 'project',
   }
 
-  node.aggregatedBudgets = aggregateBudgetsUpward(node)
-
   return node
-}
-
-// ============================================================================
-// Analytics Calculation
-// ============================================================================
-
-/**
- * Собирает все бюджеты из узла и всех потомков рекурсивно
- */
-function collectAllBudgetsFromNode(node: HierarchyNode): BudgetInfo[] {
-  const result: BudgetInfo[] = [...node.budgets]
-  for (const child of node.children) {
-    result.push(...collectAllBudgetsFromNode(child))
-  }
-  return result
-}
-
-/**
- * Вычисляет аналитику по всем узлам иерархии
- *
- * План = сумма planned_amount бюджетов БЕЗ parent_budget_id (корневые/выделенные)
- * Факт = сумма spent_amount ВСЕХ бюджетов
- *
- * Это исключает двойной подсчёт: распределённые бюджеты (с parent) не добавляются к плану,
- * но их расходы учитываются в факте.
- */
-function calculateAnalytics(nodes: HierarchyNode[]): BudgetsAnalyticsData {
-  let totalPlanned = 0
-  let totalSpent = 0
-  let projectsCount = 0
-  let sectionsCount = 0
-  let stagesCount = 0
-  let budgetsCount = 0
-
-  const byTypeMap = new Map<string, AggregatedBudgetsByType>()
-
-  // Собираем все бюджеты из всех проектов
-  for (const node of nodes) {
-    if (node.type === 'project') {
-      projectsCount++
-
-      // Собираем все бюджеты проекта и его потомков
-      const allBudgets = collectAllBudgetsFromNode(node)
-
-      for (const budget of allBudgets) {
-        budgetsCount++
-
-        // План = только корневые бюджеты (без parent_budget_id)
-        if (!budget.parent_budget_id) {
-          totalPlanned += budget.planned_amount
-        }
-
-        // Факт = spent всех бюджетов
-        totalSpent += budget.spent_amount
-
-        // Группируем по типам (только корневые для плана)
-        if (budget.type_id && budget.type_name && !budget.parent_budget_id) {
-          const existing = byTypeMap.get(budget.type_id)
-          if (existing) {
-            existing.total_planned += budget.planned_amount
-            existing.total_spent += budget.spent_amount
-          } else {
-            byTypeMap.set(budget.type_id, {
-              type_id: budget.type_id,
-              type_name: budget.type_name,
-              type_color: budget.type_color || '#6b7280',
-              total_planned: budget.planned_amount,
-              total_spent: budget.spent_amount,
-              percentage: 0,
-            })
-          }
-        }
-      }
-    }
-  }
-
-  // Считаем секции и этапы для статистики
-  function countNodes(node: HierarchyNode) {
-    if (node.type === 'section') sectionsCount++
-    if (node.type === 'decomposition_stage') stagesCount++
-    for (const child of node.children) {
-      countNodes(child)
-    }
-  }
-  for (const node of nodes) {
-    countNodes(node)
-  }
-
-  // Вычисляем проценты
-  const byType = Array.from(byTypeMap.values())
-  for (const item of byType) {
-    item.percentage = item.total_planned > 0
-      ? Math.round((item.total_spent / item.total_planned) * 100)
-      : 0
-  }
-
-  return {
-    totalPlanned,
-    totalSpent,
-    spentPercentage: totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0,
-    remaining: totalPlanned - totalSpent,
-    projectsCount,
-    sectionsCount,
-    stagesCount,
-    budgetsCount,
-    byType,
-  }
 }
 
 // ============================================================================
@@ -430,31 +243,12 @@ function calculateAnalytics(nodes: HierarchyNode[]): BudgetsAnalyticsData {
 // ============================================================================
 
 export interface UseBudgetsHierarchyResult {
-  /** Иерархия узлов с бюджетами */
   nodes: HierarchyNode[]
-  /** Агрегированная аналитика */
-  analytics: BudgetsAnalyticsData
-  /** Загрузка данных */
   isLoading: boolean
-  /** Ошибка */
   error: Error | null
-  /** Функция для обновления данных */
   refetch: () => void
 }
 
-/**
- * Хук для получения иерархии проектов с бюджетами
- *
- * Объединяет данные из:
- * - useResourceGraphData (иерархия проектов)
- * - useBudgets (все бюджеты)
- *
- * @param filters - Параметры фильтрации из InlineFilter
- * @param options - Дополнительные опции (enabled)
- *
- * @example
- * const { nodes, analytics, isLoading } = useBudgetsHierarchy(queryParams, { enabled: true })
- */
 export function useBudgetsHierarchy(
   filters?: FilterQueryParams,
   options?: { enabled?: boolean }
@@ -469,13 +263,32 @@ export function useBudgetsHierarchy(
     refetch: refetchProjects,
   } = useResourceGraphData(filters || {}, { enabled })
 
-  // Загружаем все активные бюджеты
+  // Когда фильтры применены — берём project_ids из уже загруженной иерархии
+  // и передаём в useBudgets чтобы грузить только нужные бюджеты.
+  // Когда фильтров нет ("Загрузить всё") — грузим всё как обычно.
+  const projectIds = useMemo(() => {
+    if (!filters || !projects) return undefined
+    return projects.map(p => p.id)
+  }, [filters, projects])
+
+  // С фильтрами: ждём projects → потом budgets (waterfall, но меньше данных).
+  // Без фильтров: сразу грузим всё параллельно.
+  const budgetsEnabled = filters
+    ? (projects !== undefined && projectIds !== undefined && projectIds.length > 0)
+    : enabled
+
   const {
     data: budgets,
     isLoading: budgetsLoading,
     error: budgetsError,
     refetch: refetchBudgets,
-  } = useBudgets({ is_active: true }, { enabled })
+  } = useBudgets(
+    { is_active: true, project_ids: projectIds },
+    {
+      enabled: budgetsEnabled,
+      queryOptions: { placeholderData: keepPreviousData },
+    }
+  )
 
   // Расчётный бюджет по всем разделам (loadings × ставка отдела).
   // Загружаем весь v_cache_section_calc_budget — фильтрация по section_id происходит ниже через calcMap.
@@ -525,40 +338,13 @@ export function useBudgetsHierarchy(
     return map
   }, [sectionCalcs])
 
-  // Трансформируем иерархию
-  const { nodes, analytics } = useMemo(() => {
-    if (!projects || projects.length === 0) {
-      return {
-        nodes: [],
-        analytics: {
-          totalPlanned: 0,
-          totalSpent: 0,
-          spentPercentage: 0,
-          remaining: 0,
-          projectsCount: 0,
-          sectionsCount: 0,
-          stagesCount: 0,
-          budgetsCount: 0,
-          byType: [],
-        },
-      }
-    }
-
-    const transformedNodes = projects.map(project =>
-      transformProject(project, budgetsMap, calcMap)
-    )
-
-    const calculatedAnalytics = calculateAnalytics(transformedNodes)
-
-    return {
-      nodes: transformedNodes,
-      analytics: calculatedAnalytics,
-    }
+  const nodes = useMemo(() => {
+    if (!projects || projects.length === 0) return []
+    return projects.map(project => transformProject(project, budgetsMap, calcMap))
   }, [projects, budgetsMap, calcMap])
 
   return {
     nodes,
-    analytics,
     isLoading: projectsLoading || budgetsLoading || sectionCalcsLoading,
     error: projectsError || budgetsError || sectionCalcsError || null,
     refetch,
