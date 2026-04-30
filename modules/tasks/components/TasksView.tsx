@@ -17,6 +17,7 @@ import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { SectionsPageInternal } from '@/modules/sections-page'
+import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { TasksTabs } from './TasksTabs'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 
@@ -141,6 +142,13 @@ export function TasksView() {
         )}
         {tabs.length > 0 && viewMode === 'sections' && (
           <SectionsPageInternal
+            queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
+          />
+        )}
+        {tabs.length > 0 && viewMode === 'budgets' && (
+          <BudgetsViewInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}

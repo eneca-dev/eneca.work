@@ -2,69 +2,34 @@
  * Budget Row Component
  *
  * Строка иерархии с информацией о бюджетах.
- * Табличная структура с группами колонок и контрастными разделами.
+ * Показывает: Расчётный / Распределено / Израсходовано / Выделенный.
+ * Создание и удаление структуры скрыты — только редактирование бюджета.
  */
 
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
-import { ItemDifficultySelect } from './ItemDifficultySelect'
-import { DeleteObjectModal, ObjectCreateModal, SectionCreateModal, DeleteSectionModal, ProjectQuickEditModal } from '@/modules/modals'
-import { StageInlineCreate } from './StageInlineCreate'
-import { ItemInlineCreate } from './ItemInlineCreate'
 import { BudgetRowExpander } from './BudgetRowExpander'
 import { BudgetRowBadges } from './BudgetRowBadges'
-import { BudgetRowHours } from './BudgetRowHours'
-import { BudgetRowActions } from './BudgetRowActions'
-import { SectionRateEdit } from './SectionRateEdit'
-// DEPRECATED: используются только для часов декомпозиции и fallback ставки в SectionRateEdit.
-// Удалить после полного перехода на calcBudgetFromLoadings (см. docs/deprecated/budgets-planned-hours.md).
-import { MOCK_HOURLY_RATE, HOURS_ADJUSTMENT_FACTOR } from '../config/constants'
 import { formatNumber } from '../utils'
+import { pluralizeLoadings } from '@/lib/pluralize'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
-import type { SyncStatus } from '../hooks'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface BudgetRowProps {
-  /** Узел иерархии */
   node: HierarchyNode
-  /** Уровень вложенности (0 = корень) */
   level: number
-  /** Развёрнутые узлы */
   expanded: ExpandedState
-  /** Callback для toggle узла */
   onToggle: (nodeId: string) => void
-  /** Callback для раскрытия всех детей узла */
   onExpandAll?: (nodeIds: string[]) => void
-  /** Средняя ставка (BYN/час) - наследуется от корня */
-  hourlyRate?: number
-  /** Находимся ли внутри развёрнутого раздела */
   insideSection?: boolean
-  /** Приведённые часы родителя (для расчёта % от общих) */
-  parentAdjustedHours?: number
-  /** Выделенный бюджет родителя (для расчёта % от родительского бюджета) */
   parentAllocatedBudget?: number
-  /** Распределённый бюджет родителя (fallback для расчёта %) */
-  parentDistributedBudget?: number
-  /** Callback для обновления данных после удаления */
-  onRefresh?: () => void
-  /** ID текущего раздела (для создания items в stages) */
-  currentSectionId?: string
-  /** Callback для автоматического раскрытия при создании */
-  onAutoExpand?: (nodeId: string) => void
-  /** Callback для синхронизации проекта с Worksection */
-  onProjectSync?: (projectId: string, projectName?: string) => Promise<unknown>
-  /** Статус синхронизации */
-  syncStatus?: SyncStatus
-  /** ID проекта который сейчас синхронизируется */
-  syncingProjectId?: string | null
-  /** ID раздела для подсветки */
   highlightSectionId?: string | null
 }
 
@@ -72,9 +37,6 @@ interface BudgetRowProps {
 // Helpers
 // ============================================================================
 
-/**
- * Собирает все ID детей узла рекурсивно
- */
 function collectChildIds(node: HierarchyNode): string[] {
   const ids: string[] = []
   for (const child of node.children) {
@@ -82,20 +44,6 @@ function collectChildIds(node: HierarchyNode): string[] {
     ids.push(...collectChildIds(child))
   }
   return ids
-}
-
-/**
- * Собирает сумму spent_amount со всех потомков рекурсивно
- */
-function collectSpentFromAllDescendants(node: HierarchyNode): number {
-  let total = 0
-  for (const child of node.children) {
-    // Добавляем spent_amount бюджетов этого ребёнка
-    total += child.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
-    // Рекурсивно добавляем от потомков ребёнка
-    total += collectSpentFromAllDescendants(child)
-  }
-  return total
 }
 
 // ============================================================================
@@ -108,57 +56,21 @@ export const BudgetRow = React.memo(function BudgetRow({
   expanded,
   onToggle,
   onExpandAll,
-  hourlyRate = MOCK_HOURLY_RATE,
   insideSection = false,
-  parentAdjustedHours = 0,
   parentAllocatedBudget = 0,
-  parentDistributedBudget = 0,
-  onRefresh,
-  currentSectionId,
-  onAutoExpand,
-  onProjectSync,
-  syncStatus,
-  syncingProjectId,
   highlightSectionId,
 }: BudgetRowProps) {
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [sectionCreateModalOpen, setSectionCreateModalOpen] = useState(false)
-  const [sectionDeleteModalOpen, setSectionDeleteModalOpen] = useState(false)
-  const [stageCreateOpen, setStageCreateOpen] = useState(false)
-  const [itemCreateOpen, setItemCreateOpen] = useState(false)
-  const [projectEditOpen, setProjectEditOpen] = useState(false)
-
-  // Callback для успешного создания - раскрываем родителя
-  const handleCreateSuccess = () => {
-    onAutoExpand?.(node.id)
-    onRefresh?.()
-  }
-
   const hasChildren = node.children.length > 0
   const isExpanded = expanded[node.id] ?? false
 
-  // Определяем тип строки
   const isSection = node.type === 'section'
   const isDecompStage = node.type === 'decomposition_stage'
   const isItem = node.type === 'decomposition_item'
   const isTopLevel = node.type === 'project' || node.type === 'object'
+  const isProject = node.type === 'project'
+  const isObject = node.type === 'object'
 
-  // Старая формула расчётного бюджета — DEPRECATED since 2026-04-28.
-  // Расчётный бюджет теперь приходит через node.calcBudgetFromLoadings (см. ниже).
-  // Эти переменные оставлены ТОЛЬКО для:
-  //   - BudgetRowHours (отображение и редактирование ручных часов в декомпозиции)
-  //   - SectionRateEdit (fallback при отсутствии node.hourlyRate)
-  //   - вычисления % часов от родителя (информационно)
-  // См. docs/deprecated/budgets-planned-hours.md.
-  const plannedHours = node.plannedHours || 0
-  const adjustedHours = plannedHours * HOURS_ADJUSTMENT_FACTOR
-  const effectiveRate = isSection
-    ? (node.hourlyRate ?? MOCK_HOURLY_RATE)
-    : hourlyRate
-
-  // Новый расчётный бюджет — из loadings × ставка отдела
-  // (для section: из v_cache_section_calc_budget; для object/project: агрегация в use-budgets-hierarchy)
+  // Расчётный бюджет из loadings × ставка отдела
   const calcBudget = node.calcBudgetFromLoadings && node.calcBudgetFromLoadings > 0
     ? node.calcBudgetFromLoadings
     : null
@@ -166,32 +78,17 @@ export const BudgetRow = React.memo(function BudgetRow({
   const loadingCount = node.loadingCount ?? 0
   const loadingErrorsCount = node.loadingErrorsCount ?? 0
 
-  // Выделенный бюджет (сумма planned_amount всех бюджетов)
+  // Выделенный бюджет
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
 
-  // % часов от родителя (доля приведённых часов от родительских)
-  const percentOfParentHours = parentAdjustedHours > 0
-    ? Math.round((adjustedHours / parentAdjustedHours) * 100)
-    : null
-
-  // Распределено (сумма выделенных бюджетов только прямых детей)
+  // Распределено (сумма выделенных бюджетов прямых детей)
   const distributedBudget = node.children.length > 0
     ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
     : allocatedBudget
 
-  // Израсходовано (сумма spent_amount всех потомков рекурсивно)
-  const spentBudgetChildren = node.children.length > 0
-    ? collectSpentFromAllDescendants(node)
-    : node.budgets.reduce((sum, b) => sum + b.spent_amount, 0)
-
-  // Сравнение: перебор если выделено меньше чем расчётный
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
-  // Распределено больше чем выделено
   const isOverDistributed = distributedBudget > allocatedBudget
-  // Израсходовано больше чем распределено
-  const isOverSpent = spentBudgetChildren > distributedBudget
 
-  // Полная иерархия отступов (без stage — объекты напрямую под проектом)
   const INDENT_MAP: Record<HierarchyNodeType, number> = {
     project: 0,
     object: 16,
@@ -201,33 +98,22 @@ export const BudgetRow = React.memo(function BudgetRow({
   }
   const indent = INDENT_MAP[node.type]
 
-  // Стили строки в зависимости от типа
-  const isProject = node.type === 'project'
-  const isObject = node.type === 'object'
   const isHighlighted = isSection && highlightSectionId === node.id
 
   const rowStyles = cn(
     'group flex items-center border-b transition-colors',
-    // Проект - самый верхний уровень
     isProject && 'bg-muted/40 hover:bg-muted/60',
-    // Объект
     isObject && 'bg-muted/40 hover:bg-muted/60',
-    // Разделы
     isSection && 'bg-muted/35 hover:bg-muted/55',
-    // Этапы декомпозиции внутри раздела
+    isHighlighted && 'ring-1 ring-inset ring-primary/40',
     isDecompStage && insideSection && 'bg-background hover:bg-muted/30',
-    // Задачи внутри раздела
     isItem && insideSection && 'bg-background hover:bg-muted/30',
-    // Высота строки
     'min-h-[32px]'
   )
 
-  // Обработчик клика: для раздела раскрываем всё содержимое
   const handleToggle = () => {
     if (!hasChildren) return
-
     if (isSection && !isExpanded && onExpandAll) {
-      // Раскрываем раздел и все его содержимое
       const allChildIds = collectChildIds(node)
       onExpandAll([node.id, ...allChildIds])
     } else {
@@ -247,7 +133,6 @@ export const BudgetRow = React.memo(function BudgetRow({
           className="flex items-center gap-2 min-w-[400px] w-[400px] px-2 shrink-0"
           style={{ paddingLeft: `${8 + indent}px` }}
         >
-          {/* Expand/collapse button */}
           <BudgetRowExpander
             indent={indent}
             hasChildren={hasChildren}
@@ -255,13 +140,11 @@ export const BudgetRow = React.memo(function BudgetRow({
             onToggle={handleToggle}
           />
 
-          {/* Type label and stage badges */}
           <BudgetRowBadges
             nodeType={node.type}
             stageName={node.stageName}
           />
 
-          {/* Name */}
           <span
             className={cn(
               'truncate text-[12px]',
@@ -274,66 +157,12 @@ export const BudgetRow = React.memo(function BudgetRow({
           >
             {node.name}
           </span>
-
-          {/* Action buttons */}
-          <BudgetRowActions
-            nodeType={node.type}
-            nodeId={node.id}
-            nodeName={node.name}
-            onRefresh={onRefresh}
-            onProjectEdit={() => setProjectEditOpen(true)}
-            onObjectCreate={() => setCreateModalOpen(true)}
-            onObjectDelete={() => setDeleteModalOpen(true)}
-            onSectionCreate={() => setSectionCreateModalOpen(true)}
-            onSectionDelete={() => setSectionDeleteModalOpen(true)}
-            onStageCreate={() => setStageCreateOpen(true)}
-            onItemCreate={() => setItemCreateOpen(true)}
-            onProjectSync={() => onProjectSync?.(node.id, node.name)}
-            syncStatus={syncStatus}
-            syncingProjectId={syncingProjectId}
-            workCategoryId={node.workCategoryId}
-            workCategoryName={node.workCategoryName}
-          />
         </div>
 
-        {/* ===== КАТЕГОРИЯ (сложность) ===== */}
-        <div className="w-10 shrink-0 flex items-center justify-center">
-          {isItem && (
-            <ItemDifficultySelect
-              itemId={node.id}
-              difficulty={node.difficulty || null}
-              onSuccess={onRefresh}
-            />
-          )}
-        </div>
-
-        {/* ===== ТРУДОЗАТРАТЫ ===== */}
-        <BudgetRowHours
-          nodeType={node.type}
-          nodeId={node.id}
-          plannedHours={plannedHours}
-          adjustedHours={adjustedHours}
-          percentOfParentHours={percentOfParentHours}
-          onSuccess={onRefresh}
-        />
-
-        {/* ===== СТАВКА ===== */}
-        <div className="flex items-center shrink-0 border-l border-border/30">
-          <div className="w-[72px] px-2 text-right">
-            {isSection && (
-              <SectionRateEdit
-                sectionId={node.id}
-                value={node.hourlyRate ?? null}
-                onSuccess={onRefresh}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Израсходовано / Выделенный ===== */}
-        <div className="flex items-center flex-1 min-w-[430px] shrink-0 border-l border-border/30">
+        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный ===== */}
+        <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
           <div className="w-full flex items-center">
-            {/* Расчётный — из loadings × ставка отдела */}
+            {/* Расчётный */}
             <div className="w-[80px] px-1 text-right">
               {calcBudget !== null && calcBudget > 0 ? (
                 <TooltipProvider delayDuration={200}>
@@ -349,7 +178,7 @@ export const BudgetRow = React.memo(function BudgetRow({
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
                       <div className="space-y-0.5">
-                        <div>{formatNumber(loadingHours)} ч / {loadingCount} загрузок</div>
+                        <div>{formatNumber(loadingHours)} ч / {loadingCount} {pluralizeLoadings(loadingCount)}</div>
                         {loadingErrorsCount > 0 && (
                           <div className="text-amber-500">
                             ⚠ {loadingErrorsCount} без отдела или ставки
@@ -363,7 +192,6 @@ export const BudgetRow = React.memo(function BudgetRow({
                 <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
               )}
             </div>
-            {/* Слеш */}
             <div className="w-[10px] text-center">
               <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
@@ -381,25 +209,6 @@ export const BudgetRow = React.memo(function BudgetRow({
                 <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
               )}
             </div>
-            {/* Слеш */}
-            <div className="w-[10px] text-center">
-              <span className="text-[11px] text-muted-foreground/30">/</span>
-            </div>
-            {/* Израсходовано */}
-            <div className="w-[80px] px-1 text-center">
-              {spentBudgetChildren > 0 ? (
-                <span className={cn(
-                  'text-[12px] tabular-nums',
-                  isOverSpent ? 'text-destructive' : 'text-foreground/80',
-                  (isSection || isTopLevel) && 'font-medium'
-                )}>
-                  {formatNumber(spentBudgetChildren)}
-                </span>
-              ) : (
-                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
-              )}
-            </div>
-            {/* Слеш */}
             <div className="w-[10px] text-center">
               <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
@@ -427,108 +236,11 @@ export const BudgetRow = React.memo(function BudgetRow({
             expanded={expanded}
             onToggle={onToggle}
             onExpandAll={onExpandAll}
-            hourlyRate={effectiveRate}
             insideSection={isSection || insideSection}
-            parentAdjustedHours={adjustedHours}
             parentAllocatedBudget={allocatedBudget}
-            parentDistributedBudget={distributedBudget}
-            onRefresh={onRefresh}
-            currentSectionId={isSection ? node.id : currentSectionId}
-            onAutoExpand={onAutoExpand}
-            onProjectSync={onProjectSync}
-            syncStatus={syncStatus}
-            syncingProjectId={syncingProjectId}
             highlightSectionId={highlightSectionId}
           />
         ))}
-
-      {/* Inline stage creation (for sections) */}
-      {isSection && stageCreateOpen && (
-        <div
-          className="flex items-center border-b bg-muted/30 min-h-[32px]"
-          style={{ paddingLeft: `${8 + 48}px` }}
-        >
-          <StageInlineCreate
-            sectionId={node.id}
-            sectionName={node.name}
-            onCancel={() => setStageCreateOpen(false)}
-            onSuccess={handleCreateSuccess}
-          />
-        </div>
-      )}
-
-      {/* Inline item creation (for stages) */}
-      {isDecompStage && itemCreateOpen && currentSectionId && (
-        <div
-          className="flex items-center border-b bg-card/50 min-h-[32px]"
-          style={{ paddingLeft: `${8 + 64}px` }}
-        >
-          <ItemInlineCreate
-            stageId={node.id}
-            sectionId={currentSectionId}
-            onCancel={() => setItemCreateOpen(false)}
-            onSuccess={handleCreateSuccess}
-          />
-        </div>
-      )}
-
-      {/* Create Object Modal (for projects) */}
-      {isProject && (
-        <ObjectCreateModal
-          isOpen={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          projectId={node.id}
-          projectName={node.name}
-          onSuccess={onRefresh}
-        />
-      )}
-
-      {/* Project Quick Edit Modal */}
-      {isProject && (
-        <ProjectQuickEditModal
-          isOpen={projectEditOpen}
-          onClose={() => setProjectEditOpen(false)}
-          projectId={node.id}
-          projectName={node.name}
-          currentStatus={node.projectStatus}
-          currentStageType={node.stageName}
-          currentTags={node.projectTags}
-          onSuccess={onRefresh}
-        />
-      )}
-
-      {/* Delete Object Modal */}
-      {isObject && (
-        <DeleteObjectModal
-          isOpen={deleteModalOpen}
-          onClose={() => setDeleteModalOpen(false)}
-          objectId={node.id}
-          objectName={node.name}
-          onSuccess={onRefresh}
-        />
-      )}
-
-      {/* Create Section Modal (for objects) */}
-      {isObject && (
-        <SectionCreateModal
-          isOpen={sectionCreateModalOpen}
-          onClose={() => setSectionCreateModalOpen(false)}
-          objectId={node.id}
-          objectName={node.name}
-          onSuccess={onRefresh}
-        />
-      )}
-
-      {/* Delete Section Modal */}
-      {isSection && (
-        <DeleteSectionModal
-          isOpen={sectionDeleteModalOpen}
-          onClose={() => setSectionDeleteModalOpen(false)}
-          sectionId={node.id}
-          sectionName={node.name}
-          onSuccess={onRefresh}
-        />
-      )}
     </>
   )
 })

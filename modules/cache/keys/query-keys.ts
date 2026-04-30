@@ -52,6 +52,7 @@ export interface BudgetFilters extends BaseFilters {
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  lean?: boolean
 }
 
 export interface CheckpointFilters extends BaseFilters {
@@ -300,7 +301,7 @@ export const queryKeys = {
     list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
     details: () => [...queryKeys.budgets.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
-    /** Полная информация о бюджете с частями (v_budgets_full) */
+    /** Полная информация о бюджете */
     full: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'full'] as const,
     /** История изменений бюджета */
     history: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'history'] as const,

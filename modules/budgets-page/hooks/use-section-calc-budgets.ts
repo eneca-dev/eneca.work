@@ -11,20 +11,19 @@ import { queryKeys, staleTimePresets } from '@/modules/cache'
 import { getSectionCalcBudgets } from '../actions/loading-money'
 
 /**
- * Хук возвращает массив `SectionCalcBudget` для переданных section_id.
- * При смене списка `sectionIds` старые данные сохраняются (placeholderData),
- * чтобы не было моргания при пересчёте.
+ * Хук загружает расчётные бюджеты по всем разделам (v_cache_section_calc_budget).
+ * Используется статичный ключ кэша — данные кэшируются независимо от текущей иерархии.
+ * Фильтрация по нужным разделам происходит в use-budgets-hierarchy через calcMap.
  */
-export function useSectionCalcBudgets(sectionIds: string[]) {
+export function useSectionCalcBudgets() {
   return useQuery({
-    queryKey: queryKeys.budgets.calcBySections(sectionIds),
+    queryKey: queryKeys.budgets.calc(),
     queryFn: async () => {
-      const result = await getSectionCalcBudgets(sectionIds)
+      const result = await getSectionCalcBudgets()
       if (!result.success) throw new Error(result.error)
       return result.data
     },
     staleTime: staleTimePresets.medium,
     placeholderData: keepPreviousData,
-    enabled: sectionIds.length > 0,
   })
 }
