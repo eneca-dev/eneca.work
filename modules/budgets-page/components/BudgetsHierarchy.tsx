@@ -94,20 +94,6 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
           ref={headerRef}
           className="overflow-x-hidden border-b bg-card sticky top-0 z-10"
         >
-          {/* Группы колонок */}
-          <div className="flex items-center min-w-max border-b">
-            <div className="min-w-[400px] w-[400px] shrink-0" />
-
-            {/* БЮДЖЕТЫ */}
-            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
-              <div className="w-full py-1.5 text-center">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Расчётный / Распред. / Выделенный
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Подзаголовки */}
           <div className="flex items-center min-w-max">
             {/* Наименование */}

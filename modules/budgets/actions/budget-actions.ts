@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
+import type { ActionResult } from '@/modules/cache'
 import type {
   BudgetCurrent,
   BudgetFilters,
@@ -9,19 +10,7 @@ import type {
   UpdateBudgetAmountInput,
   BudgetEntityType,
   EntityHierarchy,
-  CreateExpenseInput,
-  ApproveExpenseInput,
-  BudgetExpense,
-  BudgetHistoryEntry,
 } from '../types'
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string }
 
 // ============================================================================
 // Zod Validation Schemas
@@ -44,21 +33,23 @@ const UpdateBudgetAmountSchema = z.object({
   comment: z.string().max(500).optional(),
 })
 
+// ============================================================================
+// Permission Helpers
+// ============================================================================
 
-const CreateExpenseSchema = z.object({
-  budget_id: z.string().uuid('Некорректный ID бюджета'),
-  part_id: z.string().uuid().optional(),
-  amount: z.number().positive('Сумма расхода должна быть положительной'),
-  description: z.string().max(500).optional(),
-  expense_date: z.string().optional(),
-  work_log_id: z.string().uuid().optional(),
-})
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
-const ApproveExpenseSchema = z.object({
-  expense_id: z.string().uuid('Некорректный ID расхода'),
-  approved: z.boolean(),
-  rejection_reason: z.string().max(500).optional(),
-})
+async function checkPermission(
+  supabase: SupabaseClient,
+  userId: string,
+  permission: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('user_has_permission', {
+    p_user_id: userId,
+    p_permission_name: permission,
+  })
+  return !error && data === true
+}
 
 // ============================================================================
 // Read Actions
@@ -76,13 +67,23 @@ export async function getBudgets(
 ): Promise<ActionResult<BudgetCurrent[]>> {
   try {
     const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { success: false, error: 'Не авторизован' }
+
+    const hasPermission = await checkPermission(supabase, user.id, 'budgets.view.all')
+    if (!hasPermission) return { success: false, error: 'Нет прав на просмотр бюджетов' }
+
     const PAGE_SIZE = 1000
+
+    // Страница бюджетов использует lean-view без агрегации расходов (~3–5x быстрее).
+    // Остальные потребители (resource-graph, modals) получают полные данные из v_cache_budgets.
+    const viewName = filters?.lean ? 'v_budgets_for_page' : 'v_cache_budgets'
 
     // count передаётся в первый .select() — вызывать .select() дважды нельзя,
     // это ломает получение count (он становится null).
     const buildQuery = (withCount = false) => {
       let q = supabase
-        .from('v_cache_budgets')
+        .from(viewName as 'v_cache_budgets' | 'v_budgets_for_page')
         .select('*', withCount ? { count: 'exact' } : undefined)
       if (filters?.entity_type) q = q.eq('entity_type', filters.entity_type)
       if (filters?.entity_id)   q = q.eq('entity_id', filters.entity_id)
@@ -174,68 +175,6 @@ export async function getBudgetById(
     }
   }
 }
-
-
-/**
- * Получить историю изменений бюджета
- */
-export async function getBudgetHistory(
-  budgetId: string
-): Promise<ActionResult<BudgetHistoryEntry[]>> {
-  try {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('budget_history')
-      .select('*')
-      .eq('budget_id', budgetId)
-      .order('changed_at', { ascending: false })
-
-    if (error) {
-      console.error('[getBudgetHistory] Supabase error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as BudgetHistoryEntry[] }
-  } catch (error) {
-    console.error('[getBudgetHistory] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Получить расходы бюджета
- */
-export async function getBudgetExpenses(
-  budgetId: string
-): Promise<ActionResult<BudgetExpense[]>> {
-  try {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('budget_expenses')
-      .select('*')
-      .eq('budget_id', budgetId)
-      .order('expense_date', { ascending: false })
-
-    if (error) {
-      console.error('[getBudgetExpenses] Supabase error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as BudgetExpense[] }
-  } catch (error) {
-    console.error('[getBudgetExpenses] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
 
 
 /**
@@ -381,11 +320,13 @@ export async function createBudget(
 
     const supabase = await createClient()
 
-    // Получаем текущего пользователя
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
       return { success: false, error: 'Пользователь не авторизован' }
     }
+
+    const hasPermission = await checkPermission(supabase, user.id, 'budgets.create')
+    if (!hasPermission) return { success: false, error: 'Нет прав на создание бюджетов' }
 
     // Находим родительский бюджет если не указан
     let parentBudgetId = input.parent_budget_id
@@ -471,10 +412,18 @@ export async function updateBudgetAmount(
 
     const supabase = await createClient()
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
+    // Параллельно: getUser (нужен user.id для истории) + has_budget_permission (не требует user.id,
+    // использует auth.uid() из JWT-контекста) — экономим один round-trip.
+    const [
+      { data: { user }, error: userError },
+      { data: hasPermission },
+    ] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.rpc('has_budget_permission', { permission_name: 'budgets.edit' }),
+    ])
+
+    if (userError || !user) return { success: false, error: 'Пользователь не авторизован' }
+    if (!hasPermission) return { success: false, error: 'Нет прав на редактирование бюджетов' }
 
     // Обновляем сумму
     const { error: updateError } = await supabase
@@ -487,9 +436,9 @@ export async function updateBudgetAmount(
       return { success: false, error: updateError.message }
     }
 
-    // Записываем в историю.
+    // История — fire-and-forget, не блокируем ответ клиенту.
     // previous_amount передаётся с клиента (он уже есть в кэше) — не делаем лишний SELECT.
-    await supabase.from('budget_history').insert({
+    supabase.from('budget_history').insert({
       budget_id: input.budget_id,
       change_type: 'amount_changed',
       previous_state: { total_amount: input.previous_amount ?? null },
@@ -498,114 +447,14 @@ export async function updateBudgetAmount(
       changed_by: user.id,
     })
 
-    return getBudgetById(input.budget_id)
+    // Не делаем getBudgetById — optimistic update уже показал новое значение в UI,
+    // а invalidateKeys запустит фоновый refetch с актуальными данными из view.
+    return {
+      success: true,
+      data: { budget_id: input.budget_id, total_amount: input.total_amount } as BudgetCurrent,
+    }
   } catch (error) {
     console.error('[updateBudgetAmount] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Создать расход
- */
-export async function createExpense(
-  input: CreateExpenseInput
-): Promise<ActionResult<BudgetExpense>> {
-  try {
-    // Валидация входных данных
-    const validated = CreateExpenseSchema.safeParse(input)
-    if (!validated.success) {
-      return { success: false, error: validated.error.errors[0]?.message || 'Ошибка валидации' }
-    }
-
-    const supabase = await createClient()
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    // Система согласования через budget_parts не используется:
-    // requires_approval = false для всех частей, только 3 из 19K расходов имели part_id.
-    // Расходы создаются автоматически из work_logs (status='approved') или вручную.
-    const { data, error } = await supabase
-      .from('budget_expenses')
-      .insert({
-        budget_id: input.budget_id,
-        part_id: input.part_id ?? null,
-        amount: input.amount,
-        description: input.description,
-        expense_date: input.expense_date || new Date().toISOString().split('T')[0],
-        work_log_id: input.work_log_id,
-        status: 'approved',
-        created_by: user.id,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[createExpense] Insert error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as BudgetExpense }
-  } catch (error) {
-    console.error('[createExpense] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
-
-/**
- * Одобрить или отклонить расход
- */
-export async function approveExpense(
-  input: ApproveExpenseInput
-): Promise<ActionResult<BudgetExpense>> {
-  try {
-    // Валидация входных данных
-    const validated = ApproveExpenseSchema.safeParse(input)
-    if (!validated.success) {
-      return { success: false, error: validated.error.errors[0]?.message || 'Ошибка валидации' }
-    }
-
-    const supabase = await createClient()
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    const updateData: Record<string, unknown> = {
-      status: input.approved ? 'approved' : 'rejected',
-      approved_by: user.id,
-      approved_at: new Date().toISOString(),
-    }
-
-    if (!input.approved && input.rejection_reason) {
-      updateData.rejection_reason = input.rejection_reason
-    }
-
-    const { data, error } = await supabase
-      .from('budget_expenses')
-      .update(updateData)
-      .eq('expense_id', input.expense_id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[approveExpense] Update error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, data: data as BudgetExpense }
-  } catch (error) {
-    console.error('[approveExpense] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -632,11 +481,13 @@ export async function deactivateBudget(
 
     const supabase = await createClient()
 
-    // Проверка авторизации
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
       return { success: false, error: 'Пользователь не авторизован' }
     }
+
+    const hasPermission = await checkPermission(supabase, user.id, 'budgets.delete')
+    if (!hasPermission) return { success: false, error: 'Нет прав на деактивацию бюджетов' }
 
     // Проверка 1: Есть ли активные дочерние бюджеты
     const { data: children, error: childrenError } = await supabase
@@ -704,69 +555,4 @@ export async function deactivateBudget(
   }
 }
 
-/**
- * Очистить бюджет (обнулить сумму вместо удаления)
- *
- * Используется когда нужно "удалить" бюджет но сохранить историю.
- * Обнуляет total_amount и все части.
- */
-export async function clearBudget(
-  budgetId: string,
-  comment?: string
-): Promise<ActionResult<BudgetCurrent>> {
-  try {
-    // Валидация входных данных
-    if (!budgetId || !z.string().uuid().safeParse(budgetId).success) {
-      return { success: false, error: 'Некорректный ID бюджета' }
-    }
-
-    const supabase = await createClient()
-
-    // Проверка авторизации
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return { success: false, error: 'Пользователь не авторизован' }
-    }
-
-    // Получаем текущее состояние
-    const currentResult = await getBudgetById(budgetId)
-    if (!currentResult.success) {
-      return currentResult
-    }
-
-    const previousAmount = currentResult.data.total_amount
-
-    // Обнуляем total_amount (части пересчитаются автоматически через триггер)
-    const { error: updateError } = await supabase
-      .from('budgets')
-      .update({
-        total_amount: 0,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('budget_id', budgetId)
-
-    if (updateError) {
-      console.error('[clearBudget] Update error:', updateError)
-      return { success: false, error: updateError.message }
-    }
-
-    // Записываем в историю
-    await supabase.from('budget_history').insert({
-      budget_id: budgetId,
-      change_type: 'amount_changed',
-      previous_state: { total_amount: previousAmount },
-      new_state: { total_amount: 0 },
-      comment: comment || 'Бюджет очищен',
-      changed_by: user.id,
-    })
-
-    return getBudgetById(budgetId)
-  } catch (error) {
-    console.error('[clearBudget] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-    }
-  }
-}
 

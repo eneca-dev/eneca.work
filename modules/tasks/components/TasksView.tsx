@@ -150,6 +150,8 @@ export function TasksView() {
         {tabs.length > 0 && viewMode === 'budgets' && (
           <BudgetsViewInternal
             queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
       </div>

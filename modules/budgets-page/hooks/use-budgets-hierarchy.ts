@@ -47,6 +47,7 @@ function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
     budget_id: budget.budget_id,
     name: budget.name,
     planned_amount: toNumber(budget.total_amount),
+    // Страница бюджетов использует lean-view — spent-поля не нужны для UI
     spent_amount: toNumber(budget.total_spent),
     remaining_amount: toNumber(budget.remaining_amount),
     spent_percentage: toNumber(budget.spent_percentage),
@@ -283,7 +284,7 @@ export function useBudgetsHierarchy(
     error: budgetsError,
     refetch: refetchBudgets,
   } = useBudgets(
-    { is_active: true, project_ids: projectIds },
+    { is_active: true, project_ids: projectIds, lean: true },
     {
       enabled: budgetsEnabled,
       queryOptions: { placeholderData: keepPreviousData },

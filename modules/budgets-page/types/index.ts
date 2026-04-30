@@ -73,4 +73,6 @@ export type ExpandedState = Record<string, boolean>
 
 export interface BudgetsViewInternalProps {
   queryParams: import('@/modules/inline-filter').FilterQueryParams
+  loadAllEnabled?: boolean
+  onLoadAll?: () => void
 }

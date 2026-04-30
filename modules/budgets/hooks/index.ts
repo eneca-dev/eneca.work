@@ -9,7 +9,6 @@
 
 import {
   createCacheQuery,
-  createDetailCacheQuery,
   createCacheMutation,
   staleTimePresets,
   queryKeys,
@@ -17,18 +16,14 @@ import {
 
 import {
   getBudgets,
-  getBudgetById,
-  getBudgetHistory,
-  findParentBudget,
   createBudget,
   updateBudgetAmount,
   deactivateBudget,
-  clearBudget,
+  findParentBudget,
 } from '../actions/budget-actions'
 
 import type {
   BudgetCurrent,
-  BudgetHistoryEntry,
   BudgetFilters,
   BudgetEntityType,
   CreateBudgetInput,
@@ -50,15 +45,10 @@ export const useBudgets = createCacheQuery<BudgetCurrent[], BudgetFilters | unde
     entityType: filters.entity_type,
     entityId: filters.entity_id,
     isActive: filters.is_active,
+    lean: filters.lean,
   } : undefined),
   queryFn: getBudgets,
   staleTime: staleTimePresets.fast,
-})
-
-export const useBudgetById = createDetailCacheQuery<BudgetCurrent>({
-  queryKey: (id) => queryKeys.budgets.detail(id),
-  queryFn: getBudgetById,
-  staleTime: staleTimePresets.medium,
 })
 
 export function useBudgetsByEntity(entityType: string, entityId: string | undefined) {
@@ -68,13 +58,6 @@ export function useBudgetsByEntity(entityType: string, entityId: string | undefi
   )
 }
 
-export const useBudgetHistory = createDetailCacheQuery<BudgetHistoryEntry[]>({
-  queryKey: (id) => queryKeys.budgets.history(id),
-  queryFn: getBudgetHistory,
-  staleTime: staleTimePresets.fast,
-})
-
-// Параметры для поиска родительского бюджета
 interface ParentBudgetParams {
   entityType: BudgetEntityType
   entityId: string
@@ -122,44 +105,36 @@ export const useCreateBudget = createCacheMutation<CreateBudgetInput, BudgetCurr
 export const useUpdateBudgetAmount = createCacheMutation<UpdateBudgetAmountInput, BudgetCurrent>({
   mutationFn: updateBudgetAmount,
   optimisticUpdate: {
-    // Обновляем плоский список бюджетов мгновенно, не ждём ответа сервера.
-    // useBudgetsHierarchy пересчитает иерархию через useMemo автоматически.
     queryKey: queryKeys.budgets.lists(),
     updater: (oldData, input) =>
       (oldData ?? []).map(b => {
-        if (b.budget_id !== input.budget_id) return b
-        const newTotal = input.total_amount
-        const spent = Number(b.total_spent) || 0
-        return {
-          ...b,
-          total_amount: newTotal,
-          remaining_amount: newTotal - spent,
-          spent_percentage: newTotal > 0 ? Math.round((spent / newTotal) * 100) : 0,
+        if (b.budget_id === input.budget_id) {
+          const newTotal = input.total_amount
+          return {
+            ...b,
+            total_amount: newTotal,
+            // Пересчитываем spent-поля только если они есть (v_cache_budgets, не lean)
+            ...(b.total_spent !== undefined && {
+              remaining_amount: newTotal - (Number(b.total_spent) || 0),
+              spent_percentage: newTotal > 0
+                ? Math.round(((Number(b.total_spent) || 0) / newTotal) * 100)
+                : 0,
+            }),
+          }
         }
+        if (b.parent_budget_id === input.budget_id) {
+          return { ...b, parent_total_amount: input.total_amount }
+        }
+        return b
       }),
   },
-  // lists() инвалидируем чтобы parent_planned_amount обновился в дочерних бюджетах.
-  // Без этого поле "%" у дочерних строк не появляется пока не обновить страницу.
-  // Optimistic update всё равно даёт мгновенный отклик — lists() перезагружается фоном.
-  invalidateKeys: (input) => [
-    queryKeys.budgets.lists(),
-    queryKeys.budgets.detail(input.budget_id),
-  ] as unknown as unknown[][],
+  // Optimistic update покрывает изменение бюджета и parent_total_amount у детей.
+  // Realtime подписка (таблица budgets) обеспечивает синхронизацию с сервером.
+  // invalidateKeys намеренно убрано чтобы избежать двойного refetch (invalidate + realtime).
+  invalidateKeys: () => [] as unknown as unknown[][],
 })
 
 export const useDeactivateBudget = createCacheMutation<string, { success: boolean; warning?: string }>({
   mutationFn: deactivateBudget,
   invalidateKeys: () => [queryKeys.budgets.all] as unknown as unknown[][],
-})
-
-export const useClearBudget = createCacheMutation<
-  { budgetId: string; comment?: string },
-  BudgetCurrent
->({
-  mutationFn: ({ budgetId, comment }) => clearBudget(budgetId, comment),
-  invalidateKeys: (input) => [
-    queryKeys.budgets.lists(),
-    queryKeys.budgets.detail(input.budgetId),
-    queryKeys.budgets.history(input.budgetId),
-  ] as unknown as unknown[][],
 })

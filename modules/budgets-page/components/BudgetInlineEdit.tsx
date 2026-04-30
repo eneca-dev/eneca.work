@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Loader2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount, useCreateBudget } from '@/modules/budgets'
+import { useHasPermission } from '@/modules/permissions'
 import type { BudgetInfo, BudgetPageEntityType } from '../types'
 import { parseAmount, formatNumber, calculatePercentage } from '../utils'
 
@@ -22,6 +23,9 @@ export function BudgetInlineEdit({
   entityName,
   isOverBudget = false,
 }: BudgetInlineEditProps) {
+  const canCreate = useHasPermission('budgets.create')
+  const canEdit = useHasPermission('budgets.edit')
+
   const budget = budgets.find((b) => b.is_active)
   const hasBudget = !!budget
 
@@ -31,6 +35,7 @@ export function BudgetInlineEdit({
 
   const [localAmount, setLocalAmount] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const escapePressedRef = useRef(false)
 
   const { mutate: updateAmount, isPending: isUpdating } = useUpdateBudgetAmount()
   const { mutate: createBudget, isPending: isCreating } = useCreateBudget()
@@ -66,7 +71,10 @@ export function BudgetInlineEdit({
   }, [])
 
   const handleBlur = useCallback(() => {
-    saveToServer()
+    if (!escapePressedRef.current) {
+      saveToServer()
+    }
+    escapePressedRef.current = false
     setIsEditing(false)
   }, [saveToServer])
 
@@ -76,6 +84,7 @@ export function BudgetInlineEdit({
       ;(e.target as HTMLInputElement).blur()
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      escapePressedRef.current = true
       if (budget) setLocalAmount(formatNumber(budget.planned_amount))
       setIsEditing(false)
       ;(e.target as HTMLInputElement).blur()
@@ -87,6 +96,7 @@ export function BudgetInlineEdit({
   }, [createBudget, entityType, entityId])
 
   if (!hasBudget) {
+    if (!canCreate) return null
     return (
       <button
         onClick={handleCreate}
@@ -128,12 +138,13 @@ export function BudgetInlineEdit({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onClick={(e) => e.stopPropagation()}
-          disabled={isPending}
+          disabled={isPending || !canEdit}
           className={cn(
             'w-[70px] h-5 px-1 text-[11px] tabular-nums text-right',
             'bg-transparent border-0 outline-none',
-            'hover:bg-muted/50 focus:bg-muted/70 rounded',
             'transition-colors',
+            canEdit && 'hover:bg-muted/50 focus:bg-muted/70 rounded',
+            !canEdit && 'cursor-default',
             isPending && 'opacity-50',
             isOverBudget ? 'text-destructive font-medium' : 'text-primary font-medium'
           )}

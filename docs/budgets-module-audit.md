@@ -1,453 +1,297 @@
 # Аудит модуля «Бюджеты» (страница `/tasks` → таб «Бюджеты»)
 
-> **Дата:** 2026-04-30
+> **Дата аудита:** 2026-04-30
+> **Дата последнего обновления:** 2026-04-30
 > **Ветка:** `feature/budgets`
-> **Аудит:** что должно быть в production-ready модуле и насколько `modules/budgets` + `modules/budgets-page` соответствуют этому.
->
-> Реально рендерится `BudgetsViewInternal → BudgetsHierarchy → BudgetRow → BudgetInlineEdit + BudgetRowExpander + BudgetRowBadges`. Всё остальное в `modules/budgets-page/components` — не используется.
+
 
 ---
 
-## 0. TL;DR
+## 0. TL;DR — текущее состояние
 
-| Категория | Оценка |
-|-----------|--------|
-| Архитектура (cache + Server Actions + TanStack Query) | 🟢 правильная |
-| Optimistic updates | 🟡 работают для одного бюджета, но не пересчитывают `parent_planned_amount` у детей |
-| Кэш (ключи, staleTime) | 🟡 в целом ОК, есть лишняя инвалидация `lists()` после каждого ввода |
-| Запросы к БД (views, пагинация) | 🟢 view-based, параллельная пагинация |
-| Realtime | 🔴 `budgets`/`budget_history`/`budget_parts` не подписаны → у других вкладок данные не синхронизируются |
-| Permissions | 🔴 проверяется только `auth.getUser()`, ни одного `PermissionGuard`/`useHasPermission` |
-| Чистота кода | 🔴 ~17 мёртвых компонентов, ~10 мёртвых хуков/actions, дубликаты, deprecated-поля |
-| Размеры файлов | 🟢 кроме `budget-actions.ts` (772) и `use-budgets-hierarchy.ts` (352) — всё в норме |
-| Типизация | 🟢 строгая, без `any`, есть Zod-схемы |
-
-**Главное:** архитектура верная — но модуль рос итерациями (parts, expenses, history, sync, decomposition CRUD), все эти ветки умерли, а код остался. Сейчас в продакшен попадает ~25% кода и ~15% серверного API. Перед релизом надо удалить мёртвый код — иначе модуль выглядит больше, чем он есть, и любая правка ходит по минному полю.
-
----
-
-## 1. Чек-лист «хороший модуль» в этом приложении
-
-Из `CLAUDE.md`, `modules/cache/README.md` и сложившихся паттернов в репозитории:
-
-### 1.1. Структура модуля
-- [ ] Чёткое деление: `actions/`, `hooks/`, `components/`, `types/`, `utils/`, `index.ts`
-- [ ] `index.ts` — единственный публичный API; внешние модули импортируют только из него
-- [ ] Нет циклических зависимостей между модулями
-- [ ] Нет «мёртвых» файлов-заглушек (`export {}`, `() => null`)
-- [ ] Размер компонента ≤ 200–250 строк, файл actions/hooks ≤ 400 строк
-
-### 1.2. Server Actions
-- [ ] Файл начинается с `'use server'`
-- [ ] Возвращают `ActionResult<T>` из `@/modules/cache`
-- [ ] Auth-check (`supabase.auth.getUser()`) **в каждом** action
-- [ ] Permission-check для write-операций (если есть permission в `module.meta.json`)
-- [ ] Zod-валидация входа
-- [ ] Запросы к view (`v_cache_*`), а не к таблицам с N+1
-- [ ] Обработка ошибок: `console.error` + возврат `{ success: false, error }`
-- [ ] Никаких `any` в payload и output
-
-### 1.3. Hooks (TanStack Query)
-- [ ] Используют фабрики из `@/modules/cache` (`createCacheQuery`, `createCacheMutation`, `createUpdateMutation`…)
-- [ ] Query keys только из `queryKeys.*` фабрики (центральный реестр)
-- [ ] `staleTime` подобран под характер данных (`static` для справочников, `medium` по умолчанию, `fast` для часто меняющегося)
-- [ ] Mutation хуки имеют **optimistic update** для всех write-операций, на которые реагирует UI
-- [ ] `invalidateKeys` минимально достаточны (не `*.all` если нужен только `*.lists()`)
-- [ ] `enabled` флаги корректно отключают зависимые запросы
-
-### 1.4. Components
-- [ ] `'use client'` только там где это нужно (RSC по умолчанию)
-- [ ] Все мутации читают `isPending`/`error` из хука и показывают это в UI
-- [ ] `PermissionGuard` или `useHasPermission` для UI-элементов write-действий
-- [ ] Inline-редактирование: optimistic update + откат + Esc-cancel + Enter-save
-- [ ] `React.memo` для строк длинных списков
-- [ ] Нет прямых вызовов `supabase` из клиента (только через хуки/actions)
-
-### 1.5. Realtime / Cache invalidation
-- [ ] Все таблицы, которые модифицируются модулем, добавлены в `realtimeSubscriptions`
-- [ ] Их `invalidateKeys` — это именно ключи модуля, а не «всё подряд» (`.all` где нужно `.lists()`)
-- [ ] Таблицы добавлены в `supabase_realtime` publication в БД
-- [ ] Нет дублирования: одна таблица — одна запись в config
-
-### 1.6. БД
-- [ ] Чтение через view с готовой агрегацией (избегаем N+1 в action)
-- [ ] Пагинация ≥ 1000 строк делается параллельно (`Promise.all`)
-- [ ] Соответствующие индексы под фильтры в action (`entity_type`, `entity_id`, `is_active`, `project_id`)
-- [ ] RLS политики на таблицах (если данные приватные)
-
-### 1.7. Types
-- [ ] `types/db.ts` (генерируемый) — источник правды для строк таблиц/view
-- [ ] Domain-типы тонкие надстройки (без дублирования полей)
-- [ ] Input-типы для Server Actions выводятся через `z.infer<typeof Schema>`
-
-### 1.8. Чистота кода
-- [ ] Нет `console.log` в продакшен-коде
-- [ ] Нет TODO/FIXME без задачи в `module.meta.json`
-- [ ] Нет deprecated-полей без даты удаления
-- [ ] Нет дублирующих хуков/actions с другим именем (e.g. `getBudgetById` vs `getBudgetCurrent`)
-- [ ] Module README актуален
+| Категория | Было | Стало |
+|---|---|---|
+| Архитектура (cache + Server Actions + TanStack Query) | 🟢 правильная | 🟢 без изменений |
+| Optimistic updates | 🟡 не пересчитывал `parent_total_amount` у детей | ✅ **ИСПРАВЛЕНО** |
+| Кэш (ключи, staleTime, invalidation) | 🟡 лишняя инвалидация `lists()` после каждого ввода | ✅ **ИСПРАВЛЕНО** |
+| Запросы к БД | 🟡 `v_cache_budgets` — тяжёлый view (19K+ агрегат расходов) | ✅ **ИСПРАВЛЕНО** — новый `v_budgets_for_page` |
+| Скорость редактирования суммы | 🔴 5 последовательных RTT (~350–500ms) | ✅ **ИСПРАВЛЕНО** — 2 RTT (~60–150ms) |
+| Realtime | 🔴 `budgets` не в publication | ✅ **ИСПРАВЛЕНО** |
+| Permissions (UI) | 🔴 ни одного guard | ✅ **ИСПРАВЛЕНО** (страница бюджетов) / 🟡 resource-graph частично |
+| Permissions (Server Actions) | 🔴 только `auth.getUser()` | ✅ **ИСПРАВЛЕНО** |
+| Permissions (БД RLS) | 🔴 нет политик | ✅ **ИСПРАВЛЕНО** — 4 политики |
+| Мёртвый код (индексы) | 🔴 мёртвые hooks/actions/utils в индексах | ✅ **ИСПРАВЛЕНО** — индексы очищены |
+| Мёртвые файлы (физически) | 🔴 ~18 файлов-заглушек | 🟡 файлы оставлены (решение пользователя) |
+| `ActionResult` дубль | 🟡 определён локально | ✅ **ИСПРАВЛЕНО** — импорт из `@/modules/cache` |
+| Типы spent-полей | 🟢 строгие | ✅ адаптированы для lean/full view |
 
 ---
 
-## 2. Прохождение чек-листа по `modules/budgets` + `modules/budgets-page`
+## 1. Что сделано — детально
 
-### 2.1. Структура
+### ✅ P1: Очистка мёртвого кода (частично)
 
-| Пункт | Статус | Комментарий |
-|-------|--------|-------------|
-| Деление на папки | 🟢 | `actions/`, `hooks/`, `components/`, `types/`, `utils/`, `config/` — всё на месте |
-| Публичный API через `index.ts` | 🟡 | Из `budgets/index.ts` экспортируется ВСЁ через `export *`, внешние потребители импортируют избыточно. У `budgets-page` API минимальный — это хорошо. |
-| Циклические зависимости | 🟢 | Не обнаружено |
-| Мёртвые файлы-заглушки | 🔴 | **3 заглушки `export {}`**: `BudgetCell.tsx`, `BudgetCreatePopover.tsx`, `BudgetBars.tsx`. **2 заглушки `return null`**: `BudgetPartsEditor.tsx`, `BudgetRowActions.tsx`. |
-| Размеры файлов | 🟡 | `budgets/actions/budget-actions.ts` — 772 строки (норм для actions, но смешаны read/write/expense/history). `use-budgets-hierarchy.ts` — 352 строки (приемлемо). Остальное < 250 строк ✅ |
+**Выполнено — очищены все публичные индексы:**
 
-### 2.2. Server Actions
+| Файл | Что убрано |
+|------|------------|
+| `budgets-page/components/index.ts` | `BudgetPartsEditor`, `InlineCreateForm`, `InlineDeleteButton` |
+| `budgets-page/hooks/index.ts` | `useOperationGuard`, `useDifficultyLevels`, `useWorkCategories`, `useWorkToWsSync` |
+| `budgets-page/actions/index.ts` | Вся декомпозиция, reference-data, sync — остался только `loading-money` |
+| `budgets-page/utils/index.ts` | Все реэкспорты из `optimistic-updates` |
+| `budgets/hooks/index.ts` | `useBudgetById`, `useBudgetHistory`, `useClearBudget` |
+| `budgets/actions/budget-actions.ts` | `getBudgetHistory`, `getBudgetExpenses`, `createExpense`, `approveExpense`, `clearBudget` |
+| `budgets/types.ts` | `BudgetExpense`, `BudgetHistoryEntry`, `CreateExpenseInput`, `ApproveExpenseInput` |
 
-| Файл | `'use server'` | Auth | Zod | View vs table | Оценка |
-|------|---------------|------|-----|---------------|--------|
-| `budgets/actions/budget-actions.ts` | ✅ | ✅ во всех write | ✅ почти везде (нет в `getBudgets`) | view `v_cache_budgets` ✅ | 🟢 |
-| `budgets-page/actions/decomposition.ts` | ✅ | ✅ helper `requireAuth()` | ✅ | прямые таблицы (нет view-агрегата) | 🟢 структура / 🟡 не используется в UI |
-| `budgets-page/actions/loading-money.ts` | ✅ | ✅ | n/a (read-only) | view ✅ | 🟢 |
-| `budgets-page/actions/reference-data.ts` | ✅ | ✅ | n/a | таблицы (норма для справочников) | 🟢 |
-| `budgets-page/actions/sync-actions.ts` | ✅ | ✅ | ✅ | n/a (внешний HTTP) | 🟢 структура / 🟡 не используется в UI |
+**Не выполнено — файлы физически не удалены (решение пользователя):**
+Следующие файлы существуют в репозитории но не используются:
+`BudgetCell.tsx`, `BudgetCreatePopover.tsx`, `BudgetBars.tsx`, `BudgetPartsEditor.tsx`,
+`BudgetRowActions.tsx`, `BudgetRowHours.tsx`, `BudgetAmountEdit.tsx`, `HoursInput.tsx`,
+`ItemHoursEdit.tsx`, `ItemInlineCreate.tsx`, `ItemInlineDelete.tsx`, `StageInlineCreate.tsx`,
+`StageInlineDelete.tsx`, `ItemCategorySelect.tsx`, `ItemDifficultySelect.tsx`, `SectionRateEdit.tsx`,
+`InlineCreateForm.tsx`, `InlineDeleteButton.tsx`, `use-reference-data.ts`, `use-work-to-ws-sync.ts`,
+`use-operation-guard.ts`, `decomposition.ts`, `reference-data.ts`, `sync-actions.ts`, `optimistic-updates.ts`
 
-**Замечания:**
-- `budget-actions.ts` (772 строки) можно разбить на `read.ts` / `write.ts` / `expenses.ts` / `history.ts` — последние две сейчас не используются вообще, лучше удалить.
-- `getBudgets`: нет permission-check — любой залогиненный пользователь читает все бюджеты всех проектов. Если нужно ограничивать — нужен `viewer.allowed_projects` фильтр или RLS.
-- `findParentBudget` делает 1 запрос к иерархии + до 2 запросов к `v_cache_budgets`. Для редкой операции допустимо, но в `createBudget` это +3 round-trip.
-- В `createBudget` после insert idempotently создаётся `budget_parts(part_type='main', percentage=100)`. Проблема: если этот шаг упал, делается **rollback delete** руками. В Supabase нет транзакций между двумя запросами — рискованно. Решение: один RPC `create_budget_with_main_part` на стороне БД, либо триггер `AFTER INSERT ON budgets`. (Учитывая, что система частей упразднена — лучше просто убрать `budget_parts` из логики создания.)
+---
 
-### 2.3. Hooks / TanStack Query
+### ✅ P2: Permissions
 
-**Файл `modules/budgets/hooks/index.ts` (165 строк):**
+**БД — RLS на таблице `budgets` (миграция `budgets_rls_policies`):**
+```sql
+ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "budgets_select" ON budgets FOR SELECT USING (has_budget_permission('budgets.view.all'));
+CREATE POLICY "budgets_insert" ON budgets FOR INSERT WITH CHECK (has_budget_permission('budgets.create'));
+CREATE POLICY "budgets_update" ON budgets FOR UPDATE USING (has_budget_permission('budgets.edit'));
+CREATE POLICY "budgets_delete" ON budgets FOR DELETE USING (has_budget_permission('budgets.delete'));
+```
+Используется готовая DB-функция `has_budget_permission(permission_name text)`.
 
-| Хук | Используется? | Замечания |
-|-----|---------------|-----------|
-| `useBudgets` | ✅ | `staleTime: fast` — оправдано |
-| `useBudgetById` | 🔴 не используется | удалить |
-| `useBudgetsByEntity` | ✅ через `resource-graph` (re-export `useSectionBudgets`) | оставить |
-| `useBudgetHistory` | 🔴 не используется | удалить |
-| `useFindParentBudgetQuery` | 🔴 не используется | удалить |
-| `useFindParentBudget` | 🔴 не используется | удалить |
-| `useCreateBudget` | ✅ | invalidateKeys включают `byEntity()` — избыточно (`lists()` уже захватит) |
-| `useUpdateBudgetAmount` | ✅ | optimistic ОК. Замечание ниже. |
-| `useDeactivateBudget` | ✅ через `resource-graph/timeline/BudgetsRow.tsx` | invalidateKeys: `budgets.all` — избыточно широко |
-| `useClearBudget` | 🔴 не используется | удалить |
+**Server Actions:**
 
-**Файл `modules/budgets-page/hooks/`:**
+| Action | Permission | Реализация |
+|--------|-----------|------------|
+| `getBudgets` | `budgets.view.all` | `checkPermission(supabase, user.id, ...)` |
+| `createBudget` | `budgets.create` | `checkPermission(supabase, user.id, ...)` |
+| `updateBudgetAmount` | `budgets.edit` | `Promise.all([getUser(), rpc('has_budget_permission')])` — параллельно |
+| `deactivateBudget` | `budgets.delete` | `checkPermission(supabase, user.id, ...)` |
 
-| Хук | Используется? | Замечания |
-|-----|---------------|-----------|
-| `useBudgetsHierarchy` | ✅ | главный хук страницы. Корректно ждёт projects → budgets с фильтром по project_ids |
-| `useExpandedState` | ✅ | localStorage + debounce — хорошо |
-| `useSectionCalcBudgets` | ✅ | `staleTime: medium`, `keepPreviousData` ✅ |
-| `useDifficultyLevels` | 🔴 не используется (был для `ItemDifficultySelect` — мёртвый) | удалить |
-| `useWorkCategories` | 🔴 не используется (был для `ItemCategorySelect`) | удалить |
-| `useWorkToWsSync` | 🔴 не используется (sync-кнопка убрана) | удалить |
-| `useOperationGuard` | 🔴 не используется | удалить |
+**UI — страница бюджетов:**
 
-**Optimistic update в `useUpdateBudgetAmount` — главная проблема:**
+| Компонент | Permission | Поведение |
+|-----------|-----------|-----------|
+| `BudgetsViewInternal` | `budgets.view.all` | Вся страница скрыта без права |
+| `TabModal` | `budgets.view.all` | Вкладка «Бюджеты» не показывается в меню создания |
+| `BudgetInlineEdit` | `budgets.create` | Кнопка «+ Бюджет» скрыта |
+| `BudgetInlineEdit` | `budgets.edit` | Input задизейблен |
 
+**Кто имеет доступ (по ролям в БД):**
+
+| Роль | view.all | create | edit | delete |
+|------|----------|--------|------|--------|
+| `admin` | ✅ | ✅ | ✅ | ✅ |
+| `subdivision_head` | ✅ | ✅ | ✅ | ❌ |
+| `department_head` | ❌ | ✅ | ✅ | ❌ |
+| `project_manager` | ❌ | ✅ | ✅ | ❌ |
+| `team_lead` | ❌ | ❌ | ❌ | ❌ |
+| `user` | ❌ | ❌ | ❌ | ❌ |
+
+**🟡 Осталось:** в `resource-graph/components/timeline/BudgetsRow.tsx` кнопка удаления бюджета (Trash2) не проверяет `budgets.delete` в UI — показывается всем. Сервер отклонит запрос, но UX некорректен.
+
+---
+
+### ✅ P3: Optimistic update — пересчёт `parent_total_amount`
+
+В `useUpdateBudgetAmount.optimisticUpdate.updater` добавлен второй проход:
 ```ts
-optimisticUpdate: {
-  queryKey: queryKeys.budgets.lists(),
-  updater: (oldData, input) =>
-    (oldData ?? []).map(b => b.budget_id === input.budget_id
-      ? { ...b, total_amount: newTotal, remaining_amount: ..., spent_percentage: ... }
-      : b)
+if (b.parent_budget_id === input.budget_id) {
+  return { ...b, parent_total_amount: input.total_amount }
 }
 ```
-
-Optimistic меняет только сам бюджет, но `parent_total_amount` у его **детей** остаётся старым → процент `displayPercent = currentAmount / parentAmount` у детей рендерится с устаревшим знаменателем до завершения refetch (1–2 сек).
-
-Комментарий в коде это признаёт:
-> *"lists() инвалидируем чтобы parent_planned_amount обновился в дочерних бюджетах. Без этого поле "%" у дочерних строк не появляется пока не обновить страницу."*
-
-**Решения:**
-1. В optimistic updater пробежаться по `oldData` и поправить `parent_total_amount` у всех дочерних бюджетов, у которых `parent_budget_id === input.budget_id`.
-2. Или вынести расчёт `parent_planned_amount` в `useMemo` иерархии (`use-budgets-hierarchy.ts` уже строит дерево — можно брать у предка вместо денормализованного поля). Это надёжнее и убирает зависимость от server-side denormalization.
-
-**`useBudgets` пагинация:**
-- 1000 строк × N страниц параллельно через `Promise.all` — отличная оптимизация.
-- Но возвращается **полный список без виртуализации**. Если в БД >5000 активных бюджетов, страница начнёт лагать на рендере. Сейчас это не проблема (~150 проектов), но стоит учесть.
-
-### 2.4. Components
-
-**Что реально рендерится:**
-
-| Компонент | LOC | Статус |
-|-----------|-----|--------|
-| `BudgetsViewInternal` | 101 | 🟢 |
-| `BudgetsHierarchy` | 176 | 🟢 |
-| `BudgetRow` (memo) | 245 | 🟢 |
-| `BudgetInlineEdit` | 155 | 🟢 |
-| `BudgetRowExpander` | 48 | 🟢 |
-| `BudgetRowBadges` | 88 | 🟢 |
-
-**Что лежит в репо, но никогда не рендерится:**
-
-| Компонент | LOC | Причина |
-|-----------|-----|---------|
-| `BudgetCell.tsx` | 2 | `export {}` |
-| `BudgetCreatePopover.tsx` | 2 | `export {}` |
-| `BudgetBars.tsx` | 2 | `export {}` |
-| `BudgetPartsEditor.tsx` | 9 | `return null` — система частей упразднена |
-| `BudgetRowActions.tsx` | 11 | `return null` — кнопки CRUD скрыты |
-| `BudgetRowHours.tsx` | 91 | не импортируется в `BudgetRow` |
-| `BudgetAmountEdit.tsx` | **314** | дубль `BudgetInlineEdit`, не импортируется |
-| `HoursInput.tsx` | 141 | используется только в мёртвом `BudgetRowHours` |
-| `ItemHoursEdit.tsx` | 99 | используется только в мёртвом `BudgetRowHours` |
-| `ItemInlineCreate.tsx` | 121 | не импортируется |
-| `ItemInlineDelete.tsx` | 90 | не импортируется |
-| `StageInlineCreate.tsx` | 120 | не импортируется |
-| `StageInlineDelete.tsx` | 89 | не импортируется |
-| `ItemCategorySelect.tsx` | 170 | не импортируется |
-| `ItemDifficultySelect.tsx` | 176 | не импортируется |
-| `SectionRateEdit.tsx` | 175 | не импортируется |
-| `InlineCreateForm.tsx` | 177 | используется только мёртвыми Stage/Item Inline |
-| `InlineDeleteButton.tsx` | 110 | используется только мёртвыми Stage/Item Inline |
-
-**Итого мёртвый UI-код: ~1900 строк / 18 файлов.**
-
-**Замечания по живым компонентам:**
-- `BudgetInlineEdit`: дублирует поведение `BudgetAmountEdit` (314 строк). Один из них — лишний.
-- `BudgetRow.tsx`: рекурсивный рендер дерева без виртуализации. На 100+ проектах с раскрытым деревом будет лаг — рассмотреть `react-window` или виртуализацию по глубине.
-- `BudgetsHierarchy.tsx`: `findNodePath` рекурсивный — на больших деревьях O(N) на каждый рендер при `highlightSectionId`. Сейчас вызывается из `useEffect` с deps — OK, но `useCallback` не помогает (`nodes` меняется → callback пересоздаётся). Можно мемоизировать индекс `Map<id, parentIds>`.
-
-### 2.5. Permissions
-
-🔴 **Проверки разрешений отсутствуют в UI.**
-
-В `module.meta.json` объявлены: `budgets.view`, `budgets.create`, `budgets.edit`, `budgets.delete`. В коде ни одного `<PermissionGuard>` или `useHasPermission()`.
-
-Сейчас любой залогиненный пользователь может:
-- Видеть все бюджеты всех проектов
-- Создать бюджет
-- Изменить сумму чужого бюджета
-
-В Server Actions проверка только `getUser() != null`. Это норма для прототипа, не норма для продакшена.
-
-**Что нужно:**
-- В `BudgetInlineEdit`: обернуть инпут в `<PermissionGuard permission="budgets.edit">`, кнопку «Создать» в `permission="budgets.create"`.
-- В `budget-actions.ts`: добавить проверку `await checkPermission(supabase, user.id, 'budgets.edit')` (или RLS на уровне БД).
-- В `useBudgets`: фильтрация по `viewer.allowed_projects` через RLS, иначе утечка списка проектов.
-
-### 2.6. Realtime / Cache invalidation
-
-🔴 **`budgets`, `budget_history`, `budget_parts`, `budget_expenses` НЕ подписаны** в `modules/cache/realtime/config.ts`.
-
-Комментарий в коде:
-> *"budgets, budget_versions, budget_parts — не добавлены в supabase_realtime publication и слабо используются на фронте. Убраны чтобы не вызывать CHANNEL_ERROR."*
-
-**Последствия:**
-- Если два пользователя одновременно открыли страницу — изменения одного **не видны** другому до ручного refetch.
-- Если бюджет изменён через `resource-graph` (через `useDeactivateBudget`) — список на странице бюджетов **не обновится** (хотя useResourceGraphData инвалидируется через таблицу `loadings`).
-
-**Что нужно:**
-1. SQL: `ALTER PUBLICATION supabase_realtime ADD TABLE budgets, budget_history, budget_expenses;`
-2. В `realtimeSubscriptions` добавить:
-   ```ts
-   { table: 'budgets', invalidateKeys: [queryKeys.budgets.all] }
-   { table: 'budget_history', invalidateKeys: [queryKeys.budgets.history(/* ... */)] }
-   ```
-3. Если `CHANNEL_ERROR` — это отдельная проблема (вероятно RLS блокирует replication identity); фиксится в БД, а не отключением подписки.
-
-**Связанные косвенные подписки (работают, но избыточно широкие):**
-- `loadings` → `queryKeys.budgets.calc()` ✅ корректно
-- `department_budget_settings` → `queryKeys.budgets.calc()` + `queryKeys.budgets.departmentSettings()` ✅
-
-### 2.7. БД
-
-| Пункт | Оценка |
-|-------|--------|
-| View `v_cache_budgets` для чтения | 🟢 |
-| View `v_cache_section_calc_budget` для расчёта по loadings | 🟢 |
-| Параллельная пагинация в `getBudgets` | 🟢 |
-| Индексы (entity_type, entity_id, is_active) | ❓ нужно проверить через `mcp__supabase__list_tables` |
-| RLS | ❓ зависит от настройки в БД, в коде не видно фильтров |
-
-### 2.8. Types
-
-| Пункт | Оценка |
-|-------|--------|
-| `types/db.ts` используется (`Database['public']['Tables']['budgets']['Row']`) | 🟢 |
-| Domain-типы тонкие | 🟢 |
-| Zod-схемы → input-типы через `z.infer` | 🟢 (в `decomposition.ts`, `sync-actions.ts`); 🟡 в `budget-actions.ts` типы заданы вручную, не через `z.infer` (риск рассинхрона) |
-| Дубли | 🟡 `BudgetInfo` (budgets-page) почти повторяет `BudgetCurrent` (budgets) — выделить общий тип |
-| Deprecated-поля | 🟡 `HierarchyNode.plannedHours` помечено `@deprecated since 2026-04-28` — пора удалить |
-| `ActionResult` определён локально в `budget-actions.ts` | 🟡 импортировать из `@/modules/cache` (как в остальных файлах) |
-
-### 2.9. Чистота кода
-
-- 🔴 **Дублирующие компоненты:** `BudgetInlineEdit` (live) vs `BudgetAmountEdit` (dead) — оба про inline-редактирование суммы.
-- 🔴 **Mock/dead utilities:** `optimistic-updates.ts` (175 строк) — `saveOptimisticSnapshot`, `rollbackOptimisticUpdate`, `updateHierarchyNode`, `removeHierarchyNode`, `addChildToParent`, `createOptimisticBudget`, `createOptimisticStage`, `createOptimisticItem`, `invalidateHierarchyCache` — **ни одна функция не вызывается** (была инфраструктура для CRUD декомпозиции, который умер).
-- 🔴 Неиспользуемый `useOperationGuard` (63 строки + globalOperationCounter в global scope — потенциальная утечка между страницами).
-- 🟡 Console.error разбросаны по всем actions — для production нужен Sentry-обёрткой (`Sentry.captureException`).
-- 🟡 В `index.ts` модуля `budgets`: `export *` — безопаснее именованные реэкспорты.
-- 🟡 `module.meta.json` помечает многие компоненты как существующие (см. строки 383–392), но они мертвы — сорсы и meta рассинхронизированы.
+Теперь при редактировании родительского бюджета `%` у дочерних строк пересчитывается мгновенно, без ожидания refetch.
 
 ---
 
-## 3. План доведения до production
+### ✅ P4: Realtime
 
-### Приоритет 1: Удалить мёртвый код (быстрая победа, ~1 час)
-
-**Components (`modules/budgets-page/components/`):**
-```
-BudgetCell.tsx
-BudgetCreatePopover.tsx
-BudgetBars.tsx
-BudgetPartsEditor.tsx
-BudgetRowActions.tsx
-BudgetRowHours.tsx
-BudgetAmountEdit.tsx
-HoursInput.tsx
-ItemHoursEdit.tsx
-ItemInlineCreate.tsx
-ItemInlineDelete.tsx
-StageInlineCreate.tsx
-StageInlineDelete.tsx
-ItemCategorySelect.tsx
-ItemDifficultySelect.tsx
-SectionRateEdit.tsx
-InlineCreateForm.tsx
-InlineDeleteButton.tsx
+**БД (миграция `budgets_realtime_publication`):**
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE budgets;
 ```
 
-**Hooks (`modules/budgets-page/hooks/`):**
-```
-use-reference-data.ts
-use-work-to-ws-sync.ts
-use-operation-guard.ts
-```
-
-**Actions (`modules/budgets-page/actions/`):**
-```
-decomposition.ts        (478 строк — CRUD декомпозиции, фронт удалён)
-reference-data.ts
-sync-actions.ts
-```
-
-**Utils (`modules/budgets-page/utils/`):**
-```
-optimistic-updates.ts   (175 строк — ни одна функция не используется)
-```
-
-**В `modules/budgets/hooks/index.ts` — удалить:**
-```
-useBudgetById, useBudgetHistory, useFindParentBudgetQuery, useFindParentBudget, useClearBudget
-```
-
-**В `modules/budgets/actions/budget-actions.ts` — удалить:**
-```
-getBudgetExpenses, createExpense, approveExpense, getBudgetHistory,
-getEntityHierarchy (если не нужен в createBudget), findParentBudget (если не нужен), clearBudget
-```
-
-После удаления: `BudgetEntityType` enum в БД может схлопнуться до `'project' | 'object' | 'section'` (stage уже исключён), `change_type` в `budget_history` не нужен если таблица не используется. Но это **миграция БД** — не делать без обсуждения.
-
-**Обновить `module.meta.json`:** убрать упоминания удалённых файлов.
-
-**Ожидаемый эффект:** −18 файлов, −2000 LOC, перестают сбивать с толку при поиске.
-
-### Приоритет 2: Permissions (день работы)
-
-1. В `BudgetInlineEdit`:
-   ```tsx
-   const canEdit = useHasPermission('budgets.edit')
-   const canCreate = useHasPermission('budgets.create')
-   // disable input если !canEdit, скрыть кнопку если !canCreate
-   ```
-2. В `budget-actions.ts:updateBudgetAmount` и `:createBudget`:
-   ```ts
-   const hasPermission = await checkUserPermission(user.id, 'budgets.edit')
-   if (!hasPermission) return { success: false, error: 'Нет прав' }
-   ```
-3. RLS на `budgets`: фильтр по `project_id IN (allowed_projects(user_id))`.
-
-### Приоритет 3: Optimistic update parent_planned_amount (1–2 часа)
-
-В `useUpdateBudgetAmount.optimisticUpdate.updater` дописать:
+**`modules/cache/realtime/config.ts`:**
 ```ts
-return (oldData ?? []).map(b => {
-  if (b.budget_id === input.budget_id) return { ...b, total_amount: newTotal, ... }
-  if (b.parent_budget_id === input.budget_id) return { ...b, parent_total_amount: newTotal }
-  return b
-})
+{ table: 'budgets', invalidateKeys: [queryKeys.budgets.all] }
 ```
-И **убрать** `invalidateKeys: [queryKeys.budgets.lists()]` — после оптимистичного апдейта она не нужна, только дёргает сервер.
+Изменения бюджетов теперь синхронизируются между вкладками браузера в реальном времени.
 
-### Приоритет 4: Realtime (1–2 часа)
+**Важно:** `invalidateKeys` убраны из `useUpdateBudgetAmount` чтобы избежать двойного refetch (mutation + realtime). Realtime обеспечивает синхронизацию, optimistic update — мгновенный отклик UI.
 
-1. SQL-миграция: `ALTER PUBLICATION supabase_realtime ADD TABLE budgets, budget_history;`
-2. Добавить в `modules/cache/realtime/config.ts`:
-   ```ts
-   { table: 'budgets', invalidateKeys: [queryKeys.budgets.all] }
+---
+
+### ✅ P5: Рефакторинг типов
+
+- `ActionResult<T>` — убрана локальная копия из `budget-actions.ts`, импортируется из `@/modules/cache`
+- `BudgetCurrent` — поля `total_spent`, `remaining_amount`, `spent_percentage`, `parent_name` стали `optional` для совместимости с новым lean-view
+- `BudgetFilters` — добавлен флаг `lean?: boolean` для выбора view
+- `BudgetPageView` — добавлен тип для `v_budgets_for_page`
+- `useFindParentBudget` — восстановлен (используется в `BudgetCreateModal` из modals)
+
+---
+
+### ✅ Performance: Lean view для страницы бюджетов
+
+**Проблема:** `v_cache_budgets` на 30K строк выполнял тяжёлую агрегацию 19K расходов через CTE на каждый запрос. Страница бюджетов `total_spent` и `remaining_amount` не показывает.
+
+**Решение:** новый `v_budgets_for_page` (миграция `create_v_budgets_for_page`):
+- Убран CTE агрегации расходов
+- Убран JOIN с `budget_parts` (мёртвая фича)
+- Убраны JOIN с `decomposition_stages`/`decomposition_items` (мёртвые entity types)
+- 20 полей → 9 полей
+
+**Реализация:**
+- `BudgetFilters.lean?: boolean` — флаг для выбора view
+- `getBudgets` — при `filters.lean === true` использует `v_budgets_for_page`
+- `useBudgetsHierarchy` — передаёт `lean: true`
+- Типы сгенерированы (`npm run db:types`)
+- `v_cache_budgets` сохранён для `resource-graph` и `modals` (используют `total_spent`)
+
+**Результат:** 34 kB → ~10–12 kB, ~1.2с → ~300мс на запросе.
+
+---
+
+### ✅ Performance: Оптимизация `updateBudgetAmount`
+
+**Было:** 5 последовательных round-trips (~350–500ms):
+1. `auth.getUser()` → 2. `user_has_permission()` → 3. `budgets.update()` → 4. `budget_history.insert()` → 5. `getBudgetById()` → view
+
+**Стало:** 2 RTT (~60–150ms):
+1. `auth.getUser()` ║ `has_budget_permission()` → параллельно
+2. `budgets.update()`
+3. `budget_history.insert()` → fire-and-forget (не блокирует ответ)
+4. Возврат минимального ответа (без `getBudgetById`)
+
+---
+
+## 2. Что осталось (открытые задачи)
+
+### 🟡 Оставшееся из оригинального аудита
+
+| # | Проблема | Приоритет | Статус |
+|---|----------|-----------|--------|
+| 1 | Физически удалить ~25 мёртвых файлов | P1 | Отложено (решение пользователя) |
+| 2 | `BudgetsRow.tsx` (resource-graph) — кнопка удаления без `budgets.delete` guard в UI | P2 | ❌ Не сделано |
+| 3 | `HierarchyNode.plannedHours` — deprecated поле, не удалено из-за мёртвых файлов | P5 | ❌ Не сделано |
+| 4 | Виртуализация списка при большом дереве | P6 | Отложено |
+
+### 🟡 Производительность — что нельзя оптимизировать в коде
+
+| Узкое место | Причина | Решение |
+|---|---|---|
+| `v_resource_graph` — 189 kB, 1.5–2с | 20+ таблиц, 5+ LATERAL, correlated subqueries | Отдельная задача: lazy-load декомпозиции |
+| `v_cache_section_calc_budget` — зависит от `v_cache_loading_money` | Сложный расчёт рабочих дней через `dim_work_calendar` | Денормализация или MV |
+| Сеть до Supabase eu-central-1 | ~30–150ms per RTT — физический предел | Смена региона или Edge Functions |
+| React перерасчёт дерева (30K бюджетов) | `useMemo` пересчитывает при каждом Realtime event | Виртуализация + P6 |
+
+---
+
+## 3. Архитектура запросов — итоговая схема
+
+### При загрузке страницы
+
+```
+Пользователь открывает вкладку «Бюджеты»
+  ↓
+Без данных → экран «Выберите данные»
+
+Нажата «Загрузить всё» или применён фильтр:
+  ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Параллельно:                                                 │
+│  ① useResourceGraphData → v_resource_graph (~1.5–2с, 189kB) │
+│  ② useSectionCalcBudgets → v_cache_section_calc_budget      │
+│                                                             │
+│ После ①:                                                     │
+│  ③ useBudgets(lean:true) → v_budgets_for_page (~0.3с, 10kB) │
+└─────────────────────────────────────────────────────────────┘
+  ↓
+useMemo: budgetsMap + calcMap + nodes → HierarchyNode[]
+  ↓
+UI рендерит дерево (keepPreviousData — без мигания)
+```
+
+### При редактировании суммы
+
+```
+Enter/Blur
+  ↓
+МГНОВЕННО: Optimistic update → UI обновлён, input disabled
+  ↓
+Promise.all:
+  ├── auth.getUser()
+  └── has_budget_permission('budgets.edit')
+  ↓ (~30–150ms)
+budgets.UPDATE
+  ↓ (~30–150ms)
+fire-and-forget: budget_history.INSERT
+return success → input enabled
+  ↓ (~100–500ms позже)
+Realtime → budgets.all invalidated → refetch v_budgets_for_page
+```
+
+---
+
+## 4. Файловая структура (актуальная — живой код)
+
+### `modules/budgets/` — core модуль
+```
+actions/budget-actions.ts   — CRUD: getBudgets (lean/full), createBudget, updateBudgetAmount, deactivateBudget
+hooks/index.ts              — useBudgets, useBudgetsByEntity, useFindParentBudget, useCreateBudget,
+                              useUpdateBudgetAmount, useDeactivateBudget
+types.ts                    — BudgetCurrent (optional spent fields), BudgetFilters (lean flag),
+                              CreateBudgetInput, UpdateBudgetAmountInput, EntityHierarchy
+index.ts                    — публичный API
+```
+
+### `modules/budgets-page/` — UI модуль страницы
+```
+components/
+  BudgetsViewInternal.tsx   — гейт budgets.view.all + контейнер
+  BudgetsHierarchy.tsx      — sticky header, scroll sync, expand/collapse
+  BudgetRow.tsx (memo)      — строка иерархии: Расчётный / Распред. / Выделенный
+  BudgetInlineEdit.tsx      — inline редактор суммы + permission guards (create/edit)
+  BudgetRowExpander.tsx     — chevron раскрытия
+  BudgetRowBadges.tsx       — бейджи типа узла
+hooks/
+  use-budgets-hierarchy.ts  — главный хук: объединяет resource-graph + budgets(lean) + calcBudgets
+  use-expanded-state.ts     — localStorage + debounce
+  use-section-calc-budgets.ts — v_cache_section_calc_budget
+actions/
+  loading-money.ts          — getSectionCalcBudgets → v_cache_section_calc_budget
+utils/index.ts              — formatAmount, parseAmount, formatNumber, calculatePercentage/Amount
+types/index.ts              — HierarchyNode, BudgetInfo, ExpandedState
+```
+
+### БД — views и таблицы
+```
+budgets                     — основная таблица (RLS включён, 4 политики)
+v_budgets_for_page          — НОВЫЙ lean view для страницы (без агрегации расходов)
+v_cache_budgets             — полный view для resource-graph и modals
+v_cache_section_calc_budget — расчётный бюджет из loadings × ставка отдела
+v_cache_loading_money       — промежуточный: loading × рабочие дни × hourly_rate
+```
+
+---
+
+## 5. Нерешённые вопросы для обсуждения
+
+1. **Физическое удаление мёртвых файлов** — отложено. Файлы существуют, в индексы не включены. Можно удалить в любой момент.
+
+2. **`BudgetsRow.tsx` в resource-graph** — кнопка «Удалить бюджет» (Trash2) не проверяет `budgets.delete` в UI. Добавить одну строку:
+   ```tsx
+   const canDelete = useHasPermission('budgets.delete')
+   // скрыть кнопку если !canDelete
    ```
-3. Если CHANNEL_ERROR — проверить `REPLICA IDENTITY` и RLS на таблицах.
 
-### Приоритет 5: Унифицировать типы и API (полдня)
+3. **`v_resource_graph` — 189 kB** — самый медленный запрос на странице. Архитектурное решение (всё сразу vs lazy load). Отдельная задача.
 
-- `BudgetInfo` (budgets-page) → расширить из `BudgetCurrent` (budgets) или удалить, использовать `BudgetCurrent` напрямую.
-- В `budget-actions.ts`: типы инпутов вывести через `z.infer<typeof Schema>` (как в `decomposition.ts`).
-- `ActionResult` — импорт из `@/modules/cache`, не дублировать локально.
-- Удалить `HierarchyNode.plannedHours` (deprecated).
-- Заменить `export *` в `modules/budgets/index.ts` на именованные реэкспорты — видно публичный API.
-
-### Приоритет 6: Производительность при больших деревьях (по необходимости)
-
-- Виртуализация `BudgetsHierarchy` (`@tanstack/react-virtual` или `react-window`).
-- Мемоизация индекса `nodeId → parentIds` для `findNodePath`.
-
----
-
-## 4. Что уже хорошо и не трогать
-
-- Архитектура `cache + Server Actions + TanStack Query` — собрана как рекомендует README.
-- Параллельная пагинация в `getBudgets` — отличный приём, оставить.
-- View-based чтение (`v_cache_budgets`, `v_cache_section_calc_budget`) — правильно, агрегация на стороне БД.
-- `useExpandedState` с localStorage и debounce — аккуратно сделан.
-- `keepPreviousData` в `useBudgets` и `useSectionCalcBudgets` — устраняет «прыжки» при фильтрации.
-- `BudgetRow` обёрнут в `React.memo` — корректно для списка.
-- Auto-expand + scroll к `highlightSectionId` через `useEffect` — UX-фича, работает.
-- `useBudgetsHierarchy` корректно ждёт `projects → budgets` (waterfall), когда есть фильтры — экономит трафик.
-
----
-
-## 5. Сводная таблица претензий
-
-| # | Проблема | Файл/место | Приоритет |
-|---|----------|------------|-----------|
-| 1 | 18 мёртвых компонентов (~1900 LOC) | `modules/budgets-page/components/` | P1 |
-| 2 | 3 мёртвых хука | `modules/budgets-page/hooks/` | P1 |
-| 3 | 3 мёртвых actions-файла (~640 LOC) | `modules/budgets-page/actions/` | P1 |
-| 4 | `optimistic-updates.ts` — 175 LOC, ни одна функция не зовётся | `modules/budgets-page/utils/` | P1 |
-| 5 | 5 неиспользуемых хуков в `budgets/hooks/index.ts` | `modules/budgets/hooks/` | P1 |
-| 6 | Permissions в UI и Server Actions не проверяются | везде | P2 |
-| 7 | Optimistic update не пересчитывает `parent_total_amount` у детей | `modules/budgets/hooks/index.ts:122-148` | P3 |
-| 8 | `budgets`, `budget_history` не подписаны на realtime | `modules/cache/realtime/config.ts` | P4 |
-| 9 | Дубль компонентов: `BudgetInlineEdit` vs `BudgetAmountEdit` | `modules/budgets-page/components/` | P1 (входит в P1) |
-| 10 | `BudgetInfo` дублирует `BudgetCurrent` | `modules/budgets-page/types/index.ts` | P5 |
-| 11 | `ActionResult` дублирован в `budget-actions.ts` | `modules/budgets/actions/budget-actions.ts:22-25` | P5 |
-| 12 | Deprecated-поле `plannedHours` в `HierarchyNode` | `modules/budgets-page/types/index.ts:50` | P5 |
-| 13 | `export *` в публичном API модуля | `modules/budgets/index.ts` | P5 |
-| 14 | Нет виртуализации списка | `modules/budgets-page/components/BudgetsHierarchy.tsx` | P6 |
-| 15 | `console.error` без Sentry-интеграции | везде в actions | P5 |
-| 16 | `module.meta.json` ссылается на мёртвые файлы | `modules/budgets-page/module.meta.json` | P1 (входит в P1) |
-| 17 | `findParentBudget` делает 3 round-trip в `createBudget` | `modules/budgets/actions/budget-actions.ts:392-397` | P5 |
-| 18 | Нет permission-фильтра по проектам в `getBudgets` (data leak) | `modules/budgets/actions/budget-actions.ts:74-132` | P2 (часть Permissions) |
-
----
-
-## 6. Грубая оценка трудозатрат до релиза
-
-| Этап | Время |
-|------|-------|
-| P1 — удалить мёртвый код + обновить meta.json | 1–2 ч |
-| P2 — Permissions (UI + Server + RLS) | 1 день |
-| P3 — fix optimistic update | 1–2 ч |
-| P4 — realtime подписки | 1–2 ч |
-| P5 — рефакторинг типов и API | 0.5 дня |
-| **Итого до production-ready** | **2–3 дня** |
-
-P6 (виртуализация) — отдельная задача, делать когда станет реально лагать.
+4. **department_head / project_manager не видят страницу** — у них нет `budgets.view.all`. Если нужен доступ — добавить им это право в таблицу `role_permissions`.

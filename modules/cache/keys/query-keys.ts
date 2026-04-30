@@ -52,6 +52,7 @@ export interface BudgetFilters extends BaseFilters {
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  lean?: boolean
 }
 
 export interface CheckpointFilters extends BaseFilters {

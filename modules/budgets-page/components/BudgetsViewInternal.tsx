@@ -1,10 +1,11 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useMemo, useCallback } from 'react'
-import { Database } from 'lucide-react'
+import { useMemo, useCallback } from 'react'
+import { Database, Lock } from 'lucide-react'
 import { BudgetsHierarchy } from './BudgetsHierarchy'
 import { useBudgetsHierarchy } from '../hooks'
+import { useHasPermission } from '@/modules/permissions'
 import type { BudgetsViewInternalProps } from '../types'
 
 function LoadingSkeleton() {
@@ -27,18 +28,29 @@ function LoadingSkeleton() {
   )
 }
 
-export function BudgetsViewInternal({ queryParams }: BudgetsViewInternalProps) {
+export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoadAll }: BudgetsViewInternalProps) {
+  const canView = useHasPermission('budgets.view.all')
   const searchParams = useSearchParams()
-  const [loadAll, setLoadAll] = useState(false)
+
+  if (!canView) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center">
+          <Lock className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-sm font-medium text-muted-foreground">Нет доступа к бюджетам</p>
+        </div>
+      </div>
+    )
+  }
 
   const filtersApplied = useMemo(
     () => Object.keys(queryParams).length > 0,
     [queryParams]
   )
 
-  const shouldFetchData = filtersApplied || loadAll
+  const shouldFetchData = filtersApplied || loadAllEnabled
 
-  const handleLoadAll = useCallback(() => setLoadAll(true), [])
+  const handleLoadAll = useCallback(() => onLoadAll?.(), [onLoadAll])
 
   const { nodes, isLoading, error } = useBudgetsHierarchy(
     filtersApplied ? queryParams : undefined,

@@ -1104,6 +1104,13 @@ export type Database = {
             foreignKeyName: "budget_expenses_budget_id_fkey"
             columns: ["budget_id"]
             isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
           },
@@ -1383,6 +1390,13 @@ export type Database = {
             foreignKeyName: "budget_history_budget_id_fkey"
             columns: ["budget_id"]
             isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_history_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
           },
@@ -1646,6 +1660,13 @@ export type Database = {
             foreignKeyName: "budget_parts_budget_id_fkey"
             columns: ["budget_id"]
             isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_parts_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
             referencedRelation: "v_cache_budgets"
             referencedColumns: ["budget_id"]
           },
@@ -1900,6 +1921,13 @@ export type Database = {
             columns: ["parent_budget_id"]
             isOneToOne: false
             referencedRelation: "budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
             referencedColumns: ["budget_id"]
           },
           {
@@ -17745,6 +17773,51 @@ export type Database = {
         }
         Relationships: []
       }
+      v_budgets_for_page: {
+        Row: {
+          budget_id: string | null
+          created_at: string | null
+          entity_id: string | null
+          entity_type: Database["public"]["Enums"]["budget_entity_type"] | null
+          is_active: boolean | null
+          name: string | null
+          parent_budget_id: string | null
+          parent_total_amount: number | null
+          project_id: string | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["item_budget_id"]
+          },
+        ]
+      }
       v_cache_budgets: {
         Row: {
           budget_id: string | null
@@ -17775,6 +17848,13 @@ export type Database = {
             columns: ["parent_budget_id"]
             isOneToOne: false
             referencedRelation: "budgets"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budgets_v2_parent_budget_id_fkey"
+            columns: ["parent_budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budgets_for_page"
             referencedColumns: ["budget_id"]
           },
           {
