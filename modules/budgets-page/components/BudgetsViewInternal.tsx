@@ -32,17 +32,7 @@ export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoa
   const canView = useHasPermission('budgets.view.all')
   const searchParams = useSearchParams()
 
-  if (!canView) {
-    return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <div className="text-center">
-          <Lock className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium text-muted-foreground">Нет доступа к бюджетам</p>
-        </div>
-      </div>
-    )
-  }
-
+  // Все хуки должны быть до любого раннего return — Rules of Hooks
   const filtersApplied = useMemo(
     () => Object.keys(queryParams).length > 0,
     [queryParams]
@@ -54,8 +44,19 @@ export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoa
 
   const { nodes, isLoading, error } = useBudgetsHierarchy(
     filtersApplied ? queryParams : undefined,
-    { enabled: shouldFetchData }
+    { enabled: shouldFetchData && canView }
   )
+
+  if (!canView) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center">
+          <Lock className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-sm font-medium text-muted-foreground">Нет доступа к бюджетам</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!shouldFetchData) {
     return (

@@ -88,6 +88,19 @@ export function BudgetInlineEdit({
       if (budget) setLocalAmount(formatNumber(budget.planned_amount))
       setIsEditing(false)
       ;(e.target as HTMLInputElement).blur()
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const inputs = Array.from(
+        document.querySelectorAll<HTMLInputElement>('[data-budget-input="true"]:not(:disabled)')
+      )
+      const currentIndex = inputs.indexOf(e.target as HTMLInputElement)
+      const nextIndex = e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1
+      const nextInput = inputs[nextIndex]
+      if (nextInput) {
+        ;(e.target as HTMLInputElement).blur()
+        nextInput.focus()
+        nextInput.select()
+      }
     }
   }, [budget])
 
@@ -131,6 +144,7 @@ export function BudgetInlineEdit({
         <input
           type="text"
           inputMode="numeric"
+          data-budget-input="true"
           value={localAmount}
           onChange={handleChange}
           onFocus={handleFocus}

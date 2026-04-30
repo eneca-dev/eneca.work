@@ -25,7 +25,7 @@ export function formatAmount(amount: number): string {
  * Парсит введённую строку в число (поддержка пробелов, запятых)
  */
 export function parseAmount(value: string): number {
-  const cleaned = value.replace(/\s/g, '').replace(',', '.')
+  const cleaned = value.replace(/\s/g, '').replace(/,/g, '.')
   const num = parseFloat(cleaned)
   return isNaN(num) ? 0 : num
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, LayoutGrid, GanttChart, Users, Wallet, FolderTree } from 'lucide-react'
+import { X, Plus, LayoutGrid, Users, Wallet, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
 import { useHasPermission } from '@/modules/permissions'
@@ -61,13 +61,16 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
     if (open) {
       if (editingTab) {
         setName(editingTab.name)
-        setViewMode(editingTab.viewMode)
+        // Если viewMode вкладки больше не доступен пользователю (например, потерял права
+        // на budgets.view.all) — откатываемся на kanban, чтобы не сохранить недоступный режим
+        const allowedModes = VIEW_MODE_OPTIONS.map(o => o.value)
+        setViewMode(allowedModes.includes(editingTab.viewMode) ? editingTab.viewMode : 'kanban')
       } else {
         setName('')
         setViewMode('kanban')
       }
     }
-  }, [open, editingTab])
+  }, [open, editingTab, VIEW_MODE_OPTIONS])
 
   // Handlers
   const handleSubmit = useCallback(() => {

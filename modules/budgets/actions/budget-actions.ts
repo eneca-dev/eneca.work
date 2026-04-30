@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
+import { captureBudgetError } from '../utils/sentry'
 import type {
   BudgetCurrent,
   BudgetFilters,
@@ -48,6 +49,10 @@ async function checkPermission(
     p_user_id: userId,
     p_permission_name: permission,
   })
+  if (error) {
+    console.error('[checkPermission] RPC error:', error)
+    captureBudgetError(error, { action: 'checkPermission', permission })
+  }
   return !error && data === true
 }
 
@@ -98,6 +103,7 @@ export async function getBudgets(
 
     if (firstError) {
       console.error('[getBudgets] Supabase error:', firstError)
+      captureBudgetError(firstError, { action: 'getBudgets', step: 'first_page', view: viewName, filters })
       return { success: false, error: firstError.message }
     }
 
@@ -110,9 +116,10 @@ export async function getBudgets(
       )
     )
 
-    for (const result of remainingResults) {
+    for (const [i, result] of remainingResults.entries()) {
       if (result.error) {
         console.error('[getBudgets] Page error:', result.error)
+        captureBudgetError(result.error, { action: 'getBudgets', step: 'page', page: i + 2, view: viewName, filters })
         return { success: false, error: result.error.message }
       }
     }
@@ -125,6 +132,7 @@ export async function getBudgets(
     return { success: true, data: allData }
   } catch (error) {
     console.error('[getBudgets] Error:', error)
+    captureBudgetError(error, { action: 'getBudgets', filters })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -354,6 +362,7 @@ export async function createBudget(
 
     if (budgetError) {
       console.error('[createBudget] Budget insert error:', budgetError)
+      captureBudgetError(budgetError, { action: 'createBudget', step: 'insert_budget', entity_type: input.entity_type, entity_id: input.entity_id })
       return { success: false, error: budgetError.message }
     }
 
@@ -369,6 +378,7 @@ export async function createBudget(
 
     if (partError) {
       console.error('[createBudget] Part insert error:', partError)
+      captureBudgetError(partError, { action: 'createBudget', step: 'insert_part', budget_id: budget.budget_id })
       // Откатываем создание бюджета
       await supabase.from('budgets').delete().eq('budget_id', budget.budget_id)
       return { success: false, error: partError.message }
@@ -391,6 +401,7 @@ export async function createBudget(
     return getBudgetById(budget.budget_id)
   } catch (error) {
     console.error('[createBudget] Error:', error)
+    captureBudgetError(error, { action: 'createBudget', entity_type: input.entity_type, entity_id: input.entity_id })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -416,13 +427,18 @@ export async function updateBudgetAmount(
     // использует auth.uid() из JWT-контекста) — экономим один round-trip.
     const [
       { data: { user }, error: userError },
-      { data: hasPermission },
+      { data: hasPermission, error: permError },
     ] = await Promise.all([
       supabase.auth.getUser(),
       supabase.rpc('has_budget_permission', { permission_name: 'budgets.edit' }),
     ])
 
     if (userError || !user) return { success: false, error: 'Пользователь не авторизован' }
+    if (permError) {
+      console.error('[updateBudgetAmount] Permission check error:', permError)
+      captureBudgetError(permError, { action: 'updateBudgetAmount', step: 'permission_check', budget_id: input.budget_id })
+      return { success: false, error: 'Ошибка проверки прав доступа' }
+    }
     if (!hasPermission) return { success: false, error: 'Нет прав на редактирование бюджетов' }
 
     // Обновляем сумму
@@ -433,6 +449,7 @@ export async function updateBudgetAmount(
 
     if (updateError) {
       console.error('[updateBudgetAmount] Update error:', updateError)
+      captureBudgetError(updateError, { action: 'updateBudgetAmount', budget_id: input.budget_id, total_amount: input.total_amount })
       return { success: false, error: updateError.message }
     }
 
@@ -447,14 +464,18 @@ export async function updateBudgetAmount(
       changed_by: user.id,
     })
 
-    // Не делаем getBudgetById — optimistic update уже показал новое значение в UI,
-    // а invalidateKeys запустит фоновый refetch с актуальными данными из view.
+    // Возвращаем только обновлённые поля — полный объект не нужен.
+    // Optimistic update (useBudgetsHierarchy) уже показал новое значение в UI.
+    // Realtime подписка обеспечит синхронизацию с сервером после ~500ms.
+    // Тип приведён к BudgetCurrent чтобы совместить с дженериком хука,
+    // однако mutation result не используется для обновления кэша.
     return {
       success: true,
       data: { budget_id: input.budget_id, total_amount: input.total_amount } as BudgetCurrent,
     }
   } catch (error) {
     console.error('[updateBudgetAmount] Error:', error)
+    captureBudgetError(error, { action: 'updateBudgetAmount', budget_id: input.budget_id })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -498,6 +519,7 @@ export async function deactivateBudget(
 
     if (childrenError) {
       console.error('[deactivateBudget] Children check error:', childrenError)
+      captureBudgetError(childrenError, { action: 'deactivateBudget', step: 'check_children', budget_id: budgetId })
       return { success: false, error: 'Ошибка проверки дочерних бюджетов' }
     }
 
@@ -542,12 +564,14 @@ export async function deactivateBudget(
 
     if (error) {
       console.error('[deactivateBudget] Error:', error)
+      captureBudgetError(error, { action: 'deactivateBudget', step: 'update', budget_id: budgetId })
       return { success: false, error: error.message }
     }
 
     return { success: true, data: { success: true, warning } }
   } catch (error) {
     console.error('[deactivateBudget] Error:', error)
+    captureBudgetError(error, { action: 'deactivateBudget', budget_id: budgetId })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',

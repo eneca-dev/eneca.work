@@ -15,6 +15,7 @@ import { BudgetInlineEdit } from './BudgetInlineEdit'
 import { BudgetRowExpander } from './BudgetRowExpander'
 import { BudgetRowBadges } from './BudgetRowBadges'
 import { formatNumber } from '../utils'
+import { pluralizeLoadings } from '@/lib/pluralize'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 
 // ============================================================================
@@ -177,7 +178,7 @@ export const BudgetRow = React.memo(function BudgetRow({
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
                       <div className="space-y-0.5">
-                        <div>{formatNumber(loadingHours)} ч / {loadingCount} загрузок</div>
+                        <div>{formatNumber(loadingHours)} ч / {loadingCount} {pluralizeLoadings(loadingCount)}</div>
                         {loadingErrorsCount > 0 && (
                           <div className="text-amber-500">
                             ⚠ {loadingErrorsCount} без отдела или ставки
