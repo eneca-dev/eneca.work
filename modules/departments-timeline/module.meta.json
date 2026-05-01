@@ -143,7 +143,18 @@
     "invalidationRules": []
   },
 
-  "permissions": ["departments.view", "departments.confirm_activity"],
+  "permissions": [
+    "departments.view",
+    "departments.confirm_activity",
+    "loadings.edit.scope.all",
+    "loadings.edit.scope.subdivision",
+    "loadings.edit.scope.department",
+    "loadings.edit.scope.team",
+    "loadings.edit.scope.managed_projects",
+    "loadings.edit.scope.own",
+    "loadings.bulk_shift.department",
+    "tasks.tabs.view.department"
+  ],
 
   "tasks": [
     {
@@ -221,6 +232,16 @@
       "version": "1.1.0",
       "date": "2026-04-09",
       "changes": ["Массовый сдвиг загрузок отдела по проекту на N дней (BulkShiftPopover)"]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-04-28",
+      "changes": [
+        "Расширенная видимость отдела для user/team_lead через tasks.tabs.view.department",
+        "Per-loading edit gating через canEditLoading (drag-handles, scissors, кнопка создания)",
+        "BulkShift кнопка скрыта для не-department_head/admin",
+        "Cross-dept блокировка для restricted ролей в server actions"
+      ]
     }
   ]
 }

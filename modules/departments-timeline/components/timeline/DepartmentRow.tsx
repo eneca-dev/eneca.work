@@ -12,6 +12,7 @@ import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { useDepartmentsTimelineUIStore, useRowExpanded } from '../../stores'
 import { useConfirmTeamActivity, useConfirmMultipleTeamsActivity } from '../../hooks'
+import { useCanBulkShiftDepartment } from '@/modules/permissions'
 import { FreshnessIndicator } from '@/components/shared/timeline'
 import { BulkShiftPopover } from './BulkShiftPopover'
 import { TeamRow } from './TeamRow'
@@ -44,6 +45,10 @@ export function DepartmentRow({
 }: DepartmentRowProps) {
   const isMonthlyMode = timelineScale === 'month'
   const { isExpanded, toggle } = useRowExpanded('department', department.id)
+
+  // Permission: можно ли запустить bulk shift для этого отдела
+  // (admin — для любого, department_head — только для своего)
+  const canBulkShift = useCanBulkShiftDepartment(department.id)
 
   // Mutations for freshness
   const confirmActivityMutation = useConfirmTeamActivity()
@@ -144,7 +149,7 @@ export function DepartmentRow({
 
             {/* Right: capacity + bulk shift + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {!isMonthlyMode && <BulkShiftPopover department={department} />}
+              {!isMonthlyMode && canBulkShift && <BulkShiftPopover department={department} />}
               {totalDepartmentCapacity > 0 && (
                 <span
                   className="text-xs font-medium text-muted-foreground tabular-nums"

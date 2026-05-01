@@ -24,6 +24,7 @@ import { pluralizeEmployees } from '@/lib/pluralize'
 import { Avatar } from '@/modules/projects/components/Avatar'
 import { useEmployeeSearch } from './useEmployeeSearch'
 import { EmployeeCommandItem } from './EmployeeCommandItem'
+import { useFilterContext, canAssignLoadingToUser } from '@/modules/permissions'
 
 export interface MultiEmployeeSelectorProps {
   /** Массив выбранных ID сотрудников */
@@ -48,7 +49,25 @@ export function MultiEmployeeSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const { data: users = [], isLoading } = useUsers()
+  const { data: allUsers = [], isLoading } = useUsers()
+
+  // Фильтр по scope: user → только сам, team_lead → своя команда,
+  // department_head → свой отдел, admin/subdivision_head/PM → все (server-side гейтит).
+  const { data: filterCtx } = useFilterContext()
+  const users = useMemo(() => {
+    if (!filterCtx) return allUsers
+    return allUsers.filter((u) =>
+      canAssignLoadingToUser(
+        {
+          user_id: u.user_id,
+          team_id: u.team_id,
+          department_id: u.department_id,
+        },
+        filterCtx
+      )
+    )
+  }, [allUsers, filterCtx])
+
   const filteredUsers = useEmployeeSearch(users, search)
 
   // Map для быстрого доступа к выбранным пользователям

@@ -19,6 +19,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { openLoadingModalNewEdit, openLoadingModalNewCreate } from '@/modules/modals'
+import { useCanEditLoading } from '@/modules/permissions'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -65,6 +66,8 @@ interface LoadingBarWithResizeProps {
   onLoadingClick: (loading: Loading) => void
   onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
   onSplitLoading: (loadingId: string, splitDate: string) => void
+  /** Может ли юзер редактировать загрузки этого сотрудника (drag/scissors) */
+  canEdit: boolean
 }
 
 function LoadingBarWithResize({
@@ -75,14 +78,16 @@ function LoadingBarWithResize({
   onLoadingClick,
   onLoadingResize,
   onSplitLoading,
+  canEdit,
 }: LoadingBarWithResizeProps) {
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
   const commentRef = useRef<HTMLDivElement>(null)
   const rateBadgeRef = useRef<HTMLDivElement>(null)
 
-  // Используем useTimelineResize только для loading (не для других типов периодов)
-  const canResize = bar.period.type === 'loading'
+  // Resize доступен только для loading (не для других типов периодов)
+  // И только если у юзера есть права на редактирование
+  const canResize = bar.period.type === 'loading' && canEdit
 
   // Конвертируем Date в ISO string для useTimelineResize
   const startDateString = bar.period.startDate instanceof Date
@@ -112,8 +117,8 @@ function LoadingBarWithResize({
     disabled: !canResize,
   })
 
-  // Scissors mode
-  const isScissorsActive = useScissorsModeStore((s) => s.isActive)
+  // Scissors mode — активен только если у юзера есть права на редактирование
+  const isScissorsActive = useScissorsModeStore((s) => s.isActive) && canEdit
 
   const scissors = useScissorsInteraction({
     loadingId: bar.period.id,
@@ -424,6 +429,16 @@ export function EmployeeRow({
   const isMonthlyMode = timelineScale === 'month'
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
 
+  // Permission gating для этого сотрудника. teamId/departmentId есть в Employee
+  // (из view_employee_workloads через final_team_id/final_department_id).
+  const canEdit = useCanEditLoading({
+    responsibleId: employee.id,
+    teamId: employee.teamId ?? null,
+    departmentId: employee.departmentId ?? null,
+    subdivisionId: null,
+    projectId: null, // varies per loading; PM check fallback на server
+  })
+
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
 
@@ -514,13 +529,15 @@ export function EmployeeRow({
         rate: loading.rate,
         comment: loading.comment || null,
         section_id: loading.stageId || loading.sectionId, // stageId для этапов, sectionId как fallback для прямых загрузок на раздел
+        employee_team_id: employee.teamId ?? null,
+        employee_department_id: employee.departmentId ?? null,
       },
       // Передаём breadcrumbs только если они полные (содержат section).
       // Если sectionId отсутствует — модалка сама загрузит breadcrumbs через API по stageId.
       breadcrumbs: (loading.sectionId && breadcrumbs.length > 0) ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
-  }, [employee.id])
+  }, [employee.id, employee.teamId, employee.departmentId])
 
   // Обработчик создания новой загрузки для сотрудника
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
@@ -623,7 +640,7 @@ export function EmployeeRow({
           style={{ width: SIDEBAR_WIDTH, height: rowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
-          {!isMonthlyMode && (
+          {!isMonthlyMode && canEdit && (
             <button
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
               onClick={handleCreateLoading}
@@ -732,6 +749,7 @@ export function EmployeeRow({
                     onLoadingClick={handleLoadingClick}
                     onLoadingResize={handleLoadingResize}
                     onSplitLoading={handleSplitLoading}
+                    canEdit={canEdit}
                   />
                 ))}
               </div>

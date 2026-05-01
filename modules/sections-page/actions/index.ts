@@ -10,7 +10,15 @@ import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
-import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
+import {
+  applyMandatoryFilters,
+  assertCanEditLoading,
+  canEditLoading,
+  getFilterContext,
+  getFilterContextForTasksTabs,
+  isRestrictedToOwnDepartment,
+  type LoadingPermissionContext,
+} from '@/modules/permissions'
 import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 import type {
   Department,
@@ -60,9 +68,11 @@ export async function getSectionsHierarchy(
     }
 
     // Получаем filter context для permissions.
+    // Используем getFilterContextForTasksTabs — для user/team_lead с
+    // tasks.tabs.view.department это расширит scope team → department.
     // Параллельно: контекст + список restricted — экономит round-trip.
     const [filterContextResult, restrictedIds] = await Promise.all([
-      getFilterContext(),
+      getFilterContextForTasksTabs(),
       getRestrictedProjectIds(),
     ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
@@ -248,6 +258,27 @@ export async function getSectionsHierarchy(
 
     if (!rows || rows.length === 0) {
       return { success: true, data: [] }
+    }
+
+    // Получаем team_id для каждого уникального исполнителя загрузок.
+    // view_departments_sections_loadings не отдаёт employee_team_id, нужно для UI gating
+    // (определение что это команда team_lead'а на клиенте).
+    const uniqueEmployeeIds = Array.from(
+      new Set(
+        rows
+          .filter((r) => r.loading_id && r.employee_id)
+          .map((r) => r.employee_id as string)
+      )
+    )
+    const employeeTeamMap = new Map<string, string | null>()
+    if (uniqueEmployeeIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('view_users')
+        .select('user_id, team_id')
+        .in('user_id', uniqueEmployeeIds)
+      for (const u of usersData ?? []) {
+        if (u.user_id) employeeTeamMap.set(u.user_id, u.team_id ?? null)
+      }
     }
 
     // Трансформация плоских строк в иерархию
@@ -456,6 +487,7 @@ dailyWorkloads: {},
             employeeCategory: row.employee_category,
             employeePosition: row.employee_position,
             employeeEmploymentRate: row.employee_employment_rate ?? null,
+            employeeTeamId: row.employee_id ? (employeeTeamMap.get(row.employee_id) ?? null) : null,
             employeeDepartmentId: employeeDeptId || deptId,
             employeeDepartmentName: row.employee_department_name || row.department_name,
             startDate: row.loading_start,
@@ -662,12 +694,56 @@ export async function createSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    // Auth + permission check
+    const ctxResult = await getFilterContext()
+    if (!ctxResult.success || !ctxResult.data) {
       return { success: false, error: 'Unauthorized' }
+    }
+    const ctx = ctxResult.data
+
+    // Получаем метаданные исполнителя и раздела параллельно
+    const [employeeRow, sectionRow] = await Promise.all([
+      supabase
+        .from('view_users')
+        .select('team_id, department_id, subdivision_id')
+        .eq('user_id', input.employeeId)
+        .single(),
+      supabase
+        .from('view_section_hierarchy')
+        .select('project_id, responsible_department_id')
+        .eq('section_id', input.sectionId)
+        .single(),
+    ])
+
+    if (employeeRow.error || !employeeRow.data) {
+      return { success: false, error: 'Сотрудник не найден' }
+    }
+    if (sectionRow.error || !sectionRow.data) {
+      return { success: false, error: 'Раздел не найден' }
+    }
+
+    // Future loading metadata для проверки прав
+    const futureLoading: LoadingPermissionContext = {
+      responsibleId: input.employeeId,
+      teamId: employeeRow.data.team_id ?? null,
+      departmentId: employeeRow.data.department_id ?? null,
+      subdivisionId: employeeRow.data.subdivision_id ?? null,
+      projectId: sectionRow.data.project_id ?? null,
+    }
+
+    if (!canEditLoading(futureLoading, ctx)) {
+      return { success: false, error: 'Нет прав на создание загрузки для этого сотрудника' }
+    }
+
+    // Cross-dept: для restricted ролей раздел и сотрудник должны быть в одном отделе
+    if (
+      isRestrictedToOwnDepartment(ctx) &&
+      sectionRow.data.responsible_department_id !== futureLoading.departmentId
+    ) {
+      return {
+        success: false,
+        error: 'Раздел и сотрудник должны быть из одного отдела',
+      }
     }
 
     // Валидация: если stageId указан, проверяем что он принадлежит sectionId
@@ -765,12 +841,29 @@ export async function updateSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Unauthorized' }
+    // Auth + permission + cross-dept enforcement (см. spec §5.4)
+    const assertResult = await assertCanEditLoading(input.loadingId)
+    if (!assertResult.success) return assertResult
+    const { loading: oldLoading, ctx } = assertResult.data
+
+    // Cross-dept проверки — только для user/team_lead/department_head
+    if (isRestrictedToOwnDepartment(ctx)) {
+      const oldDeptId = oldLoading.departmentId
+
+      // Запрет смены исполнителя на сотрудника другого отдела
+      if (input.employeeId && input.employeeId !== oldLoading.responsibleId) {
+        const { data: newProfile } = await supabase
+          .from('view_users')
+          .select('department_id')
+          .eq('user_id', input.employeeId)
+          .single()
+        if (!newProfile || newProfile.department_id !== oldDeptId) {
+          return {
+            success: false,
+            error: 'Нельзя переназначить загрузку на сотрудника другого отдела',
+          }
+        }
+      }
     }
 
     // Валидация: если stageId указан, проверяем что он принадлежит section
@@ -807,6 +900,25 @@ export async function updateSectionLoading(
         return {
           success: false,
           error: 'Выбранный этап не принадлежит разделу загрузки',
+        }
+      }
+
+      // Cross-dept: запрет переноса в раздел другого отдела (для restricted ролей)
+      if (isRestrictedToOwnDepartment(ctx) && oldLoading.departmentId) {
+        const { data: sectionRow } = await supabase
+          .from('view_section_hierarchy')
+          .select('responsible_department_id')
+          .eq('section_id', stage.decomposition_stage_section_id)
+          .single()
+
+        if (
+          sectionRow?.responsible_department_id &&
+          sectionRow.responsible_department_id !== oldLoading.departmentId
+        ) {
+          return {
+            success: false,
+            error: 'Нельзя перенести загрузку в раздел другого отдела',
+          }
         }
       }
     }
@@ -888,13 +1000,9 @@ export async function deleteSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Unauthorized' }
-    }
+    // Auth + permission check
+    const assertResult = await assertCanEditLoading(loadingId)
+    if (!assertResult.success) return assertResult
 
     // Архивируем вместо удаления
     const { error } = await supabase

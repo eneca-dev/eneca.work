@@ -18,6 +18,10 @@ interface SectionsPageActions {
     rate: number
     comment: string | null
     stage_id?: string | null
+    /** Команда исполнителя (для permission gating в модалке) */
+    employee_team_id?: string | null
+    /** Отдел исполнителя (для permission gating в модалке) */
+    employee_department_id?: string | null
   }, breadcrumbs: {
     projectId: string
     projectName: string
@@ -48,6 +52,10 @@ interface SectionsPageProviderProps {
     rate: number
     comment: string | null
     stage_id?: string | null
+    /** Команда исполнителя (для permission gating в модалке) */
+    employee_team_id?: string | null
+    /** Отдел исполнителя (для permission gating в модалке) */
+    employee_department_id?: string | null
   }, breadcrumbs: {
     projectId: string
     projectName: string

@@ -8,7 +8,7 @@
 
 import { useMemo, useCallback } from 'react'
 import { Box, ChevronDown, ChevronRight, UserPlus } from 'lucide-react'
-import { useHasPermission } from '@/modules/permissions'
+import { useHasPermission, useHasAnyLoadingEditPermission } from '@/modules/permissions'
 import { useRowExpanded, useDateCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { useSectionsPageActions } from '../../context'
 import { getCellClassNames } from '../../utils/cell-utils'
@@ -53,12 +53,17 @@ export function ObjectSectionRow({
   // Permission check for capacity editing
   const canEditCapacity = useHasPermission('sections.capacity.edit')
 
+  // Permission: есть ли хотя бы одна edit-permission на загрузки
+  const canCreateAnyLoading = useHasAnyLoadingEditPermission()
+
   // Group loadings by employee
   const employeesWithLoadings = useMemo(() => {
     const employeeMap = new Map<string, {
       employeeId: string
       employeeName: string
       employeeAvatarUrl: string | null
+      employeeTeamId: string | null
+      employeeDepartmentId: string | null
       employeeDepartmentName: string | null
       employeePosition: string | null
       employeeCategory: string | null
@@ -72,7 +77,9 @@ export function ObjectSectionRow({
         employeeMap.set(empId, {
           employeeId: empId,
           employeeName: loading.employeeName,
-          employeeAvatarUrl: loading.employeeAvatarUrl,
+          employeeAvatarUrl: loading.employeeAvatarUrl ?? null,
+          employeeTeamId: loading.employeeTeamId ?? null,
+          employeeDepartmentId: loading.employeeDepartmentId,
           employeeDepartmentName: loading.employeeDepartmentName,
           employeePosition: loading.employeePosition ?? null,
           employeeCategory: loading.employeeCategory ?? null,
@@ -136,15 +143,17 @@ export function ObjectSectionRow({
             </div>
 
             {/* Create loading tab - sibling to clickable area, so hover doesn't highlight the row */}
-            <button
-              type="button"
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
-              onClick={handleCreateLoading}
-              title="Создать загрузку"
-            >
-              <UserPlus className="w-3 h-3" />
-              <span>Загрузка</span>
-            </button>
+            {canCreateAnyLoading && (
+              <button
+                type="button"
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+                onClick={handleCreateLoading}
+                title="Создать загрузку"
+              >
+                <UserPlus className="w-3 h-3" />
+                <span>Загрузка</span>
+              </button>
+            )}
           </div>
 
           {/* Timeline cells + aggregation (editable capacity) */}

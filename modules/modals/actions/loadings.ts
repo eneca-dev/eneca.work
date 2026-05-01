@@ -162,6 +162,10 @@ export interface LoadingResult {
   status: LoadingStatusType
   createdAt: string
   updatedAt: string | null
+  /** Команда исполнителя (для permission check на клиенте, опционально). Заполняется только в getLoadingById. */
+  employeeTeamId?: string | null
+  /** Отдел исполнителя (для permission check на клиенте, опционально). Заполняется только в getLoadingById. */
+  employeeDepartmentId?: string | null
 }
 
 export interface CreateLoadingBatchInput {
@@ -594,7 +598,24 @@ export async function getLoadingById(
       }
     }
 
-    return { success: true, data: mapLoadingToResult(data) }
+    // Доп. запрос для team_id/department_id исполнителя — нужен для permission gating
+    // в read-only режиме модалки. Один SELECT, поля для UI на клиенте.
+    let employeeTeamId: string | null = null
+    let employeeDepartmentId: string | null = null
+    if (data.loading_responsible) {
+      const { data: profileRow } = await supabase
+        .from('view_users')
+        .select('team_id, department_id')
+        .eq('user_id', data.loading_responsible)
+        .single()
+      employeeTeamId = profileRow?.team_id ?? null
+      employeeDepartmentId = profileRow?.department_id ?? null
+    }
+
+    return {
+      success: true,
+      data: { ...mapLoadingToResult(data), employeeTeamId, employeeDepartmentId },
+    }
   } catch (error) {
     console.error('[getLoadingById] Error:', error)
     return {

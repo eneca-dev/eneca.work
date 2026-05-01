@@ -14,8 +14,13 @@ import type { Department, Team, Employee, Loading, TeamFreshness } from '../type
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { addDays } from 'date-fns'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
-import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
-import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
+import {
+  applyMandatoryFilters,
+  assertCanEditLoading,
+  canBulkShiftDepartment,
+  getFilterContext,
+  getFilterContextForTasksTabs,
+} from '@/modules/permissions'
 import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
@@ -90,10 +95,12 @@ export async function getDepartmentsData(
     const supabase = await createClient()
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры.
+    // Используем getFilterContextForTasksTabs — для user/team_lead с
+    // tasks.tabs.view.department это расширит scope team → department.
     // Параллельно: контекст + список restricted — экономит round-trip.
     // React.cache на getRestrictedProjectIds дедуплицирует в рамках request.
     const [filterContextResult, allRestrictedIds] = await Promise.all([
-      getFilterContext(),
+      getFilterContextForTasksTabs(),
       getRestrictedProjectIds(),
     ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
@@ -730,36 +737,25 @@ export async function updateLoadingDates(
 
     const supabase = await createClient()
 
-    // Проверка авторизации
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Необходима авторизация' }
+    // Auth + permission check (включает проверку существования загрузки)
+    const assertResult = await assertCanEditLoading(loadingId)
+    if (!assertResult.success) {
+      return { success: false, error: assertResult.error }
     }
 
     // 🔒 Defense-in-depth: не-админ не может править загрузки по restricted-проектам.
-    // Параллельно: контекст + список restricted + project_id загрузки — 3 независимых запроса.
-    const [ctx, restrictedIds, loadingRowResult] = await Promise.all([
-      getFilterContext(),
-      getRestrictedProjectIds(),
-      supabase
-        .from('view_employee_workloads')
-        .select('project_id')
-        .eq('loading_id', loadingId)
-        .limit(1)
-        .maybeSingle(),
-    ])
-    const isAdmin = ctx.success && ctx.data
-      ? ctx.data.permissions.includes('hierarchy.is_admin')
-      : false
+    // assertCanEditLoading уже отдал project_id — переиспользуем без доп. запроса.
+    const restrictedIds = await getRestrictedProjectIds()
+    const isAdmin = assertResult.data.ctx.permissions.includes('hierarchy.is_admin')
 
     if (!isAdmin && restrictedIds.length > 0) {
-      const projectId = loadingRowResult.data?.project_id
+      const projectId = assertResult.data.loading.projectId
       if (projectId && restrictedIds.includes(projectId)) {
         return { success: false, error: 'Загрузка не найдена' }
       }
     }
 
-    // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
+    // Обновляем даты загрузки (RLS обеспечивает доп. проверку прав доступа)
     const { error } = await supabase
       .from('loadings')
       .update({
@@ -878,22 +874,24 @@ export async function bulkShiftLoadings(
 
     const supabase = await createClient()
 
-    // Проверка авторизации
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Необходима авторизация' }
-    }
-
-    // 🔒 Defense-in-depth: не-админ не может bulk-шифтить restricted-проект.
+    // 🔒 Permission + restricted-projects check.
     // Параллельно: контекст + список restricted — экономит round-trip.
-    const [bulkCtx, bulkRestrictedIds] = await Promise.all([
+    const [bulkCtxResult, bulkRestrictedIds] = await Promise.all([
       getFilterContext(),
       getRestrictedProjectIds(),
     ])
-    const bulkIsAdmin = bulkCtx.success && bulkCtx.data
-      ? bulkCtx.data.permissions.includes('hierarchy.is_admin')
-      : false
+    if (!bulkCtxResult.success || !bulkCtxResult.data) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+    const bulkCtx = bulkCtxResult.data
 
+    // Permission: bulk_shift доступен admin (любой отдел) и department_head (свой отдел)
+    if (!canBulkShiftDepartment(input.departmentId, bulkCtx)) {
+      return { success: false, error: 'Нет прав на массовый сдвиг отдела' }
+    }
+
+    // Defense-in-depth: не-админ не может bulk-шифтить restricted-проект
+    const bulkIsAdmin = bulkCtx.permissions.includes('hierarchy.is_admin')
     if (!bulkIsAdmin && bulkRestrictedIds.includes(input.projectId)) {
       return { success: false, error: 'Проект не найден' }
     }
