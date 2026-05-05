@@ -57,31 +57,23 @@ export function canEditLoading(
   // 1. Admin — без ограничений
   if (has('loadings.edit.scope.all')) return true
 
-  // 2. Subdivision head
-  if (
-    has('loadings.edit.scope.subdivision') &&
-    !!ctx.ownSubdivisionId &&
-    loading.subdivisionId === ctx.ownSubdivisionId
-  ) {
-    return true
+  // 2. Subdivision head — учитываем И своё подразделение, И то что он возглавляет.
+  // Юзер может числиться в одном подразделении, а возглавлять другое.
+  if (has('loadings.edit.scope.subdivision') && loading.subdivisionId) {
+    const mySubIds = [ctx.ownSubdivisionId, ctx.headSubdivisionId].filter(Boolean)
+    if (mySubIds.includes(loading.subdivisionId)) return true
   }
 
-  // 3. Department head
-  if (
-    has('loadings.edit.scope.department') &&
-    !!ctx.ownDepartmentId &&
-    loading.departmentId === ctx.ownDepartmentId
-  ) {
-    return true
+  // 3. Department head — учитываем И свой отдел, И тот что он возглавляет
+  if (has('loadings.edit.scope.department') && loading.departmentId) {
+    const myDeptIds = [ctx.ownDepartmentId, ctx.headDepartmentId].filter(Boolean)
+    if (myDeptIds.includes(loading.departmentId)) return true
   }
 
-  // 4. Team lead
-  if (
-    has('loadings.edit.scope.team') &&
-    !!ctx.ownTeamId &&
-    loading.teamId === ctx.ownTeamId
-  ) {
-    return true
+  // 4. Team lead — учитываем И свою команду, И ту что он возглавляет
+  if (has('loadings.edit.scope.team') && loading.teamId) {
+    const myTeamIds = [ctx.ownTeamId, ctx.leadTeamId].filter(Boolean)
+    if (myTeamIds.includes(loading.teamId)) return true
   }
 
   // 5. Project manager
@@ -105,7 +97,7 @@ export function canEditLoading(
 /**
  * Может ли юзер запустить bulk shift для данного отдела.
  * Admin — для любого отдела, остальные с `loadings.bulk_shift.department` —
- * только для своего отдела.
+ * только для своего/возглавляемого отдела.
  */
 export function canBulkShiftDepartment(
   departmentId: string,
@@ -115,7 +107,9 @@ export function canBulkShiftDepartment(
 
   if (ctx.permissions.includes('loadings.edit.scope.all')) return true
 
-  return !!ctx.ownDepartmentId && departmentId === ctx.ownDepartmentId
+  // Свой отдел ИЛИ отдел который возглавляет (для department_head)
+  const myDeptIds = [ctx.ownDepartmentId, ctx.headDepartmentId].filter(Boolean)
+  return myDeptIds.includes(departmentId)
 }
 
 /**
@@ -159,20 +153,16 @@ export function canAssignLoadingToUser(
   if (has('loadings.edit.scope.subdivision')) return true
   if (has('loadings.edit.scope.managed_projects')) return true
 
-  // Department / team / own — точная проверка по полям пользователя
-  if (
-    has('loadings.edit.scope.department') &&
-    !!ctx.ownDepartmentId &&
-    user.department_id === ctx.ownDepartmentId
-  ) {
-    return true
+  // Department / team / own — точная проверка по полям пользователя.
+  // Учитываем И own*, И lead*/head* — юзер может числиться в одном отделе/команде,
+  // а возглавлять другое.
+  if (has('loadings.edit.scope.department') && user.department_id) {
+    const myDeptIds = [ctx.ownDepartmentId, ctx.headDepartmentId].filter(Boolean)
+    if (myDeptIds.includes(user.department_id)) return true
   }
-  if (
-    has('loadings.edit.scope.team') &&
-    !!ctx.ownTeamId &&
-    user.team_id === ctx.ownTeamId
-  ) {
-    return true
+  if (has('loadings.edit.scope.team') && user.team_id) {
+    const myTeamIds = [ctx.ownTeamId, ctx.leadTeamId].filter(Boolean)
+    if (myTeamIds.includes(user.team_id)) return true
   }
   if (has('loadings.edit.scope.own') && user.user_id === ctx.userId) {
     return true
