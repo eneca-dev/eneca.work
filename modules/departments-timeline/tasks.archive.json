@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schemas/module-meta/tasks-archive.schema.json",
+  "moduleName": "departments-timeline",
+  "archivedTasks": [
+    {
+      "id": "DT-002",
+      "title": "Bulk Shift: выборочное применение по загрузкам",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "createdAt": "2026-05-04",
+      "completedAt": "2026-05-05",
+      "changelogEntry": "[DT-002] Добавлен режим выборочного применения bulk-shift: чекбокс «Выбрать вручную» в BulkShiftPopover, выбор конкретных загрузок одного проекта в отделе с визуальными состояниями (selectable/selected/dimmed) и badge со счётчиком у сотрудника",
+      "relatedFiles": [
+        "modules/departments-timeline/stores/bulk-shift-selection-store.ts",
+        "modules/departments-timeline/stores/index.ts",
+        "modules/departments-timeline/index.ts",
+        "modules/departments-timeline/actions/index.ts",
+        "modules/departments-timeline/components/timeline/BulkShiftPopover.tsx",
+        "modules/departments-timeline/components/timeline/EmployeeRow.tsx",
+        "modules/departments-timeline/module.meta.json",
+        "docs/superpowers/specs/2026-05-04-bulk-shift-manual-selection-design.md",
+        "docs/superpowers/plans/2026-05-04-bulk-shift-manual-selection.md"
+      ],
+      "solution": "Эфемерный Zustand store useBulkShiftSelectionStore хранит activeDepartmentId × activeProjectId × selectedLoadingIds. Server action bulkShiftLoadings расширен опциональным loadingIds с defense-in-depth фильтром (dept × project × active). LoadingBarWithResize рендерит 3 состояния: selectable (hover dashed outline), selected (solid primary outline + checkmark sibling outside overflow:hidden), dimmed (opacity 0.25, pointer-events none). ESC сбрасывает режим, onInteractOutside по [data-bulk-selectable] сохраняет popover открытым при клике на bar. Badge у сотрудника показывает количество выбранных загрузок. ARIA: role=button, aria-pressed, tabIndex, Space/Enter для toggle."
+    }
+  ]
+}

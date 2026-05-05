@@ -808,6 +808,13 @@ export interface BulkShiftLoadingsInput {
   // Для mode 'set' — конкретные даты (YYYY-MM-DD)
   setStartDate?: string
   setEndDate?: string
+  /**
+   * Опционально: явный список loading_id для применения операции.
+   * Если передан и не пуст — auto-discovery пропускается, и операция применяется только к этим IDs
+   * (с defense-in-depth фильтром по departmentId × projectId × loading_status='active').
+   * Если не передан или пуст — поведение как раньше (все загрузки отдела по проекту).
+   */
+  loadingIds?: string[]
 }
 
 /**
@@ -841,6 +848,8 @@ export async function bulkShiftLoadings(
         'department.id': input.departmentId,
         'project.id': input.projectId,
         'shift.days': input.shiftDays,
+        'shift.mode': input.shiftMode,
+        'shift.explicit_ids_count': input.loadingIds?.length ?? 0,
       },
     },
     async () => {
@@ -896,14 +905,26 @@ export async function bulkShiftLoadings(
       return { success: false, error: 'Проект не найден' }
     }
 
-    // 1. Находим все подходящие загрузки через view_employee_workloads
-    const { data: matchingLoadings, error: queryError } = await supabase
+    // 1. Находим подходящие загрузки через view_employee_workloads
+    // - Если передан явный loadingIds → фильтруем по нему (defense-in-depth: + dept × project × active)
+    // - Иначе → все активные загрузки отдела по проекту (legacy auto-discovery)
+    const explicitIds = input.loadingIds && input.loadingIds.length > 0
+      ? input.loadingIds
+      : null
+
+    let baseQuery = supabase
       .from('view_employee_workloads')
       .select('loading_id, loading_start, loading_finish')
       .eq('final_department_id', input.departmentId)
       .eq('project_id', input.projectId)
       .eq('loading_status', 'active')
       .not('loading_id', 'is', null)
+
+    if (explicitIds) {
+      baseQuery = baseQuery.in('loading_id', explicitIds)
+    }
+
+    const { data: matchingLoadings, error: queryError } = await baseQuery
 
     if (queryError) {
       console.error('[bulkShiftLoadings] Query error:', queryError)

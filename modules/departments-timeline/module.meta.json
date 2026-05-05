@@ -30,7 +30,8 @@
       "EmployeeRow",
       "useDepartmentsData",
       "useTeamsFreshness",
-      "useDepartmentsTimelineUIStore"
+      "useDepartmentsTimelineUIStore",
+      "useBulkShiftSelectionStore"
     ]
   },
 
@@ -62,9 +63,9 @@
   "actions": [
     {
       "name": "bulkShiftLoadings",
-      "description": "Массовый сдвиг дат загрузок отдела по проекту на N дней",
+      "description": "Массовый сдвиг дат загрузок отдела по проекту. Поддерживает auto-discovery (по dept × project) и явный список loadingIds для выборочного применения.",
       "file": "actions/index.ts",
-      "input": "BulkShiftLoadingsInput { departmentId, projectId, shiftDays }",
+      "input": "BulkShiftLoadingsInput { departmentId, projectId, shiftDays, shiftMode, setStartDate?, setEndDate?, loadingIds? }",
       "returns": "ActionResult<BulkShiftLoadingsResult>"
     }
   ],
@@ -77,6 +78,14 @@
       "persistence": "departments-timeline-ui",
       "state": ["expandedNodes"],
       "actions": ["toggleNode", "expandAll", "collapseAll"]
+    },
+    {
+      "name": "useBulkShiftSelectionStore",
+      "description": "Эфемерное состояние выборочного применения bulk-shift (отдел × проект × выбранные loadingIds)",
+      "file": "stores/bulk-shift-selection-store.ts",
+      "persistence": null,
+      "state": ["activeDepartmentId", "activeProjectId", "selectedLoadingIds"],
+      "actions": ["enter", "exit", "changeProject", "toggle", "selectAll", "clear"]
     }
   ],
 
@@ -241,6 +250,17 @@
         "Per-loading edit gating через canEditLoading (drag-handles, scissors, кнопка создания)",
         "BulkShift кнопка скрыта для не-department_head/admin",
         "Cross-dept блокировка для restricted ролей в server actions"
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-05-04",
+      "changes": [
+        "Bulk Shift: выборочное применение по загрузкам через чекбокс «Выбрать вручную» в BulkShiftPopover",
+        "Новый Zustand store useBulkShiftSelectionStore для эфемерного состояния выбора",
+        "Server action bulkShiftLoadings расширен опциональным loadingIds (defense-in-depth по dept × project × active)",
+        "Loading bars отображают 3 состояния в режиме выбора: selectable/selected/dimmed",
+        "Badge со счётчиком выбранных загрузок у каждого сотрудника"
       ]
     }
   ]
