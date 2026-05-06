@@ -12,9 +12,11 @@ import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { useDepartmentsTimelineUIStore, useRowExpanded } from '../../stores'
 import { useConfirmTeamActivity, useConfirmMultipleTeamsActivity } from '../../hooks'
+import { useCanBulkShiftDepartment } from '@/modules/permissions'
 import { FreshnessIndicator } from '@/components/shared/timeline'
 import { BulkShiftPopover } from './BulkShiftPopover'
 import { TeamRow } from './TeamRow'
+import { TeamSubgroupDivider } from './TeamSubgroupDivider'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
 import type { Department, TeamFreshness, DayCell } from '../../types'
 import type { DayInfo } from '@/modules/resource-graph/types'
@@ -44,6 +46,10 @@ export function DepartmentRow({
 }: DepartmentRowProps) {
   const isMonthlyMode = timelineScale === 'month'
   const { isExpanded, toggle } = useRowExpanded('department', department.id)
+
+  // Permission: можно ли запустить bulk shift для этого отдела
+  // (admin — для любого, department_head — только для своего)
+  const canBulkShift = useCanBulkShiftDepartment(department.id)
 
   // Mutations for freshness
   const confirmActivityMutation = useConfirmTeamActivity()
@@ -144,7 +150,7 @@ export function DepartmentRow({
 
             {/* Right: capacity + bulk shift + freshness indicator */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {!isMonthlyMode && <BulkShiftPopover department={department} />}
+              {!isMonthlyMode && canBulkShift && <BulkShiftPopover department={department} />}
               {totalDepartmentCapacity > 0 && (
                 <span
                   className="text-xs font-medium text-muted-foreground tabular-nums"
@@ -325,23 +331,47 @@ export function DepartmentRow({
       </div>
 
       {/* Teams (expanded) */}
-      {isExpanded && (
-        <>
-          {department.teams.map((team) => (
-            <TeamRow
-              key={team.id}
-              team={team}
-              dayCells={dayCells}
-              freshnessData={freshnessData}
-              onConfirmActivity={handleConfirmActivity}
-              timelineScale={timelineScale}
-              monthCells={monthCells}
-              monthCellWidth={monthCellWidth}
-              calendarMap={calendarMap}
-            />
-          ))}
-        </>
-      )}
+      {isExpanded && (() => {
+        const renderTeam = (team: typeof department.teams[number]) => (
+          <TeamRow
+            key={team.id}
+            team={team}
+            dayCells={dayCells}
+            freshnessData={freshnessData}
+            onConfirmActivity={handleConfirmActivity}
+            timelineScale={timelineScale}
+            monthCells={monthCells}
+            monthCellWidth={monthCellWidth}
+            calendarMap={calendarMap}
+          />
+        )
+
+        // ВК на дневном виде: команды 1/3/4 — гражд, остальные — пром.
+        // Сортируем гражд вперёд и вставляем мягкий разделитель перед пром-группой.
+        if (!isMonthlyMode && department.name === 'ВК') {
+          const civilTeamNames = new Set(['ВК - 1', 'ВК - 3', 'ВК - 4'])
+          const civil = department.teams.filter((t) => civilTeamNames.has(t.name))
+          const prom = department.teams.filter((t) => !civilTeamNames.has(t.name))
+          if (civil.length > 0 && prom.length > 0) {
+            return (
+              <>
+                <TeamSubgroupDivider
+                  label="Гражданское"
+                  width={SIDEBAR_WIDTH + timelineWidth}
+                />
+                {civil.map(renderTeam)}
+                <TeamSubgroupDivider
+                  label="Промышленное"
+                  width={SIDEBAR_WIDTH + timelineWidth}
+                />
+                {prom.map(renderTeam)}
+              </>
+            )
+          }
+        }
+
+        return <>{department.teams.map(renderTeam)}</>
+      })()}
     </>
   )
 }

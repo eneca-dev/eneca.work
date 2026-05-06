@@ -136,10 +136,15 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               className="h-8 w-8"
             />
             {!collapsed && (
-              <h1 className="text-xl font-mono ml-3">
-                <span className="text-primary">eneca</span>
-                <span className="text-slate-400">.work</span>
-              </h1>
+              <div className="ml-3 flex flex-col leading-none">
+                <h1 className="text-xl font-mono">
+                  <span className="text-primary">eneca</span>
+                  <span className="text-slate-400">.work</span>
+                </h1>
+                <span className="mt-0.5 text-[9px] font-mono text-slate-500/70 tracking-wide">
+                  v: 1.4.0
+                </span>
+              </div>
             )}
             {!collapsed && (
               <div className="ml-auto mr-2">
@@ -155,6 +160,11 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
+          {collapsed && (
+            <span className="text-[9px] font-mono text-slate-500/70 tracking-wide leading-none">
+              v: 1.4.0
+            </span>
+          )}
           {collapsed && (
             <div className="flex justify-center">
               <NotificationBell collapsed={collapsed} />

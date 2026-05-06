@@ -8,12 +8,13 @@
  * - 'loading-new-edit'
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useUserStore } from '@/stores/useUserStore'
 import { useIsModalOpen, useModalStore, closeModal } from '../../stores/modal-store'
 import { LoadingModalNew } from './LoadingModalNew'
 import { getLoadingById } from '../../actions/loadings'
 import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
+import { useCanEditLoading } from '@/modules/permissions'
 
 export function LoadingModalNewContainer() {
   const userId = useUserStore((s) => s.id)
@@ -73,6 +74,8 @@ export function LoadingModalNewContainer() {
                   rate: result.data.rate,
                   comment: result.data.comment,
                   section_id: result.data.stageId, // loading_stage в БД
+                  employee_team_id: result.data.employeeTeamId ?? null,
+                  employee_department_id: result.data.employeeDepartmentId ?? null,
                 },
                 breadcrumbs: data.breadcrumbs,
                 projectId: data.projectId,
@@ -96,6 +99,20 @@ export function LoadingModalNewContainer() {
       setIsLoadingData(false)
     }
   }, [isEditOpen, modalData])
+
+  // Permission check для edit-режима — пробрасываем в модалку как isReadOnly
+  const editLoadingPermissionContext = useMemo(() => {
+    if (!editData?.loading) return null
+    return {
+      responsibleId: editData.loading.employee_id,
+      teamId: editData.loading.employee_team_id ?? null,
+      departmentId: editData.loading.employee_department_id ?? null,
+      subdivisionId: null,
+      projectId: editData.projectId ?? null,
+    }
+  }, [editData])
+
+  const canEditExisting = useCanEditLoading(editLoadingPermissionContext)
 
   // Если нет userId, не рендерим
   if (!userId) {
@@ -135,6 +152,7 @@ export function LoadingModalNewContainer() {
         mode="edit"
         editData={editData}
         userId={userId}
+        isReadOnly={!canEditExisting}
       />
     )
   }

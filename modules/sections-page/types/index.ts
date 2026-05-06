@@ -34,6 +34,7 @@ export interface SectionLoading {
   employeeCategory?: string | null
   employeePosition?: string | null
   employeeEmploymentRate?: number | null
+  employeeTeamId: string | null
   employeeDepartmentId: string
   employeeDepartmentName: string
   startDate: string

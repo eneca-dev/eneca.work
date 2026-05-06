@@ -30,6 +30,17 @@ export { applyMandatoryFilters } from './utils/mandatory-filters'
 
 // Server actions
 export { getFilterContext } from './server/get-filter-context'
+export { getFilterContextForTasksTabs } from './server/get-filter-context-tasks'
+export { assertCanEditLoading } from './server/assert-can-edit-loading'
+
+// Loadings permissions utils (pure)
+export {
+  canEditLoading,
+  canAssignLoadingToUser,
+  canBulkShiftDepartment,
+  isRestrictedToOwnDepartment,
+  type LoadingPermissionContext,
+} from './utils/can-edit-loading'
 
 // Экспорт хуков
 export {
@@ -52,6 +63,14 @@ export { usePermissionsLoader } from './hooks/usePermissionsLoader'
 export { useFilterContext } from './hooks/use-filter-context'
 export { useFilteredOptions, getLockedFilters } from './hooks/use-filtered-options'
 export type { HierarchyContext } from './hooks/use-filtered-options'
+
+// Loadings permissions hooks
+export {
+  useCanEditLoading,
+  useCanBulkShiftDepartment,
+  useIsRestrictedToOwnDepartment,
+  useHasAnyLoadingEditPermission,
+} from './hooks/use-can-edit-loading'
 
 // Экспорт компонентов
 export * from './components/PermissionGuard'

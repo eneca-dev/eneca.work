@@ -56,6 +56,11 @@ export interface LoadingModalNewProps {
   editData?: LoadingModalNewEditData
   /** ID текущего пользователя */
   userId: string
+  /**
+   * Read-only режим. Все инпуты disabled, кнопки сохранить/удалить/копировать
+   * скрыты. Используется когда у юзера нет прав на редактирование (Sections/Departments tabs).
+   */
+  isReadOnly?: boolean
 }
 
 export function LoadingModalNew({
@@ -65,6 +70,7 @@ export function LoadingModalNew({
   createData,
   editData,
   userId,
+  isReadOnly = false,
 }: LoadingModalNewProps) {
   // Хук для управления состоянием модалки
   const {
@@ -398,7 +404,7 @@ export function LoadingModalNew({
     selectedBreadcrumbs.length > 0 &&
     hasEmployee &&
     formData.rate >= 0.01 &&
-    formData.rate <= 2.0 &&
+    formData.rate <= 10.0 &&
     !!formData.startDate.trim() &&
     !!formData.endDate.trim() &&
     !isSaving &&
@@ -407,8 +413,9 @@ export function LoadingModalNew({
 
   // Дерево заблокировано когда форма активна, разблокируется через "Сменить раздел"
   // Также блокируем пока грузятся breadcrumbs (чтобы не дать кликнуть по "Мои проекты" до автонавигации)
+  // В read-only режиме дерево всегда заблокировано
   const isFormActive = mode === 'edit' || (mode === 'create' && isFormVisible)
-  const isProjectTreeDisabled = (isFormActive && !isChangingStage) || (!!shouldLoadBreadcrumbs && isLoadingBreadcrumbs)
+  const isProjectTreeDisabled = isReadOnly || (isFormActive && !isChangingStage) || (!!shouldLoadBreadcrumbs && isLoadingBreadcrumbs)
 
   return (
     <>
@@ -417,8 +424,17 @@ export function LoadingModalNew({
         {/* Заголовок */}
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>
-            {mode === 'create' ? 'Создание загрузки' : 'Редактирование загрузки'}
+            {isReadOnly
+              ? 'Просмотр загрузки'
+              : mode === 'create'
+                ? 'Создание загрузки'
+                : 'Редактирование загрузки'}
           </DialogTitle>
+          {isReadOnly && (
+            <p className="text-xs text-muted-foreground">
+              У вас нет прав на изменение этой загрузки
+            </p>
+          )}
         </DialogHeader>
 
         {/* Двухпанельный layout */}
@@ -516,10 +532,10 @@ export function LoadingModalNew({
                 formData={formData}
                 onFieldChange={setFormField}
                 errors={errors}
-                disabled={isSaving}
+                disabled={isSaving || isReadOnly}
                 selectedBreadcrumbs={selectedBreadcrumbs}
                 mode={mode}
-                onChangeStage={startChangingStage}
+                onChangeStage={isReadOnly ? undefined : startChangingStage}
                 isUpdating={isUpdating}
               />
             )}
@@ -529,8 +545,8 @@ export function LoadingModalNew({
         {/* Футер с кнопками */}
         <DialogFooter className="px-6 py-4 border-t">
           <div className="flex items-center justify-between w-full">
-            {/* Левая часть - кнопки копирования и удаления (только в режиме edit) */}
-            {mode === 'edit' ? (
+            {/* Левая часть - кнопки копирования и удаления (только в режиме edit + не read-only) */}
+            {mode === 'edit' && !isReadOnly ? (
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -557,18 +573,20 @@ export function LoadingModalNew({
             {/* Правая часть - кнопки отмены и сохранения */}
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose} disabled={isSaving}>
-                Отмена
+                {isReadOnly ? 'Закрыть' : 'Отмена'}
               </Button>
-              <Button onClick={handleSave} disabled={!canSave}>
-                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {batchProgress
-                  ? `Создание: ${batchProgress.current}/${batchProgress.total}`
-                  : mode === 'create'
-                    ? formData.employeeIds.length > 1
-                      ? `Создать (${formData.employeeIds.length})`
-                      : 'Создать'
-                    : 'Сохранить'}
-              </Button>
+              {!isReadOnly && (
+                <Button onClick={handleSave} disabled={!canSave}>
+                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {batchProgress
+                    ? `Создание: ${batchProgress.current}/${batchProgress.total}`
+                    : mode === 'create'
+                      ? formData.employeeIds.length > 1
+                        ? `Создать (${formData.employeeIds.length})`
+                        : 'Создать'
+                      : 'Сохранить'}
+                </Button>
+              )}
             </div>
           </div>
         </DialogFooter>
