@@ -404,7 +404,7 @@ export function LoadingModalNew({
     selectedBreadcrumbs.length > 0 &&
     hasEmployee &&
     formData.rate >= 0.01 &&
-    formData.rate <= 2.0 &&
+    formData.rate <= 10.0 &&
     !!formData.startDate.trim() &&
     !!formData.endDate.trim() &&
     !isSaving &&

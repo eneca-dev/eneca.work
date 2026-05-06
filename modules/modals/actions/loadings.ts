@@ -201,10 +201,10 @@ function isValidDate(dateString: string): boolean {
 }
 
 /**
- * Валидация ставки загрузки (0.01 - 2.0)
+ * Валидация ставки загрузки (0.01 - 10.0)
  */
 function isValidRate(rate: number): boolean {
-  return rate >= 0.01 && rate <= 2.0
+  return rate >= 0.01 && rate <= 10.0
 }
 
 /**

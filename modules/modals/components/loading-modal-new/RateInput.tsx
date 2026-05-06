@@ -57,8 +57,8 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
     // Заменяем запятую на точку
     processedValue = processedValue.replace(',', '.')
 
-    // Проверяем паттерн: цифра, опционально точка и до 2 цифр после
-    const validPattern = /^\d(\.\d{0,2})?$/
+    // Проверяем паттерн: 1-2 цифры, опционально точка и до 2 цифр после
+    const validPattern = /^\d{1,2}(\.\d{0,2})?$/
     if (!validPattern.test(processedValue)) {
       return
     }
@@ -74,7 +74,7 @@ export function RateInput({ value, onChange, error, disabled = false }: RateInpu
   }
 
   // Проверка валидности значения для отображения ошибки
-  const isInvalidRange = Boolean(customValue && (value < 0.01 || value > 2.0))
+  const isInvalidRange = Boolean(customValue && (value < 0.01 || value > 10.0))
 
   const isQuickRateSelected = (rate: number) => {
     return Math.abs(value - rate) < 0.001
