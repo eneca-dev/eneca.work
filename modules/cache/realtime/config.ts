@@ -83,6 +83,15 @@ export const realtimeSubscriptions: TableSubscription[] = [
       [...queryKeys.resourceGraph.all, 'loadings'],
       queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
       queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
+      queryKeys.budgets.calc(), // Расчётный бюджет из loadings (страница бюджетов)
+    ],
+  },
+  // Настройки ставок отделов — влияют на расчётный бюджет
+  {
+    table: 'department_budget_settings',
+    invalidateKeys: [
+      queryKeys.budgets.departmentSettings(),
+      queryKeys.budgets.calc(),
     ],
   },
   {
@@ -121,9 +130,16 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.resourceGraph.all, // Фактическая готовность
     ],
   },
-  // stage_readiness_snapshots, work_logs, project_reports, budgets, budget_parts —
+  // stage_readiness_snapshots, work_logs, project_reports, budget_parts —
   // не добавлены в supabase_realtime publication и слабо используются на фронте.
-  // Убраны чтобы не вызывать CHANNEL_ERROR и снизить нагрузку на realtime.
+
+  // ============================================================================
+  // Бюджеты
+  // ============================================================================
+  {
+    table: 'budgets',
+    invalidateKeys: [queryKeys.budgets.all],
+  },
 
   // ============================================================================
   // Справочники

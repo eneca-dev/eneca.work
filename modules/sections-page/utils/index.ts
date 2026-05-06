@@ -5,6 +5,7 @@
  */
 
 export * from './loading-bars-utils'
+export * from './sort-projects'
 
 import { format, eachDayOfInterval, parseISO, isWithinInterval } from 'date-fns'
 import type { ObjectSection, SectionLoading } from '../types'

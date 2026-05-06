@@ -10,26 +10,20 @@
 // ============================================================================
 
 /**
- * Средняя часовая ставка (BYN/час)
+ * @deprecated since 2026-04-28
+ * Захардкоженная средняя ставка (BYN/час). Заменена на ставку отдела
+ * (`department_budget_settings.hourly_rate`), берётся через `useSectionCalcBudgets`.
+ * См. docs/deprecated/budgets-planned-hours.md.
  *
- * TODO: В будущем загружать из настроек организации (таблица organization_settings)
- * или рассчитывать динамически на основе реальных ставок сотрудников.
- *
- * @see https://github.com/eneca-dev/eneca.work/issues/xxx
+ * Используется только в SectionRateEdit как fallback при отсутствии значения у раздела.
  */
 export const MOCK_HOURLY_RATE = 15
 
 /**
- * Коэффициент приведения часов (К)
- *
- * Используется для расчёта приведённых часов: приведённые = плановые × К
- *
- * TODO: В будущем должно быть настраиваемым параметром на уровне:
- * - Организации (organization_settings.hours_adjustment_factor)
- * - Проекта (projects.hours_adjustment_factor)
- * - Или рассчитываться автоматически на основе исторических данных
- *
- * @see https://github.com/eneca-dev/eneca.work/issues/xxx
+ * @deprecated since 2026-04-28
+ * Коэффициент приведения часов в старой формуле расчётного бюджета.
+ * В новой формуле через loadings × ставка_отдела фактор не применяется.
+ * См. docs/deprecated/budgets-planned-hours.md.
  */
 export const HOURS_ADJUSTMENT_FACTOR = 1.2
 

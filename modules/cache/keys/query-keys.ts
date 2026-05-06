@@ -52,6 +52,7 @@ export interface BudgetFilters extends BaseFilters {
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  lean?: boolean
 }
 
 export interface CheckpointFilters extends BaseFilters {
@@ -300,7 +301,7 @@ export const queryKeys = {
     list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
     details: () => [...queryKeys.budgets.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
-    /** Полная информация о бюджете с частями (v_budgets_full) */
+    /** Полная информация о бюджете */
     full: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'full'] as const,
     /** История изменений бюджета */
     history: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'history'] as const,
@@ -312,6 +313,12 @@ export const queryKeys = {
       [...queryKeys.budgets.all, 'section-summary', projectId] as const,
     parentCandidates: (entityType: string, entityId: string, budgetTypeId: string) =>
       [...queryKeys.budgets.all, 'parent-candidates', entityType, entityId, budgetTypeId] as const,
+    /** Расчётный бюджет по списку разделов из loadings (v_cache_section_calc_budget) */
+    calc: () => [...queryKeys.budgets.all, 'calc'] as const,
+    calcBySections: (sectionIds: string[]) =>
+      [...queryKeys.budgets.calc(), 'sections', [...sectionIds].sort().join(',')] as const,
+    /** Настройки ставок отделов (department_budget_settings) */
+    departmentSettings: () => [...queryKeys.budgets.all, 'departmentSettings'] as const,
   },
 
   // -------------------------------------------------------------------------

@@ -21,6 +21,8 @@ export interface AdminPermissions {
   canManageTeamLead: boolean
   canChangeRoles: boolean
   canAddAdminRole: boolean
+  // Настройки бюджета (ставка отдела)
+  canEditBudgetSettings: boolean
 }
 
 export interface AdminTabProps {

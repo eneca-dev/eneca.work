@@ -24,6 +24,7 @@ export {
 export {
   useDepartmentsTimelineUIStore,
   useRowExpanded,
+  useBulkShiftSelectionStore,
 } from './stores'
 
 // Types

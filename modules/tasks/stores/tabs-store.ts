@@ -83,6 +83,15 @@ const SYSTEM_TABS: TaskTab[] = [
     order: 4,
     createdAt: '2024-01-01T00:00:00.000Z',
   },
+  {
+    id: 'budgets',
+    name: 'Бюджеты',
+    viewMode: 'budgets',
+    filterString: '',
+    isSystem: true,
+    order: 5,
+    createdAt: '2024-01-01T00:00:00.000Z',
+  },
 ]
 
 // ============================================================================
@@ -326,7 +335,7 @@ export const useTasksTabsStore = create<TasksTabsState>()(
       }),
       {
         name: 'tasks-tabs',
-        version: 2,
+        version: 3,
         // Мигрируем старые данные если нужно
         migrate: (persisted, version) => {
           if (!persisted) {
@@ -338,14 +347,15 @@ export const useTasksTabsStore = create<TasksTabsState>()(
 
           const state = persisted as TasksTabsState
 
-          // v1 → v2: убраны системные вкладки timeline и budgets
-          if (version <= 1) {
-            const hiddenSystemIds = ['timeline', 'budgets']
+          // v1 → v2: убрана системная вкладка timeline
+          // v2 → v3: возвращена системная вкладка budgets
+          if (version <= 2) {
+            const hiddenSystemIds = ['timeline']
             const filteredTabs = state.tabs.filter(
               (t) => !(t.isSystem && hiddenSystemIds.includes(t.id))
             )
 
-            // Ensure system tabs exist with correct data
+            // Обеспечиваем что все системные вкладки присутствуют
             const systemIds = SYSTEM_TABS.map((t) => t.id)
             const userTabs = filteredTabs.filter((t) => !systemIds.includes(t.id))
             const mergedTabs = [...SYSTEM_TABS, ...userTabs].map((t, i) => ({
@@ -355,7 +365,7 @@ export const useTasksTabsStore = create<TasksTabsState>()(
 
             return {
               tabs: mergedTabs,
-              activeTabId: hiddenSystemIds.includes(state.activeTabId)
+              activeTabId: hiddenSystemIds.includes(state.activeTabId ?? '')
                 ? 'kanban'
                 : state.activeTabId,
             }

@@ -114,15 +114,6 @@ export function createOptimisticBudget(tempBudgetId: string): BudgetInfo {
     spent_amount: 0,
     remaining_amount: 0,
     spent_percentage: 0,
-    main_part_id: null,
-    main_amount: 0,
-    main_spent: 0,
-    premium_part_id: null,
-    premium_amount: null,
-    premium_spent: 0,
-    type_id: null,
-    type_name: null,
-    type_color: null,
     parent_budget_id: null,
     parent_planned_amount: 0,
     is_active: true,
@@ -144,7 +135,6 @@ export function createOptimisticStage(
     entityType: 'decomposition_stage',
     children: [],
     budgets: [createOptimisticBudget(`temp-budget-${operationId}`)],
-    aggregatedBudgets: [],
     plannedHours: 0,
   }
 }
@@ -164,7 +154,6 @@ export function createOptimisticItem(
     entityType: 'decomposition_item',
     children: [],
     budgets: [createOptimisticBudget(`temp-budget-${operationId}`)],
-    aggregatedBudgets: [],
     plannedHours: 0,
   }
 }

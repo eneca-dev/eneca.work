@@ -1,24 +1,12 @@
-/**
- * Budgets View Internal Component
- *
- * Главный компонент модуля - отображает иерархию с бюджетами.
- * Используется внутри TasksView как одна из вкладок.
- */
-
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useMemo, useCallback } from 'react'
-import { Loader2, Wallet, TrendingUp, FolderKanban, BarChart3, Database } from 'lucide-react'
+import { useMemo, useCallback } from 'react'
+import { Database, Lock } from 'lucide-react'
 import { BudgetsHierarchy } from './BudgetsHierarchy'
 import { useBudgetsHierarchy } from '../hooks'
-import { formatAmount } from '../utils'
+import { useHasPermission } from '@/modules/permissions'
 import type { BudgetsViewInternalProps } from '../types'
-import { cn } from '@/lib/utils'
-
-// ============================================================================
-// Loading Skeleton
-// ============================================================================
 
 function LoadingSkeleton() {
   return (
@@ -40,118 +28,36 @@ function LoadingSkeleton() {
   )
 }
 
-// ============================================================================
-// Analytics Skeleton
-// ============================================================================
-
-function AnalyticsSkeleton() {
-  return (
-    <div className="shrink-0 border-b bg-card px-4 py-2.5">
-      <div className="flex items-center gap-6">
-        <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
-        <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
-        <div className="flex-1" />
-        <div className="h-4 w-28 bg-muted/50 rounded animate-pulse" />
-        <div className="h-4 w-28 bg-muted/50 rounded animate-pulse" />
-        <div className="h-4 w-20 bg-muted/50 rounded animate-pulse" />
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// Analytics Panel (top position)
-// ============================================================================
-
-interface AnalyticsPanelProps {
-  totalPlanned: number
-  totalSpent: number
-  projectsCount: number
-}
-
-function AnalyticsPanel({ totalPlanned, totalSpent, projectsCount }: AnalyticsPanelProps) {
-  const percentage = totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0
-  const isOverBudget = percentage > 100
-
-  // Склонение слова "проект"
-  const projectWord = projectsCount === 1 ? 'проект' :
-    projectsCount >= 2 && projectsCount <= 4 ? 'проекта' : 'проектов'
-
-  return (
-    <div className="shrink-0 border-b bg-muted/20 px-4 py-2">
-      <div className="flex items-center gap-4 text-xs">
-        {/* Stats */}
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <FolderKanban className="h-3.5 w-3.5" />
-          <span>{projectsCount}</span>
-          <span className="text-muted-foreground/50">{projectWord}</span>
-        </div>
-
-        <div className="flex-1" />
-
-        {/* Totals */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">План:</span>
-          <span className="font-medium tabular-nums">{formatAmount(totalPlanned)} BYN</span>
-        </div>
-
-        <div className="w-px h-4 bg-border" />
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Факт:</span>
-          <span className="font-medium tabular-nums">{formatAmount(totalSpent)} BYN</span>
-        </div>
-
-        <div className="w-px h-4 bg-border" />
-
-        <div className="flex items-center gap-1.5">
-          <TrendingUp className={cn(
-            'h-3.5 w-3.5',
-            isOverBudget ? 'text-destructive' : 'text-muted-foreground'
-          )} />
-          <span className={cn(
-            'font-medium tabular-nums',
-            isOverBudget && 'text-destructive'
-          )}>
-            {percentage}%
-          </span>
-          <span className="text-muted-foreground/50">освоено</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
-
-export function BudgetsViewInternal({
-  queryParams,
-}: BudgetsViewInternalProps) {
+export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoadAll }: BudgetsViewInternalProps) {
+  const canView = useHasPermission('budgets.view.all')
   const searchParams = useSearchParams()
-  // State: загрузить все данные без фильтров
-  const [loadAll, setLoadAll] = useState(false)
 
-  // Проверяем, применены ли фильтры
-  const filtersApplied = useMemo(() => {
-    return Object.keys(queryParams).length > 0
-  }, [queryParams])
-
-  // Определяем, нужно ли загружать данные
-  const shouldFetchData = filtersApplied || loadAll
-
-  // Handle "Load All" button click
-  const handleLoadAll = useCallback(() => {
-    setLoadAll(true)
-  }, [])
-
-  const { nodes, analytics, isLoading, error, refetch } = useBudgetsHierarchy(
-    filtersApplied ? queryParams : undefined,
-    { enabled: shouldFetchData }
+  // Все хуки должны быть до любого раннего return — Rules of Hooks
+  const filtersApplied = useMemo(
+    () => Object.keys(queryParams).length > 0,
+    [queryParams]
   )
 
-  // Empty state - before data fetch (no filters, no loadAll)
+  const shouldFetchData = filtersApplied || loadAllEnabled
+
+  const handleLoadAll = useCallback(() => onLoadAll?.(), [onLoadAll])
+
+  const { nodes, isLoading, error } = useBudgetsHierarchy(
+    filtersApplied ? queryParams : undefined,
+    { enabled: shouldFetchData && canView }
+  )
+
+  if (!canView) {
+    return (
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center">
+          <Lock className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-sm font-medium text-muted-foreground">Нет доступа к бюджетам</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!shouldFetchData) {
     return (
       <div className="flex items-center justify-center h-full bg-background">
@@ -164,7 +70,7 @@ export function BudgetsViewInternal({
             Используйте фильтр выше для поиска проектов с бюджетами.
           </p>
           <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
-            подразделение:"ОВ" проект:"Название"
+            отдел:"ОВ" проект:"Название"
           </p>
           <button
             onClick={handleLoadAll}
@@ -178,14 +84,9 @@ export function BudgetsViewInternal({
     )
   }
 
-  // Получаем параметры для автоматического разворачивания и подсветки
   const sectionId = searchParams.get('sectionId')
-  const shouldHighlight = searchParams.get('highlight') === 'true'
+  const highlightSectionId = searchParams.get('highlight') === 'true' && sectionId ? sectionId : null
 
-  // Передаём ID раздела только если нужна подсветка
-  const highlightSectionId = shouldHighlight && sectionId ? sectionId : null
-
-  // Error state
   if (error) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -199,29 +100,14 @@ export function BudgetsViewInternal({
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Loading overlay (for initial load only) */}
       {isLoading && nodes.length === 0 ? (
-        <>
-          <AnalyticsSkeleton />
-          <LoadingSkeleton />
-        </>
+        <LoadingSkeleton />
       ) : (
-        <>
-          {/* Analytics panel - TOP */}
-          <AnalyticsPanel
-            totalPlanned={analytics.totalPlanned}
-            totalSpent={analytics.totalSpent}
-            projectsCount={analytics.projectsCount}
-          />
-
-          {/* Hierarchy content */}
-          <BudgetsHierarchy
-            nodes={nodes}
-            className="flex-1 min-h-0"
-            onRefresh={refetch}
-            highlightSectionId={highlightSectionId}
-          />
-        </>
+        <BudgetsHierarchy
+          nodes={nodes}
+          className="flex-1 min-h-0"
+          highlightSectionId={highlightSectionId}
+        />
       )}
     </div>
   )

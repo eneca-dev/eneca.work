@@ -410,9 +410,15 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 // Группы в желаемом порядке: гражд → общие → пром.
                 // Разделитель с лейблом показываем перед каждой непустой группой,
                 // включая первую — чтобы юзер видел названия всех разделов.
-                // В месячном режиме показываем: гражд (без «УП - Гражд») + ВК (только 1/3/4).
+                // В месячном режиме показываем: гражд (без «УП - Гражд») + ТСБС + ВК (только 1/3/4).
+                // ТСБС подмешивается из general, т.к. его имя не содержит «гражд», но отдел
+                // должен отображаться в гражданском направлении на месячном виде.
+                const tsbsDept = isMonthlyMode ? general.find((d) => d.name === 'ТСБС') : undefined
                 const monthlyGrazhd = isMonthlyMode
-                  ? grazhd.filter((d) => d.name !== 'УП - Гражд')
+                  ? [
+                      ...grazhd.filter((d) => d.name !== 'УП - Гражд'),
+                      ...(tsbsDept ? [tsbsDept] : []),
+                    ]
                   : grazhd
                 const groups: Array<{ key: string; label: string; items: typeof departments }> = isMonthlyMode
                   ? [

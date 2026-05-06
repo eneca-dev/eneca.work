@@ -8,7 +8,7 @@
 
 import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { FolderKanban, Building2, MessageSquare, UserPlus } from 'lucide-react'
+import { FolderKanban, Building2, MessageSquare, UserPlus, Check } from 'lucide-react'
 import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
 import { dayCellsToTimelineUnits, hexToRgba, calculateTimelineRange } from '@/modules/resource-graph/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -19,6 +19,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { openLoadingModalNewEdit, openLoadingModalNewCreate } from '@/modules/modals'
+import { useCanEditLoading } from '@/modules/permissions'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -39,10 +40,23 @@ import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
 import { useScissorsModeStore } from '@/stores'
 import { useLoadingMutations } from '@/modules/modals/hooks/useLoadingMutations'
 import { useUpdateLoadingDates } from '../../hooks'
+import { useBulkShiftSelectionStore } from '../../stores'
 import { MonthlyLoadingBars, calculateMonthlyBarsRowHeight } from '@/components/shared/timeline'
 import type { MonthlyBarLoading } from '@/components/shared/timeline'
 import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { TimelineScaleMode } from '@/components/shared/timeline'
+
+/**
+ * Контекст режима выборочного bulk-shift, передаётся в loading bars.
+ * isActive=true означает что для этого отдела пользователь активировал режим выбора;
+ * bars должны рендерить selectable / selected / dimmed состояния и переключать выбор по клику.
+ */
+interface SelectionContext {
+  isActive: boolean
+  activeProjectId: string | null
+  isSelected: (loadingId: string) => boolean
+  toggle: (loadingId: string) => void
+}
 
 interface EmployeeRowProps {
   employee: Employee
@@ -65,6 +79,10 @@ interface LoadingBarWithResizeProps {
   onLoadingClick: (loading: Loading) => void
   onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
   onSplitLoading: (loadingId: string, splitDate: string) => void
+  /** Может ли юзер редактировать загрузки этого сотрудника (drag/scissors) */
+  canEdit: boolean
+  /** Контекст режима выбора bulk-shift (если активен в этом отделе) */
+  selectionContext: SelectionContext
 }
 
 function LoadingBarWithResize({
@@ -75,14 +93,34 @@ function LoadingBarWithResize({
   onLoadingClick,
   onLoadingResize,
   onSplitLoading,
+  canEdit,
+  selectionContext,
 }: LoadingBarWithResizeProps) {
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
   const commentRef = useRef<HTMLDivElement>(null)
   const rateBadgeRef = useRef<HTMLDivElement>(null)
 
-  // Используем useTimelineResize только для loading (не для других типов периодов)
-  const canResize = bar.period.type === 'loading'
+  // Bulk-shift selection state для этого bar
+  const isLoadingType = bar.period.type === 'loading'
+  const barProjectId = isLoadingType ? bar.period.projectId : undefined
+
+  type SelectionState = 'normal' | 'selectable' | 'selected' | 'dimmed'
+  const selectionState: SelectionState = !selectionContext.isActive
+    ? 'normal'
+    : !isLoadingType
+      ? 'normal' // не-loading периоды (отпуск/больничный/праздник) не участвуют в bulk-shift — оставляем как есть
+      : barProjectId === selectionContext.activeProjectId
+        ? selectionContext.isSelected(bar.period.id) ? 'selected' : 'selectable'
+        : 'dimmed'
+
+  const isInSelectionMode = selectionState === 'selectable' || selectionState === 'selected'
+  const isDimmed = selectionState === 'dimmed'
+
+  // Resize доступен только для loading (не для других типов периодов)
+  // И только если у юзера есть права на редактирование
+  // И НЕ в режиме выбора (выбор имеет приоритет над редактированием)
+  const canResize = bar.period.type === 'loading' && canEdit && !selectionContext.isActive
 
   // Конвертируем Date в ISO string для useTimelineResize
   const startDateString = bar.period.startDate instanceof Date
@@ -112,8 +150,9 @@ function LoadingBarWithResize({
     disabled: !canResize,
   })
 
-  // Scissors mode
-  const isScissorsActive = useScissorsModeStore((s) => s.isActive)
+  // Scissors mode — активен только если у юзера есть права на редактирование
+  // И НЕ в режиме выбора bulk-shift
+  const isScissorsActive = useScissorsModeStore((s) => s.isActive) && canEdit && !selectionContext.isActive
 
   const scissors = useScissorsInteraction({
     loadingId: bar.period.id,
@@ -127,18 +166,21 @@ function LoadingBarWithResize({
   const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
   const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
 
-  // Обработчик клика с проверкой wasRecentlyDragging
+  // Обработчик клика — в режиме выбора toggle, иначе открытие модалки
   const handleClick = useCallback(() => {
     if (bar.period.type !== 'loading') return
-    if (isScissorsActive) return // Scissors mode — не открываем модалку
 
-    // Не открываем модалку если только что закончили drag
+    // В режиме выбора bulk-shift: клик переключает выбор (если bar selectable/selected)
+    if (isInSelectionMode) {
+      selectionContext.toggle(bar.period.id)
+      return
+    }
+
+    if (isScissorsActive) return // Scissors mode — не открываем модалку
     if (wasRecentlyDragging()) return
 
-    // BarPeriod содержит все необходимые поля Loading; startDate/endDate - Date объекты,
-    // модал (useLoadingModal) обрабатывает оба варианта (string и Date)
     onLoadingClick(bar.period as unknown as Loading)
-  }, [bar.period, onLoadingClick, wasRecentlyDragging, isScissorsActive])
+  }, [bar.period, onLoadingClick, wasRecentlyDragging, isScissorsActive, isInSelectionMode, selectionContext])
 
   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
@@ -179,9 +221,14 @@ function LoadingBarWithResize({
         className={cn(
           'absolute pointer-events-auto flex items-center',
           !isResizing && 'transition-all duration-200',
-          bar.period.type === 'loading' && !isScissorsActive && 'cursor-pointer hover:brightness-110',
+          // Cursor / hover поведение в зависимости от состояния
+          bar.period.type === 'loading' && !isScissorsActive && !isDimmed && 'cursor-pointer hover:brightness-110',
           isScissorsActive && bar.period.type === 'loading' && 'cursor-col-resize',
-          isResizing && 'ring-2 ring-primary/50 z-50'
+          isResizing && 'ring-2 ring-primary/50 z-50',
+          // Selection mode стили
+          selectionState === 'selectable' && 'hover:outline hover:outline-2 hover:outline-dashed hover:outline-primary hover:outline-offset-1',
+          selectionState === 'selected' && 'outline outline-[2.5px] outline-primary outline-offset-1',
+          selectionState === 'dimmed' && 'pointer-events-none',
         )}
         style={{
           left: displayLeft,
@@ -189,18 +236,34 @@ function LoadingBarWithResize({
           height: BASE_BAR_HEIGHT,
           top,
           backgroundColor: bar.color,
-          opacity: 0.8,
+          opacity: isDimmed ? 0.25 : selectionState === 'selected' ? 0.9 : 0.8,
           border: `2px solid ${bar.color}`,
           paddingLeft: 6,
           paddingRight: 6,
           overflow: 'hidden',
-          filter: 'brightness(1.1)',
+          filter: selectionState === 'selected' ? 'brightness(1.2)' : 'brightness(1.1)',
           borderTopLeftRadius: 4,
           borderTopRightRadius: 4,
           borderBottomLeftRadius: bar.period.comment ? 0 : 4,
           borderBottomRightRadius: bar.period.comment ? 0 : 4,
+          // В selection mode переопределяем transition только для opacity/outline,
+          // чтобы не интерферировать с анимациями resize/positioning.
+          // Вне selection mode полагаемся на className `transition-all duration-200`.
+          ...(selectionContext.isActive && {
+            transition: 'opacity 150ms ease-out, outline-color 100ms ease-out',
+          }),
         }}
         title={formatBarTooltip(bar.period)}
+        data-bulk-selectable={isInSelectionMode ? 'true' : undefined}
+        role={isInSelectionMode ? 'button' : undefined}
+        aria-pressed={selectionState === 'selected' ? true : selectionState === 'selectable' ? false : undefined}
+        tabIndex={isInSelectionMode ? 0 : undefined}
+        onKeyDown={isInSelectionMode ? (e) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault()
+            selectionContext.toggle(bar.period.id)
+          }
+        } : undefined}
         onClick={isScissorsActive ? scissors.handlers.onClick : handleClick}
         onMouseMove={scissors.handlers.onMouseMove}
         onMouseLeave={scissors.handlers.onMouseLeave}
@@ -354,6 +417,22 @@ function LoadingBarWithResize({
         })}
       </div>
 
+      {/* Bulk-shift selected checkmark indicator (sibling of bar so it's not clipped by overflow:hidden) */}
+      {selectionState === 'selected' && (
+        <div
+          className="absolute pointer-events-none flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-primary"
+          style={{
+            // Position at top-right corner of the bar, slightly outside its bounds.
+            // Bar top is `top`, right edge is `displayLeft + displayWidth`.
+            top: top - 6,
+            left: displayLeft + displayWidth - 10,
+            zIndex: 25,
+          }}
+        >
+          <Check size={11} className="text-primary" strokeWidth={3} />
+        </div>
+      )}
+
       {/* Comment below bar */}
       {bar.period.type === 'loading' && bar.period.comment && (
         <div
@@ -424,11 +503,53 @@ export function EmployeeRow({
   const isMonthlyMode = timelineScale === 'month'
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
 
+  // Permission gating для этого сотрудника. teamId/departmentId есть в Employee
+  // (из view_employee_workloads через final_team_id/final_department_id).
+  const canEdit = useCanEditLoading({
+    responsibleId: employee.id,
+    teamId: employee.teamId ?? null,
+    departmentId: employee.departmentId ?? null,
+    subdivisionId: null,
+    projectId: null, // varies per loading; PM check fallback на server
+  })
+
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
 
   // Mutation hook для разрезания загрузки
   const { split: splitMutation } = useLoadingMutations()
+
+  // Selection mode context (для bulk-shift с выбором)
+  const isSelectionActive = useBulkShiftSelectionStore(
+    (s) => s.activeDepartmentId === employee.departmentId && employee.departmentId !== undefined
+  )
+  const selectionActiveProjectId = useBulkShiftSelectionStore((s) => s.activeProjectId)
+  const selectionToggle = useBulkShiftSelectionStore((s) => s.toggle)
+  // Set читаем напрямую — для isSelected() callback. Re-render произойдёт при изменении Set,
+  // т.к. store создаёт новый Set в toggle/clear/selectAll/changeProject.
+  const selectedIds = useBulkShiftSelectionStore((s) => s.selectedLoadingIds)
+
+  const selectionContext = useMemo<SelectionContext>(
+    () => ({
+      isActive: isSelectionActive,
+      activeProjectId: selectionActiveProjectId,
+      isSelected: (loadingId: string) => selectedIds.has(loadingId),
+      toggle: selectionToggle,
+    }),
+    [isSelectionActive, selectionActiveProjectId, selectedIds, selectionToggle]
+  )
+
+  // Сколько загрузок этого сотрудника выбрано в текущем режиме bulk-shift
+  const employeeSelectedCount = useMemo(() => {
+    if (!isSelectionActive || !selectionActiveProjectId) return 0
+    let count = 0
+    for (const loading of employee.loadings ?? []) {
+      if (loading.projectId === selectionActiveProjectId && selectedIds.has(loading.id)) {
+        count++
+      }
+    }
+    return count
+  }, [isSelectionActive, selectionActiveProjectId, selectedIds, employee.loadings])
 
   // Timeline range для useTimelineResize
   const timelineRange = useMemo(() => calculateTimelineRange(dayCells), [dayCells])
@@ -514,13 +635,15 @@ export function EmployeeRow({
         rate: loading.rate,
         comment: loading.comment || null,
         section_id: loading.stageId || loading.sectionId, // stageId для этапов, sectionId как fallback для прямых загрузок на раздел
+        employee_team_id: employee.teamId ?? null,
+        employee_department_id: employee.departmentId ?? null,
       },
       // Передаём breadcrumbs только если они полные (содержат section).
       // Если sectionId отсутствует — модалка сама загрузит breadcrumbs через API по stageId.
       breadcrumbs: (loading.sectionId && breadcrumbs.length > 0) ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
-  }, [employee.id])
+  }, [employee.id, employee.teamId, employee.departmentId])
 
   // Обработчик создания новой загрузки для сотрудника
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
@@ -623,7 +746,7 @@ export function EmployeeRow({
           style={{ width: SIDEBAR_WIDTH, height: rowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
-          {!isMonthlyMode && (
+          {!isMonthlyMode && canEdit && (
             <button
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
               onClick={handleCreateLoading}
@@ -662,6 +785,14 @@ export function EmployeeRow({
                 {isTeamLead && (
                   <span className="inline-flex items-center justify-center rounded-sm text-[10px] px-1 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
                     ★
+                  </span>
+                )}
+                {employeeSelectedCount > 0 && (
+                  <span
+                    className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground tabular-nums"
+                    title={`Выбрано загрузок: ${employeeSelectedCount}`}
+                  >
+                    {employeeSelectedCount}
                   </span>
                 )}
               </div>
@@ -732,6 +863,8 @@ export function EmployeeRow({
                     onLoadingClick={handleLoadingClick}
                     onLoadingResize={handleLoadingResize}
                     onSplitLoading={handleSplitLoading}
+                    canEdit={canEdit}
+                    selectionContext={selectionContext}
                   />
                 ))}
               </div>

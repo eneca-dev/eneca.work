@@ -21,6 +21,7 @@ import {
 import { useSectionsPageActions } from '../../context'
 import { useUpdateLoadingDates } from '../../hooks'
 import { openLoadingModalNewCreate } from '@/modules/modals'
+import { useCanEditLoading } from '@/modules/permissions'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -46,6 +47,8 @@ interface EmployeeRowProps {
     employeeId: string
     employeeName: string
     employeeAvatarUrl: string | null
+    employeeTeamId: string | null
+    employeeDepartmentId: string | null
     employeeDepartmentName: string | null
     employeePosition: string | null
     employeeCategory: string | null
@@ -87,6 +90,8 @@ interface LoadingBarProps {
   onLoadingClick: (loading: SectionLoading) => void
   onLoadingResize: (loadingId: string, startDate: string, finishDate: string) => void
   onSplitLoading: (loadingId: string, splitDate: string) => void
+  /** Может ли юзер редактировать эту загрузку (drag/scissors). Клик всегда разрешён — открывает read-only modal. */
+  canEdit: boolean
 }
 
 function LoadingBar({
@@ -97,6 +102,7 @@ function LoadingBar({
   onLoadingClick,
   onLoadingResize,
   onSplitLoading,
+  canEdit,
 }: LoadingBarProps) {
   // Refs for containers (to update transform without re-render)
   const textRef = useRef<HTMLDivElement>(null)
@@ -126,11 +132,11 @@ function LoadingBar({
       onLoadingResize(bar.period.id, newStartDate, newEndDate)
     },
     minDays: 1,
-    disabled: false,
+    disabled: !canEdit,
   })
 
-  // Scissors mode
-  const isScissorsActive = useScissorsModeStore((s) => s.isActive)
+  // Scissors mode — активен только если у юзера есть права на редактирование
+  const isScissorsActive = useScissorsModeStore((s) => s.isActive) && canEdit
 
   const scissors = useScissorsInteraction({
     loadingId: bar.period.id,
@@ -281,8 +287,8 @@ function LoadingBar({
           />
         )}
 
-        {/* Resize handles (hidden in scissors mode) */}
-        {!isScissorsActive && <>
+        {/* Resize handles (hidden in scissors mode + если нет прав на редактирование) */}
+        {canEdit && !isScissorsActive && <>
           {/* Left handle */}
           {!isClippedLeft && (
             <div
@@ -442,6 +448,15 @@ export function EmployeeRow({
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const { onEditLoading } = useSectionsPageActions()
 
+  // Permission gating для этого сотрудника.
+  const canEdit = useCanEditLoading({
+    responsibleId: employee.employeeId,
+    teamId: employee.employeeTeamId,
+    departmentId: employee.employeeDepartmentId,
+    subdivisionId: null,
+    projectId,
+  })
+
   // Mutation hook для обновления дат загрузки
   const updateLoadingDates = useUpdateLoadingDates()
 
@@ -463,6 +478,8 @@ export function EmployeeRow({
         rate: loading.rate,
         comment: loading.comment || null,
         stage_id: loading.stageId,
+        employee_team_id: employee.employeeTeamId,
+        employee_department_id: employee.employeeDepartmentId,
       },
       {
         projectId,
@@ -474,7 +491,7 @@ export function EmployeeRow({
       },
       stages
     )
-  }, [onEditLoading, projectId, projectName, objectId, objectName, sectionId, sectionName, stages])
+  }, [onEditLoading, projectId, projectName, objectId, objectName, sectionId, sectionName, stages, employee.employeeTeamId, employee.employeeDepartmentId])
 
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
@@ -558,13 +575,15 @@ export function EmployeeRow({
           style={{ width: SIDEBAR_WIDTH, height: rowHeight }}
         >
           {/* Create loading button - positioned at right edge of sidebar */}
-          <button
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
-            onClick={handleCreateLoading}
-          >
-            <UserPlus className="w-3 h-3" />
-            <span>Загрузка</span>
-          </button>
+          {canEdit && (
+            <button
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/employee:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+              onClick={handleCreateLoading}
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>Загрузка</span>
+            </button>
+          )}
 
           {/* Left: avatar + name (indented) */}
           <div className="flex items-center gap-2 min-w-0 pl-10">
@@ -633,6 +652,7 @@ export function EmployeeRow({
                 onLoadingClick={handleLoadingClick}
                 onLoadingResize={handleLoadingResize}
                 onSplitLoading={handleSplitLoading}
+                canEdit={canEdit}
               />
             ))}
           </div>
