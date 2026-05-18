@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { BudgetInlineEdit } from './BudgetInlineEdit'
 import { BudgetRowExpander } from './BudgetRowExpander'
 import { BudgetRowBadges } from './BudgetRowBadges'
+import { DepartmentBlock } from './DepartmentBlock'
 import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
 import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
@@ -159,8 +160,8 @@ export const BudgetRow = React.memo(function BudgetRow({
           </span>
         </div>
 
-        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный ===== */}
-        <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
+        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный / Отклонение ===== */}
+        <div className="flex items-center flex-1 min-w-[480px] shrink-0 border-l border-border/30">
           <div className="w-full flex items-center">
             {/* Расчётный */}
             <div className="w-[80px] px-1 text-right">
@@ -213,7 +214,7 @@ export const BudgetRow = React.memo(function BudgetRow({
               <span className="text-[11px] text-muted-foreground/30">/</span>
             </div>
             {/* Выделенный - inline редактирование */}
-            <div className="flex-1 px-1">
+            <div className="w-[140px] shrink-0 px-1">
               <BudgetInlineEdit
                 budgets={node.budgets}
                 entityType={node.entityType}
@@ -221,6 +222,36 @@ export const BudgetRow = React.memo(function BudgetRow({
                 entityName={node.name}
                 isOverBudget={isOverBudget}
               />
+            </div>
+            <div className="w-[10px] text-center">
+              <span className="text-[11px] text-muted-foreground/30">/</span>
+            </div>
+            {/* Отклонение = Выделенный − Расчётный */}
+            <div className="w-[140px] shrink-0 px-1 text-left">
+              {(calcBudget !== null && calcBudget > 0) || allocatedBudget > 0 ? (() => {
+                const calc = calcBudget ?? 0
+                const deviation = allocatedBudget - calc
+                const deviationPct = calc > 0 ? (deviation / calc) * 100 : null
+                return (
+                  <span className={cn(
+                    'text-[12px] tabular-nums font-medium',
+                    deviation >= 0 ? 'text-emerald-400' : 'text-red-400',
+                    (isSection || isTopLevel) && 'font-medium'
+                  )}>
+                    {deviation >= 0 ? '+' : ''}{formatNumber(deviation, 0)}
+                    <span className={cn(
+                      'ml-1 text-[11px]',
+                      deviation >= 0 ? 'text-emerald-500' : 'text-red-400/90'
+                    )}>
+                      {deviationPct !== null
+                        ? `(${deviationPct >= 0 ? '+' : ''}${deviationPct.toFixed(1)}%)`
+                        : '(—)'}
+                    </span>
+                  </span>
+                )
+              })() : (
+                <span className="text-[12px] text-muted-foreground/30 tabular-nums">—</span>
+              )}
             </div>
           </div>
         </div>
@@ -241,6 +272,16 @@ export const BudgetRow = React.memo(function BudgetRow({
             highlightSectionId={highlightSectionId}
           />
         ))}
+
+      {/* Блок агрегации бюджета по отделам (Человеческие ресурсы) */}
+      {isProject && isExpanded && (
+        <DepartmentBlock
+          projectId={node.id}
+          projectAllocatedBudget={allocatedBudget}
+          expanded={expanded}
+          onToggle={onToggle}
+        />
+      )}
     </>
   )
 })

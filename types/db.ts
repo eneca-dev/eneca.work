@@ -19247,6 +19247,18 @@ export type Database = {
           },
         ]
       }
+      v_cache_project_department_budget: {
+        Row: {
+          calc_budget: number | null
+          department_id: string | null
+          errors_count: number | null
+          loading_count: number | null
+          project_id: string | null
+          total_hours: number | null
+          valid_loading_count: number | null
+        }
+        Relationships: []
+      }
       v_cache_section_calc_budget: {
         Row: {
           calc_budget: number | null

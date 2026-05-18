@@ -142,7 +142,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
                   <span className="text-slate-400">.work</span>
                 </h1>
                 <span className="mt-0.5 text-[9px] font-mono text-slate-500/70 tracking-wide">
-                  v: 1.4.0
+                  v: 1.4.1
                 </span>
               </div>
             )}
@@ -162,7 +162,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
           </div>
           {collapsed && (
             <span className="text-[9px] font-mono text-slate-500/70 tracking-wide leading-none">
-              v: 1.4.0
+              v: 1.4.1
             </span>
           )}
           {collapsed && (
