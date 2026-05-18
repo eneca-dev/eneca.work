@@ -120,7 +120,7 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
             </div>
 
             {/* БЮДЖЕТЫ subheaders */}
-            <div className="flex items-center flex-1 min-w-[340px] shrink-0 border-l border-border/30">
+            <div className="flex items-center flex-1 min-w-[480px] shrink-0 border-l border-border/30">
               <div className="w-[80px] py-1.5 px-1 text-right">
                 <span className="text-[10px] text-primary">Расчётн.</span>
               </div>
@@ -129,8 +129,12 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
                 <span className="text-[10px] text-muted-foreground">Распред.</span>
               </div>
               <div className="w-[10px]" />
-              <div className="flex-1 py-1.5 px-1 text-left">
+              <div className="w-[140px] shrink-0 py-1.5 px-1 text-left">
                 <span className="text-[10px] text-primary">Выделенный (сумма / %)</span>
+              </div>
+              <div className="w-[10px]" />
+              <div className="w-[140px] shrink-0 py-1.5 px-1 text-left">
+                <span className="text-[10px] text-muted-foreground">Отклонение</span>
               </div>
             </div>
           </div>

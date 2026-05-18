@@ -317,6 +317,8 @@ export const queryKeys = {
     calc: () => [...queryKeys.budgets.all, 'calc'] as const,
     calcBySections: (sectionIds: string[]) =>
       [...queryKeys.budgets.calc(), 'sections', [...sectionIds].sort().join(',')] as const,
+    /** Расчётный бюджет проект × отдел из loadings (v_cache_project_department_budget) */
+    calcByDepartments: () => [...queryKeys.budgets.all, 'calc-by-departments'] as const,
     /** Настройки ставок отделов (department_budget_settings) */
     departmentSettings: () => [...queryKeys.budgets.all, 'departmentSettings'] as const,
   },
