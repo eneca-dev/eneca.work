@@ -200,7 +200,17 @@ export async function getDepartmentsData(
       }
     }
 
-    const { data: orgData, error: orgError } = await orgQuery
+    // Параллельно: orgQuery + все гранты системы. Гранты не зависят от orgData
+    // и таблица мала (десятки строк), быстрее тянуть всё и фильтровать в памяти,
+    // чем ждать orgQuery → grantsQuery последовательно.
+    const [orgResult, allGrantsResult] = await Promise.all([
+      orgQuery,
+      supabase
+        .from('employee_loading_access_grants')
+        .select('employee_id, granted_to_department_id'),
+    ])
+
+    const { data: orgData, error: orgError } = orgResult
 
     if (orgError) {
       console.error('[getDepartmentsData] Org structure error:', orgError)
@@ -215,15 +225,57 @@ export async function getDepartmentsData(
       return { success: true, data: [] }
     }
 
+    // Гранты не критичны: при ошибке логируем и продолжаем без них
+    if (allGrantsResult.error) {
+      Sentry.captureException(new Error(allGrantsResult.error.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'false' },
+        extra: { step: 'load_grants' },
+      })
+    }
+
     // 2. Загружаем данные о сотрудниках с их загрузками
     // Скоупим выборку отделами из org-запроса, чтобы не тянуть все отделы
     const orgDepartmentIds = [...new Set(orgData.map(o => o.department_id).filter(Boolean))]
+
+    // Гранты для отделов, попавших в выборку
+    const grantsData = (allGrantsResult.data ?? []).filter((g) =>
+      orgDepartmentIds.includes(g.granted_to_department_id as string)
+    )
+
+    // ID гостевых сотрудников — для расширения employeeQuery одним запросом
+    // вместо отдельного guestEmployeesQuery (-1 round-trip).
+    const guestEmployeeIds = [
+      ...new Set(
+        grantsData
+          .map((g) => g.employee_id)
+          .filter((id): id is string => !!id)
+      ),
+    ]
 
     let employeeQuery = supabase
       .from('view_employee_workloads')
       .select('*')
       .or('loading_status.eq.active,loading_status.is.null')
       .in('final_department_id', orgDepartmentIds)
+
+    // Запрос для гостевых сотрудников: они должны проходить ВНЕ фильтров по
+    // final_department_id / final_team_id, потому что у них эти поля = их
+    // родного отдела (а не отдела-получателя). Иначе фильтр вида
+    // .eq('final_department_id', 'Отдел развития') отбросил бы гостя.
+    // Гости фильтруются только по user_id и базовым restricted-проектам.
+    let guestQueryBuilder = guestEmployeeIds.length > 0
+      ? supabase
+          .from('view_employee_workloads')
+          .select('*')
+          .or('loading_status.eq.active,loading_status.is.null')
+          .in('user_id', guestEmployeeIds)
+      : null
+
+    if (guestQueryBuilder && restrictedProjectIds.length > 0) {
+      guestQueryBuilder = guestQueryBuilder.or(
+        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
+      )
+    }
 
     // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
     // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
@@ -338,7 +390,23 @@ export async function getDepartmentsData(
       }
     }
 
-    const { data: employeeData, error: employeeError } = await employeeQuery
+    // Параллельно: основная выборка + гостевые сотрудники.
+    // Гости идут отдельно потому что фильтры по final_department_id / final_team_id
+    // их бы отбросили (у гостя эти поля = его родного отдела, не получателя).
+    const [employeeResult, guestResult] = await Promise.all([
+      employeeQuery,
+      guestQueryBuilder ?? Promise.resolve({ data: null, error: null }),
+    ])
+
+    const { data: employeeData, error: employeeError } = employeeResult
+    const guestEmployeeData = guestResult.data ?? []
+
+    if (guestResult.error) {
+      Sentry.captureException(new Error(guestResult.error.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'false' },
+        extra: { step: 'load_guest_employees' },
+      })
+    }
 
     if (employeeError) {
       console.error('[getDepartmentsData] Employee data error:', employeeError)
@@ -354,8 +422,11 @@ export async function getDepartmentsData(
     const teamsMap = new Map<string, Team>()
     const employeesMap = new Map<string, Employee>()
 
-    // Сначала обрабатываем сотрудников и их загрузки
-    employeeData?.forEach((item) => {
+    // Сначала обрабатываем сотрудников и их загрузки.
+    // Сливаем основную выборку и гостей — гости в employeesMap идут так же
+    // как обычные, отличаются только распределением по командам (см. ниже).
+    const allEmployeeRows = [...(employeeData ?? []), ...guestEmployeeData]
+    allEmployeeRows.forEach((item) => {
       // Пропускаем записи без user_id
       if (!item.user_id) return
 
@@ -475,7 +546,49 @@ export async function getDepartmentsData(
       }
     })
 
-    // Вычисляем dailyWorkloads для команд
+    // Cross-department grants: распределяем гостевых сотрудников в виртуальные команды
+    // "Гостевые сотрудники" в отделах-получателях. Один сотрудник может быть гостем
+    // в нескольких отделах одновременно — создаём отдельный клон для каждого гранта.
+    grantsData?.forEach((grant) => {
+      if (!grant.employee_id || !grant.granted_to_department_id) return
+      // Если отдел-получатель не попал в orgData (например, отфильтрован по subdivision) —
+      // не показываем гранта здесь, иначе создадим "висячий" отдел без команд.
+      if (!departmentsMap.has(grant.granted_to_department_id)) return
+
+      const sourceEmployee = employeesMap.get(grant.employee_id)
+      if (!sourceEmployee) return
+
+      // Не дублируем: если сотрудник уже в родном отделе == отдел-получатель,
+      // это валидная ситуация — триггер БД её предотвращает, но защищаемся.
+      if (sourceEmployee.departmentId === grant.granted_to_department_id) return
+
+      const guestTeamKey = `${grant.granted_to_department_id}-guests`
+      if (!teamsMap.has(guestTeamKey)) {
+        const dept = departmentsMap.get(grant.granted_to_department_id)
+        teamsMap.set(guestTeamKey, {
+          id: `guests-${grant.granted_to_department_id}`,
+          name: 'Гостевые сотрудники',
+          code: '',
+          departmentId: grant.granted_to_department_id,
+          departmentName: dept?.name,
+          totalEmployees: 0,
+          employees: [],
+          dailyWorkloads: {},
+          isGuestTeam: true,
+        })
+      }
+
+      const guestTeam = teamsMap.get(guestTeamKey)!
+      // Клон с пометкой isGuest — сохраняем все loadings и dailyWorkloads,
+      // т.к. таймлайн должен показывать его реальную загруженность.
+      guestTeam.employees.push({
+        ...sourceEmployee,
+        isGuest: true,
+        homeDepartmentName: sourceEmployee.departmentName,
+      })
+    })
+
+    // Вычисляем dailyWorkloads для команд (включая виртуальные)
     teamsMap.forEach((team) => {
       team.dailyWorkloads = aggregateDailyWorkloads(team.employees)
     })
@@ -515,7 +628,12 @@ export async function getDepartmentsData(
 
     // Сортируем команды и сотрудников внутри отделов
     departments.forEach((dept) => {
-      dept.teams.sort((a, b) => a.name.localeCompare(b.name))
+      dept.teams.sort((a, b) => {
+        // Виртуальная команда "Гостевые сотрудники" всегда в конце
+        if (a.isGuestTeam && !b.isGuestTeam) return 1
+        if (!a.isGuestTeam && b.isGuestTeam) return -1
+        return a.name.localeCompare(b.name)
+      })
       dept.teams.forEach((team) => {
         // Тимлид первым, остальные по имени
         team.employees.sort((a, b) => {

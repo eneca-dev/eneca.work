@@ -15,6 +15,7 @@ import { LoadingModalNew } from './LoadingModalNew'
 import { getLoadingById } from '../../actions/loadings'
 import type { LoadingModalNewCreateData, LoadingModalNewEditData } from '../../types'
 import { useCanEditLoading } from '@/modules/permissions'
+import { useEmployeeGrantedDepartmentIds } from '@/modules/users/hooks/use-loading-access-grants'
 
 export function LoadingModalNewContainer() {
   const userId = useUserStore((s) => s.id)
@@ -100,6 +101,11 @@ export function LoadingModalNewContainer() {
     }
   }, [isEditOpen, modalData])
 
+  // Cross-department grants на сотрудника-исполнителя (для проверки прав НО/ТЛ-получателей)
+  const employeeIdForGrants = editData?.loading?.employee_id ?? null
+  const { data: employeeGrantedDeptIds = [] } =
+    useEmployeeGrantedDepartmentIds(employeeIdForGrants)
+
   // Permission check для edit-режима — пробрасываем в модалку как isReadOnly
   const editLoadingPermissionContext = useMemo(() => {
     if (!editData?.loading) return null
@@ -109,8 +115,9 @@ export function LoadingModalNewContainer() {
       departmentId: editData.loading.employee_department_id ?? null,
       subdivisionId: null,
       projectId: editData.projectId ?? null,
+      grantedToDepartmentIds: employeeGrantedDeptIds,
     }
-  }, [editData])
+  }, [editData, employeeGrantedDeptIds])
 
   const canEditExisting = useCanEditLoading(editLoadingPermissionContext)
 

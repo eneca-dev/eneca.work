@@ -27,6 +27,7 @@ import { useUserPermissions } from "../hooks/useUserPermissions"
 import { useUserPermissionsSync } from "@/modules/permissions"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { EmployeeAccessGrantsSection } from "./employee-access-grants-section"
 import * as Sentry from "@sentry/nextjs"
 
 interface UserDialogProps {
@@ -630,7 +631,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     <Modal isOpen={open} onClose={() => {
       onOpenChange(false)
       resetSearch()
-    }} size="xl" className="max-h-[95vh] flex flex-col">
+    }} size="xl" className="max-h-[95vh] flex flex-col overflow-x-hidden">
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         <Modal.Header 
           title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
@@ -640,8 +641,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               : "Измените информацию о пользователе и нажмите Сохранить, когда закончите."
           }
         />
-        <Modal.Body className="flex-1 min-h-0 overflow-y-auto">
-          <div className="grid gap-3 py-3">
+        <Modal.Body className="flex-1 min-h-0 overflow-y-auto min-w-0">
+          <div className="grid grid-cols-1 gap-3 py-3 min-w-0">
             {/* Имя и Фамилия в одну строку */}
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
               <Label className="text-right md:col-span-1 col-span-full pt-2">Имя и Фамилия</Label>
@@ -1031,8 +1032,14 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               </Select>
             </div>
 
-
-
+            {/* Cross-department loading access grants */}
+            {user?.id && (
+              <EmployeeAccessGrantsSection
+                employeeId={user.id}
+                employeeDepartmentId={user.departmentId ?? null}
+                employeeTeamId={user.teamId ?? null}
+              />
+            )}
 
           </div>
         </Modal.Body>

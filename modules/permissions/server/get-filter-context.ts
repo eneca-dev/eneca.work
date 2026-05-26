@@ -231,6 +231,36 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
         const managedProjectIds = projectsData?.map((p) => p.project_id)
         const managedProjectNames = projectsData?.map((p) => p.project_name)
 
+        // grantedAccessDepartmentIds — отделы, через которые юзер может получать
+        // доступ к "гостевым" сотрудникам по cross-department grants.
+        // Включаем отдел юзера и тот, которым он заведует (для НО);
+        // плюс отделы команд, в которых юзер ТЛ или состоит.
+        const hasDeptScope = allPermissions.includes('loadings.edit.scope.department')
+        const hasTeamScope = allPermissions.includes('loadings.edit.scope.team')
+        const grantedDeptIdSet = new Set<string>()
+
+        if (hasDeptScope) {
+          if (profile.department_id) grantedDeptIdSet.add(profile.department_id)
+          if (headDepartmentId) grantedDeptIdSet.add(headDepartmentId)
+        }
+
+        if (hasTeamScope) {
+          const teamIds = [profile.team_id, leadTeamId].filter(
+            (id): id is string => !!id
+          )
+          if (teamIds.length) {
+            const { data: teamDepts } = await supabase
+              .from('teams')
+              .select('department_id')
+              .in('team_id', teamIds)
+            teamDepts?.forEach((t) => {
+              if (t.department_id) grantedDeptIdSet.add(t.department_id)
+            })
+          }
+        }
+
+        const grantedAccessDepartmentIds = Array.from(grantedDeptIdSet)
+
         // Phase 3: Вычисляем scope (синхронная операция)
         const scope = resolveFilterScope(filterPermissions, {
           ownTeamId: profile.team_id ?? undefined,
@@ -266,6 +296,7 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
             headSubdivisionName,
             managedProjectIds,
             managedProjectNames,
+            grantedAccessDepartmentIds,
 
             scope,
           },

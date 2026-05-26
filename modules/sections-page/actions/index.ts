@@ -701,8 +701,8 @@ export async function createSectionLoading(
     }
     const ctx = ctxResult.data
 
-    // Получаем метаданные исполнителя и раздела параллельно
-    const [employeeRow, sectionRow] = await Promise.all([
+    // Получаем метаданные исполнителя, раздела и cross-department grants параллельно
+    const [employeeRow, sectionRow, grantsResult] = await Promise.all([
       supabase
         .from('view_users')
         .select('team_id, department_id, subdivision_id')
@@ -713,6 +713,10 @@ export async function createSectionLoading(
         .select('project_id, responsible_department_id')
         .eq('section_id', input.sectionId)
         .single(),
+      supabase
+        .from('employee_loading_access_grants')
+        .select('granted_to_department_id')
+        .eq('employee_id', input.employeeId),
     ])
 
     if (employeeRow.error || !employeeRow.data) {
@@ -722,6 +726,9 @@ export async function createSectionLoading(
       return { success: false, error: 'Раздел не найден' }
     }
 
+    const grantedToDepartmentIds =
+      grantsResult.data?.map((g) => g.granted_to_department_id) ?? []
+
     // Future loading metadata для проверки прав
     const futureLoading: LoadingPermissionContext = {
       responsibleId: input.employeeId,
@@ -729,14 +736,24 @@ export async function createSectionLoading(
       departmentId: employeeRow.data.department_id ?? null,
       subdivisionId: employeeRow.data.subdivision_id ?? null,
       projectId: sectionRow.data.project_id ?? null,
+      grantedToDepartmentIds,
     }
 
     if (!canEditLoading(futureLoading, ctx)) {
       return { success: false, error: 'Нет прав на создание загрузки для этого сотрудника' }
     }
 
-    // Cross-dept: для restricted ролей раздел и сотрудник должны быть в одном отделе
+    // Cross-dept: для restricted ролей раздел и сотрудник должны быть в одном отделе.
+    // Исключение: если есть пересечение grantedToDepartmentIds с grantedAccessDepartmentIds —
+    // юзер получил доступ через грант, проверка соответствия отделов не применяется.
+    const accessViaGrant =
+      grantedToDepartmentIds.length > 0 &&
+      ctx.grantedAccessDepartmentIds.some((d) =>
+        grantedToDepartmentIds.includes(d)
+      )
+
     if (
+      !accessViaGrant &&
       isRestrictedToOwnDepartment(ctx) &&
       sectionRow.data.responsible_department_id !== futureLoading.departmentId
     ) {
