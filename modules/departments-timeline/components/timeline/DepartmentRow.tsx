@@ -346,9 +346,9 @@ export function DepartmentRow({
           />
         )
 
-        // ВК на дневном виде: команды 1/3/4 — гражд, остальные — пром.
+        // ВК: команды 1/3/4 — гражд, остальные — пром.
         // Сортируем гражд вперёд и вставляем мягкий разделитель перед пром-группой.
-        if (!isMonthlyMode && department.name === 'ВК') {
+        if (department.name === 'ВК') {
           const civilTeamNames = new Set(['ВК - 1', 'ВК - 3', 'ВК - 4'])
           const civil = department.teams.filter((t) => civilTeamNames.has(t.name))
           const prom = department.teams.filter((t) => !civilTeamNames.has(t.name))

@@ -8,7 +8,7 @@
 
 import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { FolderKanban, Building2, MessageSquare, UserPlus, Check } from 'lucide-react'
+import { FolderKanban, Building2, MessageSquare, UserPlus, Check, ArrowLeftRight } from 'lucide-react'
 import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
 import { dayCellsToTimelineUnits, hexToRgba, calculateTimelineRange } from '@/modules/resource-graph/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/tooltip'
 import { openLoadingModalNewEdit, openLoadingModalNewCreate } from '@/modules/modals'
 import { useCanEditLoading } from '@/modules/permissions'
+import { useAllLoadingAccessGrantsIndex } from '@/modules/users/hooks/use-loading-access-grants'
 import {
   loadingsToPeriods,
   calculateBarRenders,
@@ -505,12 +506,16 @@ export function EmployeeRow({
 
   // Permission gating для этого сотрудника. teamId/departmentId есть в Employee
   // (из view_employee_workloads через final_team_id/final_department_id).
+  // Подтягиваем cross-department grants на этого сотрудника, чтобы НО/ТЛ
+  // отдела-получателя мог редактировать (drag/scissors) загрузки гостя.
+  const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
   const canEdit = useCanEditLoading({
     responsibleId: employee.id,
     teamId: employee.teamId ?? null,
     departmentId: employee.departmentId ?? null,
     subdivisionId: null,
     projectId: null, // varies per loading; PM check fallback на server
+    grantedToDepartmentIds: grantsIndex[employee.id] ?? [],
   })
 
   // Mutation hook для обновления дат загрузки
@@ -785,6 +790,15 @@ export function EmployeeRow({
                 {isTeamLead && (
                   <span className="inline-flex items-center justify-center rounded-sm text-[10px] px-1 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
                     ★
+                  </span>
+                )}
+                {employee.isGuest && employee.homeDepartmentName && (
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-200 shrink-0"
+                    title={`Гостевой сотрудник из отдела «${employee.homeDepartmentName}». Доступ открыт через cross-department grant.`}
+                  >
+                    <ArrowLeftRight className="h-2.5 w-2.5" />
+                    {employee.homeDepartmentName}
                   </span>
                 )}
                 {employeeSelectedCount > 0 && (

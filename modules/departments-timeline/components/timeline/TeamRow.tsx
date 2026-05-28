@@ -8,7 +8,7 @@
 
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronRight, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, Users, ArrowLeftRight } from 'lucide-react'
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { useRowExpanded } from '../../stores'
 import { FreshnessIndicator } from '@/components/shared/timeline'
@@ -96,12 +96,23 @@ export function TeamRow({
                   <ChevronRight className="h-4 w-4 text-primary" />
                 )}
               </div>
-              <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              {team.isGuestTeam ? (
+                <ArrowLeftRight className="h-4 w-4 text-amber-600 dark:text-amber-500 flex-shrink-0" />
+              ) : (
+                <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              )}
               <div className="min-w-0">
-                <div className="font-medium text-sm truncate">
+                <div className={cn(
+                  'font-medium text-sm truncate',
+                  team.isGuestTeam && 'text-amber-700 dark:text-amber-400'
+                )}>
                   {team.name}
                 </div>
-                {team.teamLeadName && (
+                {team.isGuestTeam ? (
+                  <div className="text-[10px] text-muted-foreground truncate">
+                    Из других отделов · доступ через грант
+                  </div>
+                ) : team.teamLeadName && (
                   <div className="text-[10px] text-muted-foreground truncate">
                     Лид: {team.teamLeadName}
                   </div>
@@ -119,15 +130,17 @@ export function TeamRow({
                   {formatWorkload(totalTeamCapacity)}
                 </span>
               )}
-              <FreshnessIndicator
-                teamId={team.id}
-                teamName={team.name}
-                daysSinceUpdate={teamFreshness?.daysSinceUpdate}
-                lastUpdate={teamFreshness?.lastUpdate ? new Date(teamFreshness.lastUpdate) : null}
-                theme="light"
-                size="sm"
-                onConfirm={onConfirmActivity}
-              />
+              {!team.isGuestTeam && (
+                <FreshnessIndicator
+                  teamId={team.id}
+                  teamName={team.name}
+                  daysSinceUpdate={teamFreshness?.daysSinceUpdate}
+                  lastUpdate={teamFreshness?.lastUpdate ? new Date(teamFreshness.lastUpdate) : null}
+                  theme="light"
+                  size="sm"
+                  onConfirm={onConfirmActivity}
+                />
+              )}
             </div>
           </div>
 

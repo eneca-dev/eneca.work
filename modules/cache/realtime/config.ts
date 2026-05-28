@@ -228,6 +228,18 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.filterPermissions.all,
     ],
   },
+
+  // ============================================================================
+  // Cross-department loading access grants
+  // ============================================================================
+  {
+    table: 'employee_loading_access_grants',
+    invalidateKeys: [
+      queryKeys.loadingAccessGrants.all,
+      queryKeys.users.all, // селекторы сотрудников зависят от грантов
+      queryKeys.filterPermissions.all, // grantedAccessDepartmentIds в UserFilterContext
+    ],
+  },
 ]
 
 /**
