@@ -35,6 +35,64 @@ function isUuid(value: string): boolean {
 }
 
 /**
+ * Экранирует значение для безопасной вставки в PostgREST .or() filter string.
+ * Оборачивает в "..." и удваивает embedded двойные кавычки — защищает от
+ * injection через имена, содержащие `,`, `(`, `)`, `:` или `"`.
+ *
+ * Wildcards `%` для ilike внутри кавычек продолжают работать как pattern.
+ */
+function escapePostgRESTValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * Применяет фильтр с поддержкой нескольких значений (UUID и/или имена) к Supabase query.
+ *
+ * - Все UUID → `.in(uuidField, [...])`
+ * - Все имена → `.or()` с цепочкой ilike
+ * - Смешанные → `.or()` c eq для UUID + ilike для имён
+ *
+ * Без этого helper'а множественные значения одного поля молча сводились к [0],
+ * из-за чего `отдел:"АР гражд" отдел:"КР гражд"` фильтровало только по первому.
+ *
+ * @param wrapName — оборачивать ли имя в `%...%` (для partial match по full_name)
+ */
+function applyMultiValueFilter<T>(
+  query: T,
+  rawValue: string | string[],
+  uuidField: string,
+  nameField: string,
+  wrapName = false,
+): T {
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue]
+  if (values.length === 0) return query
+
+  const uuids = values.filter(isUuid)
+  const names = values.filter((v) => !isUuid(v))
+  const wrap = (n: string) => (wrapName ? `%${n}%` : n)
+  // Supabase builder самовозвращающийся; cast локализован — снаружи тип T сохраняется
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = query as any
+
+  if (uuids.length > 0 && names.length === 0) {
+    return q.in(uuidField, uuids) as T
+  }
+  if (names.length > 0 && uuids.length === 0) {
+    const orClause = names
+      .map((n) => `${nameField}.ilike.${escapePostgRESTValue(wrap(n))}`)
+      .join(',')
+    return q.or(orClause) as T
+  }
+  // Смешанные: UUID через eq + имена через ilike в одном .or().
+  // UUIDs валидированы isUuid() — безопасны для интерполяции; имена — экранируем.
+  const parts: string[] = uuids.map((id) => `${uuidField}.eq.${id}`)
+  names.forEach((n) =>
+    parts.push(`${nameField}.ilike.${escapePostgRESTValue(wrap(n))}`),
+  )
+  return q.or(parts.join(',')) as T
+}
+
+/**
  * Вычисляет dailyWorkloads для сотрудника на основе его загрузок
  */
 function calculateDailyWorkloads(loadings: Loading[]): Record<string, number> {
@@ -113,72 +171,66 @@ export async function getDepartmentsData(
     // 1. Загружаем организационную структуру
     let orgQuery = supabase.from('view_organizational_structure').select('*')
 
-    // Применяем фильтр по подразделению
+    // Применяем фильтр по подразделению (поддержка нескольких значений: UUID + имена).
+    // Подразделение → отделы — двушаговый резолв: сначала собираем все subdivision_ids
+    // (введённые UUID + найденные по именам), затем вытаскиваем все отделы под ними.
     if (secureFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(secureFilters.subdivision_id)
-        ? secureFilters.subdivision_id[0]
-        : secureFilters.subdivision_id
+      const rawValues = Array.isArray(secureFilters.subdivision_id)
+        ? secureFilters.subdivision_id
+        : [secureFilters.subdivision_id]
 
-      if (isUuid(subdivisionId)) {
-        // Получаем отделы подразделения
-        const { data: depts } = await supabase
-          .from('departments')
-          .select('department_id')
-          .eq('subdivision_id', subdivisionId)
+      const subdivisionUuids = rawValues.filter(isUuid)
+      const subdivisionNames = rawValues.filter((v) => !isUuid(v))
 
-        const deptIds = depts?.map(d => d.department_id) || []
-        if (deptIds.length > 0) {
-          orgQuery = orgQuery.in('department_id', deptIds)
-        } else {
-          return { success: true, data: [] }
-        }
-      } else {
-        // Фильтрация по названию подразделения
+      // Резолвим имена в UUID одним запросом (имена экранируем — см. escapePostgRESTValue)
+      if (subdivisionNames.length > 0) {
+        const orClause = subdivisionNames
+          .map((n) => `subdivision_name.ilike.${escapePostgRESTValue(n)}`)
+          .join(',')
         const { data: subdivisions } = await supabase
           .from('subdivisions')
           .select('subdivision_id')
-          .ilike('subdivision_name', subdivisionId)
-
-        if (subdivisions && subdivisions.length > 0) {
-          const { data: depts } = await supabase
-            .from('departments')
-            .select('department_id')
-            .in('subdivision_id', subdivisions.map(s => s.subdivision_id))
-
-          const deptIds = depts?.map(d => d.department_id) || []
-          if (deptIds.length > 0) {
-            orgQuery = orgQuery.in('department_id', deptIds)
-          } else {
-            return { success: true, data: [] }
-          }
+          .or(orClause)
+        if (subdivisions) {
+          subdivisionUuids.push(...subdivisions.map((s) => s.subdivision_id))
         }
       }
+
+      if (subdivisionUuids.length === 0) {
+        return { success: true, data: [] }
+      }
+
+      const { data: depts } = await supabase
+        .from('departments')
+        .select('department_id')
+        .in('subdivision_id', subdivisionUuids)
+
+      const deptIds = depts?.map((d) => d.department_id) || []
+      if (deptIds.length > 0) {
+        orgQuery = orgQuery.in('department_id', deptIds)
+      } else {
+        return { success: true, data: [] }
+      }
     }
 
-    // Применяем фильтр по отделу
+    // Применяем фильтр по отделу (поддержка нескольких значений)
     if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id)
-        ? secureFilters.department_id[0]
-        : secureFilters.department_id
-
-      if (isUuid(departmentId)) {
-        orgQuery = orgQuery.eq('department_id', departmentId)
-      } else {
-        orgQuery = orgQuery.ilike('department_name', departmentId)
-      }
+      orgQuery = applyMultiValueFilter(
+        orgQuery,
+        secureFilters.department_id,
+        'department_id',
+        'department_name',
+      )
     }
 
-    // Применяем фильтр по команде
+    // Применяем фильтр по команде (поддержка нескольких значений)
     if (secureFilters?.team_id) {
-      const teamId = Array.isArray(secureFilters.team_id)
-        ? secureFilters.team_id[0]
-        : secureFilters.team_id
-
-      if (isUuid(teamId)) {
-        orgQuery = orgQuery.eq('team_id', teamId)
-      } else {
-        orgQuery = orgQuery.ilike('team_name', teamId)
-      }
+      orgQuery = applyMultiValueFilter(
+        orgQuery,
+        secureFilters.team_id,
+        'team_id',
+        'team_name',
+      )
     }
 
     // Исключающие фильтры для орг. структуры
@@ -287,70 +339,26 @@ export async function getDepartmentsData(
       )
     }
 
-    // Применяем те же фильтры для сотрудников
-    if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id)
-        ? secureFilters.department_id[0]
-        : secureFilters.department_id
+    // ----- Org-фильтры (только для main employeeQuery) -----
+    // Гостям эти фильтры НЕ применяются: у guest final_department_id / final_team_id =
+    // его родного отдела, а не отдела-получателя гранта, иначе фильтр их отбросил бы.
 
-      if (isUuid(departmentId)) {
-        employeeQuery = employeeQuery.eq('final_department_id', departmentId)
-      } else {
-        employeeQuery = employeeQuery.ilike('final_department_name', departmentId)
-      }
+    if (secureFilters?.department_id) {
+      employeeQuery = applyMultiValueFilter(
+        employeeQuery,
+        secureFilters.department_id,
+        'final_department_id',
+        'final_department_name',
+      )
     }
 
     if (secureFilters?.team_id) {
-      const teamId = Array.isArray(secureFilters.team_id)
-        ? secureFilters.team_id[0]
-        : secureFilters.team_id
-
-      if (isUuid(teamId)) {
-        employeeQuery = employeeQuery.eq('final_team_id', teamId)
-      } else {
-        employeeQuery = employeeQuery.ilike('final_team_name', teamId)
-      }
-    }
-
-    // Применяем фильтр по проекту (поддержка нескольких значений)
-    if (secureFilters?.project_id) {
-      const values = Array.isArray(secureFilters.project_id)
-        ? secureFilters.project_id
-        : [secureFilters.project_id]
-
-      const uuids = values.filter(isUuid)
-      const names = values.filter(v => !isUuid(v))
-
-      if (uuids.length > 0 && names.length === 0) {
-        employeeQuery = employeeQuery.in('project_id', uuids)
-      } else if (names.length > 0 && uuids.length === 0) {
-        // Несколько имён — OR через ilike
-        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
-        employeeQuery = employeeQuery.or(orClause)
-      } else if (uuids.length > 0 && names.length > 0) {
-        // Смешанный: UUID через in + имена через ilike
-        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
-        names.forEach(n => parts.push(`project_name.ilike.${n}`))
-        employeeQuery = employeeQuery.or(parts.join(','))
-      }
-    }
-
-    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный).
-    // Для project_id/project_name используем .or() с is.null — иначе сотрудники
-    // без загрузок (project_id IS NULL) отфильтровываются из-за 3-значной логики SQL.
-    // UUID-исключения собираем в один NOT IN, ilike-паттерны — каждый в свой .or()
-    // (их нельзя комбинировать в один NOT IN).
-    const negatedProjects = getNegatedParams(secureFilters, 'project_id')
-    const negatedProjectUuids = negatedProjects.filter(isUuid)
-    const negatedProjectNames = negatedProjects.filter(v => !isUuid(v))
-
-    if (negatedProjectUuids.length > 0) {
-      employeeQuery = employeeQuery.or(
-        `project_id.is.null,project_id.not.in.(${negatedProjectUuids.join(',')})`
+      employeeQuery = applyMultiValueFilter(
+        employeeQuery,
+        secureFilters.team_id,
+        'final_team_id',
+        'final_team_name',
       )
-    }
-    for (const val of negatedProjectNames) {
-      employeeQuery = employeeQuery.or(`project_name.is.null,project_name.not.ilike.${val}`)
     }
 
     for (const val of getNegatedParams(secureFilters, 'department_id')) {
@@ -369,25 +377,55 @@ export async function getDepartmentsData(
       }
     }
 
-    for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('user_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('full_name', 'ilike', `%${val}%`)
+    // ----- Loading-уровень фильтры (для обоих: main + guest) -----
+    // Эти фильтры относятся к самой загрузке (project, responsible). Без них гости
+    // приходили со ВСЕМИ своими загрузками — даже когда юзер выбрал конкретный проект,
+    // отчего гости показывались с "чужими" проектами в реальной команде.
+    //
+    // Для project_id/name и responsible negated используем .or() с is.null —
+    // иначе сотрудники без загрузок (project_id IS NULL) отвалились бы из-за
+    // 3-значной логики SQL (NULL NOT IN/NOT ILIKE = NULL = filtered out).
+    //
+    // wrapName=true для responsible: даёт partial match по ФИО (например, "Иванов"
+    // матчит "Иванов Сергей"); для project_name делаем exact match — имена проектов
+    // обычно уникальны.
+
+    function applyLoadingLevelFilters<Q>(query: Q): Q {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q = query as any
+
+      if (secureFilters?.project_id) {
+        q = applyMultiValueFilter(q, secureFilters.project_id, 'project_id', 'project_name')
       }
+
+      const negProjects = getNegatedParams(secureFilters, 'project_id')
+      const negProjectUuids = negProjects.filter(isUuid)
+      const negProjectNames = negProjects.filter((v) => !isUuid(v))
+      if (negProjectUuids.length > 0) {
+        q = q.or(`project_id.is.null,project_id.not.in.(${negProjectUuids.join(',')})`)
+      }
+      for (const val of negProjectNames) {
+        q = q.or(`project_name.is.null,project_name.not.ilike.${escapePostgRESTValue(val)}`)
+      }
+
+      if (secureFilters?.responsible_id) {
+        q = applyMultiValueFilter(q, secureFilters.responsible_id, 'user_id', 'full_name', true)
+      }
+
+      for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
+        if (isUuid(val)) {
+          q = q.neq('user_id', val)
+        } else {
+          q = q.not('full_name', 'ilike', `%${val}%`)
+        }
+      }
+
+      return q as Q
     }
 
-    // Применяем фильтр по ответственному (сотруднику)
-    if (secureFilters?.responsible_id) {
-      const responsibleId = Array.isArray(secureFilters.responsible_id)
-        ? secureFilters.responsible_id[0]
-        : secureFilters.responsible_id
-
-      if (isUuid(responsibleId)) {
-        employeeQuery = employeeQuery.eq('user_id', responsibleId)
-      } else {
-        employeeQuery = employeeQuery.ilike('full_name', `%${responsibleId}%`)
-      }
+    employeeQuery = applyLoadingLevelFilters(employeeQuery)
+    if (guestQueryBuilder) {
+      guestQueryBuilder = applyLoadingLevelFilters(guestQueryBuilder)
     }
 
     // Параллельно: основная выборка + гостевые сотрудники.

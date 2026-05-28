@@ -43,6 +43,56 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 }
 
+/**
+ * Экранирует значение для безопасной вставки в PostgREST .or() filter string.
+ * Оборачивает в "..." и удваивает embedded двойные кавычки — защищает от
+ * injection через имена, содержащие `,`, `(`, `)`, `:` или `"`.
+ *
+ * Wildcards `%` для ilike внутри кавычек продолжают работать как pattern.
+ */
+function escapePostgRESTValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * Резолвит массив значений (UUID и/или имена) в массив UUID.
+ * Имена подтягиваются через name lookup в указанной таблице одним запросом.
+ *
+ * Используется когда нужно применить дальнейшую логику с UUID (фильтр по in,
+ * иерархия по Set.has() и т.п.) — без этого helper'а множественные имена
+ * молча сводились бы к [0] и второй фильтр игнорировался.
+ */
+async function resolveMultiValueToUuids(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  rawValue: string | string[],
+  table: string,
+  uuidField: string,
+  nameField: string,
+): Promise<string[]> {
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue]
+  if (values.length === 0) return []
+
+  const uuids = values.filter(isUuid)
+  const names = values.filter((v) => !isUuid(v))
+
+  if (names.length > 0) {
+    // Экранируем имена — PostgREST .or() парсит `,`/`(`/`)`/`:` как операторы,
+    // без quoting вредоносное имя могло бы расширить условия.
+    const orClause = names
+      .map((n) => `${nameField}.ilike.${escapePostgRESTValue(n)}`)
+      .join(',')
+    const { data } = await supabase.from(table).select(uuidField).or(orClause)
+    if (data) {
+      for (const row of data) {
+        const id = row[uuidField]
+        if (id) uuids.push(id)
+      }
+    }
+  }
+  return [...new Set(uuids)]
+}
+
 // ============================================================================
 // Get Hierarchy Data
 // ============================================================================
@@ -96,42 +146,33 @@ export async function getSectionsHierarchy(
       query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
     }
 
-    // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
-    // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже)
-    let resolvedDeptUuid: string | undefined
-    let resolvedSubdivisionUuid: string | undefined
+    // Применяем фильтры из inline-filter (поддерживаем UUID и названия,
+    // несколько значений одного поля).
+    // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже).
+    // Set, а не одиночный UUID — чтобы поддержать `отдел:"А" отдел:"Б"`.
+    let resolvedDeptUuids: Set<string> | null = null
+    let resolvedSubdivisionUuids: Set<string> | null = null
 
     // Фильтр по команде (через employee_id, т.к. view не содержит team_id)
     if (effectiveFilters?.team_id) {
-      let teamUuid: string | undefined
-
-      const teamId = Array.isArray(effectiveFilters.team_id)
-        ? effectiveFilters.team_id[0]
-        : effectiveFilters.team_id
-
-      if (isUuid(teamId)) {
-        teamUuid = teamId
-      } else {
-        // Резолвим название команды в UUID
-        const { data: teams } = await supabase
-          .from('teams')
-          .select('team_id')
-          .ilike('team_name', teamId)
-
-        if (teams && teams.length > 0) {
-          teamUuid = teams[0].team_id
-        } else {
-          return { success: true, data: [] }
-        }
+      const teamUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.team_id,
+        'teams',
+        'team_id',
+        'team_name',
+      )
+      if (teamUuids.length === 0) {
+        return { success: true, data: [] }
       }
 
-      // Получаем сотрудников команды из view_employee_workloads
+      // Получаем сотрудников всех указанных команд одним запросом
       const { data: teamEmployees } = await supabase
         .from('view_employee_workloads')
         .select('user_id')
-        .eq('final_team_id', teamUuid)
+        .in('final_team_id', teamUuids)
 
-      const employeeIds = teamEmployees?.map(e => e.user_id) || []
+      const employeeIds = teamEmployees?.map((e) => e.user_id) || []
       if (employeeIds.length > 0) {
         const uniqueEmployeeIds = Array.from(new Set(employeeIds))
         query = query.in('employee_id', uniqueEmployeeIds)
@@ -140,79 +181,69 @@ export async function getSectionsHierarchy(
       }
     }
 
-    // Фильтр по подразделению
-    // Показывает раздел если ответственный или сотрудник с загрузкой из этого подразделения
+    // Фильтр по подразделению — match по ответственному ИЛИ по сотруднику с загрузкой.
+    // Дуальный OR через `in.(...)` поддерживает несколько значений.
     if (effectiveFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(effectiveFilters.subdivision_id)
-        ? effectiveFilters.subdivision_id[0]
-        : effectiveFilters.subdivision_id
-
-      if (isUuid(subdivisionId)) {
-        resolvedSubdivisionUuid = subdivisionId
-        query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
-      } else {
-        // Резолвим название в UUID (как в departments-timeline)
-        const { data: subdivisions } = await supabase
-          .from('subdivisions')
-          .select('subdivision_id')
-          .ilike('subdivision_name', subdivisionId)
-
-        if (subdivisions && subdivisions.length > 0) {
-          const subId = subdivisions[0].subdivision_id
-          resolvedSubdivisionUuid = subId
-          query = query.or(`subdivision_id.eq.${subId},employee_subdivision_id.eq.${subId}`)
-        } else {
-          return { success: true, data: [] }
-        }
+      const subUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.subdivision_id,
+        'subdivisions',
+        'subdivision_id',
+        'subdivision_name',
+      )
+      if (subUuids.length === 0) {
+        return { success: true, data: [] }
       }
+      resolvedSubdivisionUuids = new Set(subUuids)
+      const uuidList = subUuids.join(',')
+      query = query.or(
+        `subdivision_id.in.(${uuidList}),employee_subdivision_id.in.(${uuidList})`,
+      )
     }
 
-    // Фильтр по отделу
-    // Показывает раздел если:
+    // Фильтр по отделу — match если:
     // 1) Ответственный раздела из этого отдела ИЛИ
     // 2) Есть загрузка сотрудника из этого отдела
     if (effectiveFilters?.department_id) {
-      const departmentId = Array.isArray(effectiveFilters.department_id)
-        ? effectiveFilters.department_id[0]
-        : effectiveFilters.department_id
-
-      if (isUuid(departmentId)) {
-        resolvedDeptUuid = departmentId
-        query = query.or(`department_id.eq.${departmentId},employee_department_id.eq.${departmentId}`)
-      } else {
-        // Резолвим название в UUID (как в departments-timeline)
-        const { data: departments } = await supabase
-          .from('departments')
-          .select('department_id')
-          .ilike('department_name', departmentId)
-
-        if (departments && departments.length > 0) {
-          const deptId = departments[0].department_id
-          resolvedDeptUuid = deptId
-          query = query.or(`department_id.eq.${deptId},employee_department_id.eq.${deptId}`)
-        } else {
-          return { success: true, data: [] }
-        }
+      const deptUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.department_id,
+        'departments',
+        'department_id',
+        'department_name',
+      )
+      if (deptUuids.length === 0) {
+        return { success: true, data: [] }
       }
+      resolvedDeptUuids = new Set(deptUuids)
+      const uuidList = deptUuids.join(',')
+      query = query.or(
+        `department_id.in.(${uuidList}),employee_department_id.in.(${uuidList})`,
+      )
     }
 
-    // Фильтр по проекту (поддержка нескольких значений)
+    // Фильтр по проекту (поддержка нескольких значений UUID + имён)
     if (effectiveFilters?.project_id) {
       const values = Array.isArray(effectiveFilters.project_id)
         ? effectiveFilters.project_id
         : [effectiveFilters.project_id]
 
       const uuids = values.filter(isUuid)
-      const names = values.filter(v => !isUuid(v))
+      const names = values.filter((v) => !isUuid(v))
 
       if (uuids.length > 0 && names.length === 0) {
         query = query.in('project_id', uuids)
       } else if (names.length > 0 && uuids.length === 0) {
-        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        const orClause = names
+          .map((n) => `project_name.ilike.${escapePostgRESTValue(n)}`)
+          .join(',')
         query = query.or(orClause)
       } else if (uuids.length > 0 && names.length > 0) {
-        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
-        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        // UUIDs валидированы isUuid — безопасны; имена — экранируем.
+        const parts: string[] = uuids.map((id) => `project_id.eq.${id}`)
+        names.forEach((n) =>
+          parts.push(`project_name.ilike.${escapePostgRESTValue(n)}`),
+        )
         query = query.or(parts.join(','))
       }
     }
@@ -293,11 +324,12 @@ export async function getSectionsHierarchy(
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
-    // Используем разрешённый UUID отдела (resolvedDeptUuid), а не сырое значение из фильтров,
+    // Используем разрешённые UUID отделов (resolvedDeptUuids), а не сырое значение из фильтров,
     // т.к. inline-filter передаёт НАЗВАНИЕ ("Отдел развития"), а не UUID.
-    // Если mandatory-фильтр установил department_id как UUID — resolvedDeptUuid уже содержит его.
-    // Если пользователь ввёл название — resolvedDeptUuid содержит UUID из DB lookup выше.
-    const scopedDeptId = resolvedDeptUuid
+    // Set вместо одиночного значения — чтобы корректно работал dept-scope при нескольких отделах
+    // (например, mandatory department_id у dept_head всегда 1, но admin может выбрать N).
+    const scopedDeptIds = resolvedDeptUuids
+    const hasScopedDept = scopedDeptIds !== null && scopedDeptIds.size > 0
 
     for (const row of rows) {
       const responsibleDeptId = row.department_id
@@ -321,20 +353,20 @@ export async function getSectionsHierarchy(
             subdivisionName: row.employee_subdivision_name || 'Без подразделения',
           })
         }
-      } else if (scopedDeptId) {
-        // Dept scope (нач. отдела): раздел всегда попадает только в свой отдел.
-        // OR-фильтр в запросе возвращает строки через два пути:
-        // 1) department_id = МОЙ → ответственный из моего отдела
-        // 2) employee_department_id = МОЙ → мой сотрудник грузится на чужом разделе
-        // В обоих случаях дублировать в чужой отдел не нужно.
-        if (responsibleDeptId === scopedDeptId) {
+      } else if (hasScopedDept) {
+        // Dept scope (нач. отдела ИЛИ admin с фильтром по отделам): раздел попадает
+        // только в отделы из scope. OR-фильтр в запросе возвращает строки через два пути:
+        // 1) department_id ∈ scope → ответственный из этого отдела
+        // 2) employee_department_id ∈ scope → сотрудник этого отдела грузится на чужом разделе
+        // В обоих случаях дублировать в чужой (вне scope) отдел не нужно.
+        if (scopedDeptIds!.has(responsibleDeptId)) {
           departmentIds.push({
             id: responsibleDeptId,
             name: row.department_name,
             subdivisionId: row.subdivision_id,
             subdivisionName: row.subdivision_name,
           })
-        } else if (loadingId && employeeDeptId === scopedDeptId) {
+        } else if (loadingId && employeeDeptId && scopedDeptIds!.has(employeeDeptId)) {
           departmentIds.push({
             id: employeeDeptId,
             name: row.employee_department_name || 'Без отдела',
@@ -345,10 +377,10 @@ export async function getSectionsHierarchy(
       } else {
         // Admin / subdivision scope: полное дублирование —
         // Если активен фильтр по подразделению, добавляем отдел только если
-        // он принадлежит отфильтрованному подразделению (иначе появляются "лишние" отделы).
+        // он принадлежит одному из отфильтрованных подразделений.
 
-        // 1) Отдел ответственного — только если подразделение совпадает с фильтром
-        if (!resolvedSubdivisionUuid || row.subdivision_id === resolvedSubdivisionUuid) {
+        // 1) Отдел ответственного — только если подразделение в scope (или фильтр не задан)
+        if (!resolvedSubdivisionUuids || resolvedSubdivisionUuids.has(row.subdivision_id)) {
           departmentIds.push({
             id: responsibleDeptId,
             name: row.department_name,
@@ -357,9 +389,9 @@ export async function getSectionsHierarchy(
           })
         }
 
-        // 2) Отдел сотрудника (если другой) — только если подразделение совпадает с фильтром
+        // 2) Отдел сотрудника (если другой) — только если подразделение в scope
         if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
-          if (!resolvedSubdivisionUuid || row.employee_subdivision_id === resolvedSubdivisionUuid) {
+          if (!resolvedSubdivisionUuids || resolvedSubdivisionUuids.has(row.employee_subdivision_id)) {
             departmentIds.push({
               id: employeeDeptId,
               name: row.employee_department_name || 'Без отдела',
