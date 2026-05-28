@@ -164,28 +164,6 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
     return { grazhd, general, prom }
   }, [departments])
 
-  // В месячном режиме дополнительно показываем отдел ВК с фильтрацией по командам.
-  // Команды пересчитываются — department-level dailyWorkloads агрегируются заново
-  // только из оставшихся команд, чтобы суммы не включали отфильтрованные.
-  const monthlyFilteredVK = useMemo(() => {
-    if (!isMonthlyMode || !departments) return null
-    const vk = departments.find((d) => d.name === 'ВК')
-    if (!vk) return null
-    const allowedTeams = new Set(['ВК - 1', 'ВК - 3', 'ВК - 4'])
-    const filteredTeams = vk.teams.filter((t) => allowedTeams.has(t.name))
-    if (filteredTeams.length === 0) return null
-
-    // Пересчитываем агрегат отдела из отфильтрованных команд
-    const aggregated: Record<string, number> = {}
-    for (const team of filteredTeams) {
-      if (!team.dailyWorkloads) continue
-      for (const [date, value] of Object.entries(team.dailyWorkloads)) {
-        aggregated[date] = (aggregated[date] || 0) + value
-      }
-    }
-    return { ...vk, teams: filteredTeams, dailyWorkloads: aggregated }
-  }, [departments, isMonthlyMode])
-
   // Load freshness data
   const { data: freshnessData } = useTeamsFreshness()
 
@@ -410,28 +388,13 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
                 // Группы в желаемом порядке: гражд → общие → пром.
                 // Разделитель с лейблом показываем перед каждой непустой группой,
                 // включая первую — чтобы юзер видел названия всех разделов.
-                // В месячном режиме показываем: гражд (без «УП - Гражд») + ТСБС + ВК (только 1/3/4).
-                // ТСБС подмешивается из general, т.к. его имя не содержит «гражд», но отдел
-                // должен отображаться в гражданском направлении на месячном виде.
-                const tsbsDept = isMonthlyMode ? general.find((d) => d.name === 'ТСБС') : undefined
-                const monthlyGrazhd = isMonthlyMode
-                  ? [
-                      ...grazhd.filter((d) => d.name !== 'УП - Гражд'),
-                      ...(tsbsDept ? [tsbsDept] : []),
-                    ]
-                  : grazhd
-                const groups: Array<{ key: string; label: string; items: typeof departments }> = isMonthlyMode
-                  ? [
-                      { key: 'grazhd', label: 'Гражданское направление', items: monthlyGrazhd },
-                      ...(monthlyFilteredVK
-                        ? [{ key: 'vk', label: 'ВК (команды 1, 3, 4)', items: [monthlyFilteredVK] }]
-                        : []),
-                    ]
-                  : [
-                      { key: 'grazhd', label: 'Гражданское направление', items: grazhd },
-                      { key: 'general', label: 'Общие отделы', items: general },
-                      { key: 'prom', label: 'Промышленное направление', items: prom },
-                    ]
+                // Структура одинакова для дневного и месячного режимов — отличаются
+                // только визуализация ячеек таймлайна и доступные интеракции.
+                const groups: Array<{ key: string; label: string; items: typeof departments }> = [
+                  { key: 'grazhd', label: 'Гражданское направление', items: grazhd },
+                  { key: 'general', label: 'Общие отделы', items: general },
+                  { key: 'prom', label: 'Промышленное направление', items: prom },
+                ]
                 let flatIndex = 0
                 const nodes: React.ReactNode[] = []
                 for (const group of groups) {
