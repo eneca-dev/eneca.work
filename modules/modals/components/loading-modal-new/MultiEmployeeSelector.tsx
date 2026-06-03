@@ -19,12 +19,13 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { useUsers, type CachedUser } from '@/modules/cache'
+import { useUsers, useCachedDepartments, type CachedUser } from '@/modules/cache'
 import { pluralizeEmployees } from '@/lib/pluralize'
 import { Avatar } from '@/modules/projects/components/Avatar'
 import { useEmployeeSearch } from './useEmployeeSearch'
 import { EmployeeCommandItem } from './EmployeeCommandItem'
 import { useFilterContext, canAssignLoadingToUser } from '@/modules/permissions'
+import { useAllLoadingAccessGrantsIndex } from '@/modules/users/hooks/use-loading-access-grants'
 
 export interface MultiEmployeeSelectorProps {
   /** Массив выбранных ID сотрудников */
@@ -50,9 +51,18 @@ export function MultiEmployeeSelector({
   const [search, setSearch] = useState('')
 
   const { data: allUsers = [], isLoading } = useUsers()
+  const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
+  const { data: departments = [] } = useCachedDepartments()
 
-  // Фильтр по scope: user → только сам, team_lead → своя команда,
-  // department_head → свой отдел, admin/subdivision_head/PM → все (server-side гейтит).
+  const departmentNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of departments) map.set(d.id, d.name)
+    return map
+  }, [departments])
+
+  // Фильтр по scope с учётом cross-department grants.
+  // user → только сам, team_lead → своя команда + гости, department_head → свой отдел + гости,
+  // admin/subdivision_head/PM → все (server-side гейтит).
   const { data: filterCtx } = useFilterContext()
   const users = useMemo(() => {
     if (!filterCtx) return allUsers
@@ -62,11 +72,24 @@ export function MultiEmployeeSelector({
           user_id: u.user_id,
           team_id: u.team_id,
           department_id: u.department_id,
+          granted_to_department_ids: grantsIndex[u.user_id],
         },
         filterCtx
       )
     )
-  }, [allUsers, filterCtx])
+  }, [allUsers, filterCtx, grantsIndex])
+
+  // "Гостевой" сотрудник: чужой отдел, виден через грант
+  const isGuestEmployee = useCallback(
+    (userId: string, userDeptId: string | null | undefined): boolean => {
+      if (!filterCtx || !userDeptId) return false
+      const own = filterCtx.ownDepartmentId
+      const head = filterCtx.headDepartmentId
+      if (userDeptId === own || userDeptId === head) return false
+      return (grantsIndex[userId]?.length ?? 0) > 0
+    },
+    [filterCtx, grantsIndex]
+  )
 
   const filteredUsers = useEmployeeSearch(users, search)
 
@@ -147,11 +170,16 @@ export function MultiEmployeeSelector({
               <CommandGroup>
                 {sortedUsers.map((user) => {
                   const isSelected = value.includes(user.user_id)
+                  const isGuest = isGuestEmployee(user.user_id, user.department_id)
+                  const guestBadgeLabel = isGuest && user.department_id
+                    ? departmentNameById.get(user.department_id) ?? null
+                    : null
                   return (
                     <EmployeeCommandItem
                       key={user.user_id}
                       user={user}
                       onSelect={handleSelect}
+                      guestBadgeLabel={guestBadgeLabel}
                       indicator={
                         <div
                           className={cn(

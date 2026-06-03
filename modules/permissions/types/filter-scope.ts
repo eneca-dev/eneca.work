@@ -151,6 +151,18 @@ export interface UserFilterContext {
   /** Названия управляемых проектов */
   managedProjectNames?: string[]
 
+  /**
+   * ID отделов, для которых текущий пользователь является НО/ТЛ и через которые
+   * получает доступ к "гостевым" сотрудникам по cross-department grants
+   * (employee_loading_access_grants).
+   *
+   * Заполняется в getFilterContext: каждый отдел, в котором юзер `own*` или `lead/head*`,
+   * И в котором у него есть scope-permission `loadings.edit.scope.department`/`team`,
+   * включается сюда. Передаётся в canEditLoading/canAssignLoadingToUser для
+   * сопоставления с loading.grantedToDepartmentIds / user.granted_to_department_ids.
+   */
+  grantedAccessDepartmentIds: string[]
+
   // === Итоговый scope ===
 
   /** Вычисленная область видимости */

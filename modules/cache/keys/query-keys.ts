@@ -130,6 +130,19 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Loading Access Grants (cross-department гранты на управление загрузками)
+  // -------------------------------------------------------------------------
+  loadingAccessGrants: {
+    all: ['loadingAccessGrants'] as const,
+    /** Гранты для конкретного сотрудника (для UI карточки и проверки клиентских прав) */
+    byEmployee: (employeeId: string) =>
+      ['loadingAccessGrants', 'byEmployee', employeeId] as const,
+    /** Сотрудники, к которым у указанного отдела есть грант (для селектора "гостевые") */
+    byDepartment: (departmentId: string) =>
+      ['loadingAccessGrants', 'byDepartment', departmentId] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Loadings (загрузки)
   // -------------------------------------------------------------------------
   loadings: {

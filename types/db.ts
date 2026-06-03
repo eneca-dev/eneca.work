@@ -6032,6 +6032,52 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_loading_access_grants: {
+        Row: {
+          created_at: string
+          employee_id: string
+          grant_id: string
+          granted_by: string
+          granted_to_department_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          grant_id?: string
+          granted_by: string
+          granted_to_department_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          grant_id?: string
+          granted_by?: string
+          granted_to_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_loading_access_grants_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_loading_access_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_loading_access_grants_granted_to_department_id_fkey"
+            columns: ["granted_to_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["department_id"]
+          },
+        ]
+      }
       entity_types: {
         Row: {
           entity_name: string
@@ -19429,6 +19475,40 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_sections_with_loadings_v2"
             referencedColumns: ["section_id"]
+          },
+        ]
+      }
+      v_employee_loading_access_grants: {
+        Row: {
+          created_at: string | null
+          employee_id: string | null
+          grant_id: string | null
+          granted_by: string | null
+          granted_by_name: string | null
+          granted_to_department_id: string | null
+          granted_to_department_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_loading_access_grants_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_loading_access_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_loading_access_grants_granted_to_department_id_fkey"
+            columns: ["granted_to_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["department_id"]
           },
         ]
       }

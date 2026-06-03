@@ -23,6 +23,16 @@ export interface LoadingPermissionContext {
   subdivisionId: string | null
   /** Проект загрузки */
   projectId: string | null
+  /**
+   * ID отделов, которым выдан cross-department grant на этого сотрудника
+   * (employee_loading_access_grants.granted_to_department_id).
+   * Если пересекается с ctx.grantedAccessDepartmentIds — даём доступ через грант.
+   *
+   * Опционально: legacy callers (модули, не подтягивающие гранты) могут не
+   * передавать поле — тогда проверка через гранты пропускается. Сервер всё
+   * равно валидирует через assertCanEditLoading, который читает гранты из БД.
+   */
+  grantedToDepartmentIds?: string[]
 }
 
 const EDIT_SCOPE_PERMISSIONS = [
@@ -91,6 +101,20 @@ export function canEditLoading(
     return true
   }
 
+  // 7. Cross-department grant — НО/ТЛ отдела-получателя может управлять загрузкой,
+  // если этому сотруднику выдан грант на отдел, через который юзер проходит как НО/ТЛ.
+  // ?? [] защищает от stale-cache UserFilterContext до перезагрузки страницы.
+  const loadingGrants = loading.grantedToDepartmentIds ?? []
+  const userGrantedDepts = ctx.grantedAccessDepartmentIds ?? []
+  if (
+    (has('loadings.edit.scope.department') || has('loadings.edit.scope.team')) &&
+    userGrantedDepts.length > 0 &&
+    loadingGrants.length > 0
+  ) {
+    const intersects = loadingGrants.some((d) => userGrantedDepts.includes(d))
+    if (intersects) return true
+  }
+
   return false
 }
 
@@ -132,6 +156,11 @@ interface UserScopeInfo {
   user_id: string
   team_id: string | null | undefined
   department_id: string | null | undefined
+  /**
+   * ID отделов, которым выдан cross-department grant на этого сотрудника.
+   * Опционально: если не передано — проверка через гранты пропускается.
+   */
+  granted_to_department_ids?: string[]
 }
 
 /**
@@ -166,6 +195,21 @@ export function canAssignLoadingToUser(
   }
   if (has('loadings.edit.scope.own') && user.user_id === ctx.userId) {
     return true
+  }
+
+  // Cross-department grant — сотрудник из другого отдела, на которого
+  // выдан грант для одного из отделов, через которые юзер проходит как НО/ТЛ.
+  // ?? [] защищает от stale-cache UserFilterContext до перезагрузки страницы.
+  const userGrantedDepts = ctx.grantedAccessDepartmentIds ?? []
+  if (
+    (has('loadings.edit.scope.department') || has('loadings.edit.scope.team')) &&
+    user.granted_to_department_ids?.length &&
+    userGrantedDepts.length
+  ) {
+    const intersects = user.granted_to_department_ids.some((d) =>
+      userGrantedDepts.includes(d)
+    )
+    if (intersects) return true
   }
 
   // Stale-cache fallback: если ни одного scope-permission — RLS защищает на сервере

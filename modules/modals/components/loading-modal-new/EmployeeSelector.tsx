@@ -19,11 +19,12 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { useUsers } from '@/modules/cache'
+import { useUsers, useCachedDepartments } from '@/modules/cache'
 import { Avatar } from '@/modules/projects/components/Avatar'
 import { useEmployeeSearch } from './useEmployeeSearch'
 import { EmployeeCommandItem } from './EmployeeCommandItem'
 import { useFilterContext, canAssignLoadingToUser } from '@/modules/permissions'
+import { useAllLoadingAccessGrantsIndex } from '@/modules/users/hooks/use-loading-access-grants'
 
 export interface EmployeeSelectorProps {
   /** Выбранный ID сотрудника */
@@ -48,11 +49,20 @@ export function EmployeeSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  // Загрузка списка пользователей
+  // Загрузка списка пользователей и cross-department грантов
   const { data: allUsers = [], isLoading } = useUsers()
+  const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
+  const { data: departments = [] } = useCachedDepartments()
 
-  // Фильтр по scope: user → только сам, team_lead → своя команда,
-  // department_head → свой отдел, admin/subdivision_head/PM → все (server-side гейтит).
+  const departmentNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of departments) map.set(d.id, d.name)
+    return map
+  }, [departments])
+
+  // Фильтр по scope с учётом cross-department grants.
+  // user → только сам, team_lead → своя команда + гости, department_head → свой отдел + гости,
+  // admin/subdivision_head/PM → все (server-side гейтит).
   const { data: filterCtx } = useFilterContext()
   const users = useMemo(() => {
     if (!filterCtx) return allUsers
@@ -62,11 +72,25 @@ export function EmployeeSelector({
           user_id: u.user_id,
           team_id: u.team_id,
           department_id: u.department_id,
+          granted_to_department_ids: grantsIndex[u.user_id],
         },
         filterCtx
       )
     )
-  }, [allUsers, filterCtx])
+  }, [allUsers, filterCtx, grantsIndex])
+
+  // Помечаем "гостевых": сотрудник принадлежит чужому отделу, но виден через грант.
+  // Бейдж показывает название его реального отдела (departmentNameById).
+  const isGuestEmployee = useMemo(() => {
+    return (userId: string, userDeptId: string | null | undefined): boolean => {
+      if (!filterCtx || !userDeptId) return false
+      const own = filterCtx.ownDepartmentId
+      const head = filterCtx.headDepartmentId
+      const isOwn = userDeptId === own || userDeptId === head
+      if (isOwn) return false
+      return (grantsIndex[userId]?.length ?? 0) > 0
+    }
+  }, [filterCtx, grantsIndex])
 
   const filteredUsers = useEmployeeSearch(users, search)
 
@@ -133,21 +157,28 @@ export function EmployeeSelector({
             <CommandList>
               <CommandEmpty>Сотрудники не найдены</CommandEmpty>
               <CommandGroup>
-                {filteredUsers.map((user) => (
-                  <EmployeeCommandItem
-                    key={user.user_id}
-                    user={user}
-                    onSelect={handleSelect}
-                    indicator={
-                      <Check
-                        className={cn(
-                          'h-4 w-4 shrink-0',
-                          value === user.user_id ? 'opacity-100' : 'opacity-0'
-                        )}
-                      />
-                    }
-                  />
-                ))}
+                {filteredUsers.map((user) => {
+                  const isGuest = isGuestEmployee(user.user_id, user.department_id)
+                  const guestBadgeLabel = isGuest && user.department_id
+                    ? departmentNameById.get(user.department_id) ?? null
+                    : null
+                  return (
+                    <EmployeeCommandItem
+                      key={user.user_id}
+                      user={user}
+                      onSelect={handleSelect}
+                      guestBadgeLabel={guestBadgeLabel}
+                      indicator={
+                        <Check
+                          className={cn(
+                            'h-4 w-4 shrink-0',
+                            value === user.user_id ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                      }
+                    />
+                  )
+                })}
               </CommandGroup>
             </CommandList>
           </Command>

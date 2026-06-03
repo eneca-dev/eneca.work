@@ -54,16 +54,24 @@ export async function assertCanEditLoading(
     return { success: false, error: 'Загрузка не найдена' }
   }
 
-  // Подразделение исполнителя через teams → departments
-  let subdivisionId: string | null = null
-  if (loadingRow.data.final_department_id) {
-    const { data: deptRow } = await supabase
-      .from('departments')
-      .select('subdivision_id')
-      .eq('department_id', loadingRow.data.final_department_id)
-      .single()
-    subdivisionId = deptRow?.subdivision_id ?? null
-  }
+  // Параллельно: подразделение исполнителя + cross-department grants для этого сотрудника
+  const [deptRowResult, grantsResult] = await Promise.all([
+    loadingRow.data.final_department_id
+      ? supabase
+          .from('departments')
+          .select('subdivision_id')
+          .eq('department_id', loadingRow.data.final_department_id)
+          .single()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('employee_loading_access_grants')
+      .select('granted_to_department_id')
+      .eq('employee_id', loadingRow.data.user_id),
+  ])
+
+  const subdivisionId = deptRowResult.data?.subdivision_id ?? null
+  const grantedToDepartmentIds =
+    grantsResult.data?.map((g) => g.granted_to_department_id) ?? []
 
   const loading: LoadingPermissionContext = {
     responsibleId: loadingRow.data.user_id,
@@ -71,6 +79,7 @@ export async function assertCanEditLoading(
     departmentId: loadingRow.data.final_department_id,
     subdivisionId,
     projectId: loadingRow.data.project_id,
+    grantedToDepartmentIds,
   }
 
   if (!canEditLoading(loading, ctxResult.data)) {
