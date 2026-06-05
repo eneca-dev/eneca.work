@@ -464,6 +464,16 @@ export async function getDepartmentsData(
     // Сливаем основную выборку и гостей — гости в employeesMap идут так же
     // как обычные, отличаются только распределением по командам (см. ниже).
     const allEmployeeRows = [...(employeeData ?? []), ...guestEmployeeData]
+
+    // Дедупликация загрузок по loading_id. Нужна по двум причинам:
+    // 1) Гость, чей родной отдел тоже в выборке, приходит И в employeeData,
+    //    И в guestEmployeeData — его загрузки задвоились бы.
+    // 2) view_employee_workloads может вернуть дубликаты loading_id из-за
+    //    fan-out в JOIN (см. аналогичную дедупликацию в bulkShiftLoadings).
+    // loading_id глобально уникален (одна загрузка = один ответственный),
+    // поэтому глобальный Set безопасен.
+    const seenLoadingIds = new Set<string>()
+
     allEmployeeRows.forEach((item) => {
       // Пропускаем записи без user_id
       if (!item.user_id) return
@@ -495,8 +505,12 @@ export async function getDepartmentsData(
 
       const employee = employeesMap.get(item.user_id)!
 
-      // Добавляем загрузку, если она есть и имеет все обязательные поля
+      // Добавляем загрузку, если она есть, имеет все обязательные поля
+      // и ещё не была добавлена (дедуп по loading_id).
       if (item.loading_id && item.loading_start && item.loading_finish) {
+        if (seenLoadingIds.has(item.loading_id)) return
+        seenLoadingIds.add(item.loading_id)
+
         employee.loadings!.push({
           id: item.loading_id,
           employeeId: item.user_id,
@@ -639,9 +653,15 @@ export async function getDepartmentsData(
       }
     })
 
-    // Вычисляем dailyWorkloads для отделов
+    // Вычисляем dailyWorkloads для отделов.
+    // ВАЖНО: гостевые команды (cross-department grants) ИСКЛЮЧАЕМ из итога отдела —
+    // иначе загрузка гостя задваивается (она уже учтена в его РОДНОМ отделе).
+    // Гость остаётся видимым в команде "Гостевые сотрудники" со своим подытогом,
+    // но в ёмкость/нагрузку отдела-получателя не входит.
     departmentsMap.forEach((department) => {
-      const allEmployees = department.teams.flatMap(t => t.employees)
+      const allEmployees = department.teams
+        .filter((t) => !t.isGuestTeam)
+        .flatMap((t) => t.employees)
       department.dailyWorkloads = aggregateDailyWorkloads(allEmployees)
     })
 

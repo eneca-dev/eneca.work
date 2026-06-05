@@ -96,13 +96,17 @@ export function DepartmentRow({
     }
   }, [department.teams, freshnessData])
 
-  // Calculate total department capacity (sum of employment rates)
+  // Calculate total department capacity (sum of employment rates).
+  // Гостевые команды (cross-department grants) ИСКЛЮЧАЕМ — ставка гостя
+  // принадлежит его родному отделу, иначе ёмкость отдела-получателя задваивается.
   const totalDepartmentCapacity = useMemo(() => {
-    return department.teams.reduce((sum, team) => {
-      return sum + team.employees.reduce((teamSum, emp) => {
-        return teamSum + (emp.employmentRate || 1)
+    return department.teams
+      .filter((team) => !team.isGuestTeam)
+      .reduce((sum, team) => {
+        return sum + team.employees.reduce((teamSum, emp) => {
+          return teamSum + (emp.employmentRate || 1)
+        }, 0)
       }, 0)
-    }, 0)
   }, [department.teams])
 
   const formatWorkload = (value: number) =>
@@ -168,7 +172,7 @@ export function DepartmentRow({
                   theme="light"
                   size="sm"
                   onConfirm={handleConfirmActivity}
-                  teamIds={department.teams.map((t) => t.id)}
+                  teamIds={department.teams.filter((t) => !t.isGuestTeam).map((t) => t.id)}
                   onConfirmMultiple={handleConfirmMultipleActivity}
                   tooltipSide={departmentIndex === 0 ? 'left' : 'top'}
                 />
