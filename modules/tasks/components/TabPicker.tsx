@@ -24,6 +24,12 @@ const VIEW_MODE_ICON_MAP: Record<TasksViewMode, LucideIcon> = {
   sections: FolderTree,
 }
 
+// ⚠️ Фоновый префетч /tasks ВРЕМЕННО ОТКЛЮЧЁН (bug-DH-06/07/11/12):
+// шторм запросов на маунте, кэш-мисс при клике, игнор staleTime, нет отмены.
+// Пикер и навигация работают как прежде — данные грузятся при открытии вкладки.
+// Вернуть префетч: TASKS_PREFETCH_ENABLED = true.
+const TASKS_PREFETCH_ENABLED = false
+
 interface TabPickerCardProps {
   tab: TaskTab
   onOpen: (id: string) => void
@@ -61,8 +67,15 @@ export function TabPicker() {
 
   const sortedTabs = useMemo(() => [...tabs].sort((a, b) => a.order - b.order), [tabs])
 
-  // Префетч включён, пока показан пикер (этот компонент смонтирован)
-  const { prefetchTab } = useTasksPrefetch({ tabs, activeTabId, enabled: true })
+  // Префетч включается только при TASKS_PREFETCH_ENABLED (сейчас выключен, см. флаг выше)
+  const { prefetchTab } = useTasksPrefetch({ tabs, activeTabId, enabled: TASKS_PREFETCH_ENABLED })
+
+  const handlePrefetch = useCallback(
+    (id: string) => {
+      if (TASKS_PREFETCH_ENABLED) prefetchTab(id)
+    },
+    [prefetchTab]
+  )
 
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -89,7 +102,7 @@ export function TabPicker() {
               key={tab.id}
               tab={tab}
               onOpen={handleOpen}
-              onPrefetch={prefetchTab}
+              onPrefetch={handlePrefetch}
             />
           ))}
 
