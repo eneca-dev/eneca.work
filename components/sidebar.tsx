@@ -136,15 +136,10 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               className="h-8 w-8"
             />
             {!collapsed && (
-              <div className="ml-3 flex flex-col leading-none">
-                <h1 className="text-xl font-mono">
-                  <span className="text-primary">eneca</span>
-                  <span className="text-slate-400">.work</span>
-                </h1>
-                <span className="mt-0.5 text-[9px] font-mono text-slate-500/70 tracking-wide">
-                  v: 1.4.1
-                </span>
-              </div>
+              <h1 className="text-xl font-mono ml-3">
+                <span className="text-primary">eneca</span>
+                <span className="text-slate-400">.work</span>
+              </h1>
             )}
             {!collapsed && (
               <div className="ml-auto mr-2">
@@ -160,11 +155,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-          {collapsed && (
-            <span className="text-[9px] font-mono text-slate-500/70 tracking-wide leading-none">
-              v: 1.4.1
-            </span>
-          )}
+
           {collapsed && (
             <div className="flex justify-center">
               <NotificationBell collapsed={collapsed} />
@@ -262,8 +253,8 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               className="flex-shrink-0"
             />
             {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="list-item-title truncate text-slate-200">{displayName}</p>
+              <div className="min-w-0 flex-1" title="Версия приложения: 1.4.1">
+                <p className="list-item-title truncate text-slate-200 cursor-help">{displayName}</p>
                 <p className="metadata truncate text-slate-500">{displayEmail}</p>
               </div>
             )}
