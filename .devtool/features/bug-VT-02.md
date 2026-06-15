@@ -6,10 +6,10 @@ assignee: "Вадим Тихомиров"
 epic: "bug"
 dueDate: null
 created: "2026-06-15T12:52:58.000Z"
-modified: "2026-06-15T13:37:56.000Z"
+modified: "2026-06-15T13:48:15.295Z"
 completedAt: null
 labels: ["v1.5.0"]
-order: "a1"
+order: "a2"
 ---
 # bug-VT-02 Подготовка пайплайна тестирования "Человек + Нейросеть"
 
