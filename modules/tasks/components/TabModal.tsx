@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, LayoutGrid, GanttChart, Users, Wallet, FolderTree } from 'lucide-react'
+import { X, Plus, LayoutGrid, Users, Wallet, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
+import { useHasPermission } from '@/modules/permissions'
 
 // ============================================================================
 // Types
@@ -19,14 +20,13 @@ interface TabModalProps {
 // Constants
 // ============================================================================
 
-const VIEW_MODE_OPTIONS: {
+const BASE_VIEW_MODE_OPTIONS: {
   value: TasksViewMode
   label: string
   icon: typeof LayoutGrid
 }[] = [
   { value: 'kanban', label: 'Канбан', icon: LayoutGrid },
   { value: 'departments', label: 'Отделы', icon: Users },
-  // { value: 'budgets', label: 'Бюджеты', icon: Wallet },
   { value: 'sections', label: 'Разделы', icon: FolderTree },
 ]
 
@@ -36,6 +36,14 @@ const VIEW_MODE_OPTIONS: {
 
 export function TabModal({ open, onClose, editingTab }: TabModalProps) {
   const { createTab, updateTab } = useTasksTabsStore()
+  const canViewBudgets = useHasPermission('budgets.view.all')
+
+  const VIEW_MODE_OPTIONS = useMemo(
+    () => canViewBudgets
+      ? [...BASE_VIEW_MODE_OPTIONS, { value: 'budgets' as TasksViewMode, label: 'Бюджеты', icon: Wallet }]
+      : BASE_VIEW_MODE_OPTIONS,
+    [canViewBudgets]
+  )
 
   // Form state
   const [name, setName] = useState('')
@@ -53,13 +61,16 @@ export function TabModal({ open, onClose, editingTab }: TabModalProps) {
     if (open) {
       if (editingTab) {
         setName(editingTab.name)
-        setViewMode(editingTab.viewMode)
+        // Если viewMode вкладки больше не доступен пользователю (например, потерял права
+        // на budgets.view.all) — откатываемся на kanban, чтобы не сохранить недоступный режим
+        const allowedModes = VIEW_MODE_OPTIONS.map(o => o.value)
+        setViewMode(allowedModes.includes(editingTab.viewMode) ? editingTab.viewMode : 'kanban')
       } else {
         setName('')
         setViewMode('kanban')
       }
     }
-  }, [open, editingTab])
+  }, [open, editingTab, VIEW_MODE_OPTIONS])
 
   // Handlers
   const handleSubmit = useCallback(() => {

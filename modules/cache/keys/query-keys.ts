@@ -52,6 +52,7 @@ export interface BudgetFilters extends BaseFilters {
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  lean?: boolean
 }
 
 export interface CheckpointFilters extends BaseFilters {
@@ -126,6 +127,19 @@ export const queryKeys = {
     decomposition: (id: string) => [...queryKeys.sections.detail(id), 'decomposition'] as const,
     /** Контрольные точки плановой готовности раздела */
     readinessCheckpoints: (sectionId: string) => [...queryKeys.sections.detail(sectionId), 'readiness-checkpoints'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Loading Access Grants (cross-department гранты на управление загрузками)
+  // -------------------------------------------------------------------------
+  loadingAccessGrants: {
+    all: ['loadingAccessGrants'] as const,
+    /** Гранты для конкретного сотрудника (для UI карточки и проверки клиентских прав) */
+    byEmployee: (employeeId: string) =>
+      ['loadingAccessGrants', 'byEmployee', employeeId] as const,
+    /** Сотрудники, к которым у указанного отдела есть грант (для селектора "гостевые") */
+    byDepartment: (departmentId: string) =>
+      ['loadingAccessGrants', 'byDepartment', departmentId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -300,7 +314,7 @@ export const queryKeys = {
     list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
     details: () => [...queryKeys.budgets.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
-    /** Полная информация о бюджете с частями (v_budgets_full) */
+    /** Полная информация о бюджете */
     full: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'full'] as const,
     /** История изменений бюджета */
     history: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'history'] as const,
@@ -316,6 +330,8 @@ export const queryKeys = {
     calc: () => [...queryKeys.budgets.all, 'calc'] as const,
     calcBySections: (sectionIds: string[]) =>
       [...queryKeys.budgets.calc(), 'sections', [...sectionIds].sort().join(',')] as const,
+    /** Расчётный бюджет проект × отдел из loadings (v_cache_project_department_budget) */
+    calcByDepartments: () => [...queryKeys.budgets.all, 'calc-by-departments'] as const,
     /** Настройки ставок отделов (department_budget_settings) */
     departmentSettings: () => [...queryKeys.budgets.all, 'departmentSettings'] as const,
   },

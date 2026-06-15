@@ -10,7 +10,7 @@ import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange, CompanyCalendarEvent, DayInfo } from '../../types'
 import { buildCalendarMap, getDayInfo } from '../../utils'
 import { formatMinskDate, getMinskDayOfWeek, getMinskDate, getTodayMinsk, parseMinskDate } from '@/lib/timezone-utils'
-import { TimelineDatePopover, type CustomDateRange } from './TimelineDatePopover'
+import { TimelineDatePopover, isValidCustomRange, type CustomDateRange } from './TimelineDatePopover'
 
 export interface DayCell {
   date: Date
@@ -36,13 +36,15 @@ interface CalculateTimelineRangeOptions {
 
 /**
  * Вычисляет диапазон дат таймлайна.
- * При наличии customRange — использует его, иначе — daysBefore/daysAfter от сегодня.
+ * При наличии валидного customRange — использует его, иначе — daysBefore/daysAfter от сегодня.
+ * Невалидный customRange (битые даты, инверсия start/end, год вне [2000, 2100]) игнорируется
+ * для защиты от ранее сохранённых в localStorage некорректных значений.
  */
 export function resolveTimelineRange(
   customRange: CustomDateRange | null | undefined,
   options: CalculateTimelineRangeOptions
 ): TimelineRange {
-  if (customRange) {
+  if (customRange && isValidCustomRange(customRange)) {
     const start = parseMinskDate(customRange.startDate)
     const end = parseMinskDate(customRange.endDate)
     const totalDays = differenceInDays(end, start) + 1

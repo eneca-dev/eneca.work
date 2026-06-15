@@ -10,7 +10,15 @@ import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
-import { getFilterContext, applyMandatoryFilters } from '@/modules/permissions'
+import {
+  applyMandatoryFilters,
+  assertCanEditLoading,
+  canEditLoading,
+  getFilterContext,
+  getFilterContextForTasksTabs,
+  isRestrictedToOwnDepartment,
+  type LoadingPermissionContext,
+} from '@/modules/permissions'
 import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 import type {
   Department,
@@ -22,6 +30,7 @@ import type {
   CapacityInput,
   SectionCapacity,
 } from '../types'
+import { compareProjectsByGup } from '../utils/sort-projects'
 
 // ============================================================================
 // Helper Functions
@@ -32,6 +41,56 @@ import type {
  */
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+/**
+ * Экранирует значение для безопасной вставки в PostgREST .or() filter string.
+ * Оборачивает в "..." и удваивает embedded двойные кавычки — защищает от
+ * injection через имена, содержащие `,`, `(`, `)`, `:` или `"`.
+ *
+ * Wildcards `%` для ilike внутри кавычек продолжают работать как pattern.
+ */
+function escapePostgRESTValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * Резолвит массив значений (UUID и/или имена) в массив UUID.
+ * Имена подтягиваются через name lookup в указанной таблице одним запросом.
+ *
+ * Используется когда нужно применить дальнейшую логику с UUID (фильтр по in,
+ * иерархия по Set.has() и т.п.) — без этого helper'а множественные имена
+ * молча сводились бы к [0] и второй фильтр игнорировался.
+ */
+async function resolveMultiValueToUuids(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  rawValue: string | string[],
+  table: string,
+  uuidField: string,
+  nameField: string,
+): Promise<string[]> {
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue]
+  if (values.length === 0) return []
+
+  const uuids = values.filter(isUuid)
+  const names = values.filter((v) => !isUuid(v))
+
+  if (names.length > 0) {
+    // Экранируем имена — PostgREST .or() парсит `,`/`(`/`)`/`:` как операторы,
+    // без quoting вредоносное имя могло бы расширить условия.
+    const orClause = names
+      .map((n) => `${nameField}.ilike.${escapePostgRESTValue(n)}`)
+      .join(',')
+    const { data } = await supabase.from(table).select(uuidField).or(orClause)
+    if (data) {
+      for (const row of data) {
+        const id = row[uuidField]
+        if (id) uuids.push(id)
+      }
+    }
+  }
+  return [...new Set(uuids)]
 }
 
 // ============================================================================
@@ -59,9 +118,11 @@ export async function getSectionsHierarchy(
     }
 
     // Получаем filter context для permissions.
+    // Используем getFilterContextForTasksTabs — для user/team_lead с
+    // tasks.tabs.view.department это расширит scope team → department.
     // Параллельно: контекст + список restricted — экономит round-trip.
     const [filterContextResult, restrictedIds] = await Promise.all([
-      getFilterContext(),
+      getFilterContextForTasksTabs(),
       getRestrictedProjectIds(),
     ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
@@ -85,42 +146,33 @@ export async function getSectionsHierarchy(
       query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
     }
 
-    // Применяем фильтры из inline-filter (поддерживаем UUID и названия)
-    // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже)
-    let resolvedDeptUuid: string | undefined
-    let resolvedSubdivisionUuid: string | undefined
+    // Применяем фильтры из inline-filter (поддерживаем UUID и названия,
+    // несколько значений одного поля).
+    // Переменные для хранения разрешённых UUID (для трансформации иерархии ниже).
+    // Set, а не одиночный UUID — чтобы поддержать `отдел:"А" отдел:"Б"`.
+    let resolvedDeptUuids: Set<string> | null = null
+    let resolvedSubdivisionUuids: Set<string> | null = null
 
     // Фильтр по команде (через employee_id, т.к. view не содержит team_id)
     if (effectiveFilters?.team_id) {
-      let teamUuid: string | undefined
-
-      const teamId = Array.isArray(effectiveFilters.team_id)
-        ? effectiveFilters.team_id[0]
-        : effectiveFilters.team_id
-
-      if (isUuid(teamId)) {
-        teamUuid = teamId
-      } else {
-        // Резолвим название команды в UUID
-        const { data: teams } = await supabase
-          .from('teams')
-          .select('team_id')
-          .ilike('team_name', teamId)
-
-        if (teams && teams.length > 0) {
-          teamUuid = teams[0].team_id
-        } else {
-          return { success: true, data: [] }
-        }
+      const teamUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.team_id,
+        'teams',
+        'team_id',
+        'team_name',
+      )
+      if (teamUuids.length === 0) {
+        return { success: true, data: [] }
       }
 
-      // Получаем сотрудников команды из view_employee_workloads
+      // Получаем сотрудников всех указанных команд одним запросом
       const { data: teamEmployees } = await supabase
         .from('view_employee_workloads')
         .select('user_id')
-        .eq('final_team_id', teamUuid)
+        .in('final_team_id', teamUuids)
 
-      const employeeIds = teamEmployees?.map(e => e.user_id) || []
+      const employeeIds = teamEmployees?.map((e) => e.user_id) || []
       if (employeeIds.length > 0) {
         const uniqueEmployeeIds = Array.from(new Set(employeeIds))
         query = query.in('employee_id', uniqueEmployeeIds)
@@ -129,79 +181,69 @@ export async function getSectionsHierarchy(
       }
     }
 
-    // Фильтр по подразделению
-    // Показывает раздел если ответственный или сотрудник с загрузкой из этого подразделения
+    // Фильтр по подразделению — match по ответственному ИЛИ по сотруднику с загрузкой.
+    // Дуальный OR через `in.(...)` поддерживает несколько значений.
     if (effectiveFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(effectiveFilters.subdivision_id)
-        ? effectiveFilters.subdivision_id[0]
-        : effectiveFilters.subdivision_id
-
-      if (isUuid(subdivisionId)) {
-        resolvedSubdivisionUuid = subdivisionId
-        query = query.or(`subdivision_id.eq.${subdivisionId},employee_subdivision_id.eq.${subdivisionId}`)
-      } else {
-        // Резолвим название в UUID (как в departments-timeline)
-        const { data: subdivisions } = await supabase
-          .from('subdivisions')
-          .select('subdivision_id')
-          .ilike('subdivision_name', subdivisionId)
-
-        if (subdivisions && subdivisions.length > 0) {
-          const subId = subdivisions[0].subdivision_id
-          resolvedSubdivisionUuid = subId
-          query = query.or(`subdivision_id.eq.${subId},employee_subdivision_id.eq.${subId}`)
-        } else {
-          return { success: true, data: [] }
-        }
+      const subUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.subdivision_id,
+        'subdivisions',
+        'subdivision_id',
+        'subdivision_name',
+      )
+      if (subUuids.length === 0) {
+        return { success: true, data: [] }
       }
+      resolvedSubdivisionUuids = new Set(subUuids)
+      const uuidList = subUuids.join(',')
+      query = query.or(
+        `subdivision_id.in.(${uuidList}),employee_subdivision_id.in.(${uuidList})`,
+      )
     }
 
-    // Фильтр по отделу
-    // Показывает раздел если:
+    // Фильтр по отделу — match если:
     // 1) Ответственный раздела из этого отдела ИЛИ
     // 2) Есть загрузка сотрудника из этого отдела
     if (effectiveFilters?.department_id) {
-      const departmentId = Array.isArray(effectiveFilters.department_id)
-        ? effectiveFilters.department_id[0]
-        : effectiveFilters.department_id
-
-      if (isUuid(departmentId)) {
-        resolvedDeptUuid = departmentId
-        query = query.or(`department_id.eq.${departmentId},employee_department_id.eq.${departmentId}`)
-      } else {
-        // Резолвим название в UUID (как в departments-timeline)
-        const { data: departments } = await supabase
-          .from('departments')
-          .select('department_id')
-          .ilike('department_name', departmentId)
-
-        if (departments && departments.length > 0) {
-          const deptId = departments[0].department_id
-          resolvedDeptUuid = deptId
-          query = query.or(`department_id.eq.${deptId},employee_department_id.eq.${deptId}`)
-        } else {
-          return { success: true, data: [] }
-        }
+      const deptUuids = await resolveMultiValueToUuids(
+        supabase,
+        effectiveFilters.department_id,
+        'departments',
+        'department_id',
+        'department_name',
+      )
+      if (deptUuids.length === 0) {
+        return { success: true, data: [] }
       }
+      resolvedDeptUuids = new Set(deptUuids)
+      const uuidList = deptUuids.join(',')
+      query = query.or(
+        `department_id.in.(${uuidList}),employee_department_id.in.(${uuidList})`,
+      )
     }
 
-    // Фильтр по проекту (поддержка нескольких значений)
+    // Фильтр по проекту (поддержка нескольких значений UUID + имён)
     if (effectiveFilters?.project_id) {
       const values = Array.isArray(effectiveFilters.project_id)
         ? effectiveFilters.project_id
         : [effectiveFilters.project_id]
 
       const uuids = values.filter(isUuid)
-      const names = values.filter(v => !isUuid(v))
+      const names = values.filter((v) => !isUuid(v))
 
       if (uuids.length > 0 && names.length === 0) {
         query = query.in('project_id', uuids)
       } else if (names.length > 0 && uuids.length === 0) {
-        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+        const orClause = names
+          .map((n) => `project_name.ilike.${escapePostgRESTValue(n)}`)
+          .join(',')
         query = query.or(orClause)
       } else if (uuids.length > 0 && names.length > 0) {
-        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
-        names.forEach(n => parts.push(`project_name.ilike.${n}`))
+        // UUIDs валидированы isUuid — безопасны; имена — экранируем.
+        const parts: string[] = uuids.map((id) => `project_id.eq.${id}`)
+        names.forEach((n) =>
+          parts.push(`project_name.ilike.${escapePostgRESTValue(n)}`),
+        )
         query = query.or(parts.join(','))
       }
     }
@@ -249,6 +291,27 @@ export async function getSectionsHierarchy(
       return { success: true, data: [] }
     }
 
+    // Получаем team_id для каждого уникального исполнителя загрузок.
+    // view_departments_sections_loadings не отдаёт employee_team_id, нужно для UI gating
+    // (определение что это команда team_lead'а на клиенте).
+    const uniqueEmployeeIds = Array.from(
+      new Set(
+        rows
+          .filter((r) => r.loading_id && r.employee_id)
+          .map((r) => r.employee_id as string)
+      )
+    )
+    const employeeTeamMap = new Map<string, string | null>()
+    if (uniqueEmployeeIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('view_users')
+        .select('user_id, team_id')
+        .in('user_id', uniqueEmployeeIds)
+      for (const u of usersData ?? []) {
+        if (u.user_id) employeeTeamMap.set(u.user_id, u.team_id ?? null)
+      }
+    }
+
     // Трансформация плоских строк в иерархию
     // Логика размещения раздела по отделам зависит от scope пользователя:
     // - team scope (user/team_lead): только отдел сотрудника с загрузкой
@@ -261,11 +324,12 @@ export async function getSectionsHierarchy(
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
-    // Используем разрешённый UUID отдела (resolvedDeptUuid), а не сырое значение из фильтров,
+    // Используем разрешённые UUID отделов (resolvedDeptUuids), а не сырое значение из фильтров,
     // т.к. inline-filter передаёт НАЗВАНИЕ ("Отдел развития"), а не UUID.
-    // Если mandatory-фильтр установил department_id как UUID — resolvedDeptUuid уже содержит его.
-    // Если пользователь ввёл название — resolvedDeptUuid содержит UUID из DB lookup выше.
-    const scopedDeptId = resolvedDeptUuid
+    // Set вместо одиночного значения — чтобы корректно работал dept-scope при нескольких отделах
+    // (например, mandatory department_id у dept_head всегда 1, но admin может выбрать N).
+    const scopedDeptIds = resolvedDeptUuids
+    const hasScopedDept = scopedDeptIds !== null && scopedDeptIds.size > 0
 
     for (const row of rows) {
       const responsibleDeptId = row.department_id
@@ -289,20 +353,20 @@ export async function getSectionsHierarchy(
             subdivisionName: row.employee_subdivision_name || 'Без подразделения',
           })
         }
-      } else if (scopedDeptId) {
-        // Dept scope (нач. отдела): раздел всегда попадает только в свой отдел.
-        // OR-фильтр в запросе возвращает строки через два пути:
-        // 1) department_id = МОЙ → ответственный из моего отдела
-        // 2) employee_department_id = МОЙ → мой сотрудник грузится на чужом разделе
-        // В обоих случаях дублировать в чужой отдел не нужно.
-        if (responsibleDeptId === scopedDeptId) {
+      } else if (hasScopedDept) {
+        // Dept scope (нач. отдела ИЛИ admin с фильтром по отделам): раздел попадает
+        // только в отделы из scope. OR-фильтр в запросе возвращает строки через два пути:
+        // 1) department_id ∈ scope → ответственный из этого отдела
+        // 2) employee_department_id ∈ scope → сотрудник этого отдела грузится на чужом разделе
+        // В обоих случаях дублировать в чужой (вне scope) отдел не нужно.
+        if (scopedDeptIds!.has(responsibleDeptId)) {
           departmentIds.push({
             id: responsibleDeptId,
             name: row.department_name,
             subdivisionId: row.subdivision_id,
             subdivisionName: row.subdivision_name,
           })
-        } else if (loadingId && employeeDeptId === scopedDeptId) {
+        } else if (loadingId && employeeDeptId && scopedDeptIds!.has(employeeDeptId)) {
           departmentIds.push({
             id: employeeDeptId,
             name: row.employee_department_name || 'Без отдела',
@@ -313,10 +377,10 @@ export async function getSectionsHierarchy(
       } else {
         // Admin / subdivision scope: полное дублирование —
         // Если активен фильтр по подразделению, добавляем отдел только если
-        // он принадлежит отфильтрованному подразделению (иначе появляются "лишние" отделы).
+        // он принадлежит одному из отфильтрованных подразделений.
 
-        // 1) Отдел ответственного — только если подразделение совпадает с фильтром
-        if (!resolvedSubdivisionUuid || row.subdivision_id === resolvedSubdivisionUuid) {
+        // 1) Отдел ответственного — только если подразделение в scope (или фильтр не задан)
+        if (!resolvedSubdivisionUuids || resolvedSubdivisionUuids.has(row.subdivision_id)) {
           departmentIds.push({
             id: responsibleDeptId,
             name: row.department_name,
@@ -325,9 +389,9 @@ export async function getSectionsHierarchy(
           })
         }
 
-        // 2) Отдел сотрудника (если другой) — только если подразделение совпадает с фильтром
+        // 2) Отдел сотрудника (если другой) — только если подразделение в scope
         if (loadingId && employeeDeptId && employeeDeptId !== responsibleDeptId) {
-          if (!resolvedSubdivisionUuid || row.employee_subdivision_id === resolvedSubdivisionUuid) {
+          if (!resolvedSubdivisionUuids || resolvedSubdivisionUuids.has(row.employee_subdivision_id)) {
             departmentIds.push({
               id: employeeDeptId,
               name: row.employee_department_name || 'Без отдела',
@@ -455,6 +519,7 @@ dailyWorkloads: {},
             employeeCategory: row.employee_category,
             employeePosition: row.employee_position,
             employeeEmploymentRate: row.employee_employment_rate ?? null,
+            employeeTeamId: row.employee_id ? (employeeTeamMap.get(row.employee_id) ?? null) : null,
             employeeDepartmentId: employeeDeptId || deptId,
             employeeDepartmentName: row.employee_department_name || row.department_name,
             startDate: row.loading_start,
@@ -477,12 +542,13 @@ dailyWorkloads: {},
       }
     }
 
-    // Присваиваем totalEmployees из Set.size
+    // Присваиваем totalEmployees из Set.size и сортируем проекты по ГУП-нумерации
     for (const dept of departmentsMap.values()) {
       dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
       for (const project of dept.projects) {
         project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
       }
+      dept.projects.sort(compareProjectsByGup)
     }
 
     // Преобразуем Map в массив
@@ -660,12 +726,73 @@ export async function createSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    // Auth + permission check
+    const ctxResult = await getFilterContext()
+    if (!ctxResult.success || !ctxResult.data) {
       return { success: false, error: 'Unauthorized' }
+    }
+    const ctx = ctxResult.data
+
+    // Получаем метаданные исполнителя, раздела и cross-department grants параллельно
+    const [employeeRow, sectionRow, grantsResult] = await Promise.all([
+      supabase
+        .from('view_users')
+        .select('team_id, department_id, subdivision_id')
+        .eq('user_id', input.employeeId)
+        .single(),
+      supabase
+        .from('view_section_hierarchy')
+        .select('project_id, responsible_department_id')
+        .eq('section_id', input.sectionId)
+        .single(),
+      supabase
+        .from('employee_loading_access_grants')
+        .select('granted_to_department_id')
+        .eq('employee_id', input.employeeId),
+    ])
+
+    if (employeeRow.error || !employeeRow.data) {
+      return { success: false, error: 'Сотрудник не найден' }
+    }
+    if (sectionRow.error || !sectionRow.data) {
+      return { success: false, error: 'Раздел не найден' }
+    }
+
+    const grantedToDepartmentIds =
+      grantsResult.data?.map((g) => g.granted_to_department_id) ?? []
+
+    // Future loading metadata для проверки прав
+    const futureLoading: LoadingPermissionContext = {
+      responsibleId: input.employeeId,
+      teamId: employeeRow.data.team_id ?? null,
+      departmentId: employeeRow.data.department_id ?? null,
+      subdivisionId: employeeRow.data.subdivision_id ?? null,
+      projectId: sectionRow.data.project_id ?? null,
+      grantedToDepartmentIds,
+    }
+
+    if (!canEditLoading(futureLoading, ctx)) {
+      return { success: false, error: 'Нет прав на создание загрузки для этого сотрудника' }
+    }
+
+    // Cross-dept: для restricted ролей раздел и сотрудник должны быть в одном отделе.
+    // Исключение: если есть пересечение grantedToDepartmentIds с grantedAccessDepartmentIds —
+    // юзер получил доступ через грант, проверка соответствия отделов не применяется.
+    const accessViaGrant =
+      grantedToDepartmentIds.length > 0 &&
+      ctx.grantedAccessDepartmentIds.some((d) =>
+        grantedToDepartmentIds.includes(d)
+      )
+
+    if (
+      !accessViaGrant &&
+      isRestrictedToOwnDepartment(ctx) &&
+      sectionRow.data.responsible_department_id !== futureLoading.departmentId
+    ) {
+      return {
+        success: false,
+        error: 'Раздел и сотрудник должны быть из одного отдела',
+      }
     }
 
     // Валидация: если stageId указан, проверяем что он принадлежит sectionId
@@ -763,12 +890,29 @@ export async function updateSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Unauthorized' }
+    // Auth + permission + cross-dept enforcement (см. spec §5.4)
+    const assertResult = await assertCanEditLoading(input.loadingId)
+    if (!assertResult.success) return assertResult
+    const { loading: oldLoading, ctx } = assertResult.data
+
+    // Cross-dept проверки — только для user/team_lead/department_head
+    if (isRestrictedToOwnDepartment(ctx)) {
+      const oldDeptId = oldLoading.departmentId
+
+      // Запрет смены исполнителя на сотрудника другого отдела
+      if (input.employeeId && input.employeeId !== oldLoading.responsibleId) {
+        const { data: newProfile } = await supabase
+          .from('view_users')
+          .select('department_id')
+          .eq('user_id', input.employeeId)
+          .single()
+        if (!newProfile || newProfile.department_id !== oldDeptId) {
+          return {
+            success: false,
+            error: 'Нельзя переназначить загрузку на сотрудника другого отдела',
+          }
+        }
+      }
     }
 
     // Валидация: если stageId указан, проверяем что он принадлежит section
@@ -805,6 +949,25 @@ export async function updateSectionLoading(
         return {
           success: false,
           error: 'Выбранный этап не принадлежит разделу загрузки',
+        }
+      }
+
+      // Cross-dept: запрет переноса в раздел другого отдела (для restricted ролей)
+      if (isRestrictedToOwnDepartment(ctx) && oldLoading.departmentId) {
+        const { data: sectionRow } = await supabase
+          .from('view_section_hierarchy')
+          .select('responsible_department_id')
+          .eq('section_id', stage.decomposition_stage_section_id)
+          .single()
+
+        if (
+          sectionRow?.responsible_department_id &&
+          sectionRow.responsible_department_id !== oldLoading.departmentId
+        ) {
+          return {
+            success: false,
+            error: 'Нельзя перенести загрузку в раздел другого отдела',
+          }
         }
       }
     }
@@ -886,13 +1049,9 @@ export async function deleteSectionLoading(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Unauthorized' }
-    }
+    // Auth + permission check
+    const assertResult = await assertCanEditLoading(loadingId)
+    if (!assertResult.success) return assertResult
 
     // Архивируем вместо удаления
     const { error } = await supabase

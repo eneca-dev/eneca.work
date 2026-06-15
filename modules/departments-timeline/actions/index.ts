@@ -14,8 +14,13 @@ import type { Department, Team, Employee, Loading, TeamFreshness } from '../type
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { addDays } from 'date-fns'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
-import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
-import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
+import {
+  applyMandatoryFilters,
+  assertCanEditLoading,
+  canBulkShiftDepartment,
+  getFilterContext,
+  getFilterContextForTasksTabs,
+} from '@/modules/permissions'
 import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
 
 // ============================================================================
@@ -27,6 +32,64 @@ import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted
  */
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+/**
+ * Экранирует значение для безопасной вставки в PostgREST .or() filter string.
+ * Оборачивает в "..." и удваивает embedded двойные кавычки — защищает от
+ * injection через имена, содержащие `,`, `(`, `)`, `:` или `"`.
+ *
+ * Wildcards `%` для ilike внутри кавычек продолжают работать как pattern.
+ */
+function escapePostgRESTValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * Применяет фильтр с поддержкой нескольких значений (UUID и/или имена) к Supabase query.
+ *
+ * - Все UUID → `.in(uuidField, [...])`
+ * - Все имена → `.or()` с цепочкой ilike
+ * - Смешанные → `.or()` c eq для UUID + ilike для имён
+ *
+ * Без этого helper'а множественные значения одного поля молча сводились к [0],
+ * из-за чего `отдел:"АР гражд" отдел:"КР гражд"` фильтровало только по первому.
+ *
+ * @param wrapName — оборачивать ли имя в `%...%` (для partial match по full_name)
+ */
+function applyMultiValueFilter<T>(
+  query: T,
+  rawValue: string | string[],
+  uuidField: string,
+  nameField: string,
+  wrapName = false,
+): T {
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue]
+  if (values.length === 0) return query
+
+  const uuids = values.filter(isUuid)
+  const names = values.filter((v) => !isUuid(v))
+  const wrap = (n: string) => (wrapName ? `%${n}%` : n)
+  // Supabase builder самовозвращающийся; cast локализован — снаружи тип T сохраняется
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = query as any
+
+  if (uuids.length > 0 && names.length === 0) {
+    return q.in(uuidField, uuids) as T
+  }
+  if (names.length > 0 && uuids.length === 0) {
+    const orClause = names
+      .map((n) => `${nameField}.ilike.${escapePostgRESTValue(wrap(n))}`)
+      .join(',')
+    return q.or(orClause) as T
+  }
+  // Смешанные: UUID через eq + имена через ilike в одном .or().
+  // UUIDs валидированы isUuid() — безопасны для интерполяции; имена — экранируем.
+  const parts: string[] = uuids.map((id) => `${uuidField}.eq.${id}`)
+  names.forEach((n) =>
+    parts.push(`${nameField}.ilike.${escapePostgRESTValue(wrap(n))}`),
+  )
+  return q.or(parts.join(',')) as T
 }
 
 /**
@@ -90,10 +153,12 @@ export async function getDepartmentsData(
     const supabase = await createClient()
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры.
+    // Используем getFilterContextForTasksTabs — для user/team_lead с
+    // tasks.tabs.view.department это расширит scope team → department.
     // Параллельно: контекст + список restricted — экономит round-trip.
     // React.cache на getRestrictedProjectIds дедуплицирует в рамках request.
     const [filterContextResult, allRestrictedIds] = await Promise.all([
-      getFilterContext(),
+      getFilterContextForTasksTabs(),
       getRestrictedProjectIds(),
     ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
@@ -106,72 +171,66 @@ export async function getDepartmentsData(
     // 1. Загружаем организационную структуру
     let orgQuery = supabase.from('view_organizational_structure').select('*')
 
-    // Применяем фильтр по подразделению
+    // Применяем фильтр по подразделению (поддержка нескольких значений: UUID + имена).
+    // Подразделение → отделы — двушаговый резолв: сначала собираем все subdivision_ids
+    // (введённые UUID + найденные по именам), затем вытаскиваем все отделы под ними.
     if (secureFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(secureFilters.subdivision_id)
-        ? secureFilters.subdivision_id[0]
-        : secureFilters.subdivision_id
+      const rawValues = Array.isArray(secureFilters.subdivision_id)
+        ? secureFilters.subdivision_id
+        : [secureFilters.subdivision_id]
 
-      if (isUuid(subdivisionId)) {
-        // Получаем отделы подразделения
-        const { data: depts } = await supabase
-          .from('departments')
-          .select('department_id')
-          .eq('subdivision_id', subdivisionId)
+      const subdivisionUuids = rawValues.filter(isUuid)
+      const subdivisionNames = rawValues.filter((v) => !isUuid(v))
 
-        const deptIds = depts?.map(d => d.department_id) || []
-        if (deptIds.length > 0) {
-          orgQuery = orgQuery.in('department_id', deptIds)
-        } else {
-          return { success: true, data: [] }
-        }
-      } else {
-        // Фильтрация по названию подразделения
+      // Резолвим имена в UUID одним запросом (имена экранируем — см. escapePostgRESTValue)
+      if (subdivisionNames.length > 0) {
+        const orClause = subdivisionNames
+          .map((n) => `subdivision_name.ilike.${escapePostgRESTValue(n)}`)
+          .join(',')
         const { data: subdivisions } = await supabase
           .from('subdivisions')
           .select('subdivision_id')
-          .ilike('subdivision_name', subdivisionId)
-
-        if (subdivisions && subdivisions.length > 0) {
-          const { data: depts } = await supabase
-            .from('departments')
-            .select('department_id')
-            .in('subdivision_id', subdivisions.map(s => s.subdivision_id))
-
-          const deptIds = depts?.map(d => d.department_id) || []
-          if (deptIds.length > 0) {
-            orgQuery = orgQuery.in('department_id', deptIds)
-          } else {
-            return { success: true, data: [] }
-          }
+          .or(orClause)
+        if (subdivisions) {
+          subdivisionUuids.push(...subdivisions.map((s) => s.subdivision_id))
         }
       }
+
+      if (subdivisionUuids.length === 0) {
+        return { success: true, data: [] }
+      }
+
+      const { data: depts } = await supabase
+        .from('departments')
+        .select('department_id')
+        .in('subdivision_id', subdivisionUuids)
+
+      const deptIds = depts?.map((d) => d.department_id) || []
+      if (deptIds.length > 0) {
+        orgQuery = orgQuery.in('department_id', deptIds)
+      } else {
+        return { success: true, data: [] }
+      }
     }
 
-    // Применяем фильтр по отделу
+    // Применяем фильтр по отделу (поддержка нескольких значений)
     if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id)
-        ? secureFilters.department_id[0]
-        : secureFilters.department_id
-
-      if (isUuid(departmentId)) {
-        orgQuery = orgQuery.eq('department_id', departmentId)
-      } else {
-        orgQuery = orgQuery.ilike('department_name', departmentId)
-      }
+      orgQuery = applyMultiValueFilter(
+        orgQuery,
+        secureFilters.department_id,
+        'department_id',
+        'department_name',
+      )
     }
 
-    // Применяем фильтр по команде
+    // Применяем фильтр по команде (поддержка нескольких значений)
     if (secureFilters?.team_id) {
-      const teamId = Array.isArray(secureFilters.team_id)
-        ? secureFilters.team_id[0]
-        : secureFilters.team_id
-
-      if (isUuid(teamId)) {
-        orgQuery = orgQuery.eq('team_id', teamId)
-      } else {
-        orgQuery = orgQuery.ilike('team_name', teamId)
-      }
+      orgQuery = applyMultiValueFilter(
+        orgQuery,
+        secureFilters.team_id,
+        'team_id',
+        'team_name',
+      )
     }
 
     // Исключающие фильтры для орг. структуры
@@ -193,7 +252,17 @@ export async function getDepartmentsData(
       }
     }
 
-    const { data: orgData, error: orgError } = await orgQuery
+    // Параллельно: orgQuery + все гранты системы. Гранты не зависят от orgData
+    // и таблица мала (десятки строк), быстрее тянуть всё и фильтровать в памяти,
+    // чем ждать orgQuery → grantsQuery последовательно.
+    const [orgResult, allGrantsResult] = await Promise.all([
+      orgQuery,
+      supabase
+        .from('employee_loading_access_grants')
+        .select('employee_id, granted_to_department_id'),
+    ])
+
+    const { data: orgData, error: orgError } = orgResult
 
     if (orgError) {
       console.error('[getDepartmentsData] Org structure error:', orgError)
@@ -208,15 +277,57 @@ export async function getDepartmentsData(
       return { success: true, data: [] }
     }
 
+    // Гранты не критичны: при ошибке логируем и продолжаем без них
+    if (allGrantsResult.error) {
+      Sentry.captureException(new Error(allGrantsResult.error.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'false' },
+        extra: { step: 'load_grants' },
+      })
+    }
+
     // 2. Загружаем данные о сотрудниках с их загрузками
     // Скоупим выборку отделами из org-запроса, чтобы не тянуть все отделы
     const orgDepartmentIds = [...new Set(orgData.map(o => o.department_id).filter(Boolean))]
+
+    // Гранты для отделов, попавших в выборку
+    const grantsData = (allGrantsResult.data ?? []).filter((g) =>
+      orgDepartmentIds.includes(g.granted_to_department_id as string)
+    )
+
+    // ID гостевых сотрудников — для расширения employeeQuery одним запросом
+    // вместо отдельного guestEmployeesQuery (-1 round-trip).
+    const guestEmployeeIds = [
+      ...new Set(
+        grantsData
+          .map((g) => g.employee_id)
+          .filter((id): id is string => !!id)
+      ),
+    ]
 
     let employeeQuery = supabase
       .from('view_employee_workloads')
       .select('*')
       .or('loading_status.eq.active,loading_status.is.null')
       .in('final_department_id', orgDepartmentIds)
+
+    // Запрос для гостевых сотрудников: они должны проходить ВНЕ фильтров по
+    // final_department_id / final_team_id, потому что у них эти поля = их
+    // родного отдела (а не отдела-получателя). Иначе фильтр вида
+    // .eq('final_department_id', 'Отдел развития') отбросил бы гостя.
+    // Гости фильтруются только по user_id и базовым restricted-проектам.
+    let guestQueryBuilder = guestEmployeeIds.length > 0
+      ? supabase
+          .from('view_employee_workloads')
+          .select('*')
+          .or('loading_status.eq.active,loading_status.is.null')
+          .in('user_id', guestEmployeeIds)
+      : null
+
+    if (guestQueryBuilder && restrictedProjectIds.length > 0) {
+      guestQueryBuilder = guestQueryBuilder.or(
+        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
+      )
+    }
 
     // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
     // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
@@ -228,70 +339,26 @@ export async function getDepartmentsData(
       )
     }
 
-    // Применяем те же фильтры для сотрудников
-    if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id)
-        ? secureFilters.department_id[0]
-        : secureFilters.department_id
+    // ----- Org-фильтры (только для main employeeQuery) -----
+    // Гостям эти фильтры НЕ применяются: у guest final_department_id / final_team_id =
+    // его родного отдела, а не отдела-получателя гранта, иначе фильтр их отбросил бы.
 
-      if (isUuid(departmentId)) {
-        employeeQuery = employeeQuery.eq('final_department_id', departmentId)
-      } else {
-        employeeQuery = employeeQuery.ilike('final_department_name', departmentId)
-      }
+    if (secureFilters?.department_id) {
+      employeeQuery = applyMultiValueFilter(
+        employeeQuery,
+        secureFilters.department_id,
+        'final_department_id',
+        'final_department_name',
+      )
     }
 
     if (secureFilters?.team_id) {
-      const teamId = Array.isArray(secureFilters.team_id)
-        ? secureFilters.team_id[0]
-        : secureFilters.team_id
-
-      if (isUuid(teamId)) {
-        employeeQuery = employeeQuery.eq('final_team_id', teamId)
-      } else {
-        employeeQuery = employeeQuery.ilike('final_team_name', teamId)
-      }
-    }
-
-    // Применяем фильтр по проекту (поддержка нескольких значений)
-    if (secureFilters?.project_id) {
-      const values = Array.isArray(secureFilters.project_id)
-        ? secureFilters.project_id
-        : [secureFilters.project_id]
-
-      const uuids = values.filter(isUuid)
-      const names = values.filter(v => !isUuid(v))
-
-      if (uuids.length > 0 && names.length === 0) {
-        employeeQuery = employeeQuery.in('project_id', uuids)
-      } else if (names.length > 0 && uuids.length === 0) {
-        // Несколько имён — OR через ilike
-        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
-        employeeQuery = employeeQuery.or(orClause)
-      } else if (uuids.length > 0 && names.length > 0) {
-        // Смешанный: UUID через in + имена через ilike
-        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
-        names.forEach(n => parts.push(`project_name.ilike.${n}`))
-        employeeQuery = employeeQuery.or(parts.join(','))
-      }
-    }
-
-    // Исключающие фильтры для сотрудников (-проект, -отдел, -команда, -ответственный).
-    // Для project_id/project_name используем .or() с is.null — иначе сотрудники
-    // без загрузок (project_id IS NULL) отфильтровываются из-за 3-значной логики SQL.
-    // UUID-исключения собираем в один NOT IN, ilike-паттерны — каждый в свой .or()
-    // (их нельзя комбинировать в один NOT IN).
-    const negatedProjects = getNegatedParams(secureFilters, 'project_id')
-    const negatedProjectUuids = negatedProjects.filter(isUuid)
-    const negatedProjectNames = negatedProjects.filter(v => !isUuid(v))
-
-    if (negatedProjectUuids.length > 0) {
-      employeeQuery = employeeQuery.or(
-        `project_id.is.null,project_id.not.in.(${negatedProjectUuids.join(',')})`
+      employeeQuery = applyMultiValueFilter(
+        employeeQuery,
+        secureFilters.team_id,
+        'final_team_id',
+        'final_team_name',
       )
-    }
-    for (const val of negatedProjectNames) {
-      employeeQuery = employeeQuery.or(`project_name.is.null,project_name.not.ilike.${val}`)
     }
 
     for (const val of getNegatedParams(secureFilters, 'department_id')) {
@@ -310,28 +377,74 @@ export async function getDepartmentsData(
       }
     }
 
-    for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('user_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('full_name', 'ilike', `%${val}%`)
+    // ----- Loading-уровень фильтры (для обоих: main + guest) -----
+    // Эти фильтры относятся к самой загрузке (project, responsible). Без них гости
+    // приходили со ВСЕМИ своими загрузками — даже когда юзер выбрал конкретный проект,
+    // отчего гости показывались с "чужими" проектами в реальной команде.
+    //
+    // Для project_id/name и responsible negated используем .or() с is.null —
+    // иначе сотрудники без загрузок (project_id IS NULL) отвалились бы из-за
+    // 3-значной логики SQL (NULL NOT IN/NOT ILIKE = NULL = filtered out).
+    //
+    // wrapName=true для responsible: даёт partial match по ФИО (например, "Иванов"
+    // матчит "Иванов Сергей"); для project_name делаем exact match — имена проектов
+    // обычно уникальны.
+
+    function applyLoadingLevelFilters<Q>(query: Q): Q {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q = query as any
+
+      if (secureFilters?.project_id) {
+        q = applyMultiValueFilter(q, secureFilters.project_id, 'project_id', 'project_name')
       }
+
+      const negProjects = getNegatedParams(secureFilters, 'project_id')
+      const negProjectUuids = negProjects.filter(isUuid)
+      const negProjectNames = negProjects.filter((v) => !isUuid(v))
+      if (negProjectUuids.length > 0) {
+        q = q.or(`project_id.is.null,project_id.not.in.(${negProjectUuids.join(',')})`)
+      }
+      for (const val of negProjectNames) {
+        q = q.or(`project_name.is.null,project_name.not.ilike.${escapePostgRESTValue(val)}`)
+      }
+
+      if (secureFilters?.responsible_id) {
+        q = applyMultiValueFilter(q, secureFilters.responsible_id, 'user_id', 'full_name', true)
+      }
+
+      for (const val of getNegatedParams(secureFilters, 'responsible_id')) {
+        if (isUuid(val)) {
+          q = q.neq('user_id', val)
+        } else {
+          q = q.not('full_name', 'ilike', `%${val}%`)
+        }
+      }
+
+      return q as Q
     }
 
-    // Применяем фильтр по ответственному (сотруднику)
-    if (secureFilters?.responsible_id) {
-      const responsibleId = Array.isArray(secureFilters.responsible_id)
-        ? secureFilters.responsible_id[0]
-        : secureFilters.responsible_id
-
-      if (isUuid(responsibleId)) {
-        employeeQuery = employeeQuery.eq('user_id', responsibleId)
-      } else {
-        employeeQuery = employeeQuery.ilike('full_name', `%${responsibleId}%`)
-      }
+    employeeQuery = applyLoadingLevelFilters(employeeQuery)
+    if (guestQueryBuilder) {
+      guestQueryBuilder = applyLoadingLevelFilters(guestQueryBuilder)
     }
 
-    const { data: employeeData, error: employeeError } = await employeeQuery
+    // Параллельно: основная выборка + гостевые сотрудники.
+    // Гости идут отдельно потому что фильтры по final_department_id / final_team_id
+    // их бы отбросили (у гостя эти поля = его родного отдела, не получателя).
+    const [employeeResult, guestResult] = await Promise.all([
+      employeeQuery,
+      guestQueryBuilder ?? Promise.resolve({ data: null, error: null }),
+    ])
+
+    const { data: employeeData, error: employeeError } = employeeResult
+    const guestEmployeeData = guestResult.data ?? []
+
+    if (guestResult.error) {
+      Sentry.captureException(new Error(guestResult.error.message), {
+        tags: { module: 'departments-timeline', action: 'getDepartmentsData', error_type: 'db_error', user_facing: 'false' },
+        extra: { step: 'load_guest_employees' },
+      })
+    }
 
     if (employeeError) {
       console.error('[getDepartmentsData] Employee data error:', employeeError)
@@ -347,8 +460,21 @@ export async function getDepartmentsData(
     const teamsMap = new Map<string, Team>()
     const employeesMap = new Map<string, Employee>()
 
-    // Сначала обрабатываем сотрудников и их загрузки
-    employeeData?.forEach((item) => {
+    // Сначала обрабатываем сотрудников и их загрузки.
+    // Сливаем основную выборку и гостей — гости в employeesMap идут так же
+    // как обычные, отличаются только распределением по командам (см. ниже).
+    const allEmployeeRows = [...(employeeData ?? []), ...guestEmployeeData]
+
+    // Дедупликация загрузок по loading_id. Нужна по двум причинам:
+    // 1) Гость, чей родной отдел тоже в выборке, приходит И в employeeData,
+    //    И в guestEmployeeData — его загрузки задвоились бы.
+    // 2) view_employee_workloads может вернуть дубликаты loading_id из-за
+    //    fan-out в JOIN (см. аналогичную дедупликацию в bulkShiftLoadings).
+    // loading_id глобально уникален (одна загрузка = один ответственный),
+    // поэтому глобальный Set безопасен.
+    const seenLoadingIds = new Set<string>()
+
+    allEmployeeRows.forEach((item) => {
       // Пропускаем записи без user_id
       if (!item.user_id) return
 
@@ -379,8 +505,12 @@ export async function getDepartmentsData(
 
       const employee = employeesMap.get(item.user_id)!
 
-      // Добавляем загрузку, если она есть и имеет все обязательные поля
+      // Добавляем загрузку, если она есть, имеет все обязательные поля
+      // и ещё не была добавлена (дедуп по loading_id).
       if (item.loading_id && item.loading_start && item.loading_finish) {
+        if (seenLoadingIds.has(item.loading_id)) return
+        seenLoadingIds.add(item.loading_id)
+
         employee.loadings!.push({
           id: item.loading_id,
           employeeId: item.user_id,
@@ -468,7 +598,49 @@ export async function getDepartmentsData(
       }
     })
 
-    // Вычисляем dailyWorkloads для команд
+    // Cross-department grants: распределяем гостевых сотрудников в виртуальные команды
+    // "Гостевые сотрудники" в отделах-получателях. Один сотрудник может быть гостем
+    // в нескольких отделах одновременно — создаём отдельный клон для каждого гранта.
+    grantsData?.forEach((grant) => {
+      if (!grant.employee_id || !grant.granted_to_department_id) return
+      // Если отдел-получатель не попал в orgData (например, отфильтрован по subdivision) —
+      // не показываем гранта здесь, иначе создадим "висячий" отдел без команд.
+      if (!departmentsMap.has(grant.granted_to_department_id)) return
+
+      const sourceEmployee = employeesMap.get(grant.employee_id)
+      if (!sourceEmployee) return
+
+      // Не дублируем: если сотрудник уже в родном отделе == отдел-получатель,
+      // это валидная ситуация — триггер БД её предотвращает, но защищаемся.
+      if (sourceEmployee.departmentId === grant.granted_to_department_id) return
+
+      const guestTeamKey = `${grant.granted_to_department_id}-guests`
+      if (!teamsMap.has(guestTeamKey)) {
+        const dept = departmentsMap.get(grant.granted_to_department_id)
+        teamsMap.set(guestTeamKey, {
+          id: `guests-${grant.granted_to_department_id}`,
+          name: 'Гостевые сотрудники',
+          code: '',
+          departmentId: grant.granted_to_department_id,
+          departmentName: dept?.name,
+          totalEmployees: 0,
+          employees: [],
+          dailyWorkloads: {},
+          isGuestTeam: true,
+        })
+      }
+
+      const guestTeam = teamsMap.get(guestTeamKey)!
+      // Клон с пометкой isGuest — сохраняем все loadings и dailyWorkloads,
+      // т.к. таймлайн должен показывать его реальную загруженность.
+      guestTeam.employees.push({
+        ...sourceEmployee,
+        isGuest: true,
+        homeDepartmentName: sourceEmployee.departmentName,
+      })
+    })
+
+    // Вычисляем dailyWorkloads для команд (включая виртуальные)
     teamsMap.forEach((team) => {
       team.dailyWorkloads = aggregateDailyWorkloads(team.employees)
     })
@@ -481,9 +653,15 @@ export async function getDepartmentsData(
       }
     })
 
-    // Вычисляем dailyWorkloads для отделов
+    // Вычисляем dailyWorkloads для отделов.
+    // ВАЖНО: гостевые команды (cross-department grants) ИСКЛЮЧАЕМ из итога отдела —
+    // иначе загрузка гостя задваивается (она уже учтена в его РОДНОМ отделе).
+    // Гость остаётся видимым в команде "Гостевые сотрудники" со своим подытогом,
+    // но в ёмкость/нагрузку отдела-получателя не входит.
     departmentsMap.forEach((department) => {
-      const allEmployees = department.teams.flatMap(t => t.employees)
+      const allEmployees = department.teams
+        .filter((t) => !t.isGuestTeam)
+        .flatMap((t) => t.employees)
       department.dailyWorkloads = aggregateDailyWorkloads(allEmployees)
     })
 
@@ -508,7 +686,12 @@ export async function getDepartmentsData(
 
     // Сортируем команды и сотрудников внутри отделов
     departments.forEach((dept) => {
-      dept.teams.sort((a, b) => a.name.localeCompare(b.name))
+      dept.teams.sort((a, b) => {
+        // Виртуальная команда "Гостевые сотрудники" всегда в конце
+        if (a.isGuestTeam && !b.isGuestTeam) return 1
+        if (!a.isGuestTeam && b.isGuestTeam) return -1
+        return a.name.localeCompare(b.name)
+      })
       dept.teams.forEach((team) => {
         // Тимлид первым, остальные по имени
         team.employees.sort((a, b) => {
@@ -730,36 +913,25 @@ export async function updateLoadingDates(
 
     const supabase = await createClient()
 
-    // Проверка авторизации
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Необходима авторизация' }
+    // Auth + permission check (включает проверку существования загрузки)
+    const assertResult = await assertCanEditLoading(loadingId)
+    if (!assertResult.success) {
+      return { success: false, error: assertResult.error }
     }
 
     // 🔒 Defense-in-depth: не-админ не может править загрузки по restricted-проектам.
-    // Параллельно: контекст + список restricted + project_id загрузки — 3 независимых запроса.
-    const [ctx, restrictedIds, loadingRowResult] = await Promise.all([
-      getFilterContext(),
-      getRestrictedProjectIds(),
-      supabase
-        .from('view_employee_workloads')
-        .select('project_id')
-        .eq('loading_id', loadingId)
-        .limit(1)
-        .maybeSingle(),
-    ])
-    const isAdmin = ctx.success && ctx.data
-      ? ctx.data.permissions.includes('hierarchy.is_admin')
-      : false
+    // assertCanEditLoading уже отдал project_id — переиспользуем без доп. запроса.
+    const restrictedIds = await getRestrictedProjectIds()
+    const isAdmin = assertResult.data.ctx.permissions.includes('hierarchy.is_admin')
 
     if (!isAdmin && restrictedIds.length > 0) {
-      const projectId = loadingRowResult.data?.project_id
+      const projectId = assertResult.data.loading.projectId
       if (projectId && restrictedIds.includes(projectId)) {
         return { success: false, error: 'Загрузка не найдена' }
       }
     }
 
-    // Обновляем даты загрузки (RLS обеспечивает проверку прав доступа)
+    // Обновляем даты загрузки (RLS обеспечивает доп. проверку прав доступа)
     const { error } = await supabase
       .from('loadings')
       .update({
@@ -812,6 +984,13 @@ export interface BulkShiftLoadingsInput {
   // Для mode 'set' — конкретные даты (YYYY-MM-DD)
   setStartDate?: string
   setEndDate?: string
+  /**
+   * Опционально: явный список loading_id для применения операции.
+   * Если передан и не пуст — auto-discovery пропускается, и операция применяется только к этим IDs
+   * (с defense-in-depth фильтром по departmentId × projectId × loading_status='active').
+   * Если не передан или пуст — поведение как раньше (все загрузки отдела по проекту).
+   */
+  loadingIds?: string[]
 }
 
 /**
@@ -845,6 +1024,8 @@ export async function bulkShiftLoadings(
         'department.id': input.departmentId,
         'project.id': input.projectId,
         'shift.days': input.shiftDays,
+        'shift.mode': input.shiftMode,
+        'shift.explicit_ids_count': input.loadingIds?.length ?? 0,
       },
     },
     async () => {
@@ -878,34 +1059,48 @@ export async function bulkShiftLoadings(
 
     const supabase = await createClient()
 
-    // Проверка авторизации
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Необходима авторизация' }
-    }
-
-    // 🔒 Defense-in-depth: не-админ не может bulk-шифтить restricted-проект.
+    // 🔒 Permission + restricted-projects check.
     // Параллельно: контекст + список restricted — экономит round-trip.
-    const [bulkCtx, bulkRestrictedIds] = await Promise.all([
+    const [bulkCtxResult, bulkRestrictedIds] = await Promise.all([
       getFilterContext(),
       getRestrictedProjectIds(),
     ])
-    const bulkIsAdmin = bulkCtx.success && bulkCtx.data
-      ? bulkCtx.data.permissions.includes('hierarchy.is_admin')
-      : false
+    if (!bulkCtxResult.success || !bulkCtxResult.data) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+    const bulkCtx = bulkCtxResult.data
 
+    // Permission: bulk_shift доступен admin (любой отдел) и department_head (свой отдел)
+    if (!canBulkShiftDepartment(input.departmentId, bulkCtx)) {
+      return { success: false, error: 'Нет прав на массовый сдвиг отдела' }
+    }
+
+    // Defense-in-depth: не-админ не может bulk-шифтить restricted-проект
+    const bulkIsAdmin = bulkCtx.permissions.includes('hierarchy.is_admin')
     if (!bulkIsAdmin && bulkRestrictedIds.includes(input.projectId)) {
       return { success: false, error: 'Проект не найден' }
     }
 
-    // 1. Находим все подходящие загрузки через view_employee_workloads
-    const { data: matchingLoadings, error: queryError } = await supabase
+    // 1. Находим подходящие загрузки через view_employee_workloads
+    // - Если передан явный loadingIds → фильтруем по нему (defense-in-depth: + dept × project × active)
+    // - Иначе → все активные загрузки отдела по проекту (legacy auto-discovery)
+    const explicitIds = input.loadingIds && input.loadingIds.length > 0
+      ? input.loadingIds
+      : null
+
+    let baseQuery = supabase
       .from('view_employee_workloads')
       .select('loading_id, loading_start, loading_finish')
       .eq('final_department_id', input.departmentId)
       .eq('project_id', input.projectId)
       .eq('loading_status', 'active')
       .not('loading_id', 'is', null)
+
+    if (explicitIds) {
+      baseQuery = baseQuery.in('loading_id', explicitIds)
+    }
+
+    const { data: matchingLoadings, error: queryError } = await baseQuery
 
     if (queryError) {
       console.error('[bulkShiftLoadings] Query error:', queryError)

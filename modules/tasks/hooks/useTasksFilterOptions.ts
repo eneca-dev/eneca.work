@@ -22,6 +22,7 @@ import {
   useFilteredOptions,
   getLockedFilters,
 } from '@/modules/permissions'
+import { expandScopeForTasksTabs } from '@/modules/permissions/utils/expand-scope-for-tasks'
 
 // ============================================================================
 // Base Structure Hooks
@@ -54,14 +55,26 @@ const useProjectTags = createSimpleCacheQuery<ProjectTag[]>({
  *
  * Включает: подразделения, отделы, команды, ответственных, проекты, метки
  * Фильтрует опции на основе scope пользователя (filter-permissions)
+ *
+ * @param expandScopeForTasks Если true и у юзера есть `tasks.tabs.view.department`,
+ *   scope расширяется team → department. Передаётся true только на вкладках
+ *   Sections/Departments. На Kanban scope сохраняется базовый.
  */
-export function useTasksFilterOptions() {
+export function useTasksFilterOptions({
+  expandScopeForTasks = false,
+}: { expandScopeForTasks?: boolean } = {}) {
   const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()
   const { data: projectStructure, isLoading: loadingProject } = useProjectStructure()
   const { data: tags, isLoading: loadingTags } = useProjectTags()
 
-  // 🔒 Получаем контекст разрешений
-  const { data: filterContext, isLoading: loadingContext } = useFilterContext()
+  // 🔒 Получаем контекст разрешений.
+  // Если activeTab = Sections/Departments и юзер имеет tasks.tabs.view.department,
+  // расширяем scope team → department для согласованности UI с серверной выборкой.
+  const { data: rawFilterContext, isLoading: loadingContext } = useFilterContext()
+  const filterContext = useMemo(() => {
+    if (!rawFilterContext) return null
+    return expandScopeForTasks ? expandScopeForTasksTabs(rawFilterContext) : rawFilterContext
+  }, [rawFilterContext, expandScopeForTasks])
 
   // Собираем все опции с parent IDs для иерархической фильтрации
   const allOptions = useMemo<FilterOption[]>(() => {

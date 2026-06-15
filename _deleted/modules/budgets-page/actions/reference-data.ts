@@ -36,14 +36,11 @@ export interface WorkCategory {
  * Получить список уровней сложности
  */
 export async function getDifficultyLevels(): Promise<ActionResult<DifficultyLevel[]>> {
-  console.log('[getDifficultyLevels] Called')
   try {
     const supabase = await createClient()
 
-    // Auth check
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      console.log('[getDifficultyLevels] Auth failed:', authError?.message)
       return { success: false, error: 'Не авторизован' }
     }
 
@@ -64,7 +61,6 @@ export async function getDifficultyLevels(): Promise<ActionResult<DifficultyLeve
       weight: d.difficulty_weight,
     }))
 
-    console.log('[getDifficultyLevels] Success, count:', mapped.length)
     return { success: true, data: mapped }
   } catch (error) {
     console.error('[getDifficultyLevels] Error:', error)

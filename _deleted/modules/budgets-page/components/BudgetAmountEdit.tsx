@@ -8,13 +8,13 @@
  * Сохранение: по Enter или при потере фокуса (blur).
  * Отмена: по Escape.
  *
- * Включает кнопку для открытия BudgetPartsEditor (управление частями бюджета).
+ * Inline редактор суммы и процента от родительского бюджета.
  */
 
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Loader2, PieChart } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUpdateBudgetAmount } from '@/modules/budgets'
 import {
@@ -22,16 +22,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { BudgetPartsEditor } from './BudgetPartsEditor'
 import { parseAmount, formatNumber, calculatePercentage, calculateAmount } from '../utils'
 
-// Debug logging (отключить в production)
-const DEBUG = false
-const log = (action: string, data?: Record<string, unknown>) => {
-  if (DEBUG) {
-    console.log(`[AmountEdit] ${action}`, data ?? '')
-  }
-}
 
 // ============================================================================
 // Types
@@ -89,7 +81,6 @@ export function BudgetAmountEdit({
   // isPending = true означает оптимистичный рендер — показываем локальное значение
   useEffect(() => {
     if (!isEditing && !isPending) {
-      log('SYNC from server', { budgetId, amount: currentAmount })
       setLocalAmount(formatNumber(currentAmount))
       setLocalPercent(
         hasParent ? calculatePercentage(currentAmount, parentPlannedAmount).toString() : ''
@@ -103,13 +94,11 @@ export function BudgetAmountEdit({
 
     // Сохраняем только если значение изменилось
     if (newAmount >= 0 && newAmount !== currentAmount) {
-      log('SAVE to server', { budgetId, amount: newAmount })
       updateAmount({
         budget_id: budgetId,
         total_amount: newAmount,
       })
     } else {
-      log('SKIP save (no change)', { newAmount, serverAmount: currentAmount })
     }
   }, [budgetId, localAmount, currentAmount, updateAmount])
 
@@ -119,7 +108,6 @@ export function BudgetAmountEdit({
 
   // Фокус на поле суммы
   const handleAmountFocus = useCallback(() => {
-    log('FOCUS amount')
     setIsEditing(true)
   }, [])
 
@@ -170,7 +158,6 @@ export function BudgetAmountEdit({
 
   // Потеря фокуса → сохранение
   const handleBlur = useCallback(() => {
-    log('BLUR → save')
     saveToServer()
     setIsEditing(false)
   }, [saveToServer])
@@ -180,11 +167,9 @@ export function BudgetAmountEdit({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        log('ENTER → save & blur')
         ;(e.target as HTMLInputElement).blur() // blur вызовет handleBlur → saveToServer
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        log('ESCAPE → revert')
         // Отмена: возвращаем серверное значение без сохранения
         setLocalAmount(formatNumber(currentAmount))
         setLocalPercent(
@@ -298,25 +283,6 @@ export function BudgetAmountEdit({
 
       {/* Spacer для прижатия прогресс-бара к правому краю */}
       <div className="flex-1" />
-
-      {/* Parts editor button */}
-      <BudgetPartsEditor
-        budgetId={budgetId}
-        totalAmount={currentAmount}
-        trigger={
-          <button
-            className={cn(
-              'p-1 rounded text-muted-foreground hover:text-foreground',
-              'hover:bg-muted transition-colors',
-              'opacity-0 group-hover:opacity-100'
-            )}
-            title="Управление частями"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PieChart className="w-3 h-3" />
-          </button>
-        }
-      />
 
       {/* Mini progress bar - прижат к правому краю */}
       <Tooltip delayDuration={200}>

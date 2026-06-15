@@ -246,7 +246,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       }
     }
 
-    if (formData.rate < 0.01 || formData.rate > 2.0) {
+    if (formData.rate < 0.01 || formData.rate > 10.0) {
       newErrors.rate = 'Ставка должна быть от 0.01 до 2.0'
     }
 

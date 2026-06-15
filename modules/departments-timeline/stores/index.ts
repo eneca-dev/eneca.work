@@ -283,3 +283,9 @@ export function useRowExpanded(type: TreeNodeType, id: string) {
 
   return { isExpanded, toggle }
 }
+
+// ============================================================================
+// Bulk Shift Selection Store
+// ============================================================================
+
+export { useBulkShiftSelectionStore } from './bulk-shift-selection-store'

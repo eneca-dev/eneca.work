@@ -169,6 +169,26 @@ export function pluralizeReports(count: number): string {
 }
 
 /**
+ * Склонение слова "загрузка" в зависимости от числа
+ * @returns правильная форма слова ("загрузка", "загрузки" или "загрузок")
+ */
+export function pluralizeLoadings(count: number): string {
+  const lastDigit = count % 10
+  const lastTwoDigits = count % 100
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'загрузок'
+  }
+  if (lastDigit === 1) {
+    return 'загрузка'
+  }
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'загрузки'
+  }
+  return 'загрузок'
+}
+
+/**
  * Склонение слова "сотрудник" в зависимости от числа
  */
 export function pluralizeEmployees(count: number): string {

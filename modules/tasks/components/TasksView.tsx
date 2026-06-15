@@ -17,14 +17,25 @@ import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { SectionsPageInternal } from '@/modules/sections-page'
+import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { TasksTabs } from './TasksTabs'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
+import { usePermissionsLoader } from '@/modules/permissions'
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
 export function TasksView() {
+  // Refresh permissions cache on mount — после деплоя нового кода у юзеров
+  // в Zustand могут быть устаревшие permissions. Этот reload подтянет новые
+  // ключи (loadings.edit.scope.* и tasks.tabs.view.department).
+  const { reloadPermissions } = usePermissionsLoader()
+  useEffect(() => {
+    reloadPermissions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // URL search params
   const searchParams = useSearchParams()
 
@@ -45,8 +56,13 @@ export function TasksView() {
   const viewMode = activeTab?.viewMode ?? 'kanban'
   const loadAllEnabled = activeTab?.loadAllEnabled ?? false
 
-  // Filter options for autocomplete + locked filters
-  const { options: filterOptions, lockedFilters } = useTasksFilterOptions()
+  // Filter options for autocomplete + locked filters.
+  // На Sections/Departments вкладках расширяем scope до отдела, чтобы UI
+  // соответствовал серверной выборке (whole department, не только своя команда).
+  const expandScopeForTasks = viewMode === 'sections' || viewMode === 'departments'
+  const { options: filterOptions, lockedFilters } = useTasksFilterOptions({
+    expandScopeForTasks,
+  })
 
   // // Log URL params for debugging
   // useEffect(() => {
@@ -141,6 +157,13 @@ export function TasksView() {
         )}
         {tabs.length > 0 && viewMode === 'sections' && (
           <SectionsPageInternal
+            queryParams={queryParams}
+            loadAllEnabled={loadAllEnabled}
+            onLoadAll={() => setActiveTabLoadAll(true)}
+          />
+        )}
+        {tabs.length > 0 && viewMode === 'budgets' && (
+          <BudgetsViewInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}

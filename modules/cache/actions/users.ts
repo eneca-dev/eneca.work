@@ -16,6 +16,10 @@ export interface CachedUser {
   full_name: string
   /** Почасовая ставка (из профиля) */
   salary: number | null
+  /** ID отдела (опционально, заполняется в getUsers) */
+  department_id?: string | null
+  /** ID команды (опционально, заполняется в getUsers) */
+  team_id?: string | null
 }
 
 // ============================================================================
@@ -36,7 +40,7 @@ export async function getUsers(): Promise<ActionResult<CachedUser[]>> {
 
     const { data, error } = await supabase
       .from('view_users')
-      .select('user_id, first_name, last_name, email, avatar_url')
+      .select('user_id, first_name, last_name, email, avatar_url, department_id, team_id')
       .order('first_name')
 
     if (error) {
@@ -44,14 +48,19 @@ export async function getUsers(): Promise<ActionResult<CachedUser[]>> {
       return { success: false, error: error.message }
     }
 
-    const users: CachedUser[] = (data || []).map(user => ({
-      user_id: user.user_id,
-      first_name: user.first_name || null,
-      last_name: user.last_name || null,
-      email: user.email,
-      avatar_url: user.avatar_url || null,
-      full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-    }))
+    const users: CachedUser[] = (data || [])
+      .filter((u): u is typeof u & { user_id: string; email: string } => !!u.user_id && !!u.email)
+      .map(user => ({
+        user_id: user.user_id,
+        first_name: user.first_name || null,
+        last_name: user.last_name || null,
+        email: user.email,
+        avatar_url: user.avatar_url || null,
+        full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+        salary: null,
+        department_id: user.department_id ?? null,
+        team_id: user.team_id ?? null,
+      }))
 
     return { success: true, data: users }
   } catch (error) {

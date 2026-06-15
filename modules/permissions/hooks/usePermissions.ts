@@ -144,7 +144,7 @@ export const useProjectsPermissions = () => {
  */
 export const usePlanningPermissions = () => {
   const { hasPermission } = usePermissions()
-  
+
   return {
     canViewAll: hasPermission('planning.view.all'),
     canViewDepartment: hasPermission('planning.view.department'),
@@ -154,12 +154,28 @@ export const usePlanningPermissions = () => {
     canCreatePlanLoadings: hasPermission('planning.create.plan_loadings'),
     canManageSections: hasPermission('planning.manage.sections'),
     canAdmin: hasPermission('planning.admin'),
-    
+
+    // Loadings scope permissions (introduced for /tasks Sections/Departments tabs)
+    canEditLoadingsAll: hasPermission('loadings.edit.scope.all'),
+    canEditLoadingsSubdivision: hasPermission('loadings.edit.scope.subdivision'),
+    canEditLoadingsDepartment: hasPermission('loadings.edit.scope.department'),
+    canEditLoadingsTeam: hasPermission('loadings.edit.scope.team'),
+    canEditLoadingsManagedProjects: hasPermission('loadings.edit.scope.managed_projects'),
+    canEditLoadingsOwn: hasPermission('loadings.edit.scope.own'),
+    canBulkShiftDepartment: hasPermission('loadings.bulk_shift.department'),
+    canViewTasksTabsDepartment: hasPermission('tasks.tabs.view.department'),
+
     // Логические комбинации
     canViewPlanning: hasPermission('planning.view.all') ||
                      hasPermission('planning.view.department') ||
                      hasPermission('planning.view.team') ||
-                     hasPermission('planning.view.own')
+                     hasPermission('planning.view.own'),
+    canEditAnyLoading: hasPermission('loadings.edit.scope.all') ||
+                       hasPermission('loadings.edit.scope.subdivision') ||
+                       hasPermission('loadings.edit.scope.department') ||
+                       hasPermission('loadings.edit.scope.team') ||
+                       hasPermission('loadings.edit.scope.managed_projects') ||
+                       hasPermission('loadings.edit.scope.own'),
   }
 }
 

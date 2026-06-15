@@ -84,6 +84,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
       queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
       queryKeys.budgets.calc(), // Расчётный бюджет из loadings (страница бюджетов)
+      queryKeys.budgets.calcByDepartments(), // Расчётный бюджет по отделам (блок "Человеческие ресурсы")
     ],
   },
   // Настройки ставок отделов — влияют на расчётный бюджет
@@ -92,6 +93,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.budgets.departmentSettings(),
       queryKeys.budgets.calc(),
+      queryKeys.budgets.calcByDepartments(),
     ],
   },
   {
@@ -130,9 +132,16 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.resourceGraph.all, // Фактическая готовность
     ],
   },
-  // stage_readiness_snapshots, work_logs, project_reports, budgets, budget_parts —
+  // stage_readiness_snapshots, work_logs, project_reports, budget_parts —
   // не добавлены в supabase_realtime publication и слабо используются на фронте.
-  // Убраны чтобы не вызывать CHANNEL_ERROR и снизить нагрузку на realtime.
+
+  // ============================================================================
+  // Бюджеты
+  // ============================================================================
+  {
+    table: 'budgets',
+    invalidateKeys: [queryKeys.budgets.all],
+  },
 
   // ============================================================================
   // Справочники
@@ -217,6 +226,18 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'role_permissions',
     invalidateKeys: [
       queryKeys.filterPermissions.all,
+    ],
+  },
+
+  // ============================================================================
+  // Cross-department loading access grants
+  // ============================================================================
+  {
+    table: 'employee_loading_access_grants',
+    invalidateKeys: [
+      queryKeys.loadingAccessGrants.all,
+      queryKeys.users.all, // селекторы сотрудников зависят от грантов
+      queryKeys.filterPermissions.all, // grantedAccessDepartmentIds в UserFilterContext
     ],
   },
 ]

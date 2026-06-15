@@ -136,3 +136,117 @@ function Filters() {
 | department_head | `Отдел: Проектирование` |
 | project_manager | `Проект: Солнечный` или `Проекты: 3` |
 | team_lead / user | `Команда: Разработка` |
+
+---
+
+## 🔧 Loadings Permissions (для вкладок Разделы/Отделы на /tasks)
+
+Гранулярная система прав на редактирование загрузок. Подробный дизайн: [docs/superpowers/specs/2026-04-28-role-based-loadings-permissions-design.md](../../docs/superpowers/specs/2026-04-28-role-based-loadings-permissions-design.md).
+
+### Permissions
+
+| Имя | Назначено ролям | Описание |
+|---|---|---|
+| `loadings.edit.scope.all` | admin | Редактирование любой загрузки |
+| `loadings.edit.scope.subdivision` | subdivision_head | Редактирование если ответственный из своего подразделения |
+| `loadings.edit.scope.department` | department_head | Редактирование если ответственный из своего отдела |
+| `loadings.edit.scope.team` | team_lead | Редактирование если ответственный из своей команды |
+| `loadings.edit.scope.managed_projects` | project_manager | Редактирование на своих проектах |
+| `loadings.edit.scope.own` | все роли | Редактирование своих загрузок (где сам responsible) |
+| `loadings.bulk_shift.department` | admin, department_head | Массовый сдвиг загрузок отдела по проекту |
+| `tasks.tabs.view.department` | user, team_lead, department_head | Расширенный просмотр всего отдела на этих вкладках |
+
+### Pure-функции (модуль utils)
+
+```ts
+import {
+  canEditLoading,
+  canBulkShiftDepartment,
+  isRestrictedToOwnDepartment,
+  type LoadingPermissionContext,
+} from '@/modules/permissions'
+
+// На сервере (Server Action)
+const allowed = canEditLoading(loading, ctx)
+
+// Применяется ли cross-dept ограничение к юзеру
+const restricted = isRestrictedToOwnDepartment(ctx)
+```
+
+### Server helpers
+
+```ts
+import {
+  getFilterContextForTasksTabs,
+  assertCanEditLoading,
+} from '@/modules/permissions'
+
+// В getSectionsHierarchy / getDepartmentsData — расширяет scope team→department
+const ctx = await getFilterContextForTasksTabs()
+
+// В updateSectionLoading / deleteSectionLoading / updateLoadingDates
+const result = await assertCanEditLoading(loadingId)
+if (!result.success) return result
+const { loading, ctx } = result.data
+```
+
+### React хуки (клиент)
+
+```tsx
+import {
+  useCanEditLoading,
+  useCanBulkShiftDepartment,
+  useIsRestrictedToOwnDepartment,
+  useHasAnyLoadingEditPermission,
+} from '@/modules/permissions'
+
+// В компонент строки сотрудника
+const canEdit = useCanEditLoading({
+  responsibleId: employee.id,
+  teamId: employee.teamId ?? null,
+  departmentId: employee.departmentId ?? null,
+  subdivisionId: null,
+  projectId: null, // varies per loading; PM check падёт на сервер
+})
+
+// На уровне отдела для BulkShift
+const canBulkShift = useCanBulkShiftDepartment(department.id)
+
+// Для модалки: ограничивать ли селектор сотрудников
+const restricted = useIsRestrictedToOwnDepartment()
+```
+
+### Логика `canEditLoading`
+
+OR-логика между всеми scope-permissions юзера:
+
+```
+canEditLoading(loading, ctx) returns true if:
+  has('loadings.edit.scope.all') OR
+  (has('...subdivision') && loading.subdivisionId === ctx.ownSubdivisionId) OR
+  (has('...department')   && loading.departmentId   === ctx.ownDepartmentId) OR
+  (has('...team')         && loading.teamId         === ctx.ownTeamId) OR
+  (has('...managed_projects') && ctx.managedProjectIds.includes(loading.projectId)) OR
+  (has('...own')          && loading.responsibleId  === ctx.userId)
+```
+
+**Stale-cache fallback:** если у юзера в `permissions` ни одного `loadings.edit.scope.*` (вошёл до миграции), возвращает `true` — RLS защищает.
+
+### Cross-department блокировка
+
+Применяется только к ролям с максимальным scope = department/team/own (т.е. `user`/`team_lead`/`department_head`).
+
+В `updateSectionLoading` / `createSectionLoading`:
+- Нельзя переназначить загрузку на сотрудника другого отдела
+- Нельзя перенести в раздел чужого отдела
+
+Проверяется через `isRestrictedToOwnDepartment(ctx)` + сравнение department_id до/после.
+
+### Read-only modal
+
+`LoadingModalNewContainer` вычисляет `isReadOnly = !canEditExisting` и пробрасывает в `LoadingModalNew`. В read-only:
+- Заголовок "Просмотр загрузки" + подсказка
+- Все инпуты `disabled`
+- ProjectTree `disabled`
+- Скрыты кнопки "Сохранить", "Удалить", "Копировать"
+- Только "Закрыть"

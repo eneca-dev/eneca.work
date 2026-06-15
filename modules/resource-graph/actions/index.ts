@@ -59,15 +59,10 @@ export async function getResourceGraphData(
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
     const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
 
-    // Build query
-    let query = supabase
-      .from('v_resource_graph')
-      .select('*')
-
-    // 🔒 Скрываем restricted-проекты от не-админов (v_resource_graph не проксирует is_restricted)
-    if (!isAdmin && restrictedIds.length > 0) {
-      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
-    }
+    // Пред-подготовка значений для фильтров (tag UUIDs, team employee IDs).
+    // Эти запросы могут short-circuit с пустым результатом.
+    let projectIdsFromTags: string[] | null = null
+    let employeeIdsFromTeam: string[] | null = null
 
     // Apply tag filter first (requires subquery to get project IDs)
     // Метки передаются как названия, нужно сначала найти их ID
@@ -110,101 +105,21 @@ export async function getResourceGraphData(
         }
 
         // Get unique project IDs
-        const projectIdsFromTags = [...new Set(tagLinks?.map(l => l.project_id) || [])]
+        projectIdsFromTags = [...new Set(tagLinks?.map(l => l.project_id) || [])]
 
         // If no projects match tags, return empty result
         if (projectIdsFromTags.length === 0) {
           return { success: true, data: [] }
         }
-
-        query = query.in('project_id', projectIdsFromTags)
       }
     }
 
-    // Apply subdivision filter (фильтр по подразделению - по названию)
-    if (secureFilters?.subdivision_id) {
-      const subdivisionId = Array.isArray(secureFilters.subdivision_id) ? secureFilters.subdivision_id[0] : secureFilters.subdivision_id
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(subdivisionId)
-      if (isUuid) {
-        query = query.eq('section_subdivision_id', subdivisionId)
-      } else {
-        query = query.ilike('section_subdivision_name', subdivisionId)
-      }
-    }
-
-    // Apply department filter (фильтр по отделу - по названию)
-    if (secureFilters?.department_id) {
-      const departmentId = Array.isArray(secureFilters.department_id) ? secureFilters.department_id[0] : secureFilters.department_id
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(departmentId)
-      if (isUuid) {
-        query = query.eq('section_department_id', departmentId)
-      } else {
-        query = query.ilike('section_department_name', departmentId)
-      }
-    }
-
-    // Apply project filter (по названию или ID, поддержка нескольких значений)
-    if (secureFilters?.project_id) {
-      const values = Array.isArray(secureFilters.project_id)
-        ? secureFilters.project_id
-        : [secureFilters.project_id]
-      const isUuidCheck = (v: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
-      const uuids = values.filter(isUuidCheck)
-      const names = values.filter(v => !isUuidCheck(v))
-
-      if (uuids.length > 0 && names.length === 0) {
-        query = query.in('project_id', uuids)
-      } else if (names.length > 0 && uuids.length === 0) {
-        const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
-        query = query.or(orClause)
-      } else if (uuids.length > 0 && names.length > 0) {
-        const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
-        names.forEach(n => parts.push(`project_name.ilike.${n}`))
-        query = query.or(parts.join(','))
-      }
-    }
-
-    // Исключающие фильтры (-проект, -отдел, -подразделение)
-    for (const val of getNegatedParams(secureFilters, 'project_id')) {
-      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
-      if (isExcludeUuid) {
-        query = query.neq('project_id', val)
-      } else {
-        query = query.not('project_name', 'ilike', val)
-      }
-    }
-
-    for (const val of getNegatedParams(secureFilters, 'department_id')) {
-      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
-      if (isExcludeUuid) {
-        query = query.neq('section_department_id', val)
-      } else {
-        query = query.not('section_department_name', 'ilike', val)
-      }
-    }
-
-    for (const val of getNegatedParams(secureFilters, 'subdivision_id')) {
-      const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
-      if (isExcludeUuid) {
-        query = query.neq('section_subdivision_id', val)
-      } else {
-        query = query.not('section_subdivision_name', 'ilike', val)
-      }
-    }
-
-    // Apply project status filter (точное совпадение с enum значением)
-    if (secureFilters?.project_status && typeof secureFilters.project_status === 'string') {
-      query = query.eq('project_status', secureFilters.project_status)
-    }
-
-    // Apply team filter (requires subquery to get team members)
+    // Pre-fetch team members если фильтр по команде задан
     const teamIdRaw = secureFilters?.team_id
     if (teamIdRaw) {
       const teamId = Array.isArray(teamIdRaw) ? teamIdRaw[0] : teamIdRaw
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId)
 
-      // Get team members from v_org_structure
       let teamQuery = supabase.from('v_org_structure').select('employee_id')
       if (isUuid) {
         teamQuery = teamQuery.eq('team_id', teamId)
@@ -219,8 +134,7 @@ export async function getResourceGraphData(
         return { success: false, error: teamError.message }
       }
 
-      // Get unique employee IDs from team
-      const employeeIds = [
+      employeeIdsFromTeam = [
         ...new Set(
           (teamMembers || [])
             .map((m) => m.employee_id)
@@ -228,42 +142,175 @@ export async function getResourceGraphData(
         ),
       ]
 
-      if (employeeIds.length === 0) {
+      if (employeeIdsFromTeam.length === 0) {
         return { success: true, data: [] }
       }
-
-      query = query.in('section_responsible_id', employeeIds)
     }
 
-    // Apply responsible filter (по имени или UUID)
-    const responsibleIdRaw = secureFilters?.responsible_id
-    if (responsibleIdRaw) {
-      const responsibleId = Array.isArray(responsibleIdRaw) ? responsibleIdRaw[0] : responsibleIdRaw
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsibleId)
-      if (isUuid) {
-        query = query.eq('section_responsible_id', responsibleId)
-      } else {
-        query = query.ilike('section_responsible_name', responsibleId)
+    // ========================================================================
+    // Builder для запроса с применением всех фильтров.
+    // v_resource_graph денормализован (≈148 строк на проект) — общий объём
+    // ~17k+ строк. Supabase REST default limit = 1000, поэтому нужна пагинация.
+    // ========================================================================
+    const buildQuery = (withCount: boolean) => {
+      let q = withCount
+        ? supabase.from('v_resource_graph').select('*', { count: 'exact' })
+        : supabase.from('v_resource_graph').select('*')
+
+      // 🔒 Скрываем restricted-проекты от не-админов
+      if (!isAdmin && restrictedIds.length > 0) {
+        q = q.not('project_id', 'in', `(${restrictedIds.join(',')})`)
       }
+
+      // Tag filter (через пред-fetched список project IDs)
+      if (projectIdsFromTags && projectIdsFromTags.length > 0) {
+        q = q.in('project_id', projectIdsFromTags)
+      }
+
+      // Subdivision filter
+      if (secureFilters?.subdivision_id) {
+        const subdivisionId = Array.isArray(secureFilters.subdivision_id) ? secureFilters.subdivision_id[0] : secureFilters.subdivision_id
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(subdivisionId)
+        if (isUuid) {
+          q = q.eq('section_subdivision_id', subdivisionId)
+        } else {
+          q = q.ilike('section_subdivision_name', subdivisionId)
+        }
+      }
+
+      // Department filter
+      if (secureFilters?.department_id) {
+        const departmentId = Array.isArray(secureFilters.department_id) ? secureFilters.department_id[0] : secureFilters.department_id
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(departmentId)
+        if (isUuid) {
+          q = q.eq('section_department_id', departmentId)
+        } else {
+          q = q.ilike('section_department_name', departmentId)
+        }
+      }
+
+      // Project filter (по названию или ID, поддержка нескольких значений)
+      if (secureFilters?.project_id) {
+        const values = Array.isArray(secureFilters.project_id)
+          ? secureFilters.project_id
+          : [secureFilters.project_id]
+        const isUuidCheck = (v: string) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+        const uuids = values.filter(isUuidCheck)
+        const names = values.filter(v => !isUuidCheck(v))
+
+        if (uuids.length > 0 && names.length === 0) {
+          q = q.in('project_id', uuids)
+        } else if (names.length > 0 && uuids.length === 0) {
+          const orClause = names.map(n => `project_name.ilike.${n}`).join(',')
+          q = q.or(orClause)
+        } else if (uuids.length > 0 && names.length > 0) {
+          const parts: string[] = uuids.map(id => `project_id.eq.${id}`)
+          names.forEach(n => parts.push(`project_name.ilike.${n}`))
+          q = q.or(parts.join(','))
+        }
+      }
+
+      // Исключающие фильтры (-проект, -отдел, -подразделение)
+      for (const val of getNegatedParams(secureFilters, 'project_id')) {
+        const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+        if (isExcludeUuid) {
+          q = q.neq('project_id', val)
+        } else {
+          q = q.not('project_name', 'ilike', val)
+        }
+      }
+
+      for (const val of getNegatedParams(secureFilters, 'department_id')) {
+        const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+        if (isExcludeUuid) {
+          q = q.neq('section_department_id', val)
+        } else {
+          q = q.not('section_department_name', 'ilike', val)
+        }
+      }
+
+      for (const val of getNegatedParams(secureFilters, 'subdivision_id')) {
+        const isExcludeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+        if (isExcludeUuid) {
+          q = q.neq('section_subdivision_id', val)
+        } else {
+          q = q.not('section_subdivision_name', 'ilike', val)
+        }
+      }
+
+      // Project status (enum)
+      if (secureFilters?.project_status && typeof secureFilters.project_status === 'string') {
+        q = q.eq('project_status', secureFilters.project_status)
+      }
+
+      // Team filter (через пред-fetched employee IDs)
+      if (employeeIdsFromTeam && employeeIdsFromTeam.length > 0) {
+        q = q.in('section_responsible_id', employeeIdsFromTeam)
+      }
+
+      // Responsible filter
+      const responsibleIdRaw = secureFilters?.responsible_id
+      if (responsibleIdRaw) {
+        const responsibleId = Array.isArray(responsibleIdRaw) ? responsibleIdRaw[0] : responsibleIdRaw
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsibleId)
+        if (isUuid) {
+          q = q.eq('section_responsible_id', responsibleId)
+        } else {
+          q = q.ilike('section_responsible_name', responsibleId)
+        }
+      }
+
+      // Order для консистентной иерархии
+      q = q
+        .order('project_name')
+        .order('object_name')
+        .order('section_name')
+        .order('decomposition_stage_order')
+        .order('decomposition_item_order')
+
+      return q
     }
 
-    // Order for consistent hierarchy (Project → Object → Section → DecompositionStage → Item)
-    query = query
-      .order('project_name')
-      .order('object_name')
-      .order('section_name')
-      .order('decomposition_stage_order')
-      .order('decomposition_item_order')
+    // ========================================================================
+    // Параллельная пагинация (паттерн из budgets/actions/budget-actions.ts).
+    // PAGE_SIZE совпадает с настройкой Max rows в Supabase Data API (5000)
+    // — минимум запросов при ограничениях PostgREST.
+    // ========================================================================
+    const PAGE_SIZE = 5000
 
-    const { data, error } = await query
+    // Шаг 1: первая страница + точный count за один запрос
+    const { data: firstPage, count, error: firstError } = await buildQuery(true)
+      .range(0, PAGE_SIZE - 1)
 
-    if (error) {
-      console.error('[getResourceGraphData] Supabase error:', error)
-      return { success: false, error: error.message }
+    if (firstError) {
+      console.error('[getResourceGraphData] Supabase error:', firstError)
+      return { success: false, error: firstError.message }
     }
+
+    const totalRows = count ?? 0
+    const totalPages = Math.ceil(totalRows / PAGE_SIZE)
+
+    // Шаг 2: остальные страницы параллельно
+    const remainingResults = await Promise.all(
+      Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) =>
+        buildQuery(false).range((i + 1) * PAGE_SIZE, (i + 2) * PAGE_SIZE - 1)
+      )
+    )
+
+    const failedPage = remainingResults.find(r => r.error)
+    if (failedPage?.error) {
+      console.error('[getResourceGraphData] Pagination error:', failedPage.error)
+      return { success: false, error: failedPage.error.message }
+    }
+
+    const allData = [
+      ...(firstPage ?? []),
+      ...remainingResults.flatMap(r => r.data ?? []),
+    ]
 
     // Transform flat rows to hierarchy
-    const projects = transformRowsToHierarchy(data as ResourceGraphRow[])
+    const projects = transformRowsToHierarchy(allData as ResourceGraphRow[])
 
     return { success: true, data: projects }
   } catch (error) {

@@ -204,6 +204,10 @@ export const openLoadingModalNewEdit = (
       rate: number
       comment: string | null
       section_id: string
+      /** Команда исполнителя (для permission gating, опционально) */
+      employee_team_id?: string | null
+      /** Отдел исполнителя (для permission gating, опционально) */
+      employee_department_id?: string | null
     }
     breadcrumbs?: Array<{
       id: string

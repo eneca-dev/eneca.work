@@ -202,6 +202,10 @@ export interface LoadingModalNewEditData {
     rate: number
     comment: string | null
     section_id: string
+    /** Команда исполнителя (для permission check на клиенте, опционально) */
+    employee_team_id?: string | null
+    /** Отдел исполнителя (для permission check на клиенте, опционально) */
+    employee_department_id?: string | null
   }
   /** Breadcrumbs для отображения пути (опционально - если не передано, будет загружено из API) */
   breadcrumbs?: Array<{

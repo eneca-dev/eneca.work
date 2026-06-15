@@ -67,6 +67,13 @@ export interface Employee {
   // Фантомный сотрудник "Дефицит"
   isShortage?: boolean
   shortageDescription?: string | null
+  /**
+   * Гостевой сотрудник: его основной department_id отличается от того, в котором
+   * он отрисован — он попал сюда через cross-department loading access grant.
+   */
+  isGuest?: boolean
+  /** Название родного отдела, если сотрудник гостевой. Для бейджа в UI. */
+  homeDepartmentName?: string
 }
 
 /**
@@ -85,6 +92,11 @@ export interface Team {
   teamLeadName?: string | null
   teamLeadEmail?: string | null
   teamLeadAvatarUrl?: string | null
+  /**
+   * Виртуальная команда для гостевых сотрудников отдела
+   * (cross-department loading access grants).
+   */
+  isGuestTeam?: boolean
 }
 
 /**
