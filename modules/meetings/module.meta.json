@@ -1,0 +1,61 @@
+{
+  "name": "meetings",
+  "title": "Проекты (личные проекты с протоколами созвонов)",
+  "description": "Панель личных проектов: хранение готовых протоколов созвонов (.docx) с текстом и глобальный поиск по ним.",
+  "status": "in-progress",
+  "tasks": [
+    {
+      "id": "MT-001",
+      "title": "Дизайн модуля на мок-данных + глобальный поиск",
+      "category": "feature",
+      "priority": "high",
+      "status": "in-progress",
+      "createdAt": "2026-06-16",
+      "relatedFiles": [
+        "modules/meetings/components/MeetingsPanel.tsx",
+        "modules/meetings/components/ProjectList.tsx",
+        "modules/meetings/components/ProtocolList.tsx",
+        "modules/meetings/components/ProtocolViewer.tsx",
+        "modules/meetings/components/MeetingsSearchBar.tsx",
+        "modules/meetings/search.ts",
+        "modules/meetings/mock-data.ts",
+        "app/(dashboard)/meetings/page.tsx",
+        "components/sidebar.tsx"
+      ]
+    },
+    {
+      "id": "MT-002",
+      "title": "Реальные данные: таблицы БД, Server Actions, права (вне фазы 1)",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "createdAt": "2026-06-16"
+    },
+    {
+      "id": "MT-003",
+      "title": "Загрузка и парсинг .docx (mammoth → html), хранение файлов (вне фазы 1)",
+      "category": "feature",
+      "priority": "medium",
+      "status": "todo",
+      "createdAt": "2026-06-16"
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-06-16",
+      "entry": "Создан модуль meetings: 3-панельный дизайн (проекты/протоколы/просмотр) на мок-данных, глобальный поиск."
+    },
+    {
+      "date": "2026-06-16",
+      "entry": "Доработка дизайна: подсветка совпадений + счётчик результатов поиска, оформленные пустые состояния и относительные даты, CRUD на мок-данных (создание/переименование/удаление проектов, добавление-заглушка/удаление протоколов). Вынесены InlineInput/ConfirmDialog."
+    },
+    {
+      "date": "2026-06-16",
+      "entry": "Перетаскиваемые границы панелей на десктопе (react-resizable-panels, ширины сохраняются в localStorage) и подсветка совпадений поиска внутри текста протокола (highlightHtml — обход DOM-узлов после санитизации) и в названии во вьюере."
+    },
+    {
+      "date": "2026-06-16",
+      "entry": "Раскладка перестроена в 2 панели: убрана колонка проектов, добавлен фильтр по проекту (Select) и единый список всех протоколов; полное управление проектами вынесено в модалку (ProjectsManagerDialog, переиспользует ProjectList). Поиск компонуется с фильтром. ProjectFilterBar/ProjectsManagerDialog подключены к стору напрямую."
+    }
+  ]
+}
