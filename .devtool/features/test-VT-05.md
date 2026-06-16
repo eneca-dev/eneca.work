@@ -1,43 +1,52 @@
 ---
 id: "test-VT-05"
-status: "todo"
+status: "review"
 priority: "high"
 assignee: "Вадим Тихомиров"
 epic: "test"
 dueDate: null
 created: "2026-06-15T13:46:00.000Z"
-modified: "2026-06-15T13:46:00.000Z"
+modified: "2026-06-15T14:05:00.000Z"
 completedAt: null
 labels: ["v1.5.0"]
 order: "a4"
 ---
-# test-VT-05 Тест вкладки «Бюджеты» (/tasks): сетевые запросы и оптимизация
+# test-VT-05 Тест вкладки «Бюджеты» (/tasks): функционал, сетевые запросы и оптимизация
 
 Родительская задача: **bug-VT-02**. Тестируем по правилам из `bug-VT-02` («Человек + Нейросеть»).
 
 ## Цель
-Вкладка «Бюджеты» в модуле `tasks` работает медленно. Цель — разобрать **каждый сетевой запрос** на этой вкладке, найти лишние/дублирующиеся/тяжёлые запросы, водопады и over-fetch, оценить тяжёлые агрегации (расчётный бюджет из загрузок) и предложить оптимизации. Баги/находки оформляем отдельными тикетами `bug-...`.
+Полностью прогнать вкладку «Бюджеты» в модуле `tasks`: **все панели, колонки, действия и состояния** (иерархия, inline-редактирование сумм, блок «Человеческие ресурсы», расчётный/распределённый/выделенный бюджет, отклонения, parent-hierarchy) + разобрать **каждый сетевой запрос**, найти водопады, over-fetch и тяжёлые агрегации, предложить оптимизации. На каждый подтверждённый дефект — отдельный тикет `bug-...` со ссылкой сюда.
 
 ## Контекст реализации (для проверяющего ИИ)
 - Маршрут: `app/(dashboard)/tasks/page.tsx` → `TasksView` → при `viewMode === 'budgets'` рендерит `BudgetsViewInternal` (модуль `modules/budgets-page`).
 - Server Actions в Next.js App Router идут как **POST на текущий маршрут `/tasks` с заголовком `Next-Action`** — различаем их по этому заголовку и по телу ответа.
 - **Права/условие загрузки:** требуется `budgets.view.all` (иначе Lock-экран). Данные грузятся только при наличии фильтров ИЛИ нажатой кнопке «Загрузить всё».
 - Главный хук `useBudgetsHierarchy(queryParams)` композирует **три запроса** (строит иерархию Project → Object → Section → Stage → Item):
-  1. `useResourceGraphData(filters)` → `getResourceGraphData` — иерархия проектов (структура), source `resourceGraph.list(filters)`, `staleTime: Infinity` (Realtime).
-  2. `useBudgets({ project_ids, lean: true })` → `getBudgets` из lean-view `v_budgets_for_page` (без spent-сумм, быстрее), `staleTime: 2 мин` (fast). **Зависит** от `project_ids` из шага 1 → водопад при фильтрах.
-  3. `useSectionCalcBudgets()` → `getSectionCalcBudgets` из `v_cache_section_calc_budget` (расчёт `loadings × ставка отдела`, грузит **весь** view ~1200 строк, фильтрация на клиенте через Map), `staleTime: 3 мин` (medium).
-- Lazy при раскрытии Project-узла (блок «Человеческие ресурсы», `DepartmentBlock`):
+  1. `useResourceGraphData(filters)` → `getResourceGraphData` — структура проектов, `resourceGraph.list(filters)`, `staleTime: Infinity`.
+  2. `useBudgets({ project_ids, lean: true })` → `getBudgets` из lean-view `v_budgets_for_page`, `staleTime: 2 мин`. **Зависит** от `project_ids` из шага 1 → водопад при фильтрах. Пагинация PAGE_SIZE=1000 через `Promise.all`.
+  3. `useSectionCalcBudgets()` → `getSectionCalcBudgets` из `v_cache_section_calc_budget` (расчёт `loadings × ставка отдела`, грузит **весь** view ~1200 строк, фильтрация на клиенте через Map), `staleTime: 3 мин`.
+- Lazy при раскрытии Project (блок «Человеческие ресурсы», `DepartmentBlock`):
   - `useProjectDepartmentBudgets()` → `getProjectDepartmentBudgets` из `v_cache_project_department_budget` (~1000–3000 строк, **весь** view без серверной фильтрации по проекту), `staleTime: 3 мин`.
 - `reloadPermissions()` — вызывается в `TasksView` на маунте (useEffect) → возможный источник лишних запросов/рефетча.
 - Мутации и их инвалидация (`modules/budgets/hooks`):
-  - `updateBudgetAmount` (inline edit суммы) → **optimistic** (меняет `total_amount`/`remaining_amount`/`spent_percentage` у узла и детей), `invalidateKeys: []` — рассчитывает на Realtime.
+  - `updateBudgetAmount` (inline edit) → **optimistic** (меняет `total_amount`/`remaining_amount`/`spent_percentage` у узла и детей), `invalidateKeys: []` — рассчитывает на Realtime.
   - `createBudget` → invalidate `budgets.lists()` + `budgets.byEntity(...)`.
   - `deactivateBudget` → invalidate `budgets.all`.
 - Realtime-подписки (см. `modules/cache/realtime/config.ts`, debounce 100ms):
-  - `budgets` → invalidate `budgets.all`.
-  - `loadings` → invalidate `budgets.calc()`, `budgets.calcByDepartments()`, `resourceGraph.all` (пересчёт расчётного бюджета).
-  - `department_budget_settings` → invalidate `budgets.calc()`, `budgets.calcByDepartments()` (пересчёт при смене ставки отдела).
-  - `sections`/`objects`/`stages`/`decomposition_*` → invalidate `resourceGraph.all`.
+  - `budgets` → `budgets.all`; `loadings` → `budgets.calc()` + `budgets.calcByDepartments()` + `resourceGraph.all`; `department_budget_settings` → `budgets.calc()` + `budgets.calcByDepartments()`; `sections`/`objects`/`stages`/`decomposition_*` → `resourceGraph.all`.
+
+### Карта UI-поверхности (что проверяем)
+- **Таблица `BudgetsHierarchy`:** sticky-заголовок с кнопками «Все» (expand all) / «Скрыть» (collapse all), горизонтальный скролл (синхронизация header ↔ контент).
+- **Колонки:** `Наименование` (expander + бейдж типа + текст) · `Расчётный` (из loadings×ставка, tooltip часы/loadings/ошибки) · `Распред.` (сумма прямых детей) · `Выделенный` (`BudgetInlineEdit` + % от родителя) · `Отклонение` (выделенный − расчётный, цвет/знак/%).
+- **Иерархия (5 уровней):** Project → Object → Section → DecompositionStage → DecompositionItem (`BudgetRow`, рекурсивно, INDENT_MAP 0/16/32/48/64px).
+- **Бейджи:** тип узла («Проект»/«Объект»/«Раздел»/«Этап», у item нет), стадия проекта («ст. А/П/ПП/Р/С/Э/…»).
+- **`DepartmentBlock` («👥 Человеческие ресурсы»):** внутри раскрытого проекта, целевые отделы (АР/КР/ОВ/ВК/ЭС/ТСБС/АВТ) + «Другое», по каждому — расчётный/выделенный/отклонение/%.
+- **`BudgetInlineEdit`:** input (только цифры), select-all на фокус, Enter сохраняет, Escape откатывает, стрелки ↑/↓ навигация между полями, Loader2 при сохранении, кнопка «+ Бюджет» (hover, право `budgets.create`).
+- **Состояния:** Lock (нет `budgets.view.all`), empty (+ «Загрузить всё»), skeleton, error.
+- **Стор/persist:** `useExpandedState` (localStorage `budgets-hierarchy-expanded`, debounce 300ms; ключи узлов + `hr:${projectId}` для DepartmentBlock).
+- **Права:** `budgets.view.all` (вкладка), `budgets.create` (кнопка), `budgets.edit` (редактирование сумм).
+- **Валюта: BYN**, формат ru-RU (`150 000,00`), tabular-nums.
 
 ## Среда
 - `localhost:3000`, dev-режим, тестировщик авторизуется сам.
@@ -46,47 +55,92 @@ order: "a4"
 
 ## Сценарии (чек-лист)
 
-### 🔴 Приоритет 1 — базовый сетевой профиль
-- [ ] **S1. Холодная загрузка с фильтрами** (отдел + проект). Открыть `/tasks`, переключиться на «Бюджеты», применить фильтр.
+### 🔴 Приоритет 1 — базовый сетевой профиль и оптимизация
+- [ ] **S1. Холодная загрузка с фильтрами** (отдел + проект). Открыть `/tasks`, «Бюджеты», применить фильтр.
   - Зафиксировать: список всех запросов, по каждому — метод, статус, время ответа, размер.
-  - Ожидание: `getResourceGraphData` (1) → затем `getBudgets` (зависит от project_ids) + `getSectionCalcBudgets` (параллельно).
+  - Ожидание: `getResourceGraphData` (1) → `getBudgets` (зависит от project_ids) + `getSectionCalcBudgets` (параллельно).
   - Искать: глубину водопада (300–600 мс), дубли, лишний рефетч из-за `reloadPermissions`, можно ли распараллелить шаг 2.
 - [ ] **S2. Холодная загрузка «Загрузить всё»** (без фильтров).
   - Ожидание: три запроса **параллельно**; `getBudgets` пагинируется (PAGE_SIZE=1000) через `Promise.all`.
-  - Искать: суммарный размер payload (`v_budgets_for_page` может быть очень большим), время 1–2 сек, риск таймаута/перегруза памяти.
-- [ ] **S3. Размер и время каждого из трёх запросов.**
-  - Измерить размер ответа и время; в Supabase/Sentry — длительность `db.query` по `v_budgets_for_page`, `v_cache_section_calc_budget`.
+  - Искать: суммарный размер payload, время 1–2 сек, риск таймаута/перегруза памяти.
+- [ ] **S3. Размер и время трёх запросов.**
+  - В Supabase/Sentry — длительность `db.query` по `v_budgets_for_page`, `v_cache_section_calc_budget`.
   - Искать: over-fetch (полный `v_cache_section_calc_budget` ~1200 строк при любом фильтре), стоимость материализованных вьюх (`v_cache_loading_money`), стоимость рекурсивной агрегации `transformProject` в JS.
 
-### 🟡 Приоритет 2 — реакция на действия пользователя
-- [ ] **S4. Раскрытие Project → блок «Человеческие ресурсы».**
-  - Ожидание: 1 lazy-запрос `getProjectDepartmentBudgets`.
-  - Искать: **главный кандидат на оптимизацию** — грузится весь `v_cache_project_department_budget` (3000 строк) без серверной фильтрации по `project_id`; при раскрытии нескольких проектов — N × полный view (косвенный N+1).
-- [ ] **S5. Изменение фильтра** (отдел/проект).
-  - Ожидание: запрос на закоммиченный фильтр, дебаунс, плавный переход (keepPreviousData), нет запроса на каждый символ.
-  - Искать: запрос-на-keystroke, дубли, гонки, повторный полный `getSectionCalcBudgets`.
-- [ ] **S6. Inline-редактирование суммы бюджета** (`updateBudgetAmount`).
-  - Ожидание: 1 мутация + optimistic (узел и дети обновляются мгновенно), затем подтверждение через Realtime (`invalidateKeys: []`).
-  - Искать: рассинхрон optimistic ↔ Realtime, мигание значений, корректность `parent_total_amount` у детей, нет ли лишнего полного рефетча.
-- [ ] **S7. Раскрытие/сворачивание узлов иерархии.**
-  - Ожидание: **ноль** сетевых запросов (expanded state в localStorage / `use-expanded-state`), кроме первого раскрытия Project (S4).
-  - Искать: любой лишний запрос при простом expand/collapse.
+### 🔴 Приоритет 1 — состояния вкладки
+- [ ] **F1. Нет прав.** Без `budgets.view.all` — Lock-иконка + «Нет доступа к бюджетам»; хуки данных не вызываются (ноль запросов).
+- [ ] **F2. Empty state.** С правом, без фильтров — Database-иконка + «Выберите данные для отображения» + пример фильтра + кнопка «Загрузить всё».
+- [ ] **F3. Loading skeleton.** 3 уровня анимированных строк (animate-pulse), без «прыжков».
+- [ ] **F4. No data.** Фильтр без результатов → «Нет данных для отображения».
+- [ ] **F5. Error state.** Сетевая ошибка → красное «Ошибка загрузки данных» + текст; приложение не падает (console/Sentry).
 
-### 🟢 Приоритет 3 — фон и пересчёты
-- [ ] **S8. Realtime: смена ставки отдела** (`department_budget_settings`).
-  - Ожидание: инвалидация `budgets.calc()` + `budgets.calcByDepartments()` → пересчёт расчётного бюджета (с debounce 100ms).
-  - Искать: шторм рефетчей, повторная полная загрузка тяжёлых вьюх, рассинхрон расчётных и распределённых сумм.
-- [ ] **S9. Realtime: изменение `loadings`.**
-  - Ожидание: пересчёт `budgets.calc()` / `calcByDepartments()` + `resourceGraph.all`.
-  - Искать: каскад рефетчей, дублирование с подписками других вкладок.
-- [ ] **S10. Переключение вкладок Бюджеты → Канбан → Бюджеты.**
-  - Ожидание: кеш-хит по `resourceGraph` (Infinity) и `budgets`/`calc` в пределах staleTime (2–3 мин).
-  - Искать: лишний рефетч при возврате, повторный `reloadPermissions`, повторная загрузка `getProjectDepartmentBudgets`.
+### 🟡 Приоритет 2 — иерархия и expand/collapse (5 уровней)
+- [ ] **F6. Дефолтное состояние.** Первая загрузка — все проекты раскрыты, остальное свёрнуто.
+- [ ] **F7. Toggle узла.** Клик по chevron (`BudgetRowExpander`, ротация 90°) раскрывает/сворачивает. **Ноль сетевых запросов** (кроме первого раскрытия проекта — см. F18).
+- [ ] **F8. «Все» / «Скрыть».** Expand All раскрывает все узлы (`collectAllNodeIds`), Collapse All очищает state.
+- [ ] **F9. Раскрытие раздела.** Section → этапы и items раскрываются (через `onExpandAll`).
+- [ ] **F10. Персистентность.** Состояние раскрытия сохраняется в localStorage (`budgets-hierarchy-expanded`, debounce 300ms), восстанавливается после reload.
+- [ ] **F11. Отступы и иконки уровней.** INDENT_MAP: project 0 / object 16 / section 32 / stage 48 / item 64px; truncate + title на длинных именах.
+- [ ] **F12. Горизонтальный скролл.** Скролл контента синхронизирует заголовок; header sticky top; колонки выровнены без смещения.
+
+### 🟡 Приоритет 2 — бейджи и визуализация
+- [ ] **F13. Бейджи типов.** «Проект» (amber) / «Объект» (violet) / «Раздел» (teal) / «Этап» (muted) / item — без бейджа.
+- [ ] **F14. Бейдж стадии проекта.** «ст. А/П/ПП/Р/С/Э/РУО/ОП/ОТП/ОТЧ/ПР» (purple) из STAGE_ABBREVIATIONS.
+- [ ] **F15. Highlight раздела.** При `highlightSectionId` (URL highlight) — ring на строке + авто-раскрытие родителей до корня + `scrollIntoView`.
+
+### 🟡 Приоритет 2 — колонки и расчёты
+- [ ] **F16. Расчётный бюджет.** Из `loadingHours × ставка отдела`; «—» если нет loadings; tooltip (200ms) — часы + кол-во loadings; ошибки `⚠ N без отдела или ставки` (amber) + пунктирное подчёркивание при `loadingErrorsCount > 0`.
+- [ ] **F17. Распред. / Выделенный / Отклонение.** Распред. = сумма прямых детей (красный при `isOverDistributed`); Выделенный = `BudgetInlineEdit` (+ % от родителя), красный при `isOverBudget`; Отклонение = выделенный − расчётный, зелёный при ≥0 / красный при <0, с процентом в скобках.
+- [ ] **F18. Форматирование BYN.** ru-RU (`150 000,00`), часы (`120,50`), проценты (`35.2%`), tabular-nums. **Не должно быть символа ₽** — только BYN-формат.
+
+### 🟡 Приоритет 2 — inline-редактирование бюджета
+- [ ] **F19. Создание бюджета.** Кнопка «+ Бюджет» (hover, право `budgets.create`) → `createBudget(total_amount: 0)`; инвалидация `budgets.lists()`/`byEntity`.
+- [ ] **F20. Ввод суммы.** Клик → select-all; ввод только цифр (буквы фильтруются); Enter сохраняет (`updateBudgetAmount`), Escape откатывает к прежнему, blur сохраняет.
+- [ ] **F21. Optimistic + спиннер.** Loader2 при сохранении; значение и % обновляются мгновенно; затем подтверждение через Realtime (`invalidateKeys: []`).
+- [ ] **F22. % от родителя.** Обновляется в реальном времени при вводе; скрыт если `parent_planned_amount == 0`.
+- [ ] **F23. Навигация стрелками.** ↑/↓ — переход между budget-инпутами (blur+focus+select следующего).
+- [ ] **F24. Ошибка сохранения.** Спиннер исчезает, значение откатывается; нет «залипания» оптимистичного значения.
+- [ ] **F25. Без права `budgets.edit`** — инпут недоступен; без `budgets.create` — кнопки «+ Бюджет» нет.
+
+### 🟢 Приоритет 3 — блок «Человеческие ресурсы» (DepartmentBlock)
+- [ ] **F26. Появление и toggle.** Виден только внутри раскрытого проекта (default expanded); клик по «👥 Человеческие ресурсы» сворачивает/раскрывает; ключ `hr:${projectId}` персистится.
+- [ ] **F27. Lazy-загрузка данных.** При первом раскрытии проекта — `getProjectDepartmentBudgets`.
+  - Искать: **главный кандидат на оптимизацию** — грузится весь `v_cache_project_department_budget` (~3000 строк) без серверной фильтрации по `project_id`; при раскрытии нескольких проектов — N × полный view (косвенный N+1).
+- [ ] **F28. Отделы и распределение.** Целевые отделы АР/КР/ОВ/ВК/ЭС/ТСБС/АВТ + «Другое»; по каждому — расчётный/выделенный (`projectAllocatedBudget × pct`)/отклонение/%; tooltip с часами и loadings.
+
+### 🟢 Приоритет 3 — parent-hierarchy и версионирование
+- [ ] **F29. Создание child-бюджета** → автоматически проставляется `parent_budget_id` (section → object → project).
+- [ ] **F30. % от родителя по уровням** — корректно вычисляется на всех уровнях; при изменении суммы родителя % у детей пересчитываются (проверить кеш-консистентность).
+- [ ] **F31. Деактивация бюджета.** Поведение при `deactivateBudget` (блокировка при активных детях / orphan-бюджеты с «—»).
+
+### 🟢 Приоритет 3 — фон, realtime и производительность
+- [ ] **F32. Realtime: смена ставки отдела** (`department_budget_settings`) → инвалидация `budgets.calc()` + `calcByDepartments()` → пересчёт расчётного (debounce 100ms). Искать шторм рефетчей.
+- [ ] **F33. Realtime: изменение `loadings`** → пересчёт `budgets.calc()`/`calcByDepartments()` + `resourceGraph.all`. Искать каскад/дубли с подписками других вкладок.
+- [ ] **F34. Переключение вкладок Бюджеты → Канбан → Бюджеты.** Кеш-хит `resourceGraph` (Infinity) и `budgets`/`calc` в пределах staleTime (2–3 мин); искать лишний рефетч, повторный `reloadPermissions`, повторную загрузку `getProjectDepartmentBudgets`.
+- [ ] **F35. Производительность.** 1000+ узлов: нет фриза при expand/collapse (React.memo на `BudgetRow`), debounce localStorage не блокирует UI; параллельное редактирование разных инпутов независимо; нет двойного сабмита по двойному клику.
 
 ## Найденные баги
 _(ИИ дозаполняет по ходу; на каждый подтверждённый баг — отдельный тикет `bug-...` со ссылкой сюда)_
-- …
+- **[bug-VT-14](./bug-VT-14.md)**: Сценарии S1/S2. Шторм из ~15 `POST /tasks` запросов при загрузке вкладки «Бюджеты» (вероятно, из-за `reloadPermissions()`).
+- **[bug-VT-15](./bug-VT-15.md)**: Сценарии F8/F35. Полное зависание (freeze) UI на несколько секунд при нажатии «Раскрыть всё» (отсутствие виртуализации и N+1 на HR-блок).
+- **[bug-VT-16](./bug-VT-16.md)**: Сценарии F32/F33. Realtime-подписки для бюджетов не работают или обновляют UI некорректно.
 
-## Результаты
-_(ИИ заполняет в конце: сводка по запросам, подтверждённые проблемы, список заведённых багов, предложения по оптимизации)_
-- …
+## Результаты и отчет тестирования
+**Сводка:** Вкладка «Бюджеты» протестирована. Визуальный функционал inline-редактирования, иерархия и бейджи работают корректно. Обнаружены три критические проблемы:
+1. **bug-VT-14:** Сетевой шторм из ~15 Server Actions (`POST /tasks`) при загрузке.
+2. **bug-VT-15:** Зависание интерфейса при рендере тысяч строк без виртуализации (кнопка "Раскрыть всё").
+3. **bug-VT-16:** Отсутствие/поломка Realtime-обновлений при параллельном редактировании.
+
+**Предложения по оптимизации:**
+- Внедрить библиотеку виртуализации (например, `react-window` или `@tanstack/react-virtual`) для таблицы `BudgetsHierarchy`.
+- Разобраться с источником лишних ре-рендеров и POST-запросов (вероятно `reloadPermissions`).
+- Починить/проверить подписки на каналы `budgets` в `realtime/config.ts`.
+
+---
+
+## Что изменено в этом тикете (для ревьюера)
+**Как доработан план:** Добавлен полный функциональный охват вкладки «Бюджеты» (F1–F35) на основе карты UI-поверхности.
+
+**Для Review:**
+1. **Как была решена проблема:** Проведено ручное и автоматизированное (Network) тестирование через Playwright MCP. Зафиксированы водопады запросов и узкие места рендеринга.
+2. **Что требуется от ревьюера:** Ознакомиться с заведенными багами (VT-14, VT-15, VT-16) и взять их в исправление. Тикет тестирования можно считать успешно завершенным, статус переведен в review.
