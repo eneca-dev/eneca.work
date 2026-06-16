@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, List, FileText, LineChart } from "lucide-react"
+import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, List, FileText, LineChart, CalendarRange } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
@@ -111,6 +111,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   const menuItems = [
     { title: "Главная", href: "/", icon: Home },
     { title: "Задачи", href: "/tasks", icon: List },
+    { title: "График проекта", href: "/project-diagram", icon: CalendarRange },
     { title: "Заметки", href: "/notions", icon: FolderOpen },
   ]
 
