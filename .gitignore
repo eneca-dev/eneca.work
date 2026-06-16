@@ -48,3 +48,5 @@ tsconfig.tsbuildinfo
 .agents
 
 skills-lock.json
+
+.playwright-mcp
