@@ -1,12 +1,15 @@
-// Публичный API модуля meetings (личные проекты + протоколы созвонов).
+// Публичный API модуля meetings (read-only отчёты о созвонах от Teams-бота).
 
 export { MeetingsPanel } from './components/MeetingsPanel'
 export { useMeetingsStore } from './store'
-export { searchProtocols, stripHtml } from './search'
-export { mockProjects, mockProtocols } from './mock-data'
+export { useMeetingReports } from './hooks/use-meeting-reports'
+export { searchReports } from './search'
 export type {
-  PersonalProject,
-  MeetingProtocol,
-  MeetingsState,
-  MeetingsActions,
+  MeetingReport,
+  ProtocolReport,
+  ReportPerson,
+  ReportDiscussionItem,
+  ReportOpenQuestion,
+  MeetingsUiState,
+  MeetingsUiActions,
 } from './types'

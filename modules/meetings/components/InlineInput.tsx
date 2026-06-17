@@ -13,7 +13,7 @@ interface InlineInputProps {
   ariaLabel?: string
 }
 
-/** Инлайн-поле «создать» с кнопками подтверждения/отмены и горячими клавишами. */
+/** Инлайн-поле «создать/переименовать» с подтверждением/отменой и горячими клавишами. */
 export function InlineInput({
   value,
   onChange,
@@ -36,7 +36,7 @@ export function InlineInput({
         className="h-9"
         aria-label={ariaLabel}
       />
-      <Button size="icon" className="h-9 w-9 flex-shrink-0" onClick={onCommit} aria-label="Создать">
+      <Button size="icon" className="h-9 w-9 flex-shrink-0" onClick={onCommit} aria-label="Сохранить">
         <Check className="h-4 w-4" />
       </Button>
       <Button

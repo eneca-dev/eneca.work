@@ -1,43 +1,44 @@
 {
   "name": "meetings",
-  "title": "Проекты (личные проекты с протоколами созвонов)",
-  "description": "Панель личных проектов: хранение готовых протоколов созвонов (.docx) с текстом и глобальный поиск по ним.",
+  "title": "Созвоны (протоколы от Teams-бота)",
+  "description": "Read-only просмотр протоколов созвонов от Teams-бота (recall.ai) из отдельного Supabase-проекта: список, поиск, просмотр report (jsonb), скачивание .docx.",
   "status": "in-progress",
   "tasks": [
     {
       "id": "MT-001",
-      "title": "Дизайн модуля на мок-данных + глобальный поиск",
+      "title": "Дизайн модуля на мок-данных + поиск",
       "category": "feature",
       "priority": "high",
-      "status": "in-progress",
+      "status": "done",
       "createdAt": "2026-06-16",
-      "relatedFiles": [
-        "modules/meetings/components/MeetingsPanel.tsx",
-        "modules/meetings/components/ProjectList.tsx",
-        "modules/meetings/components/ProtocolList.tsx",
-        "modules/meetings/components/ProtocolViewer.tsx",
-        "modules/meetings/components/MeetingsSearchBar.tsx",
-        "modules/meetings/search.ts",
-        "modules/meetings/mock-data.ts",
-        "app/(dashboard)/meetings/page.tsx",
-        "components/sidebar.tsx"
-      ]
+      "completedAt": "2026-06-16",
+      "changelogEntry": "Прототип на мок-данных (проекты/протоколы); позже заменён на реальную read-only интеграцию."
     },
     {
       "id": "MT-002",
-      "title": "Реальные данные: таблицы БД, Server Actions, права (вне фазы 1)",
+      "title": "Реальные данные: интеграция meeting_reports из отдельного Supabase-проекта (read-only)",
       "category": "feature",
-      "priority": "medium",
-      "status": "todo",
-      "createdAt": "2026-06-16"
+      "priority": "high",
+      "status": "done",
+      "createdAt": "2026-06-16",
+      "completedAt": "2026-06-17",
+      "changelogEntry": "Серверный service-role клиент к meetings-проекту, Server Action getMeetingReports с auth, хук, UI перестроен на список созвонов + просмотр report + скачивание .docx.",
+      "relatedFiles": [
+        "modules/meetings/server/meetings-client.ts",
+        "modules/meetings/actions/reports.ts",
+        "modules/meetings/hooks/use-meeting-reports.ts",
+        "modules/meetings/components/MeetingsPanel.tsx",
+        "modules/meetings/components/ReportViewer.tsx"
+      ]
     },
     {
       "id": "MT-003",
-      "title": "Загрузка и парсинг .docx (mammoth → html), хранение файлов (вне фазы 1)",
+      "title": "Привязка созвонов к пользователю: бот пишет email участников → фильтр по participant_emails",
       "category": "feature",
-      "priority": "medium",
+      "priority": "high",
       "status": "todo",
-      "createdAt": "2026-06-16"
+      "createdAt": "2026-06-17",
+      "note": "Блокируется доработкой бота: в meeting_reports нет email участников. После появления participant_emails text[] включить фильтр .contains в actions/reports.ts."
     }
   ],
   "changelog": [
@@ -56,6 +57,14 @@
     {
       "date": "2026-06-16",
       "entry": "Раскладка перестроена в 2 панели: убрана колонка проектов, добавлен фильтр по проекту (Select) и единый список всех протоколов; полное управление проектами вынесено в модалку (ProjectsManagerDialog, переиспользует ProjectList). Поиск компонуется с фильтром. ProjectFilterBar/ProjectsManagerDialog подключены к стору напрямую."
+    },
+    {
+      "date": "2026-06-17",
+      "entry": "Переход на реальные данные: оказалось, что протоколы создаёт Teams-бот и лежат в отдельном Supabase-проекте (таблица meeting_reports). Модуль перестроен в read-only: серверный service-role клиент к meetings-проекту, Server Action getMeetingReports (auth в основном проекте), хук useMeetingReports, UI = список созвонов + поиск + просмотр report (jsonb) + скачивание .docx. Мок-данные и CRUD удалены. Фильтр по участникам отложен (в данных нет email участников) — MT-003."
+    },
+    {
+      "date": "2026-06-17",
+      "entry": "Возвращены «папки» как локальный прототип группировки: фильтр по папке (Select), модалка управления папками (CRUD), назначение созвона в папку. Хранение в localStorage (zustand/persist, skipHydration + ручная регидрация). Позже заменится на реальные проекты в БД."
     }
   ]
 }

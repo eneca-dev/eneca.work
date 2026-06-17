@@ -500,6 +500,15 @@ export const queryKeys = {
     /** Capacity для конкретного раздела */
     capacity: (sectionId: string) => [...queryKeys.sectionsPage.all, 'capacity', sectionId] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Meetings (созвоны от Teams-бота — отдельный Supabase-проект)
+  // -------------------------------------------------------------------------
+  meetings: {
+    all: ['meetings'] as const,
+    /** Список отчётов о созвонах */
+    reports: () => [...queryKeys.meetings.all, 'reports'] as const,
+  },
 } as const
 
 // ============================================================================

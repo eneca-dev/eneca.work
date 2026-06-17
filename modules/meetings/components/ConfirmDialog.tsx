@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,14 +14,14 @@ import {
 } from '@/components/ui/alert-dialog'
 
 interface ConfirmDialogProps {
-  trigger: React.ReactNode
+  trigger: ReactNode
   title: string
   description: string
   confirmLabel?: string
   onConfirm: () => void
 }
 
-/** Переиспользуемое подтверждение удаления (проект/протокол). */
+/** Переиспользуемое подтверждение деструктивного действия. */
 export function ConfirmDialog({
   trigger,
   title,

@@ -1,35 +1,24 @@
-import type { MeetingProtocol } from './types'
+import type { MeetingReport } from './types'
 
-/** Убирает HTML-теги и схлопывает пробелы — для текстового поиска по телу протокола. */
-export function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+/** Собирает искомый текст созвона: тема, кто пригласил, summary, участники, обсуждение, вопросы. */
+function reportHaystack(meeting: MeetingReport): string {
+  const parts: string[] = [meeting.subject ?? '', meeting.invited_by_name ?? '']
+  const report = meeting.report
+  if (report) {
+    parts.push(report.preview_summary ?? '')
+    report.participants?.forEach((p) => parts.push(p.name))
+    report.discussion_items?.forEach((d) => parts.push(d.topic ?? '', d.outcome ?? ''))
+    report.open_questions?.forEach((q) => parts.push(q.question ?? ''))
+  }
+  return parts.join(' ').toLowerCase()
 }
 
 /**
- * Глобальный поиск по протоколам.
- * Регистронезависимо, по названию, тексту (contentHtml) и участникам.
- * Пустой/пробельный запрос возвращает пустой массив (поиск не активен).
+ * Поиск по созвонам. Регистронезависимо по теме, участникам и содержимому протокола.
+ * Пустой запрос возвращает исходный список (это основной список, а не отдельный режим поиска).
  */
-export function searchProtocols(
-  protocols: MeetingProtocol[],
-  query: string,
-): MeetingProtocol[] {
+export function searchReports(reports: MeetingReport[], query: string): MeetingReport[] {
   const normalized = query.trim().toLowerCase()
-  if (!normalized) return []
-
-  return protocols.filter((protocol) => {
-    const haystack = [
-      protocol.title,
-      stripHtml(protocol.contentHtml),
-      protocol.participants.join(' '),
-    ]
-      .join(' ')
-      .toLowerCase()
-
-    return haystack.includes(normalized)
-  })
+  if (!normalized) return reports
+  return reports.filter((meeting) => reportHaystack(meeting).includes(normalized))
 }

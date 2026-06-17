@@ -1,53 +1,73 @@
-# Meetings (Проекты)
+# Meetings (Созвоны)
 
-Панель личных проектов: хранение готовых **протоколов созвонов** (`.docx` с текстом) и глобальный поиск по ним.
+Read-only просмотр **протоколов созвонов**, которые генерирует Teams-бот (recall.ai): список, поиск, просмотр структурированного протокола и скачивание `.docx`.
 
-Пункт сайдбара — «Проекты», роут `/meetings`.
+Пункт сайдбара — «Встречи», роут `/meetings`.
 
-> **Статус:** Фаза 1 — дизайн на мок-данных. Реальные данные (БД, Server Actions, права), загрузка и парсинг `.docx` — последующие этапы (см. `module.meta.json`, задачи MT-002 / MT-003).
+> **Источник данных:** таблица `meeting_reports` в **отдельном** Supabase-проекте (не основном). Доступ — серверный, через service-role клиент в Server Actions. Realtime отключён (бот пишет асинхронно; свежесть — через refetch/инвалидацию).
+
+## Архитектура данных
+
+```
+Teams-бот → meeting_reports (отдельный Supabase)
+                 │  service-role (server-only)
+   modules/meetings/server/meetings-client.ts
+                 │
+   actions/reports.ts  (getMeetingReports, auth-проверка в основном проекте)
+                 │  ActionResult<MeetingReport[]>
+   hooks/use-meeting-reports.ts  (createSimpleCacheQuery)
+                 │
+   components/*  (read-only UI)
+```
 
 ## Структура
 
 ```
 modules/meetings/
-├── index.ts            # публичный API
-├── types.ts            # PersonalProject, MeetingProtocol, состояние стора
-├── mock-data.ts        # мок-проекты и протоколы (фаза 1)
-├── search.ts           # searchProtocols() + stripHtml() — чистые функции
-├── search.test.ts      # unit-тесты поиска (Vitest)
-├── highlight.ts        # splitHighlight() — подсветка совпадений (чистая функция)
-├── highlight.test.ts   # unit-тесты подсветки
-├── plural.ts           # русское склонение «протокол/протокола/протоколов»
-├── store.ts            # useMeetingsStore (zustand): данные (сид из mock) + CRUD + навигация/поиск
-├── utils.ts            # форматирование даты, относительного времени и размера файла
+├── index.ts
+├── types.ts                 # MeetingReport, ProtocolReport (report jsonb) и пр.
+├── search.ts                # searchReports() — поиск по теме/участникам/содержимому
+├── highlight.ts             # splitHighlight() + HIGHLIGHT_CLASS
+├── utils.ts                 # форматирование дат
+├── store.ts                 # useMeetingsStore — только UI-состояние (выбор/поиск)
+├── server/
+│   └── meetings-client.ts   # service-role клиент к meetings-проекту (SERVER-ONLY)
+├── actions/
+│   └── reports.ts           # 'use server' — getMeetingReports
+├── hooks/
+│   └── use-meeting-reports.ts
 └── components/
-    ├── MeetingsPanel.tsx        # оркестратор: 2 панели (десктоп) / drill-down (мобайл)
-    ├── ProjectFilterBar.tsx     # фильтр по проекту (Select) + кнопка управления проектами
-    ├── ProjectsManagerDialog.tsx# модалка управления проектами (переиспользует ProjectList)
-    ├── ProjectList.tsx          # список проектов + добавление (внутри модалки)
-    ├── ProjectRow.tsx           # строка проекта: выбор / переименование / удаление
-    ├── ProtocolPane.tsx         # список протоколов: поиск, счётчик/добавление
-    ├── ProtocolRow.tsx          # строка протокола: подсветка + удаление
-    ├── ProtocolViewer.tsx       # правая панель — метаданные + текст протокола
-    ├── HighlightedText.tsx      # рендер подсвеченного текста
-    ├── InlineInput.tsx          # переиспользуемое инлайн-поле «создать»
-    ├── ConfirmDialog.tsx        # переиспользуемое подтверждение удаления (AlertDialog)
-    └── MeetingsSearchBar.tsx    # поле поиска
+    ├── MeetingsPanel.tsx        # 2 панели (список | просмотр), адаптив
+    ├── FolderFilterBar.tsx      # фильтр по папке (Select) + управление папками
+    ├── FoldersManagerDialog.tsx # модалка: создать/переименовать/удалить папки
+    ├── FolderAssignSelect.tsx   # назначить открытый созвон в папку
+    ├── MeetingsList.tsx         # поиск + счётчик + список + состояния (loading/error/empty)
+    ├── MeetingReportRow.tsx     # строка созвона
+    ├── ReportViewer.tsx         # рендер протокола (report jsonb) + скачать .docx
+    ├── InlineInput.tsx          # инлайн-поле «создать/переименовать»
+    ├── ConfirmDialog.tsx        # подтверждение удаления (AlertDialog)
+    ├── HighlightedText.tsx
+    └── MeetingsSearchBar.tsx
 ```
 
 ## Ключевые концепции
 
-- **Доменная модель:** `PersonalProject` (личный проект) → много `MeetingProtocol` (протоколов созвонов). Протокол хранит метаданные (название, дата созвона, участники, имя/размер `.docx`) и текст (`contentHtml`).
-- **Раскладка:** 2 панели — слева список всех протоколов (фильтр по проекту + поиск), справа просмотр. На десктопе (≥1024px) границы перетаскиваются (`react-resizable-panels`), ширины сохраняются в localStorage (`autoSaveId`); на узких экранах — drill-down список → текст.
-- **Фильтр + поиск:** `selectedProjectId` работает как фильтр (`null` = все проекты). `searchProtocols(base, query)` ищет регистронезависимо по названию, тексту (`stripHtml`) и участникам **внутри отфильтрованного набора**. Имя проекта в строках показывается только при фильтре «Все».
-- **Управление проектами:** полный CRUD (добавить/переименовать/удалить) вынесен в модалку `ProjectsManagerDialog`; выбор проекта в ней применяет фильтр. Удаление проекта каскадно убирает его протоколы.
-- **Подсветка поиска:** `splitHighlight` помечает вхождения в обычном тексте (`HighlightedText`); `highlightHtml` подсвечивает совпадения **внутри текста протокола**, обходя DOM-узлы (теги не затрагиваются) — во вьюере к названию и телу. В шапке списка — счётчик «Найдено: N».
-- **Пустые состояния:** оформлены для «нет протоколов», «нет протоколов в проекте» и «ничего не найдено»; в списках — относительные даты («2 дня назад»).
-- **CRUD (на мок-данных, in-memory):** протоколы — добавить (заглушка-плейсхолдер, доступно при выбранном проекте) / удалить. Без persist — сбрасывается на refresh.
-- **Безопасность:** текст протокола рендерится через `dangerouslySetInnerHTML` только после `DOMPurify.sanitize` (`isomorphic-dompurify`).
-- **Состояние:** `useMeetingsStore` — источник правды (сид из `mock-data`): `projects`, `protocols`, `selectedProjectId` (фильтр), `selectedProtocolId`, `searchQuery` + CRUD-экшены. Смена фильтра не сбрасывает открытый протокол.
+- **Read-only.** Протоколы создаёт бот; приложение их только показывает/ищет/даёт скачать. CRUD нет.
+- **Данные через TanStack Query** (`useMeetingReports`), UI-состояние — в Zustand (`selectedReportId`, `searchQuery`).
+- **Просмотр протокола** рендерит `report` (jsonb) как структуру: summary, участники, обсуждение, открытые вопросы, риски; плюс кнопки скачать `protocol_docx_url` / `transcript_docx_url`.
+- **Поиск** клиентский по теме, участникам и содержимому протокола; совпадения в теме подсвечиваются.
+- **Папки (локальный прототип):** группировка созвонов в папки + фильтр по папке. Хранятся в **localStorage** браузера (`zustand/persist`, ключ `meetings-folders`) — без бэкенда и привязки к серверу. Назначение созвона в папку — селект в шапке просмотра. Когда подключим реальные проекты, хранилище заменится на БД.
+- **Безопасность:** service-role ключ только на сервере (`MEETINGS_SUPABASE_SERVICE_ROLE_KEY`), в клиентский бандл не попадает. Server Action требует авторизации в основном проекте.
 
-## Планы (следующие фазы)
+## Окружение (.env.local)
 
-- **MT-002:** таблицы БД (`personal_projects`, `meeting_protocols`), Server Actions через cache-модуль, права, Realtime.
-- **MT-003:** загрузка `.docx`, парсинг в HTML (например, `mammoth`), хранение файлов в Supabase Storage; для реальных данных — индекс поиска (`flexsearch`) вместо линейного фильтра.
+```
+MEETINGS_SUPABASE_URL=...                  # URL meetings-проекта
+MEETINGS_SUPABASE_SERVICE_ROLE_KEY=...      # service-role, SERVER-ONLY (не NEXT_PUBLIC)
+```
+
+## Известные ограничения / следующие шаги
+
+- **Привязка к пользователю не реализована.** Сейчас показываются **все** созвоны: в `meeting_reports` нет email участников (только имена). Чтобы показывать созвон только его участникам, бот должен отдавать email участников (например, колонка `participant_emails text[]`), после чего в `actions/reports.ts` включается фильтр `.contains('participant_emails', [user.email])`.
+- **Privacy-замечание:** до этой привязки протоколы видны всем авторизованным пользователям.
+- Загрузка/повторная генерация `.docx` — на стороне бота; приложение только ссылается на готовые URL.

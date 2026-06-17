@@ -1,48 +1,94 @@
-// Типы модуля meetings (личные проекты с протоколами созвонов).
-// Фаза 1: мок-данные. Реальные таблицы БД и парсинг .docx — последующие этапы.
+// Типы модуля meetings: read-only отчёты о созвонах от Teams-бота (recall.ai).
+// Источник — таблица meeting_reports в отдельном Supabase-проекте.
 
-export interface MeetingProtocol {
-  id: string
-  projectId: string
-  /** Название протокола, напр. «Протокол созвона по API» */
-  title: string
-  /** Дата созвона, ISO-строка */
-  meetingDate: string
-  participants: string[]
-  /** Имя исходного файла, напр. «protocol-2026-06-10.docx» */
-  fileName: string
-  fileSizeKb: number
-  /** Текст протокола (HTML). На фазе мок-данных — заранее подготовленный текст. */
-  contentHtml: string
+/** Человек в протоколе (участник/автор). Email в данных пока нет — только имя/роль/организация. */
+export interface ReportPerson {
+  name: string
+  role?: string | null
+  organization?: string | null
 }
 
-export interface PersonalProject {
+export interface ReportDiscussionItem {
+  topic?: string | null
+  status?: string | null
+  outcome?: string | null
+  deadline?: string | null
+  responsible?: string | null
+}
+
+export interface ReportOpenQuestion {
+  question?: string | null
+  comment?: string | null
+  deadline?: string | null
+  responsible?: string | null
+}
+
+export interface ReportRisk {
+  description?: string | null
+  comment?: string | null
+  responsible?: string | null
+  deadline?: string | null
+}
+
+/** Содержимое колонки meeting_reports.report (jsonb) — структурированный протокол. */
+export interface ProtocolReport {
+  date?: string | null
+  subject?: string | null
+  project?: string | null
+  duration?: string | null
+  location?: string | null
+  author?: ReportPerson | null
+  participants?: ReportPerson[] | null
+  preview_summary?: string | null
+  discussion_items?: ReportDiscussionItem[] | null
+  open_questions?: ReportOpenQuestion[] | null
+  risks?: ReportRisk[] | null
+  transcript_url?: string | null
+  previous_protocol_url?: string | null
+}
+
+/** Строка meeting_reports (нужные колонки). */
+export interface MeetingReport {
+  id: string
+  created_at: string
+  subject: string | null
+  meeting_date: string | null
+  meeting_started_at: string | null
+  status: string
+  invited_by_name: string | null
+  protocol_docx_url: string | null
+  transcript_docx_url: string | null
+  report: ProtocolReport | null
+}
+
+/** Локальная «папка» для группировки созвонов (прототип; хранится в localStorage). */
+export interface MeetingFolder {
   id: string
   name: string
-  description?: string
-  /** Дата последнего обновления, ISO-строка */
-  updatedAt: string
 }
 
-export interface MeetingsState {
-  /** Источник правды (фаза 1): сид из mock-data, мутабельный для CRUD-прототипа. */
-  projects: PersonalProject[]
-  protocols: MeetingProtocol[]
-  selectedProjectId: string | null
-  selectedProtocolId: string | null
+/** Спецзначение фильтра «Без папки». null = «Все». */
+export const UNFILED_FOLDER = '__unfiled__'
+
+// UI-состояние (клиентское; данные созвонов — через TanStack Query).
+// folders/assignments/selectedFolderId персистятся в localStorage.
+export interface MeetingsUiState {
+  selectedReportId: string | null
   searchQuery: string
+  /** Фильтр: null = все, UNFILED_FOLDER = без папки, иначе id папки. */
+  selectedFolderId: string | null
+  folders: MeetingFolder[]
+  /** reportId → folderId. */
+  assignments: Record<string, string>
 }
 
-export interface MeetingsActions {
-  selectProject: (projectId: string | null) => void
-  selectProtocol: (protocolId: string | null) => void
+export interface MeetingsUiActions {
+  selectReport: (id: string | null) => void
   setSearchQuery: (query: string) => void
-
-  // CRUD на мок-данных (in-memory, без persist; реальный бэкенд — MT-002)
-  addProject: (name: string) => void
-  renameProject: (projectId: string, name: string) => void
-  deleteProject: (projectId: string) => void
-  /** Заглушка: создаёт протокол-плейсхолдер (реальная загрузка .docx — MT-003). */
-  addProtocol: (projectId: string, title: string) => void
-  deleteProtocol: (protocolId: string) => void
+  selectFolder: (id: string | null) => void
+  addFolder: (name: string) => void
+  renameFolder: (id: string, name: string) => void
+  deleteFolder: (id: string) => void
+  /** Назначить созвон в папку (folderId = null — убрать из папки). */
+  assignReport: (reportId: string, folderId: string | null) => void
 }
