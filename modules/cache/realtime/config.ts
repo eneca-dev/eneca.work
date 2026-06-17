@@ -81,7 +81,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
       [...queryKeys.resourceGraph.all, 'loadings'],
-      queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
+      queryKeys.departmentsTimeline.lists(), // Таймлайн отделов (загрузки сотрудников) — только список, не freshness (bug-VT-09)
       queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
       queryKeys.budgets.calc(), // Расчётный бюджет из loadings (страница бюджетов)
       queryKeys.budgets.calcByDepartments(), // Расчётный бюджет по отделам (блок "Человеческие ресурсы")

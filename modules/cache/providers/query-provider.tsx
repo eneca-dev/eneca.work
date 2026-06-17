@@ -3,12 +3,9 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { getQueryClient } from '../client/query-client'
-import { RealtimeSync } from '../realtime'
 
 interface QueryProviderProps {
   children: React.ReactNode
-  /** Отключить Realtime синхронизацию (по умолчанию включена) */
-  disableRealtime?: boolean
 }
 
 /**
@@ -19,18 +16,18 @@ interface QueryProviderProps {
  *
  * Включает:
  * - DevTools в режиме разработки
- * - Realtime синхронизацию с Supabase (можно отключить)
+ *
+ * NOTE: RealtimeSync рендерится ОТДЕЛЬНО в app/ClientProviders.tsx (ровно один раз),
+ * после AuthProvider — чтобы подписка стартовала после установки auth-сессии.
+ * Здесь его НЕ рендерим, иначе будет двойная подписка на канал cache-sync (bug-SB-02).
  */
-export function QueryProvider({ children, disableRealtime = false }: QueryProviderProps) {
+export function QueryProvider({ children }: QueryProviderProps) {
   // NOTE: Не используем useState для инициализации клиента,
   // чтобы избежать проблем с Suspense
   const queryClient = getQueryClient()
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Realtime синхронизация кеша */}
-      {!disableRealtime && <RealtimeSync />}
-
       {children}
 
       {process.env.NODE_ENV === 'development' && (

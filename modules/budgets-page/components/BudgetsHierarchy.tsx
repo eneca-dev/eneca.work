@@ -9,11 +9,10 @@
 'use client'
 
 import { useCallback, useRef, useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BudgetRow } from './BudgetRow'
-import { useExpandedState } from '../hooks/use-expanded-state'
+import { useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
 import type { HierarchyNode } from '../types'
 
 // ============================================================================
@@ -35,14 +34,16 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
   const headerRef = useRef<HTMLDivElement>(null)
   const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
 
-  const {
-    expanded,
-    toggle: handleToggle,
-    expandMultiple: handleExpandAll,
-    expandWithParents,
-    expandAll,
-    collapseAll,
-  } = useExpandedState({ nodes })
+  // Раскрытие живёт в UI-сторе; строки подписываются на свой узел сами
+  // (useBudgetRowExpanded). Здесь нужны только операции для авто-перехода и сидинга.
+  const expandWithParents = useBudgetsPageUIStore((s) => s.expandWithParents)
+  const seedIfEmpty = useBudgetsPageUIStore((s) => s.seedIfEmpty)
+
+  // Дефолт: раскрываем проекты верхнего уровня (только если состояние пустое) —
+  // поведение как было в useExpandedState.
+  useEffect(() => {
+    if (nodes.length > 0) seedIfEmpty(nodes.map((n) => n.id))
+  }, [nodes, seedIfEmpty])
 
   // Синхронизация горизонтального скролла
   const handleScroll = useCallback(() => {
@@ -97,26 +98,13 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
           {/* Подзаголовки */}
           <div className="flex items-center min-w-max">
             {/* Наименование */}
-            <div className="min-w-[400px] w-[400px] px-2 py-1 shrink-0 flex items-center justify-between">
+            {/* Кнопки «Развернуть всё / Свернуть всё» скрыты — как на вкладках
+                «Отделы»/«Разделы». Массовое раскрытие монтирует тысячи строк за раз
+                и подвешивает UI (bug-VT-15); узлы раскрываются по мере надобности. */}
+            <div className="min-w-[400px] w-[400px] px-2 py-1 shrink-0 flex items-center">
               <span className="text-[10px] text-muted-foreground">
                 Наименование
               </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={expandAll}
-                  className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded flex items-center gap-0.5"
-                >
-                  <ChevronDown className="h-3 w-3" />
-                  Все
-                </button>
-                <button
-                  onClick={collapseAll}
-                  className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded flex items-center gap-0.5"
-                >
-                  <ChevronRight className="h-3 w-3" />
-                  Скрыть
-                </button>
-              </div>
             </div>
 
             {/* БЮДЖЕТЫ subheaders */}
@@ -152,9 +140,6 @@ export function BudgetsHierarchy({ nodes, className, highlightSectionId }: Budge
                 key={node.id}
                 node={node}
                 level={0}
-                expanded={expanded}
-                onToggle={handleToggle}
-                onExpandAll={handleExpandAll}
                 highlightSectionId={highlightSectionId}
               />
             ))}

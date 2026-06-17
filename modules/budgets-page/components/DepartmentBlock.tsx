@@ -9,7 +9,7 @@ import { pluralizeLoadings } from '@/lib/pluralize'
 import { formatNumber } from '../utils'
 import { useProjectDepartmentBudgets } from '../hooks/use-project-department-budgets'
 import type { ProjectDepartmentBudgetSummary } from '../hooks/use-project-department-budgets'
-import type { ExpandedState } from '../types'
+import { useBudgetRowExpanded } from '../stores/useBudgetsPageUIStore'
 
 /** Префикс синтетического id для блока ЧР (`hr:${projectId}`) — хранится в общем expanded state */
 const HR_BLOCK_KEY_PREFIX = 'hr:'
@@ -64,20 +64,18 @@ interface ResolvedDepartment {
 interface DepartmentBlockProps {
   projectId: string
   projectAllocatedBudget: number
-  expanded: ExpandedState
-  onToggle: (nodeId: string) => void
 }
 
-export function DepartmentBlock({ projectId, projectAllocatedBudget, expanded, onToggle }: DepartmentBlockProps) {
+export function DepartmentBlock({ projectId, projectAllocatedBudget }: DepartmentBlockProps) {
   const { data: departmentBudgets, isLoading: budgetsLoading } = useProjectDepartmentBudgets()
   const { data: departments, isLoading: departmentsLoading } = useCachedDepartments()
 
   const isLoading = budgetsLoading || departmentsLoading
 
-  // Свёрнутость блока ЧР хранится в общем expanded state (localStorage).
-  // Дефолт — раскрыто (как сейчас).
+  // Свёрнутость блока ЧР хранится в UI-сторе (persist в localStorage).
+  // Дефолт — раскрыто (как было).
   const blockKey = `${HR_BLOCK_KEY_PREFIX}${projectId}`
-  const isBlockExpanded = expanded[blockKey] ?? true
+  const { isExpanded: isBlockExpanded, toggle: toggleBlock } = useBudgetRowExpanded(blockKey, true)
 
   // Резолвим целевые отделы по name → id через справочник из БД
   const resolved = useMemo<ResolvedDepartment[]>(() => {
@@ -122,7 +120,7 @@ export function DepartmentBlock({ projectId, projectAllocatedBudget, expanded, o
       {/* Section header — toggleable */}
       <div
         className="flex items-center border-b border-t border-emerald-900/30 bg-emerald-950/20 min-h-[26px] cursor-pointer hover:bg-emerald-950/30 transition-colors"
-        onClick={() => onToggle(blockKey)}
+        onClick={toggleBlock}
       >
         <div
           className="flex items-center gap-1.5 min-w-[400px] w-[400px] px-2 shrink-0"

@@ -17,7 +17,8 @@ import { BudgetRowBadges } from './BudgetRowBadges'
 import { DepartmentBlock } from './DepartmentBlock'
 import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
-import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
+import { useBudgetRowExpanded, useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
+import type { HierarchyNode, HierarchyNodeType } from '../types'
 
 // ============================================================================
 // Types
@@ -26,11 +27,7 @@ import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 interface BudgetRowProps {
   node: HierarchyNode
   level: number
-  expanded: ExpandedState
-  onToggle: (nodeId: string) => void
-  onExpandAll?: (nodeIds: string[]) => void
   insideSection?: boolean
-  parentAllocatedBudget?: number
   highlightSectionId?: string | null
 }
 
@@ -54,15 +51,14 @@ function collectChildIds(node: HierarchyNode): string[] {
 export const BudgetRow = React.memo(function BudgetRow({
   node,
   level,
-  expanded,
-  onToggle,
-  onExpandAll,
   insideSection = false,
-  parentAllocatedBudget = 0,
   highlightSectionId,
 }: BudgetRowProps) {
   const hasChildren = node.children.length > 0
-  const isExpanded = expanded[node.id] ?? false
+  // Подписка на boolean раскрытия именно этого узла (per-node селектор) —
+  // toggle одного узла не перерисовывает остальные строки.
+  const { isExpanded, toggle } = useBudgetRowExpanded(node.id)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
 
   const isSection = node.type === 'section'
   const isDecompStage = node.type === 'decomposition_stage'
@@ -114,11 +110,12 @@ export const BudgetRow = React.memo(function BudgetRow({
 
   const handleToggle = () => {
     if (!hasChildren) return
-    if (isSection && !isExpanded && onExpandAll) {
+    if (isSection && !isExpanded) {
+      // Раскрытие раздела сразу раскрывает все его этапы/задачи
       const allChildIds = collectChildIds(node)
-      onExpandAll([node.id, ...allChildIds])
+      expandMultiple([node.id, ...allChildIds])
     } else {
-      onToggle(node.id)
+      toggle()
     }
   }
 
@@ -264,11 +261,7 @@ export const BudgetRow = React.memo(function BudgetRow({
             key={child.id}
             node={child}
             level={level + 1}
-            expanded={expanded}
-            onToggle={onToggle}
-            onExpandAll={onExpandAll}
             insideSection={isSection || insideSection}
-            parentAllocatedBudget={allocatedBudget}
             highlightSectionId={highlightSectionId}
           />
         ))}
@@ -278,8 +271,6 @@ export const BudgetRow = React.memo(function BudgetRow({
         <DepartmentBlock
           projectId={node.id}
           projectAllocatedBudget={allocatedBudget}
-          expanded={expanded}
-          onToggle={onToggle}
         />
       )}
     </>

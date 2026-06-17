@@ -1,6 +1,6 @@
 ---
 id: "bug-VT-14"
-status: "todo"
+status: "review"
 priority: "high"
 assignee: "Вадим Тихомиров"
 epic: "bug"
@@ -30,3 +30,22 @@ order: "a14"
 ### Связанные тикеты
 - Обнаружено в рамках [test-VT-05](./test-VT-05.md) (Сценарии S1 и S2).
 - Имеет общий корень с [bug-VT-06](./bug-VT-06.md) и [bug-VT-12](./bug-VT-12.md).
+
+---
+
+## Разбор
+
+«~15 POST» — это разные Server Actions, а не дубли (как в bug-VT-06 / bug-VT-12). В Next.js любой Server Action идёт POST'ом на `/tasks`, различаются заголовком `Next-Action`. `reloadPermissions` не виноват: на старте `BudgetRow` данные не грузит, per-row на маунте нет.
+
+Состав запросов на «Загрузить всё»:
+- данные вкладки — 3 легитимных: `getResourceGraphData`, `getBudgets`, `getSectionCalcBudgets` (`useBudgetsHierarchy`);
+- глобальный prefetch `<ReferencePrefetch />` (~6, к Бюджетам не относится, 1 раз за сессию);
+- опции фильтра + права (~5).
+
+Дублей нет, систематического шторма нет.
+
+## Реальная боль (не «шторм»)
+
+Тормоза «долго грузится» на Бюджетах — это **тяжёлый `getResourceGraphData`**, а не количество запросов. По замеру `EXPLAIN ANALYZE`: `v_resource_graph` = ~19k строк, `select('*')` без проекций, `ORDER BY` по 5 колонкам → внешняя сортировка на диске (~59 МБ), ~1.6с даже в тёплом кэше. На холодном кэше или под конкурентной нагрузкой запрос превышает `statement_timeout` роли `authenticated` (8с) → PostgreSQL отменяет его с кодом `57014` → весь `getResourceGraphData` падает, и вкладка не грузится вовсе (в консоли видно как `[getResourceGraphData] Pagination error: 57014`). Усугубляется параллельной пагинацией (`Promise.all`), запускающей несколько полных прогонов view разом. Лечится отдельной оптимизацией view / проекций / пагинации (убрать `ORDER BY` в JS, убрать `count: 'exact'`, проекция колонок).
+
+Per-row N+1 на Бюджетах (блок «Человеческие ресурсы» при раскрытии проектов) относится к **bug-VT-15**, не сюда.

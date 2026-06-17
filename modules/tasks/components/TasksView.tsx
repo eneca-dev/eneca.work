@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useEffect, useState } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -27,14 +27,12 @@ import { usePermissionsLoader } from '@/modules/permissions'
 // ============================================================================
 
 export function TasksView() {
-  // Refresh permissions cache on mount — после деплоя нового кода у юзеров
-  // в Zustand могут быть устаревшие permissions. Этот reload подтянет новые
-  // ключи (loadings.edit.scope.* и tasks.tabs.view.department).
-  const { reloadPermissions } = usePermissionsLoader()
-  useEffect(() => {
-    reloadPermissions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Подтягиваем permissions через встроенный авто-loader usePermissionsLoader.
+  // Он грузит права один раз за сессию (guard globalLoadedForUserId) и делает
+  // фоновое обновление при наличии кэша — без блокировки UI и без лишних POST.
+  // Раньше здесь был форсированный reloadPermissions() на каждый маунт, который
+  // пробивал кэш и дублировал useFilterContext → шторм Server Actions (bug-VT-06).
+  usePermissionsLoader()
 
   // URL search params
   const searchParams = useSearchParams()
