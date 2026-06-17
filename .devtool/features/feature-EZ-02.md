@@ -1,17 +1,16 @@
 ---
 id: "feature-EZ-02"
-status: "todo"
+status: "in-progress"
 priority: "medium"
 assignee: "Екатерина Зорина"
 epic: "feature"
 dueDate: null
 created: "2026-06-16T09:00:00.000Z"
-modified: "2026-06-16T10:00:00.000Z"
+modified: "2026-06-17T08:02:51.989Z"
 completedAt: null
 labels: ["v1.5.0"]
-order: "b1"
+order: "a0"
 ---
-
 # feature-EZ-02 Диаграмма Ганта для этапов проекта (Project Diagram)
 
 Родительский тикет. Новый модуль/представление для управления сроками этапов декомпозиции в иерархии проект → объект → раздел → этап.
