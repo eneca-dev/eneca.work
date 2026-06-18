@@ -8,7 +8,7 @@
 
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
@@ -18,7 +18,10 @@ import { DepartmentBlock } from './DepartmentBlock'
 import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
 import { useBudgetRowExpanded, useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
-import type { HierarchyNode, HierarchyNodeType } from '../types'
+import { useSectionBudgetItems } from '../hooks/use-budget-hierarchy'
+import { useBudgetsData } from '../context/budgets-data-context'
+import type { HierarchyNode, HierarchyNodeType, BudgetInfo } from '../types'
+import type { BudgetSectionStage } from '../actions'
 
 // ============================================================================
 // Types
@@ -54,7 +57,8 @@ export const BudgetRow = React.memo(function BudgetRow({
   insideSection = false,
   highlightSectionId,
 }: BudgetRowProps) {
-  const hasChildren = node.children.length > 0
+  // Раздел может иметь ленивых детей (этапы), ещё не загруженных → раскрывалка должна быть.
+  const hasChildren = node.children.length > 0 || !!node.hasLazyChildren
   // Подписка на boolean раскрытия именно этого узла (per-node селектор) —
   // toggle одного узла не перерисовывает остальные строки.
   const { isExpanded, toggle } = useBudgetRowExpanded(node.id)
@@ -78,10 +82,13 @@ export const BudgetRow = React.memo(function BudgetRow({
   // Выделенный бюджет
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
 
-  // Распределено (сумма выделенных бюджетов прямых детей)
-  const distributedBudget = node.children.length > 0
-    ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
-    : allocatedBudget
+  // Распределено: для разделов — предсчитанное в БД (children грузятся лениво);
+  // для проект/объект/этап — сумма выделенного загруженных прямых детей.
+  const distributedBudget = node.distributedBudget !== undefined
+    ? node.distributedBudget
+    : node.children.length > 0
+      ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
+      : allocatedBudget
 
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
   const isOverDistributed = distributedBudget > allocatedBudget
@@ -254,16 +261,20 @@ export const BudgetRow = React.memo(function BudgetRow({
         </div>
       </div>
 
-      {/* Children (if expanded) */}
+      {/* Children (if expanded). Раздел с ленивыми детьми догружает этапы/задачи сам. */}
       {isExpanded &&
-        node.children.map((child) => (
-          <BudgetRow
-            key={child.id}
-            node={child}
-            level={level + 1}
-            insideSection={isSection || insideSection}
-            highlightSectionId={highlightSectionId}
-          />
+        (isSection && node.hasLazyChildren ? (
+          <SectionLazyChildren sectionId={node.id} highlightSectionId={highlightSectionId} />
+        ) : (
+          node.children.map((child) => (
+            <BudgetRow
+              key={child.id}
+              node={child}
+              level={level + 1}
+              insideSection={isSection || insideSection}
+              highlightSectionId={highlightSectionId}
+            />
+          ))
         ))}
 
       {/* Блок агрегации бюджета по отделам (Человеческие ресурсы) */}
@@ -273,6 +284,95 @@ export const BudgetRow = React.memo(function BudgetRow({
           projectAllocatedBudget={allocatedBudget}
         />
       )}
+    </>
+  )
+})
+
+// ============================================================================
+// Ленивые дети раздела (этапы + задачи) — грузятся при раскрытии раздела
+// ============================================================================
+
+/** Строит узлы этапов с задачами из ленивых данных + budgetsMap (выделенный) */
+function buildStageBudgetNodes(
+  stages: BudgetSectionStage[],
+  budgetsMap: Map<string, BudgetInfo[]>
+): HierarchyNode[] {
+  return stages.map((stage) => {
+    const items: HierarchyNode[] = stage.items.map((item) => ({
+      id: item.id,
+      name: item.description,
+      type: 'decomposition_item',
+      budgets: budgetsMap.get(`decomposition_item:${item.id}`) || [],
+      plannedHours: item.plannedHours,
+      children: [],
+      entityType: 'decomposition_item',
+    }))
+    const plannedHours = items.reduce((s, i) => s + (i.plannedHours || 0), 0)
+    return {
+      id: stage.id,
+      name: stage.name,
+      type: 'decomposition_stage',
+      budgets: budgetsMap.get(`decomposition_stage:${stage.id}`) || [],
+      plannedHours,
+      children: items,
+      entityType: 'decomposition_stage',
+    }
+  })
+}
+
+interface SectionLazyChildrenProps {
+  sectionId: string
+  highlightSectionId?: string | null
+}
+
+const SectionLazyChildren = React.memo(function SectionLazyChildren({
+  sectionId,
+  highlightSectionId,
+}: SectionLazyChildrenProps) {
+  const { budgetsMap } = useBudgetsData()
+  const { data: stages, isLoading, isError } = useSectionBudgetItems(sectionId)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
+  const expandedOnceRef = useRef<string | null>(null)
+
+  const stageNodes = useMemo(
+    () => (stages ? buildStageBudgetNodes(stages, budgetsMap) : []),
+    [stages, budgetsMap]
+  )
+
+  // Раскрытие раздела показывает этапы+задачи целиком (как было) — раскрываем этапы один раз
+  useEffect(() => {
+    if (stages && stages.length > 0 && expandedOnceRef.current !== sectionId) {
+      expandedOnceRef.current = sectionId
+      expandMultiple(stages.map((s) => s.id))
+    }
+  }, [stages, sectionId, expandMultiple])
+
+  if (isLoading) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-muted-foreground" style={{ paddingLeft: '56px' }}>
+        Загрузка задач…
+      </div>
+    )
+  }
+  if (isError) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-destructive" style={{ paddingLeft: '56px' }}>
+        Ошибка загрузки задач раздела
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {stageNodes.map((node) => (
+        <BudgetRow
+          key={node.id}
+          node={node}
+          level={3}
+          insideSection
+          highlightSectionId={highlightSectionId}
+        />
+      ))}
     </>
   )
 })

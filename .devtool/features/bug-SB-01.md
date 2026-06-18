@@ -1,75 +1,68 @@
 ---
 id: "bug-SB-01"
-status: "todo"
+status: "review"
 priority: "high"
 assignee: "Саша Бирило"
 epic: "bug"
 dueDate: null
 created: "2026-06-17T09:00:00.000Z"
-modified: "2026-06-17T13:00:00.000Z"
+modified: "2026-06-18T08:54:37.345Z"
 completedAt: null
 labels: ["v1.5.0"]
-order: "a17"
+order: "Zz"
 ---
-# bug-SB-01 Таймаут `57014` на `v_resource_graph` — материализация view с дебаунс-рефрешем
+# bug-SB-01 Вкладка «Бюджеты» грузится 7–12с и падает с таймаутом `57014`
 
 ## Проблема
 
-Вкладка «Бюджеты» (`getResourceGraphData`) периодически падает с ошибкой в консоли:
+Вкладка «Бюджеты» грузилась 7–12с и периодически падала с ошибкой в консоли:
+
 ```
 [getResourceGraphData] Pagination error: { code: '57014', message: 'canceling statement due to statement timeout' }
 ```
 
-`57014` = PostgreSQL сам отменяет запрос, т.к. он дольше `statement_timeout` роли `authenticated` (**8с**).
+`57014` = PostgreSQL сам отменяет запрос, т.к. он дольше `statement_timeout` роли `authenticated` (8с).
 
-**Замеры (EXPLAIN ANALYZE):**
-- `v_resource_graph` = **19 386 строк**, ширина строки 1562 байта, ~20 nested-loop джойнов + коррелированные подзапросы на каждую строку (`section_totals`, `section_readiness_snapshots`, бюджеты, progress_history).
-- Полный прогон: ~1.6–2.0с в тёплом кэше, кратно больше на холодном.
-- `ORDER BY` по 5 колонкам → внешняя сортировка на диске (~59 МБ).
-- `count: 'exact'` + параллельная пагинация (`Promise.all`, 4×5000) → 4 одновременных тяжёлых прогона конкурируют за work_mem/IO → один выходит за 8с → `57014` → весь запрос падает, вкладка не грузится.
-- Фильтр по `project_id` **не проталкивается** в view (проверено: чанк на 20 проектов = 1.47с) — обычными способами не оптимизируется.
+**Разбор причины (не та, что казалась изначально).** Узким местом было НЕ построение дерева на клиенте (сборка дерева в JS \~94мс) и не вычисление сумм. Медленным было **количество и объём данных**:
 
-Max rows Data API = **5000**, поэтому пагинация для 19k строк обязательна в любом случае.
+- Бюджеты читали `v_resource_graph` — тяжёлую view с грейном **по задаче**: **\~19 445 строк × \~67 колонок** (+ тяжёлые JSONB), \~20 nested-loop джойнов и коррелированные подзапросы на строку.
+- В БД полный прогон \~1.6–2с (на холодном кэше кратно больше), `count: 'exact'` + параллельная пагинация 4×5000 → конкуренция за work_mem/IO → один прогон выходил за 8с → `57014`, вкладка не грузилась.
+- По сети \~22 МБ; сериализация/парс 19k широких строк добавляли ещё несколько секунд.
+- **Главное:** на экране изначально показаны только свёрнутые Проект→Объект→Раздел (\~4.3к разделов), а тянулись все \~19k задач — 90% данных скрыты и сразу выкидывались в суммы.
 
 ## Решение
 
-Материализовать view → `mat_resource_graph`. Чтение становится дешёвым seq scan (~100–300мс вместо 1.6–2с), таймаут уходит. На физической таблице работают индексы, push-down фильтров и проекция. Обновление — **дебаунс**: триггеры на базовых таблицах ставят флаг «грязно», лёгкая pg_cron-задача рефрешит MV не чаще раза в ~30с и только если были изменения.
+> Сначала пробовали материализовать `v_resource_graph` → `mat_resource_graph` с дебаунс-рефрешем (триггеры + pg_cron). **Откатили:** «выделенный» правят inline → MV даёт устаревание тому, что редактируют; крон+триггеры засоряют БД; и главное — MV ускоряла пересчёт view, но строки всё равно качались все (19k), т.е. лечила не ту причину. Подробности отката — `docs/sb-01-mat-view-rollback.md`.
 
-В проекте уже есть паттерн MV (`mat_project_involved_users` + `refresh_project_involved_users`) — копируем его.
+Реализован **Вариант 1 — лёгкая live-вью + ленивая подгрузка** (без MV):
 
-### Где используется view (важно — НИЧЕГО не удаляем)
-`v_resource_graph` читают 4 модуля: `resource-graph` (Бюджеты), `kanban`, `modals/loadings`, `project-reports`. View **остаётся**. Мигрируем только Бюджеты; остальные потребители — позже и отдельно (модалки лучше оставить на живой view — им важна свежесть сразу после правки).
+1. **Новая обычная live-вью** `v_budget_hierarchy` (section-grain, \~4 367 строк, \~290мс):
 
-### Безопасность / RLS
-View не использует `auth.uid()` — вся безопасность в server action (`applyMandatoryFilters`, restricted-проекты, isAdmin). MV это не меняет, НО при переходе на MV в action **сохранить все фильтры** + выдать `GRANT SELECT` роли `authenticated`.
+   - структура `projects + objects + sections` (мелкие таблицы, без взрыва до задач);
+   - фильтр-колонки 1:1 с `v_resource_graph` (project/status, department/subdivision/responsible через ответственного раздела) + `WHERE project_status = 'active'`;
+   - **расчётный** влит из `v_cache_section_calc_budget`;
+   - **«Распределено» посчитано в БД** (Σ выделенного этапов раздела);
+   - флаг `section_has_stages` (показывать раскрывалку до ленивой загрузки);
+   - `GRANT SELECT` роли `authenticated`. Аддитивно: `v_resource_graph` и базовые таблицы не тронуты.
 
-## Как работает дебаунс + realtime
+2. `getBudgetHierarchy(filters)` — читает `v_budget_hierarchy`, фильтры/безопасность 1:1 с `getResourceGraphData` (restricted-проекты, `applyMandatoryFilters`, isAdmin), один запрос без пагинации (4.3к &lt; Max rows 5000).
 
-```
-Правка загрузки/бюджета:
-  → A видит изменение сразу (optimistic update, уже есть)
-  → триггер ставит mv_refresh_state.is_dirty = true   (микросекунды, мутацию не тормозит)
+3. **Дерево строится до раздела и сразу показывается.** Числа разделов — из строки вьюхи; объект/проект — лёгкий роллап на клиенте. Дерево собирается ОДИН раз (стабильные узлы) → `React.memo` строк не ломается.
 
-pg_cron каждые ~30с:
-  if is_dirty: REFRESH MATERIALIZED VIEW CONCURRENTLY mat_resource_graph  (2-4с, сбоку)
-               is_dirty = false, last_refreshed = now()
-  else: ничего (на простое нагрузки нет)
+4. **Этапы и задачи — лениво при раскрытии раздела** (`getSectionBudgetItems(section_id)`): читает напрямую базовые `decomposition_stages` + `decomposition_items` по одному разделу (десятки строк). Бюджеты этапов/задач берутся из уже загруженного `getBudgets`. Ленивые дети рендерятся через `SectionLazyChildren` + контекст `budgetsMap` (база дерева остаётся стабильной).
 
-mv_refresh_state в realtime-публикации:
-  → событие «MV обновилась» → клиенты инвалидируют resourceGraph.all → рефетч свежей MV
-```
-- 100 правок за 30с → один рефреш. Ноль правок → ноль рефрешей.
-- Своя правка видна сразу (optimistic), чужая — через ~30с.
-- Realtime переезжает с подписки на `loadings`/`budgets`/… на подписку на одну строку `mv_refresh_state` → инвалидация **после** рефреша (иначе рефетчим ещё не обновлённый снимок).
-- Канбан/Разделы не трогаем — у них свой instant-realtime на живых view.
+5. **Инвалидация** «Распределено» при правке — через существующую realtime-подписку на `budgets` (`queryKeys.budgets.all` префиксом накрывает `budgets.hierarchy`/`budgets.sectionItems`); мгновенный «Выделенный» — через optimistic update списка бюджетов.
 
-## План реализации (Definition of Done)
-- [ ] **Сначала:** сузить широкие realtime-инвалидации (`*.all` на каждое изменение каждой таблицы) — предусловие, иначе firehose штормит рефетчами и выигрыш MV теряется.
-- [ ] Материализовать `v_resource_graph` → `mat_resource_graph` (UNIQUE-индекс на грейн для `REFRESH CONCURRENTLY`, индексы `project_id`/`section_id`, `GRANT SELECT` роли `authenticated`).
-- [ ] Дебаунс-рефреш: statement-триггеры-флаг на data-таблицах + таблица `mv_refresh_state` + pg_cron (рефреш только по флагу, ~30с) + ежедневная страховка (внутри view есть `CURRENT_DATE`).
-- [ ] Переключить `getResourceGraphData` на MV — **сохранить все security-фильтры** (`applyMandatoryFilters`, restricted, isAdmin) — + realtime через `mv_refresh_state` (инвалидация ПОСЛЕ рефреша).
-- [ ] Браузер-тест: Бюджеты без `57014`, чужая правка ≤30с, свои — мгновенно (optimistic); `npm run db:types` + `npm run build`.
+**Сохранены полезные правки** (не зависят от MV): O(n)-сборка дерева `transformRowsToHierarchy` (Map вместо `.find()`), `PAGE_SIZE 5000` в `getBudgets`.
 
-## Связанные находки
-- Каскад `resourceGraph.all` после мутаций (bug-VT-09) на MV тоже дешевеет.
-- Побочно: Разделы (`view_departments_sections_loadings` = 7356 строк) грузятся одним `.select('*')` без пагинации → при «Загрузить всё» молча теряют ~2356 строк (Max rows = 5000). Отдельный тикет.
+**Результат:** `57014` ушёл (Бюджеты больше не используют `v_resource_graph`); загрузка **7–12с → 3–4с**.
+
+## Затронутые файлы
+
+- БД: `v_budget_hierarchy` (миграция `sb_01_v2_create_v_budget_hierarchy` + добавления колонок).
+- `modules/budgets-page/actions/budget-hierarchy.ts` (новый), `actions/index.ts`.
+- `modules/budgets-page/hooks/use-budget-hierarchy.ts` (новый), `hooks/use-budgets-hierarchy.ts` (переписан), `hooks/index.ts`.
+- `modules/budgets-page/context/budgets-data-context.tsx` (новый).
+- `modules/budgets-page/components/BudgetRow.tsx`, `BudgetsViewInternal.tsx`.
+- `modules/budgets-page/types/index.ts`, `modules/cache/keys/query-keys.ts`.
+- `modules/budgets/actions/budget-actions.ts` (PAGE_SIZE), `modules/resource-graph/utils/index.ts` (O(n)).

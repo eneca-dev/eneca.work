@@ -326,6 +326,10 @@ export const queryKeys = {
       [...queryKeys.budgets.all, 'section-summary', projectId] as const,
     parentCandidates: (entityType: string, entityId: string, budgetTypeId: string) =>
       [...queryKeys.budgets.all, 'parent-candidates', entityType, entityId, budgetTypeId] as const,
+    /** Лёгкая иерархия бюджетов section-grain (v_budget_hierarchy) */
+    hierarchy: (filters?: unknown) => [...queryKeys.budgets.all, 'hierarchy', filters ?? null] as const,
+    /** Ленивые этапы+задачи одного раздела (страница Бюджетов) */
+    sectionItems: (sectionId: string) => [...queryKeys.budgets.all, 'section-items', sectionId] as const,
     /** Расчётный бюджет по списку разделов из loadings (v_cache_section_calc_budget) */
     calc: () => [...queryKeys.budgets.all, 'calc'] as const,
     calcBySections: (sectionIds: string[]) =>

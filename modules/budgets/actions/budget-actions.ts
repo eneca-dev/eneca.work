@@ -78,7 +78,9 @@ export async function getBudgets(
     const hasPermission = await checkPermission(supabase, user.id, 'budgets.view.all')
     if (!hasPermission) return { success: false, error: 'Нет прав на просмотр бюджетов' }
 
-    const PAGE_SIZE = 1000
+    // bug-SB-01 #2: 5000 = потолок Max rows Data API. ~35k бюджетов / 5000 ≈ 8 страниц
+    // вместо ~36 (×4.5 меньше Server Action round-trip'ов → быстрее загрузка Бюджетов).
+    const PAGE_SIZE = 5000
 
     // Страница бюджетов использует lean-view без агрегации расходов (~3–5x быстрее).
     // Остальные потребители (resource-graph, modals) получают полные данные из v_cache_budgets.
