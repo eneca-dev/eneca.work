@@ -13,6 +13,7 @@ import type {
 import { formatMeetingDate, formatMeetingDateTime } from '../utils'
 import { HighlightedText } from './HighlightedText'
 import { FolderAssignSelect } from './FolderAssignSelect'
+import { ShareDialog } from './ShareDialog'
 
 interface ReportViewerProps {
   meeting: MeetingReport | null
@@ -53,6 +54,7 @@ export function ReportViewer({ meeting, query }: ReportViewerProps) {
         <div className="flex flex-wrap items-center gap-2">
           <DownloadButton url={meeting.protocol_docx_url} label="Протокол .docx" />
           <DownloadButton url={meeting.transcript_docx_url} label="Транскрипт .docx" variant="ghost" />
+          {meeting.isOwner && <ShareDialog reportId={meeting.id} />}
           <div className="ml-auto">
             <FolderAssignSelect reportId={meeting.id} />
           </div>

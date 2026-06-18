@@ -47,7 +47,7 @@ export interface ProtocolReport {
   previous_protocol_url?: string | null
 }
 
-/** Строка meeting_reports (нужные колонки). */
+/** Строка meeting_reports (нужные колонки) + признак владельца для текущего пользователя. */
 export interface MeetingReport {
   id: string
   created_at: string
@@ -56,9 +56,12 @@ export interface MeetingReport {
   meeting_started_at: string | null
   status: string
   invited_by_name: string | null
+  invited_by_email: string | null
   protocol_docx_url: string | null
   transcript_docx_url: string | null
   report: ProtocolReport | null
+  /** true, если текущий пользователь — пригласивший (владелец). Заполняется сервером. */
+  isOwner: boolean
 }
 
 /** Локальная «папка» для группировки созвонов (прототип; хранится в localStorage). */

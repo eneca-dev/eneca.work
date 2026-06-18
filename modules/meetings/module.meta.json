@@ -65,6 +65,10 @@
     {
       "date": "2026-06-17",
       "entry": "Возвращены «папки» как локальный прототип группировки: фильтр по папке (Select), модалка управления папками (CRUD), назначение созвона в папку. Хранение в localStorage (zustand/persist, skipHydration + ручная регидрация). Позже заменится на реальные проекты в БД."
+    },
+    {
+      "date": "2026-06-17",
+      "entry": "Сайдбар: «Проекты» → «Встречи» (иконка Video). Видимость и шеринг: созвон видит владелец (invited_by_email = profiles.email) или тот, кому расшарено. Таблица meeting_report_shares в meetings-проекте, Server Actions shareReport/unshareReport/getReportShares (проверка владельца на сервере), хуки и ShareDialog (пикер пользователей из useUsers). Подсветка поиска возвращена во все текстовые поля протокола. Требует доработки бота (invited_by_email) — SQL в modules/meetings/sql/meetings-project-setup.sql."
     }
   ]
 }
