@@ -4,7 +4,6 @@ import { useSearchParams } from 'next/navigation'
 import { useMemo, useCallback } from 'react'
 import { Database, Lock } from 'lucide-react'
 import { BudgetsHierarchy } from './BudgetsHierarchy'
-import { BudgetsDataProvider } from '../context/budgets-data-context'
 import { useBudgetsHierarchy } from '../hooks'
 import { useHasPermission } from '@/modules/permissions'
 import type { BudgetsViewInternalProps } from '../types'
@@ -43,7 +42,7 @@ export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoa
 
   const handleLoadAll = useCallback(() => onLoadAll?.(), [onLoadAll])
 
-  const { nodes, budgetsMap, isLoading, error } = useBudgetsHierarchy(
+  const { nodes, isLoading, error } = useBudgetsHierarchy(
     filtersApplied ? queryParams : undefined,
     { enabled: shouldFetchData && canView }
   )
@@ -104,13 +103,11 @@ export function BudgetsViewInternal({ queryParams, loadAllEnabled = false, onLoa
       {isLoading && nodes.length === 0 ? (
         <LoadingSkeleton />
       ) : (
-        <BudgetsDataProvider budgetsMap={budgetsMap}>
-          <BudgetsHierarchy
-            nodes={nodes}
-            className="flex-1 min-h-0"
-            highlightSectionId={highlightSectionId}
-          />
-        </BudgetsDataProvider>
+        <BudgetsHierarchy
+          nodes={nodes}
+          className="flex-1 min-h-0"
+          highlightSectionId={highlightSectionId}
+        />
       )}
     </div>
   )

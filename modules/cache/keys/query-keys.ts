@@ -49,9 +49,13 @@ export interface LoadingFilters extends BaseFilters {
 
 export interface BudgetFilters extends BaseFilters {
   entityType?: 'section' | 'object' | 'stage' | 'project'
+  /** Несколько уровней (сериализованы в строку для ключа) */
+  entityTypes?: string
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  /** Проекты-фильтр (сериализованы) — чтобы scoped/полный запрос не коллизировали */
+  projectIds?: string
   lean?: boolean
 }
 
@@ -416,6 +420,8 @@ export const queryKeys = {
     org: () => [...queryKeys.filterStructure.all, 'org'] as const,
     /** Проектная структура (проекты) */
     project: () => [...queryKeys.filterStructure.all, 'project'] as const,
+    /** Лёгкий список проектов для фильтра (только id+name, ~132 вместо 4.4к section-grain) */
+    projectsLight: () => [...queryKeys.filterStructure.all, 'projects-light'] as const,
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
   },

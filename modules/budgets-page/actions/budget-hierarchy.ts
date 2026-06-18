@@ -14,6 +14,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
+import type { BudgetCurrent } from '@/modules/budgets'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import { getFilterContext } from '@/modules/permissions/server/get-filter-context'
 import { applyMandatoryFilters } from '@/modules/permissions/utils/mandatory-filters'
@@ -230,26 +231,29 @@ export async function getBudgetHierarchy(
 // Ленивая подгрузка этапов+задач одного раздела (Фаза 3)
 // ============================================================================
 
-/** Задача (item) для дерева бюджетов — только поля, которые рендерит BudgetRow */
+/** Задача (item) для дерева бюджетов — поля для BudgetRow + бюджеты (Фаза 7) */
 export interface BudgetSectionItem {
   id: string
   description: string
   plannedHours: number
   order: number
+  budgets: BudgetCurrent[]
 }
 
-/** Этап декомпозиции с задачами */
+/** Этап декомпозиции с задачами и бюджетами */
 export interface BudgetSectionStage {
   id: string
   name: string
   order: number
+  budgets: BudgetCurrent[]
   items: BudgetSectionItem[]
 }
 
 /**
- * Этапы+задачи ОДНОГО раздела (вызывается при раскрытии раздела).
- * Лёгкие базовые таблицы (~десятки строк), без тяжёлой v_resource_graph.
- * Бюджеты (выделенный) этапов/задач берутся на клиенте из уже загруженного budgetsMap.
+ * Этапы+задачи ОДНОГО раздела + ИХ бюджеты (вызывается при раскрытии раздела).
+ * Фаза 7: на старте getBudgets грузит только project/object/section, поэтому бюджеты
+ * этапов/задач отдаём здесь (lean v_budgets_for_page по entity этого раздела).
+ * Лёгкие запросы (~десятки строк), без тяжёлой v_resource_graph.
  */
 export async function getSectionBudgetItems(
   sectionId: string
@@ -295,6 +299,24 @@ export async function getSectionBudgetItems(
       .order('decomposition_item_order')
     if (itemsErr) return { success: false, error: itemsErr.message }
 
+    const itemIds = (items ?? []).map(it => it.decomposition_item_id)
+
+    // Бюджеты этапов+задач (lean, тот же источник, что getBudgets для верхних уровней)
+    const { data: budgets, error: budgetsErr } = await supabase
+      .from('v_budgets_for_page')
+      .select('*')
+      .in('entity_type', ['decomposition_stage', 'decomposition_item'])
+      .in('entity_id', [...stageIds, ...itemIds])
+      .eq('is_active', true)
+    if (budgetsErr) return { success: false, error: budgetsErr.message }
+
+    const budgetsByEntity = new Map<string, BudgetCurrent[]>()
+    for (const b of (budgets ?? []) as BudgetCurrent[]) {
+      const arr = budgetsByEntity.get(b.entity_id) || []
+      arr.push(b)
+      budgetsByEntity.set(b.entity_id, arr)
+    }
+
     // Группируем задачи по этапу
     const itemsByStage = new Map<string, BudgetSectionItem[]>()
     for (const it of items ?? []) {
@@ -304,6 +326,7 @@ export async function getSectionBudgetItems(
         description: it.decomposition_item_description || '',
         plannedHours: Number(it.decomposition_item_planned_hours ?? 0),
         order: it.decomposition_item_order ?? 0,
+        budgets: budgetsByEntity.get(it.decomposition_item_id) ?? [],
       })
       itemsByStage.set(it.decomposition_item_stage_id, arr)
     }
@@ -312,6 +335,7 @@ export async function getSectionBudgetItems(
       id: s.decomposition_stage_id,
       name: s.decomposition_stage_name || '',
       order: s.decomposition_stage_order ?? 0,
+      budgets: budgetsByEntity.get(s.decomposition_stage_id) ?? [],
       items: itemsByStage.get(s.decomposition_stage_id) ?? [],
     }))
 

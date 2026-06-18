@@ -29,7 +29,7 @@ const num = (v: number | string | null | undefined): number => {
 }
 
 /** BudgetCurrent (V2) → BudgetInfo */
-function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
+export function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
   return {
     budget_id: budget.budget_id,
     name: budget.name,
@@ -150,8 +150,6 @@ function buildHierarchy(
 
 export interface UseBudgetsHierarchyResult {
   nodes: HierarchyNode[]
-  /** Карта бюджетов по entity (для ленивых детей раздела через контекст) */
-  budgetsMap: Map<string, BudgetInfo[]>
   isLoading: boolean
   error: Error | null
   refetch: () => void
@@ -187,7 +185,9 @@ export function useBudgetsHierarchy(
     error: budgetsError,
     refetch: refetchBudgets,
   } = useBudgets(
-    { is_active: true, project_ids: projectIds, lean: true },
+    // Фаза 7: на старте грузим только верхние уровни (~5к вместо ~35к).
+    // Бюджеты этапов/задач приходят лениво через getSectionBudgetItems при раскрытии раздела.
+    { is_active: true, project_ids: projectIds, lean: true, entity_types: ['project', 'object', 'section'] },
     {
       enabled: budgetsEnabled,
       queryOptions: { placeholderData: keepPreviousData },
@@ -219,7 +219,6 @@ export function useBudgetsHierarchy(
 
   return {
     nodes,
-    budgetsMap,
     isLoading: rowsLoading || budgetsLoading,
     error: (rowsError as Error) || (budgetsError as Error) || null,
     refetch,

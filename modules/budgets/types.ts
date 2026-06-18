@@ -89,6 +89,8 @@ export interface EntityHierarchy {
 
 export interface BudgetFilters {
   entity_type?: BudgetEntityType
+  /** Несколько уровней сразу (например project/object/section для стартовой загрузки Бюджетов) */
+  entity_types?: BudgetEntityType[]
   entity_id?: string
   is_active?: boolean
   /** Фильтр по проектам — загружает только бюджеты указанных проектов */

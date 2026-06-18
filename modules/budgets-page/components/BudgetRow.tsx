@@ -19,8 +19,8 @@ import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
 import { useBudgetRowExpanded, useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
 import { useSectionBudgetItems } from '../hooks/use-budget-hierarchy'
-import { useBudgetsData } from '../context/budgets-data-context'
-import type { HierarchyNode, HierarchyNodeType, BudgetInfo } from '../types'
+import { toBudgetInfo } from '../hooks/use-budgets-hierarchy'
+import type { HierarchyNode, HierarchyNodeType } from '../types'
 import type { BudgetSectionStage } from '../actions'
 
 // ============================================================================
@@ -292,17 +292,14 @@ export const BudgetRow = React.memo(function BudgetRow({
 // Ленивые дети раздела (этапы + задачи) — грузятся при раскрытии раздела
 // ============================================================================
 
-/** Строит узлы этапов с задачами из ленивых данных + budgetsMap (выделенный) */
-function buildStageBudgetNodes(
-  stages: BudgetSectionStage[],
-  budgetsMap: Map<string, BudgetInfo[]>
-): HierarchyNode[] {
+/** Строит узлы этапов с задачами из ленивых данных (структура + бюджеты, Фаза 7) */
+function buildStageBudgetNodes(stages: BudgetSectionStage[]): HierarchyNode[] {
   return stages.map((stage) => {
     const items: HierarchyNode[] = stage.items.map((item) => ({
       id: item.id,
       name: item.description,
       type: 'decomposition_item',
-      budgets: budgetsMap.get(`decomposition_item:${item.id}`) || [],
+      budgets: item.budgets.map(toBudgetInfo),
       plannedHours: item.plannedHours,
       children: [],
       entityType: 'decomposition_item',
@@ -312,7 +309,7 @@ function buildStageBudgetNodes(
       id: stage.id,
       name: stage.name,
       type: 'decomposition_stage',
-      budgets: budgetsMap.get(`decomposition_stage:${stage.id}`) || [],
+      budgets: stage.budgets.map(toBudgetInfo),
       plannedHours,
       children: items,
       entityType: 'decomposition_stage',
@@ -329,14 +326,13 @@ const SectionLazyChildren = React.memo(function SectionLazyChildren({
   sectionId,
   highlightSectionId,
 }: SectionLazyChildrenProps) {
-  const { budgetsMap } = useBudgetsData()
   const { data: stages, isLoading, isError } = useSectionBudgetItems(sectionId)
   const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
   const expandedOnceRef = useRef<string | null>(null)
 
   const stageNodes = useMemo(
-    () => (stages ? buildStageBudgetNodes(stages, budgetsMap) : []),
-    [stages, budgetsMap]
+    () => (stages ? buildStageBudgetNodes(stages) : []),
+    [stages]
   )
 
   // Раскрытие раздела показывает этапы+задачи целиком (как было) — раскрываем этапы один раз
