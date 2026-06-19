@@ -1,12 +1,12 @@
 ---
 id: "feature-EZ-02"
-status: "in-progress"
+status: "review"
 priority: "medium"
 assignee: "Екатерина Зорина"
 epic: "feature"
 dueDate: null
 created: "2026-06-16T09:00:00.000Z"
-modified: "2026-06-17T08:02:51.989Z"
+modified: "2026-06-19T09:00:00.000Z"
 completedAt: null
 labels: ["v1.5.0"]
 order: "a0"
@@ -334,3 +334,20 @@ function stackStages(stages): Array<{ stage; track: number }>
 - `modules/planning/` — данные по этапам декомпозиции (Фаза 2)
 - `types/db.ts` — типы из Supabase (Фаза 2, после миграции)
 - `modules/cache/` — паттерн Server Actions + TanStack Query (Фаза 2)
+
+---
+
+## Review
+
+### Как решена задача
+
+Реализован новый модуль `modules/project-diagram/` с компонентом `ProjectDiagram.tsx` — кастомная диаграмма Ганта на `div`-ах с абсолютным позиционированием. Используются мок-данные (2 проекта, 5 разделов, ~16 этапов). Переиспользованы утилиты из `resource-graph` (`calculateBarPosition`, `generateDayCells`, константы). Реализованы: sticky-шапка с масштабами, sidebar с иерархией и pills, stacking перекрывающихся баров, линия «сегодня», @dnd-kit для drag-and-drop.
+
+### Что проверить ревьюеру
+
+- Корректность sticky-позиционирования шапки и sidebar при горизонтальном и вертикальном скролле
+- Алгоритм stacking: перекрывающиеся бары должны раскладываться по трекам без наложения
+- Высота строки раздела: определяется максимумом из кол-ва треков и кол-ва рядов pills
+- Drag pill → таймлайн: pill исчезает из sidebar, появляется баром
+- Масштаб day/week/month: шапка и позиции баров должны корректно пересчитываться
+- Импорты из `resource-graph` — убедиться, что не тянутся store-зависимости

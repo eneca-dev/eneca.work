@@ -25,3 +25,17 @@ export interface MockProject {
 }
 
 export type GanttScale = 'day' | 'week' | 'month'
+
+export interface MockLink {
+  id: string
+  fromStageId: string
+  toStageId: string
+  type: 'FS'
+}
+
+export interface BarRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}

@@ -1,4 +1,4 @@
-import type { MockProject } from './types'
+import type { MockLink, MockProject } from './types'
 
 // Базовая дата: 2026-06-16
 export const MOCK_PROJECTS: MockProject[] = [
@@ -358,4 +358,18 @@ export const MOCK_PROJECTS: MockProject[] = [
       },
     ],
   },
+]
+
+// Тестовые связи между этапами (тип FS: конец → начало)
+export const MOCK_LINKS: MockLink[] = [
+  // АР Корпус А: Концепция → Согласование
+  { id: 'l1', fromStageId: 'st1', toStageId: 'st3', type: 'FS' },
+  // КЖ Корпус А: Фундамент → Каркас → Перекрытия
+  { id: 'l2', fromStageId: 'st6', toStageId: 'st7', type: 'FS' },
+  { id: 'l3', fromStageId: 'st7', toStageId: 'st8', type: 'FS' },
+  // ОВ Корпус А: Проектирование → Монтаж
+  { id: 'l4', fromStageId: 'st10', toStageId: 'st11', type: 'FS' },
+  // КМ Корпус Б: Рабочая документация → Изготовление → Монтаж
+  { id: 'l5', fromStageId: 'st16a', toStageId: 'st16b', type: 'FS' },
+  { id: 'l6', fromStageId: 'st16b', toStageId: 'st16c', type: 'FS' },
 ]
