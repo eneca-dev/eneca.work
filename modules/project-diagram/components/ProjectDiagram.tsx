@@ -69,21 +69,7 @@ function stackStages(stages: MockStage[]): StackedStage[] {
   const sorted = [...timed].sort((a, b) =>
     parseMinskDate(a.startDate!).getTime() - parseMinskDate(b.startDate!).getTime()
   )
-  const trackEnds: Date[] = []
-  // minTrack enforces monotone ordering: each bar goes on a track ≥ the previous bar's track,
-  // so earlier-starting bars always appear higher (smaller track index = closer to top).
-  let minTrack = 0
-  return sorted.map(stage => {
-    const start = parseMinskDate(stage.startDate!)
-    let chosen = -1
-    for (let k = minTrack; k < trackEnds.length; k++) {
-      if (trackEnds[k] < start) { chosen = k; break }
-    }
-    if (chosen === -1) chosen = trackEnds.length
-    trackEnds[chosen] = parseMinskDate(stage.endDate!)
-    minTrack = chosen
-    return { stage, track: chosen }
-  })
+  return sorted.map((stage, index) => ({ stage, track: index }))
 }
 
 // ─── BFS cascade: collect this bar + all bars reachable via FS links (both directions) ───
