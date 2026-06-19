@@ -107,7 +107,10 @@ function buildHierarchy(
         calcBudgetFromLoadings: num(row.section_calc_budget),
         loadingCount: row.section_loading_count ?? 0,
         loadingErrorsCount: row.section_errors_count ?? 0,
-        distributedBudget: num(row.section_distributed),
+        // Раздел С этапами → «Распределено» из БД (Σ выделенного этапов).
+        // Раздел БЕЗ этапов → лист: distributedBudget=undefined, BudgetRow покажет
+        // собственный «Выделенный» (как старый код, иначе у безэтапных разделов «—»).
+        distributedBudget: row.section_has_stages ? num(row.section_distributed) : undefined,
         hasLazyChildren: !!row.section_has_stages,
         children: [],
         entityType: 'section',

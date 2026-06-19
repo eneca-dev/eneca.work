@@ -46,6 +46,7 @@ export interface BudgetHierarchyRow {
   section_loading_count: number | null
   section_errors_count: number | null
   section_distributed: number | string | null
+  section_has_stages: boolean | null
 }
 
 /**
