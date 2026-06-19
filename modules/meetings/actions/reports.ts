@@ -9,10 +9,9 @@ const REPORT_COLUMNS =
   'id, created_at, subject, meeting_date, meeting_started_at, status, invited_by_name, invited_by_email, protocol_docx_url, transcript_docx_url, report'
 
 // Исключения: email входа в eneca.work → email(ы) в Teams (invited_by_email),
-// когда они различаются. Ключ и значения — lowercase. У большинства почты совпадают.
-const EMAIL_ALIASES: Record<string, string[]> = {
-  'fopeto72@gmail.com': ['vladzimir.nesterovich@enecagroup.com'],
-}
+// когда они различаются. Ключ и значения — lowercase. У всех текущих пользователей
+// почты совпадают (вход = Teams), поэтому маппингов нет.
+const EMAIL_ALIASES: Record<string, string[]> = {}
 
 /** Все email, которые считаются «текущим пользователем как владельцем» (его почта + алиасы). */
 function ownerEmailsFor(userEmail: string | null): string[] {
