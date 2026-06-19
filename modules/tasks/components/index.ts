@@ -1,4 +1,5 @@
 export { TasksView } from './TasksView'
 export { TasksTabs } from './TasksTabs'
+export { TabPicker } from './TabPicker'
 export { TabModal } from './TabModal'
 export { PermissionsDebugPanel } from './PermissionsDebugPanel'

@@ -98,7 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-background transition-colors duration-200">
       {/* Фиксированное меню */}
-      <div className={`fixed inset-y-0 left-0 z-40 h-screen ${sidebarWidth} transition-all duration-300`}>
+      <div className={`fixed inset-y-0 left-0 z-60 h-screen ${sidebarWidth} transition-all duration-300`}>
         <Sidebar
           user={{ name: name || "Пользователь", email: email || "" }}
           collapsed={sidebarCollapsed}
