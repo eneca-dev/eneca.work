@@ -9,7 +9,7 @@
 
 // Components
 export { DepartmentsTimelineInternal } from './components'
-export { DepartmentRow, TeamRow, EmployeeRow } from './components'
+export { DepartmentRowContent, TeamRowContent, EmployeeRow } from './components'
 
 // Hooks
 export {
