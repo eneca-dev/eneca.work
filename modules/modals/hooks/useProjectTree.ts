@@ -10,7 +10,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
 import { fetchProjectTree } from '../actions/projects-tree'
-import type { ProjectTreeNode, FetchProjectTreeInput } from '../actions/projects-tree'
+import type { ProjectTreeNode } from '../actions/projects-tree'
 
 export interface ProjectTreeNodeWithChildren extends ProjectTreeNode {
   children?: ProjectTreeNodeWithChildren[]
@@ -99,31 +99,31 @@ export interface UseProjectTreeOptions {
   enabled?: boolean
 }
 
+/**
+ * Опции запроса дерева проекта — переиспользуются в useProjectTree и в префетче
+ * (usePrefetchProjectTrees), чтобы кэш совпадал 1:1 (тот же queryKey + queryFn).
+ */
+export function projectTreeQueryOptions(projectId: string) {
+  return {
+    queryKey: queryKeys.projects.tree(projectId || ''),
+    queryFn: async (): Promise<ProjectTreeNodeWithChildren[]> => {
+      if (!projectId) return []
+      const result = await fetchProjectTree({ projectId })
+      if (!result.success) throw new Error(result.error)
+      // Строим иерархическое дерево из плоского списка
+      return buildTree(result.data)
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes — после устаревания фоновый рефетч (без спиннера)
+    gcTime: Infinity, // не удаляем дерево из кэша в течение сессии → нет крутилки при открытии модалки
+  }
+}
+
 export function useProjectTree(options: UseProjectTreeOptions) {
   const { projectId, enabled = true } = options
 
   return useQuery({
-    queryKey: queryKeys.projects.tree(projectId || ''),
-    queryFn: async () => {
-      if (!projectId) {
-        return []
-      }
-
-      const input: FetchProjectTreeInput = { projectId }
-      const result = await fetchProjectTree(input)
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
-      // Строим иерархическое дерево из плоского списка
-      const tree = buildTree(result.data)
-
-      return tree
-    },
+    ...projectTreeQueryOptions(projectId || ''),
     enabled: enabled && Boolean(projectId?.trim()),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 

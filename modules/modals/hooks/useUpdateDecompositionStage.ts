@@ -33,6 +33,7 @@ export const useCreateDecompositionStage = createCacheMutation<CreateStageInput,
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.decompositionStages.all,
     queryKeys.sections.all,
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
@@ -58,6 +59,7 @@ export const useUpdateDecompositionStage = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.decompositionStages.all,
     queryKeys.sections.all,
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
@@ -84,6 +86,7 @@ export const useDeleteDecompositionStage = createCacheMutation<
   invalidateKeys: (input) => [
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.decompositionStages.all,
     queryKeys.sections.all,
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
@@ -109,6 +112,7 @@ export const useReorderDecompositionStages = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.decompositionStages.all,
     // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
     queryKeys.resourceGraph.lists(),

@@ -26,7 +26,8 @@ import { ScissorsToggle } from '@/components/shared/timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import { DepartmentRow } from './rows/DepartmentRow'
 import { Skeleton } from '@/components/ui/skeleton'
-import { openLoadingModalNewCreate, openLoadingModalNewEdit } from '@/modules/modals'
+import { openLoadingModalNewCreate, openLoadingModalNewEdit, usePrefetchProjectsList, usePrefetchProjectTrees } from '@/modules/modals'
+import { useShallow } from 'zustand/react/shallow'
 import type { FilterQueryParams } from '@/modules/cache'
 import { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
 
@@ -43,6 +44,31 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   const filtersApplied = useMemo(() => {
     return queryParams && Object.keys(queryParams).length > 0
   }, [queryParams])
+
+  // Idle-префетч списка проектов для модалки «Создать загрузку»: греем в простое
+  // ПОСЛЕ загрузки страницы → модалка открывается мгновенно, страницу не замедляем.
+  // Единственное холодное место модалки (сотрудники уже в кэше, деревья — лениво).
+  const prefetchProjectsList = usePrefetchProjectsList()
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => prefetchProjectsList(), { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const id = setTimeout(() => prefetchProjectsList(), 1500)
+    return () => clearTimeout(id)
+  }, [prefetchProjectsList])
+
+  // Idle-префетч деревьев РАСКРЫТЫХ проектов (их id переживают перезагрузку в localStorage):
+  // открываешь «Создать загрузку» на разделе раскрытого проекта → дерево уже тёплое →
+  // модалка открывается с содержимым мгновенно. Греется последовательно, в простое.
+  const expandedProjectIds = useSectionsPageUIStore(
+    useShallow((s) =>
+      s.expandedNodes
+        .filter((n) => n.startsWith('project-'))
+        .map((n) => n.slice('project-'.length))
+    )
+  )
+  usePrefetchProjectTrees(expandedProjectIds)
 
   // Context action for editing
   const handleEditLoading = useCallback((
