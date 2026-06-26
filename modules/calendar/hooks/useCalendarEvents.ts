@@ -5,6 +5,7 @@ import { useCalendarStore } from '@/modules/calendar/store';
 import { CalendarEvent, EventFormData } from '@/modules/calendar/types';
 import { toast } from 'sonner';
 import { formatDateToString, parseDateFromString, isSameDateOnly, isDateInRange } from '@/modules/calendar/utils';
+import { reportSupabaseError } from '@/lib/report-supabase-error';
 
 export function useCalendarEvents() {
   const {
@@ -47,18 +48,6 @@ export function useCalendarEvents() {
           if (error) {
             span.setAttribute("fetch.success", false)
             span.setAttribute("fetch.error", error.message)
-            Sentry.captureException(error, {
-              tags: {
-                module: 'calendar',
-                action: 'fetch_events',
-                error_type: 'db_error'
-              },
-              extra: {
-                component: 'useCalendarEvents',
-                user_id: userId,
-                timestamp: new Date().toISOString()
-              }
-            })
             throw error;
           }
 
@@ -78,20 +67,16 @@ export function useCalendarEvents() {
           setEvents(data || []);
         } catch (error) {
           span.setAttribute("fetch.success", false)
-          span.recordException(error as Error)
-          Sentry.captureException(error, {
-            tags: {
-              module: 'calendar',
-              action: 'fetch_events',
-              error_type: 'unexpected_error'
-            },
-            extra: {
-              component: 'useCalendarEvents',
-              user_id: userId,
-              timestamp: new Date().toISOString()
-            }
+          // Логируем РОВНО ОДИН раз: сетевой обрыв → breadcrumb, реальная ошибка БД → Error.
+          reportSupabaseError(error, {
+            module: 'calendar',
+            action: 'fetch_events',
+            extra: { component: 'useCalendarEvents', user_id: userId },
           })
-          const message = error instanceof Error ? error.message : 'Ошибка загрузки событий';
+          const message =
+            error instanceof Error
+              ? error.message
+              : (error as { message?: string })?.message || 'Ошибка загрузки событий';
           setError(message);
           toast.error(message);
         } finally {
