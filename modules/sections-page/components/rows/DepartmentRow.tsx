@@ -1,7 +1,6 @@
 /**
- * Department Row Component
- *
- * Строка отдела на таймлайне разделов
+ * Department Row (content) Component — одна строка отдела на таймлайне разделов.
+ * Раскрытие проектов/разделов/сотрудников — через flatten + виртуализатор.
  */
 
 'use client'
@@ -10,22 +9,23 @@ import { useMemo } from 'react'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
-import { ProjectRow } from './ProjectRow'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
 import { getCellClassNames } from '../../utils/cell-utils'
 import type { Department, DayCell, SectionLoading } from '../../types'
+import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
-interface DepartmentRowProps {
+interface DepartmentRowContentProps {
   department: Department
-  departmentIndex: number
   dayCells: DayCell[]
+  /** Видимые колонки дня (горизонтальная виртуализация). undefined → все. */
+  columns?: VirtualColumn[]
 }
 
-export function DepartmentRow({
+export function DepartmentRowContent({
   department,
-  departmentIndex,
   dayCells,
-}: DepartmentRowProps) {
+  columns,
+}: DepartmentRowContentProps) {
   const isExpanded = useSectionsPageUIStore((s) => s.isExpanded(`department-${department.id}`))
   const toggle = useSectionsPageUIStore((s) => s.toggle)
 
@@ -34,6 +34,8 @@ export function DepartmentRow({
   }
 
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const dayCols: VirtualColumn[] =
+    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
 
   // X: агрегация всех загрузок из всех проектов и разделов отдела
   const allDepartmentLoadings = useMemo((): SectionLoading[] => {
@@ -73,83 +75,73 @@ export function DepartmentRow({
   }, [allSections, capacityOverrides])
 
   return (
-    <>
-      {/* Department header row */}
-      <div className="group/row min-w-full relative border-b border-border">
+    <div className="group/row min-w-full relative border-b border-border">
+      <div
+        className="flex transition-colors"
+        style={{ height: DEPARTMENT_ROW_HEIGHT }}
+      >
+        {/* Sidebar - sticky left */}
         <div
-          className="flex transition-colors"
-          style={{ height: DEPARTMENT_ROW_HEIGHT }}
+          className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
+          style={{ width: SIDEBAR_WIDTH }}
+          onClick={handleToggle}
         >
-          {/* Sidebar - sticky left */}
-          <div
-            className="shrink-0 flex items-center justify-between px-3 border-r border-border bg-card sticky left-0 z-10 cursor-pointer hover:bg-accent transition-colors"
-            style={{ width: SIDEBAR_WIDTH }}
-            onClick={handleToggle}
-          >
-            {/* Left: expand icon + department name */}
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="flex-shrink-0">
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-primary" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <Building2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-sm truncate">
-                  {department.name}
-                </div>
-                {department.departmentHeadName && (
-                  <div className="text-xs text-muted-foreground truncate">
-                    {department.departmentHeadName}
-                  </div>
-                )}
-              </div>
+          {/* Left: expand icon + department name */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex-shrink-0">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-primary" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
             </div>
-
-            {/* Right: metrics */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                {department.totalProjects} пр. · {department.totalSections} разд. · {department.totalEmployees} сотр.
+            <Building2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-sm truncate">
+                {department.name}
               </div>
+              {department.departmentHeadName && (
+                <div className="text-xs text-muted-foreground truncate">
+                  {department.departmentHeadName}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Timeline cells with department-level capacity aggregation */}
-          <div className="flex relative z-0" style={{ width: timelineWidth }}>
-            {allDepartmentLoadings.length > 0 && (
-              <AggregatedBarsOverlay
-                loadings={allDepartmentLoadings}
-                defaultCapacity={totalDepartmentCapacity}
-                dateCapacityOverrides={departmentDateCapacityOverrides}
-                dayCells={dayCells}
-                rowHeight={DEPARTMENT_ROW_HEIGHT}
-                editable={false}
-              />
-            )}
-            {dayCells.map((cell, i) => (
-              <div
-                key={`${department.id}-${cell.dateKey}-${i}`}
-                className={getCellClassNames(cell)}
-                style={{ width: DAY_CELL_WIDTH, height: DEPARTMENT_ROW_HEIGHT }}
-              />
-            ))}
+          {/* Right: metrics */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+              {department.totalProjects} пр. · {department.totalSections} разд. · {department.totalEmployees} сотр.
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Projects (when expanded) */}
-      {isExpanded &&
-        department.projects.map((project, projectIndex) => (
-          <ProjectRow
-            key={project.id}
-            project={project}
-            projectIndex={projectIndex}
-            departmentId={department.id}
-            dayCells={dayCells}
-          />
-        ))}
-    </>
+        {/* Timeline cells with department-level capacity aggregation */}
+        <div className="flex relative z-0" style={{ width: timelineWidth }}>
+          {allDepartmentLoadings.length > 0 && (
+            <AggregatedBarsOverlay
+              loadings={allDepartmentLoadings}
+              defaultCapacity={totalDepartmentCapacity}
+              dateCapacityOverrides={departmentDateCapacityOverrides}
+              dayCells={dayCells}
+              columns={columns}
+              rowHeight={DEPARTMENT_ROW_HEIGHT}
+              editable={false}
+            />
+          )}
+          {dayCols.map((col) => {
+            const cell = dayCells[col.index]
+            if (!cell) return null
+            return (
+              <div
+                key={col.index}
+                className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
