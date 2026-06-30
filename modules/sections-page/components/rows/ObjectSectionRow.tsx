@@ -18,6 +18,9 @@ import { EmployeeRow } from './EmployeeRow'
 import { openLoadingModalNewCreate } from '@/modules/modals'
 import { useDecompositionStages } from '@/modules/modals/hooks/useDecompositionStages'
 import type { ObjectSection, DayCell, SectionLoading } from '../../types'
+import { MockSectionPeriodBar } from '../mock/MockSectionPeriodBar'
+import { MockCapacityPlanBar } from '../mock/MockCapacityPlanBar'
+import { MOCK_PROJECT_ID } from '@/modules/resource-graph/mocks/stagePeriods'
 
 interface ObjectSectionRowProps {
   objectSection: ObjectSection
@@ -38,6 +41,12 @@ export function ObjectSectionRow({
 }: ObjectSectionRowProps) {
   const { isExpanded, toggle } = useRowExpanded('objectSection', objectSection.id)
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+
+  // Для мок-проекта: верхняя зона — плановая ёмкость, нижняя — фактические загрузки
+  const MOCK_CAPACITY_ZONE_HEIGHT = 20
+  const effectiveRowHeight = projectId === MOCK_PROJECT_ID
+    ? OBJECT_SECTION_ROW_HEIGHT + MOCK_CAPACITY_ZONE_HEIGHT
+    : OBJECT_SECTION_ROW_HEIGHT
 
   // Загрузка stages для раздела
   const { data: stages = [] } = useDecompositionStages({
@@ -108,12 +117,12 @@ export function ObjectSectionRow({
       <div className="group/row min-w-full relative border-b border-border/50">
         <div
           className="flex transition-colors"
-          style={{ minHeight: OBJECT_SECTION_ROW_HEIGHT }}
+          style={{ minHeight: effectiveRowHeight }}
         >
           {/* Sidebar wrapper - sticky, provides positioning context for the tab button */}
           <div
             className="shrink-0 sticky left-0 z-20 relative"
-            style={{ width: SIDEBAR_WIDTH, minHeight: OBJECT_SECTION_ROW_HEIGHT }}
+            style={{ width: SIDEBAR_WIDTH, minHeight: effectiveRowHeight }}
           >
             {/* Clickable area - hover highlight only here, NOT on the tab button */}
             <div
@@ -158,15 +167,53 @@ export function ObjectSectionRow({
 
           {/* Timeline cells + aggregation (editable capacity) */}
           <div className="flex relative z-0" style={{ width: timelineWidth }}>
-            <AggregatedBarsOverlay
-              loadings={loadings}
-              defaultCapacity={objectSection.defaultCapacity ?? 0}
-              dateCapacityOverrides={dateCapacityOverrides}
-              dayCells={dayCells}
-              rowHeight={OBJECT_SECTION_ROW_HEIGHT}
-              editable={canEditCapacity}
-              osId={objectSection.sectionId}
-            />
+            {/* MOCK: подоснова дат раздела */}
+            {projectId === MOCK_PROJECT_ID && (
+              <>
+                <MockSectionPeriodBar
+                  sectionId={objectSection.sectionId}
+                  dayCells={dayCells}
+                  rowHeight={effectiveRowHeight}
+                />
+                {/* MOCK: плановая ёмкость — верхняя зона строки */}
+                <MockCapacityPlanBar
+                  sectionId={objectSection.sectionId}
+                  dayCells={dayCells}
+                />
+              </>
+            )}
+            {/* Фактические загрузки: для мок-проекта — нижняя зона строки */}
+            {projectId === MOCK_PROJECT_ID ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: MOCK_CAPACITY_ZONE_HEIGHT,
+                  left: 0,
+                  right: 0,
+                  height: OBJECT_SECTION_ROW_HEIGHT,
+                }}
+              >
+                <AggregatedBarsOverlay
+                  loadings={loadings}
+                  defaultCapacity={objectSection.defaultCapacity ?? 0}
+                  dateCapacityOverrides={dateCapacityOverrides}
+                  dayCells={dayCells}
+                  rowHeight={OBJECT_SECTION_ROW_HEIGHT}
+                  editable={canEditCapacity}
+                  osId={objectSection.sectionId}
+                />
+              </div>
+            ) : (
+              <AggregatedBarsOverlay
+                loadings={loadings}
+                defaultCapacity={objectSection.defaultCapacity ?? 0}
+                dateCapacityOverrides={dateCapacityOverrides}
+                dayCells={dayCells}
+                rowHeight={effectiveRowHeight}
+                editable={canEditCapacity}
+                osId={objectSection.sectionId}
+              />
+            )}
             {dayCells.map((cell, i) => (
               <div
                 key={i}

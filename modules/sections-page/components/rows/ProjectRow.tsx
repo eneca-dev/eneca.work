@@ -14,6 +14,7 @@ import { ObjectSectionRow } from './ObjectSectionRow'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
 import { getCellClassNames } from '../../utils/cell-utils'
 import type { Project, DayCell, SectionLoading } from '../../types'
+import { MockProjectDateBars } from '../mock/MockProjectDateBars'
 
 interface ProjectRowProps {
   project: Project
@@ -118,6 +119,12 @@ export function ProjectRow({
 
           {/* Timeline cells with aggregation when collapsed */}
           <div className="flex relative z-0" style={{ width: timelineWidth }}>
+            {/* MOCK: плановые даты проекта (мануальные + из разделов) */}
+            <MockProjectDateBars
+              projectId={project.id}
+              dayCells={dayCells}
+              rowHeight={PROJECT_ROW_HEIGHT}
+            />
             {!isExpanded && allProjectLoadings.length > 0 && (
               <AggregatedBarsOverlay
                 loadings={allProjectLoadings}
