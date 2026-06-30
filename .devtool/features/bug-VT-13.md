@@ -1,6 +1,6 @@
 ---
 id: "bug-VT-13"
-status: "todo"
+status: "review"
 priority: "high"
 assignee: "Вадим Тихомиров"
 epic: "bug"
@@ -30,3 +30,17 @@ order: "a13"
 ### Связанные тикеты
 - Обнаружено в рамках [test-VT-04](./test-VT-04.md) (Сценарий S6).
 - Является следствием или родственным багом к [bug-VT-12](./bug-VT-12.md).
+
+---
+
+## Причина (реальный per-row N+1)
+
+`ObjectSectionRow` грузил этапы декомпозиции с `enabled: true` — то есть **каждая** строка раздела при маунте слала свой `getDecompositionStages` по своему `sectionId`. Рендеринг ленивый: `DepartmentRow` рендерит проекты только при раскрытии отдела, `ProjectRow` рендерит разделы только при раскрытии проекта. Поэтому при раскрытии проекта монтировались все его `ObjectSectionRow` разом → пачка параллельных POST + тормоза.
+
+`stages` при этом используются только внутри блока `{isExpanded && ...}` (передаются в `EmployeeRow`), то есть нужны лишь когда раскрыт сам раздел.
+
+## Что сделано
+
+`modules/sections-page/components/rows/ObjectSectionRow.tsx`: `useDecompositionStages` переведён с `enabled: true` на `enabled: isExpanded`. Теперь stages грузятся только при раскрытии конкретного раздела (где они и нужны). Раскрытие отдела/проекта — 0 сетевых запросов.
+
+Проверено: остальные хуки строк (`useHasPermission`, `useHasAnyLoadingEditPermission`, `useDateCapacityOverrides`) читают из Zustand/дедуплицированного кэша, не Server Actions. `useDecompositionStages` был единственным per-row сетевым запросом. Раскрытие отдела/проекта — 0 сетевых запросов; раскрытие самого раздела намеренно шлёт 1 `getDecompositionStages` (gated, кэш 5 мин), т.к. этапы нужны только в раскрытом виде.

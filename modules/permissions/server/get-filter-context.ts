@@ -51,10 +51,32 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
         } = await supabase.auth.getUser()
 
         if (authError) {
-          Sentry.captureMessage('getFilterContext: Auth error', {
-            level: 'warning',
-            extra: { error: authError.message },
-          })
+          // getUser() возвращает AuthSessionMissingError, когда у запроса нет активной сессии:
+          // пользователь не аутентифицирован, либо access-токен истёк и в этот момент обновляется.
+          // Это штатное состояние аутентификации, а НЕ сбой приложения — middleware уже
+          // обрабатывает его редиректом на /auth/login, и доступ ниже всё равно отклоняется.
+          //
+          // Раньше любой authError логировался как ошибка, поэтому это штатное состояние
+          // создавало тысячи ложных событий в мониторинге — и за этим шумом терялись настоящие
+          // сбои аутентификации. Ниже мы разделяем два принципиально разных случая и логируем
+          // как ошибку только то, что действительно ошибкой является.
+          if (authError.name === 'AuthSessionMissingError') {
+            // Штатное отсутствие сессии — не ошибка. Фиксируем breadcrumb для трассировки
+            // (останется в контексте, если рядом возникнет реальный сбой), но не как алерт.
+            Sentry.addBreadcrumb({
+              category: 'auth',
+              level: 'info',
+              message: 'getFilterContext: запрос без активной сессии (обрабатывается редиректом)',
+              data: { status: authError.status },
+            })
+          } else {
+            // Настоящий сбой аутентификации: недоступность Auth-сервиса, повреждённый или
+            // невалидный токен. Это реальная проблема — логируем как ошибку.
+            Sentry.captureMessage('getFilterContext: Auth error', {
+              level: 'warning',
+              extra: { error: authError.message, name: authError.name, status: authError.status },
+            })
+          }
           return { success: false, error: 'Ошибка аутентификации' }
         }
 

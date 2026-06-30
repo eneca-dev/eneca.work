@@ -38,7 +38,10 @@ export const realtimeSubscriptions: TableSubscription[] = [
   // ============================================================================
   {
     table: 'projects',
-    invalidateKeys: [queryKeys.projects.all],
+    invalidateKeys: [
+      queryKeys.projects.all,
+      [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (название/статус/стадия проекта)
+    ],
   },
   {
     table: 'stages',
@@ -46,7 +49,10 @@ export const realtimeSubscriptions: TableSubscription[] = [
   },
   {
     table: 'objects',
-    invalidateKeys: [queryKeys.projects.all], // Структура проекта
+    invalidateKeys: [
+      queryKeys.projects.all, // Структура проекта
+      [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (объекты)
+    ],
   },
   {
     table: 'sections',
@@ -55,6 +61,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.projects.all, // Структура проекта тоже обновляется
       queryKeys.resourceGraph.all, // График ресурсов
       queryKeys.sectionsPage.all, // Страница разделов (иерархия отделы → проекты → разделы)
+      [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (разделы)
     ],
   },
 
@@ -81,10 +88,11 @@ export const realtimeSubscriptions: TableSubscription[] = [
       // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
       [...queryKeys.resourceGraph.all, 'loadings'],
-      queryKeys.departmentsTimeline.all, // Таймлайн отделов (загрузки сотрудников)
+      queryKeys.departmentsTimeline.lists(), // Таймлайн отделов (загрузки сотрудников) — только список, не freshness (bug-VT-09)
       queryKeys.sectionsPage.all, // Страница разделов (загрузки по разделам)
       queryKeys.budgets.calc(), // Расчётный бюджет из loadings (страница бюджетов)
       queryKeys.budgets.calcByDepartments(), // Расчётный бюджет по отделам (блок "Человеческие ресурсы")
+      [...queryKeys.budgets.all, 'hierarchy'], // Расчётный в дереве Бюджетов (v_budget_hierarchy.section_calc_budget)
     ],
   },
   // Настройки ставок отделов — влияют на расчётный бюджет
@@ -94,6 +102,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.budgets.departmentSettings(),
       queryKeys.budgets.calc(),
       queryKeys.budgets.calcByDepartments(),
+      [...queryKeys.budgets.all, 'hierarchy'], // Расчётный в дереве Бюджетов (ставка → calc)
     ],
   },
   {
@@ -105,6 +114,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.kanban.all, // Канбан-доска
       // Ответственные за этапы (lazy-loaded данные)
       [...queryKeys.resourceGraph.all, 'stageResponsibles'],
+      [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (has_stages/section_distributed)
+      [...queryKeys.budgets.all, 'section-items'], // Ленивые этапы раздела
     ],
   },
   {
@@ -114,6 +125,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
       queryKeys.kanban.all, // Канбан-доска (задачи)
+      [...queryKeys.budgets.all, 'section-items'], // Ленивые задачи раздела
     ],
   },
 

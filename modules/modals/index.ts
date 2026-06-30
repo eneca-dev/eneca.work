@@ -93,6 +93,9 @@ export {
   // Checkpoint
   useCheckpointCreateModal,
   useCheckpointEditModal,
+  // Prefetch
+  usePrefetchProjectsList,
+  usePrefetchProjectTrees,
 } from './hooks'
 
 // ============================================================================

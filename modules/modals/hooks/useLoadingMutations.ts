@@ -285,7 +285,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
       // (важно для staleTime: Infinity — без явного ожидания кэш не обновится)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])
@@ -586,7 +586,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
@@ -745,7 +745,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
@@ -904,7 +904,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     onSuccess: (data) => {
       // Инвалидация кешей для обновления с реальными данными
       queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() })
       queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all })
 
@@ -1136,7 +1136,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.loadings.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.all }),
       ])

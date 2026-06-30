@@ -669,6 +669,52 @@ export async function getProjectStructure(): Promise<ActionResult<{
   }
 }
 
+/**
+ * Лёгкий список проектов для выпадашки фильтра.
+ *
+ * Фильтр Задач использует из проектной структуры ТОЛЬКО проекты, поэтому читаем их
+ * напрямую из таблицы `projects` (~132 строки) вместо тяжёлой `v_project_structure`
+ * (грейн до раздела, ~4.4к строк). Набор проектов тот же (все минус restricted),
+ * но без раздувания и без риска обрезания на Max rows.
+ */
+export async function getFilterProjects(): Promise<ActionResult<Array<{ id: string; name: string }>>> {
+  try {
+    const supabase = await createClient()
+
+    // 🔒 Скрываем restricted-проекты от не-админов (как в getProjectStructure)
+    const [ctx, restrictedIds] = await Promise.all([
+      getFilterContext(),
+      getRestrictedProjectIds(),
+    ])
+    const isAdmin = ctx.success && ctx.data
+      ? ctx.data.permissions.includes('hierarchy.is_admin')
+      : false
+
+    let query = supabase.from('projects').select('project_id, project_name')
+    if (!isAdmin && restrictedIds.length > 0) {
+      query = query.not('project_id', 'in', `(${restrictedIds.join(',')})`)
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.error('[getFilterProjects] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const projects = (data || [])
+      .map((p) => ({ id: p.project_id, name: p.project_name?.trim() || 'Без названия' }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    return { success: true, data: projects }
+  } catch (error) {
+    console.error('[getFilterProjects] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки проектов фильтра',
+    }
+  }
+}
+
 // ============================================================================
 // Calendar Actions - Праздники и переносы
 // ============================================================================

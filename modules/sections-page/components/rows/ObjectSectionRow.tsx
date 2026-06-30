@@ -48,10 +48,14 @@ export function ObjectSectionRow({
     ? OBJECT_SECTION_ROW_HEIGHT + MOCK_CAPACITY_ZONE_HEIGHT
     : OBJECT_SECTION_ROW_HEIGHT
 
-  // Загрузка stages для раздела
+  // Загрузка stages для раздела — только когда строка раскрыта.
+  // stages используются исключительно внутри блока {isExpanded && ...} (передаются
+  // в EmployeeRow), поэтому грузить их для каждой свёрнутой строки не нужно.
+  // enabled: true приводил к N+1: каждая строка раздела при маунте слала свой
+  // getDecompositionStages (bug-VT-12 — шторм POST, bug-VT-13 — тормоза раскрытия).
   const { data: stages = [] } = useDecompositionStages({
     sectionId: objectSection.sectionId,
-    enabled: true,
+    enabled: isExpanded,
   })
 
   const loadings = useMemo(() => objectSection.loadings, [objectSection.loadings])

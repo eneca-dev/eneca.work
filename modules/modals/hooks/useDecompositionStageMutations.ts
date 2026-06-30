@@ -40,6 +40,9 @@ export function useDecompositionStageMutations(
       // Инвалидация кешей проектов и разделов
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.sections.all })
+      // Парно к дереву: список этапов модалки берётся cache-first из дерева,
+      // поэтому держим decompositionStages в синхроне (см. project-tree-cache.ts)
+      queryClient.invalidateQueries({ queryKey: queryKeys.decompositionStages.all })
 
       options.onCreateSuccess?.(data)
     },

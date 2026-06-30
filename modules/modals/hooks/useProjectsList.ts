@@ -37,8 +37,8 @@ export function useProjectsList(options: UseProjectsListOptions) {
       return result.data
     },
     enabled: enabled && Boolean(userId?.trim()),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
+    staleTime: 5 * 60 * 1000, // 5 minutes — после устаревания фоновый рефетч (без спиннера)
+    gcTime: Infinity, // не удаляем из кэша в течение сессии → нет крутилки при открытии модалки
   })
 }
 

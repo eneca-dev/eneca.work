@@ -28,6 +28,7 @@ import { MONTH_CELL_WIDTH, MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER } from '@
 import { useIsAdmin } from '@/modules/permissions'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import type { FilterQueryParams } from '@/modules/inline-filter'
+import { usePrefetchProjectsList } from '@/modules/modals'
 import { DepartmentRow } from './timeline/DepartmentRow'
 import { DepartmentGroupDivider } from './timeline/DepartmentGroupDivider'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -55,6 +56,20 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
+
+  // Idle-префетч списка проектов для модалки «Создать загрузку»: тут модалка открывается
+  // на список проектов (по employeeId, без пред-выбранного проекта) → греем 'my' список
+  // в простое после загрузки страницы, чтобы убрать спиннер «Загрузка проектов…».
+  // Дерево/этапы/breadcrumbs дальше держит общий кэш модалки (gcTime: Infinity).
+  const prefetchProjectsList = usePrefetchProjectsList()
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => prefetchProjectsList(), { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const id = setTimeout(() => prefetchProjectsList(), 1500)
+    return () => clearTimeout(id)
+  }, [prefetchProjectsList])
 
   // Определяем, нужно ли загружать данные
   const shouldFetchData = filtersApplied || loadAllEnabled

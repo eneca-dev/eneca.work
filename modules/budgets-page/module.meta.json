@@ -109,7 +109,6 @@
       "BudgetPartsEditor",
       "useBudgetsHierarchy",
       "useOperationGuard",
-      "useExpandedState",
       "useDifficultyLevels",
       "useWorkCategories",
       "formatAmount",
@@ -128,14 +127,6 @@
       "params": "FilterQueryParams?",
       "returns": "UseBudgetsHierarchyResult { hierarchy, analytics, isLoading, error }",
       "example": "const { hierarchy, analytics, isLoading } = useBudgetsHierarchy(queryParams)"
-    },
-    {
-      "name": "useExpandedState",
-      "description": "Управление состоянием развёрнутых узлов иерархии",
-      "file": "hooks/use-expanded-state.ts",
-      "params": "void",
-      "returns": "{ expandedState, toggleExpand, expandAll, collapseAll }",
-      "example": "const { expandedState, toggleExpand } = useExpandedState()"
     },
     {
       "name": "useOperationGuard",

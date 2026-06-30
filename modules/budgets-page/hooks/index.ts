@@ -5,6 +5,6 @@
 export { useBudgetsHierarchy } from './use-budgets-hierarchy'
 export type { UseBudgetsHierarchyResult } from './use-budgets-hierarchy'
 
-export { useExpandedState } from './use-expanded-state'
+export { useBudgetHierarchy, useSectionBudgetItems } from './use-budget-hierarchy'
 
 export { useSectionCalcBudgets } from './use-section-calc-budgets'

@@ -1,6 +1,6 @@
 ---
 id: "bug-VT-12"
-status: "todo"
+status: "review"
 priority: "high"
 assignee: "Вадим Тихомиров"
 epic: "bug"
@@ -31,3 +31,23 @@ order: "a12"
 ### Связанные тикеты
 - Обнаружено в рамках [test-VT-04](./test-VT-04.md) (Сценарии S1 и S2).
 - Аналогично багу [bug-VT-06](./bug-VT-06.md).
+
+---
+
+## Разбор
+
+«19 POST» — это разные Server Actions, а не дубли (как и в bug-VT-06). В Next.js любой Server Action идёт POST'ом на URL текущей страницы (`/tasks`), различаются заголовком `Next-Action`. Гипотеза про `reloadPermissions`/per-row на старте не подтвердилась.
+
+На старте всё свёрнуто → строки разделов (`ObjectSectionRow`) не смонтированы → per-row запросов нет. «19» складываются из:
+- глобальный prefetch `<ReferencePrefetch />` (~6, к Разделам не относится, 1 раз за сессию);
+- опции фильтра + права (~5): getFilterContext, getOrgStructure, getProjectStructure, getProjectTags;
+- `getSectionsHierarchy` (1, тяжёлый);
+- календарь (1).
+
+Возврат с другой вкладки — кэш-хит / realtime-эхо (как в bug-VT-07), не систематический рефетч.
+
+## Что сделано
+
+Per-row N+1, который реально был на Разделах, устранён в рамках bug-VT-13 (`useDecompositionStages` теперь `enabled: isExpanded`). Это закрывает и случай, когда на старте смонтированы заранее раскрытые (persist) разделы.
+
+Систематического «шторма дублей» нет.

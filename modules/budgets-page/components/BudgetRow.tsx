@@ -8,7 +8,7 @@
 
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
@@ -17,7 +17,11 @@ import { BudgetRowBadges } from './BudgetRowBadges'
 import { DepartmentBlock } from './DepartmentBlock'
 import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
-import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
+import { useBudgetRowExpanded, useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
+import { useSectionBudgetItems } from '../hooks/use-budget-hierarchy'
+import { toBudgetInfo } from '../hooks/use-budgets-hierarchy'
+import type { HierarchyNode, HierarchyNodeType } from '../types'
+import type { BudgetSectionStage } from '../actions'
 
 // ============================================================================
 // Types
@@ -26,11 +30,7 @@ import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
 interface BudgetRowProps {
   node: HierarchyNode
   level: number
-  expanded: ExpandedState
-  onToggle: (nodeId: string) => void
-  onExpandAll?: (nodeIds: string[]) => void
   insideSection?: boolean
-  parentAllocatedBudget?: number
   highlightSectionId?: string | null
 }
 
@@ -54,15 +54,15 @@ function collectChildIds(node: HierarchyNode): string[] {
 export const BudgetRow = React.memo(function BudgetRow({
   node,
   level,
-  expanded,
-  onToggle,
-  onExpandAll,
   insideSection = false,
-  parentAllocatedBudget = 0,
   highlightSectionId,
 }: BudgetRowProps) {
-  const hasChildren = node.children.length > 0
-  const isExpanded = expanded[node.id] ?? false
+  // Раздел может иметь ленивых детей (этапы), ещё не загруженных → раскрывалка должна быть.
+  const hasChildren = node.children.length > 0 || !!node.hasLazyChildren
+  // Подписка на boolean раскрытия именно этого узла (per-node селектор) —
+  // toggle одного узла не перерисовывает остальные строки.
+  const { isExpanded, toggle } = useBudgetRowExpanded(node.id)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
 
   const isSection = node.type === 'section'
   const isDecompStage = node.type === 'decomposition_stage'
@@ -82,10 +82,13 @@ export const BudgetRow = React.memo(function BudgetRow({
   // Выделенный бюджет
   const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
 
-  // Распределено (сумма выделенных бюджетов прямых детей)
-  const distributedBudget = node.children.length > 0
-    ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
-    : allocatedBudget
+  // Распределено: для разделов — предсчитанное в БД (children грузятся лениво);
+  // для проект/объект/этап — сумма выделенного загруженных прямых детей.
+  const distributedBudget = node.distributedBudget !== undefined
+    ? node.distributedBudget
+    : node.children.length > 0
+      ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
+      : allocatedBudget
 
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
   const isOverDistributed = distributedBudget > allocatedBudget
@@ -114,11 +117,12 @@ export const BudgetRow = React.memo(function BudgetRow({
 
   const handleToggle = () => {
     if (!hasChildren) return
-    if (isSection && !isExpanded && onExpandAll) {
+    if (isSection && !isExpanded) {
+      // Раскрытие раздела сразу раскрывает все его этапы/задачи
       const allChildIds = collectChildIds(node)
-      onExpandAll([node.id, ...allChildIds])
+      expandMultiple([node.id, ...allChildIds])
     } else {
-      onToggle(node.id)
+      toggle()
     }
   }
 
@@ -257,20 +261,20 @@ export const BudgetRow = React.memo(function BudgetRow({
         </div>
       </div>
 
-      {/* Children (if expanded) */}
+      {/* Children (if expanded). Раздел с ленивыми детьми догружает этапы/задачи сам. */}
       {isExpanded &&
-        node.children.map((child) => (
-          <BudgetRow
-            key={child.id}
-            node={child}
-            level={level + 1}
-            expanded={expanded}
-            onToggle={onToggle}
-            onExpandAll={onExpandAll}
-            insideSection={isSection || insideSection}
-            parentAllocatedBudget={allocatedBudget}
-            highlightSectionId={highlightSectionId}
-          />
+        (isSection && node.hasLazyChildren ? (
+          <SectionLazyChildren sectionId={node.id} highlightSectionId={highlightSectionId} />
+        ) : (
+          node.children.map((child) => (
+            <BudgetRow
+              key={child.id}
+              node={child}
+              level={level + 1}
+              insideSection={isSection || insideSection}
+              highlightSectionId={highlightSectionId}
+            />
+          ))
         ))}
 
       {/* Блок агрегации бюджета по отделам (Человеческие ресурсы) */}
@@ -278,10 +282,93 @@ export const BudgetRow = React.memo(function BudgetRow({
         <DepartmentBlock
           projectId={node.id}
           projectAllocatedBudget={allocatedBudget}
-          expanded={expanded}
-          onToggle={onToggle}
         />
       )}
+    </>
+  )
+})
+
+// ============================================================================
+// Ленивые дети раздела (этапы + задачи) — грузятся при раскрытии раздела
+// ============================================================================
+
+/** Строит узлы этапов с задачами из ленивых данных (структура + бюджеты, Фаза 7) */
+function buildStageBudgetNodes(stages: BudgetSectionStage[]): HierarchyNode[] {
+  return stages.map((stage) => {
+    const items: HierarchyNode[] = stage.items.map((item) => ({
+      id: item.id,
+      name: item.description,
+      type: 'decomposition_item',
+      budgets: item.budgets.map(toBudgetInfo),
+      plannedHours: item.plannedHours,
+      children: [],
+      entityType: 'decomposition_item',
+    }))
+    const plannedHours = items.reduce((s, i) => s + (i.plannedHours || 0), 0)
+    return {
+      id: stage.id,
+      name: stage.name,
+      type: 'decomposition_stage',
+      budgets: stage.budgets.map(toBudgetInfo),
+      plannedHours,
+      children: items,
+      entityType: 'decomposition_stage',
+    }
+  })
+}
+
+interface SectionLazyChildrenProps {
+  sectionId: string
+  highlightSectionId?: string | null
+}
+
+const SectionLazyChildren = React.memo(function SectionLazyChildren({
+  sectionId,
+  highlightSectionId,
+}: SectionLazyChildrenProps) {
+  const { data: stages, isLoading, isError } = useSectionBudgetItems(sectionId)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
+  const expandedOnceRef = useRef<string | null>(null)
+
+  const stageNodes = useMemo(
+    () => (stages ? buildStageBudgetNodes(stages) : []),
+    [stages]
+  )
+
+  // Раскрытие раздела показывает этапы+задачи целиком (как было) — раскрываем этапы один раз
+  useEffect(() => {
+    if (stages && stages.length > 0 && expandedOnceRef.current !== sectionId) {
+      expandedOnceRef.current = sectionId
+      expandMultiple(stages.map((s) => s.id))
+    }
+  }, [stages, sectionId, expandMultiple])
+
+  if (isLoading) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-muted-foreground" style={{ paddingLeft: '56px' }}>
+        Загрузка задач…
+      </div>
+    )
+  }
+  if (isError) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-destructive" style={{ paddingLeft: '56px' }}>
+        Ошибка загрузки задач раздела
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {stageNodes.map((node) => (
+        <BudgetRow
+          key={node.id}
+          node={node}
+          level={3}
+          insideSection
+          highlightSectionId={highlightSectionId}
+        />
+      ))}
     </>
   )
 })
