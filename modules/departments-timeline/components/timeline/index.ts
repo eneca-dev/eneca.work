@@ -2,8 +2,8 @@
  * Departments Timeline - Timeline Components
  */
 
-export { DepartmentRow } from './DepartmentRow'
-export { TeamRow } from './TeamRow'
+export { DepartmentRowContent } from './DepartmentRow'
+export { TeamRowContent } from './TeamRow'
 export { EmployeeRow } from './EmployeeRow'
 export { DepartmentGroupDivider } from './DepartmentGroupDivider'
 export { TeamSubgroupDivider } from './TeamSubgroupDivider'

@@ -41,6 +41,8 @@ import { useTimelineResize } from '@/modules/resource-graph/hooks'
 import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
 import { useScissorsModeStore } from '@/stores'
 import { useLoadingMutations } from '@/modules/modals/hooks/useLoadingMutations'
+import { useDecompositionStages } from '@/modules/modals/hooks/useDecompositionStages'
+import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface EmployeeRowProps {
   employee: {
@@ -62,7 +64,8 @@ interface EmployeeRowProps {
   objectId: string
   objectName: string
   dayCells: DayCell[]
-  stages?: Array<{ id: string; name: string; order: number | null }>
+  /** Видимые колонки дня (горизонтальная виртуализация фоновых ячеек). undefined → все. */
+  columns?: VirtualColumn[]
 }
 
 
@@ -443,10 +446,15 @@ export function EmployeeRow({
   objectId,
   objectName,
   dayCells,
-  stages,
+  columns,
 }: EmployeeRowProps) {
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const { onEditLoading } = useSectionsPageActions()
+
+  // Этапы декомпозиции раздела (для breadcrumbs в модалке редактирования).
+  // Раньше грузились в ObjectSectionRow и прокидывались пропом; во flat-модели каждая
+  // строка сотрудника грузит сама — React Query дедупит по sectionId (1 запрос на раздел).
+  const { data: stages = [] } = useDecompositionStages({ sectionId, enabled: true })
 
   // Permission gating для этого сотрудника.
   const canEdit = useCanEditLoading({
@@ -562,6 +570,8 @@ export function EmployeeRow({
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const rowHeight = actualRowHeight
   const employmentRate = employee.employeeEmploymentRate ?? 1
+  const dayCols: VirtualColumn[] =
+    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">
@@ -657,17 +667,18 @@ export function EmployeeRow({
             ))}
           </div>
 
-          {/* Background cells */}
-          {dayCells.map((cell, i) => (
-            <div
-              key={i}
-              className={getCellClassNames(cell)}
-              style={{
-                width: DAY_CELL_WIDTH,
-                height: rowHeight,
-              }}
-            />
-          ))}
+          {/* Background cells (горизонтально виртуализированы) */}
+          {dayCols.map((col) => {
+            const cell = dayCells[col.index]
+            if (!cell) return null
+            return (
+              <div
+                key={col.index}
+                className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
         </div>
       </div>
     </div>
