@@ -521,6 +521,18 @@ export const queryKeys = {
     /** Список пользователей, которым расшарен конкретный созвон */
     shares: (reportId: string) => [...queryKeys.meetings.all, 'shares', reportId] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // WS Task Report (отчёт по задачам Worksection)
+  // -------------------------------------------------------------------------
+  wsTaskReport: {
+    all: ['ws-task-report'] as const,
+    lists: () => [...queryKeys.wsTaskReport.all, 'list'] as const,
+    /** Строки отчёта с фильтрами (поиск по названию, статус, диапазон дат) */
+    list: (filters?: Record<string, unknown>) => [...queryKeys.wsTaskReport.lists(), filters] as const,
+    /** Есть ли у текущего пользователя доступ к отчёту */
+    access: () => [...queryKeys.wsTaskReport.all, 'access'] as const,
+  },
 } as const
 
 // ============================================================================

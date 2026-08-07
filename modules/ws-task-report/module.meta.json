@@ -1,0 +1,335 @@
+{
+  "$schema": "../../schemas/module-meta/module.schema.json",
+  "meta": {
+    "name": "ws-task-report",
+    "displayName": "WS Task Report",
+    "description": "Отчёт по задачам 3-го уровня Worksection: трудозатраты, суммы, статусы, плановый бюджет",
+    "version": "0.1.0",
+    "status": "in-development",
+    "route": "/ws-report (пункт сайдбара «Отчёт по задачам»)",
+    "tags": [
+      "feature",
+      "ui",
+      "reporting"
+    ]
+  },
+  "documentation": {
+    "overview": "Плоский отчёт по задачам 3-го уровня Worksection для одного пользователя. Данные приходят из Worksection отдельной синхронизацией (ws-to-work/task-report) в таблицу ws_task_report. Основная модель данных приложения не участвует ни в одной колонке.",
+    "dataFlow": {
+      "source": "Worksection API → ws-to-work/task-report (по расписанию 4:30) → таблица ws_task_report",
+      "read": "getWsTaskReport(filters) → Server Action → таблица → TanStack Query → страница /ws-report",
+      "note": "Приложение не знает о существовании синхронизации: межсервисных вызовов нет, кнопки «Обновить» нет"
+    },
+    "columns": {
+      "ws_project_name": "Объект — проект Worksection, в названии содержится шифр",
+      "ws_object_name": "Подэтап — задача 1-го уровня WS. В OS-проектах уровня нет, подставляется имя проекта (как объект-заглушка в основной синхронизации), поэтому колонки совпадают",
+      "ws_task_name": "Название задачи — задача 3-го уровня WS",
+      "date_added": "Дата открытия — WS date_added",
+      "ws_status": "Статус — WS status: active | done",
+      "date_closed": "Дата закрытия — WS date_closed",
+      "total_hours": "Трудозатраты в часах на дату выгрузки — Σ cost.time",
+      "planned_budget": "Плановый бюджет — WS max_money, null = не задан",
+      "total_money": "Сумма в BYN по ставке исполнителя — Σ cost.money"
+    },
+    "access": {
+      "model": "Персональный список, не роль: таблица ws_task_report_access",
+      "why": "Право нужно конкретным людям, а не роли; роль-однодневка была бы лишней сущностью",
+      "rls": "Политика на ws_task_report проверяет наличие auth.uid() в ws_task_report_access. Политика на самой access-таблице разрешает только свою строку — поэтому подзапрос работает без SECURITY DEFINER, а список не утекает",
+      "grant": "Добавить человека = insert в ws_task_report_access, без деплоя"
+    },
+    "keyRules": [
+      "Ни одна колонка отчёта не берётся из нашей БД — только из Worksection",
+      "Задачи без ответственного в WS не синхронизируются",
+      "Свежесть данных = max(synced_at), отдельной таблицы прогонов нет",
+      "Типы таблицы описаны локально в types/index.ts (таблица больше нигде не используется)"
+    ]
+  },
+  "architecture": {
+    "structure": {
+      "actions/": "Server Actions: чтение отчёта, проверка доступа",
+      "hooks/": "Query-хуки через фабрики modules/cache",
+      "components/": "Страница отчёта и таблица",
+      "types/": "Типы строки отчёта и фильтров"
+    },
+    "entryPoint": "index.ts",
+    "publicApi": [
+      "WsTaskReportView",
+      "useWsTaskReport",
+      "useWsReportAccess"
+    ]
+  },
+  "hooks": [
+    {
+      "name": "useWsTaskReport",
+      "description": "Строки отчёта с фильтрами (поиск по названию, отдел, статус)",
+      "file": "hooks/index.ts",
+      "params": "WsTaskReportFilters",
+      "returns": "{ data: WsTaskReportRow[], isLoading, error }"
+    },
+    {
+      "name": "useWsReportAccess",
+      "description": "Есть ли у текущего пользователя доступ к отчёту",
+      "file": "hooks/index.ts",
+      "params": "void",
+      "returns": "{ data: boolean, isLoading }"
+    }
+  ],
+  "actions": [
+    {
+      "name": "getWsTaskReport",
+      "description": "Строки отчёта из ws_task_report с фильтрами",
+      "file": "actions/index.ts",
+      "input": "WsTaskReportFilters { search?, department?, status? }",
+      "output": "ActionResult<WsTaskReportRow[]>",
+      "mutates": false
+    },
+    {
+      "name": "hasWsReportAccess",
+      "description": "Проверка наличия пользователя в ws_task_report_access",
+      "file": "actions/index.ts",
+      "input": "void",
+      "output": "ActionResult<boolean>",
+      "mutates": false
+    }
+  ],
+  "stores": [],
+  "components": [
+    {
+      "name": "WsTaskReportView",
+      "description": "Страница отчёта: фильтры, дата обновления, таблица",
+      "file": "components/WsTaskReportView.tsx",
+      "props": []
+    },
+    {
+      "name": "ReportTable",
+      "description": "Таблица отчёта: 9 колонок, сортировка, итоговая строка",
+      "file": "components/ReportTable.tsx",
+      "props": [
+        "rows",
+        "isLoading"
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Read-only Snapshot Pattern",
+      "description": "Модуль только читает снимок, наполняемый внешней синхронизацией. Упадёт синк — страница покажет данные постарше и честную дату, но не сломается",
+      "example": "getWsTaskReport() → select from ws_task_report"
+    }
+  ],
+  "antipatterns": [
+    {
+      "name": "Cross-service call",
+      "description": "НЕ вызывать синхронизацию из приложения",
+      "instead": "Синк работает по своему расписанию, приложение только читает таблицу"
+    },
+    {
+      "name": "Mixing with app data",
+      "description": "НЕ дополнять колонки отчёта данными из нашей БД",
+      "instead": "Все значения приходят из Worksection — иначе цифры разъедутся с первоисточником"
+    }
+  ],
+  "technologies": [
+    "@tanstack/react-query",
+    "@supabase/supabase-js",
+    "tailwindcss",
+    "lucide-react"
+  ],
+  "dependencies": {
+    "modules": [
+      "cache"
+    ],
+    "database": {
+      "tables": [
+        "ws_task_report",
+        "ws_task_report_access"
+      ],
+      "views": [],
+      "enums": [],
+      "functions": []
+    },
+    "external": [
+      "ws-to-work/task-report — синхронизация из Worksection"
+    ]
+  },
+  "dependents": [],
+  "cache": {
+    "queryKeys": [
+      "wsTaskReport.list",
+      "wsTaskReport.access"
+    ],
+    "realtimeChannels": [],
+    "invalidationRules": []
+  },
+  "permissions": [],
+  "tasks": [
+    {
+      "id": "WTR-001",
+      "title": "Миграция: таблицы отчёта и персонального доступа",
+      "description": "Создать ws_task_report и ws_task_report_access, включить RLS, политики на select, выдать доступ Дмитрию Голикову",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [],
+      "blocks": [
+        "WTR-002",
+        "WTR-003"
+      ],
+      "relatedFiles": [
+        "supabase/migrations/2026-08-06_ws_task_report.sql"
+      ]
+    },
+    {
+      "id": "WTR-002",
+      "title": "Синхронизация ws-to-work/task-report",
+      "description": "Отдельная папка в ws-to-work: клиент отделов, логика синка (get_users, get_projects, get_tasks, get_costs, точечный get_task), свой эндпоинт с ответом сразу, своё расписание 4:30, удаление устаревших строк",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [
+        "WTR-001"
+      ],
+      "blocks": [
+        "WTR-003"
+      ],
+      "note": "Синк написан, прогон прошёл: 1864 задачи отдела КР гражд, отдел зафиксирован Object.freeze",
+      "relatedFiles": [
+        "d:/ws-to-work/task-report/index.js",
+        "d:/ws-to-work/task-report/report-sync.js",
+        "d:/ws-to-work/task-report/departments.js",
+        "d:/ws-to-work/task-report/supabase.js",
+        "d:/ws-to-work/task-report/scheduler.js",
+        "d:/ws-to-work/app.js"
+      ]
+    },
+    {
+      "id": "WTR-003",
+      "title": "Server Actions, типы и хуки",
+      "description": "getWsTaskReport с фильтрами, hasWsReportAccess, локальные типы, query-хуки через фабрики cache",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [
+        "WTR-001"
+      ],
+      "blocks": [
+        "WTR-004"
+      ],
+      "relatedFiles": [
+        "modules/ws-task-report/actions/index.ts",
+        "modules/ws-task-report/types/index.ts",
+        "modules/ws-task-report/hooks/index.ts"
+      ],
+      "note": "Типы, Server Actions с проверкой доступа, query-хуки, ключи в cache"
+    },
+    {
+      "id": "WTR-004",
+      "title": "Страница отчёта",
+      "description": "WsTaskReportView с поиском по названию, фильтрами отдела и статуса, датой обновления; ReportTable на 8 колонок с сортировкой и итоговой строкой",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [
+        "WTR-003"
+      ],
+      "blocks": [
+        "WTR-005"
+      ],
+      "relatedFiles": [
+        "modules/ws-task-report/components/WsTaskReportView.tsx",
+        "modules/ws-task-report/components/ReportTable.tsx"
+      ],
+      "note": "WsTaskReportView + ReportTable: поиск, статус, сортировка, итоги"
+    },
+    {
+      "id": "WTR-005",
+      "title": "Страница /ws-report и пункт в сайдбаре",
+      "description": "Отдельная страница вместо вкладки на Задачах: route в app/(dashboard)/ws-report, пункт меню в sidebar.tsx со скрытием по доступу",
+      "category": "feature",
+      "priority": "high",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [
+        "WTR-004"
+      ],
+      "blocks": [
+        "WTR-006"
+      ],
+      "relatedFiles": [
+        "app/(dashboard)/ws-report/page.tsx",
+        "components/sidebar.tsx"
+      ],
+      "note": "Изначально делалась вкладкой внутри /tasks — перенесено в сайдбар по запросу. Модуль tasks не затронут."
+    },
+    {
+      "id": "WTR-006",
+      "title": "Аудит и документация",
+      "description": "Security Guardian (доступ, прямой вызов action чужим пользователем), TypeScript Guardian, Clean Code Guardian. README модуля и README синка",
+      "category": "chore",
+      "priority": "medium",
+      "status": "todo",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": null,
+      "blockedBy": [
+        "WTR-005"
+      ],
+      "blocks": [],
+      "relatedFiles": [
+        "modules/ws-task-report/README.md"
+      ]
+    },
+    {
+      "id": "WTR-007",
+      "title": "Разделить объект и подэтап в таблице",
+      "description": "По обратной связи: в колонке «Объект» показывался подэтап. Добавлена отдельная колонка «Объект» (ws_project_name), прежняя переименована в «Подэтап». Сортировка по объекту с вторичной по подэтапу. Только интерфейс — данные уже были в таблице, миграция и пересинхронизация не потребовались",
+      "category": "feature",
+      "priority": "medium",
+      "status": "done",
+      "assignee": null,
+      "createdAt": "2026-08-06",
+      "updatedAt": "2026-08-06",
+      "completedAt": "2026-08-06",
+      "blockedBy": [],
+      "blocks": [],
+      "relatedFiles": [
+        "modules/ws-task-report/components/ReportTable.tsx",
+        "modules/ws-task-report/types/index.ts"
+      ]
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-08-06",
+      "version": "0.1.0",
+      "changes": [
+        "WTR-001: созданы таблицы ws_task_report и ws_task_report_access с RLS, доступ выдан Дмитрию Голикову",
+        "WTR-002: синхронизация ws-to-work/task-report, отдел КР гражд зафиксирован в коде, расписание 4:30",
+        "WTR-003: типы, Server Actions, хуки, ключи запросов в cache-модуле",
+        "WTR-004: страница отчёта с поиском, фильтром статуса, сортировкой и итогами",
+        "WTR-005: страница /ws-report и пункт сайдбара «Отчёт по задачам» со скрытием по доступу",
+        "WTR-007: колонки «Объект» и «Подэтап» разделены (обратная связь заказчика)"
+      ]
+    }
+  ]
+}

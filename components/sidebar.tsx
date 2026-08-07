@@ -8,11 +8,12 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, Video, List, FileText, LineChart, CalendarRange } from "lucide-react"
+import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, Video, List, FileText, LineChart, CalendarRange, FileSpreadsheet } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
 import { useAuthContext } from "@/modules/auth"
+import { useWsReportAccess } from "@/modules/ws-task-report"
 
 interface SidebarProps {
   user: {
@@ -116,6 +117,9 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
     { title: "Встречи", href: "/meetings", icon: Video },
   ]
 
+  // Отчёт по задачам Worksection виден только тем, кто есть в ws_task_report_access
+  const { data: hasWsReportAccess } = useWsReportAccess()
+
   const isUsersActiveInternal = isUsersActive ?? pathname === "/users"
 
   return (
@@ -185,6 +189,25 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
                 </Link>
               </li>
             ))}
+
+            {/* Отчёт по задачам — виден только по персональному доступу */}
+            {hasWsReportAccess && (
+              <li>
+                <Link
+                  href="/ws-report"
+                  className={cn(
+                    "flex items-center rounded-md px-3 py-2 nav-item transition-colors",
+                    pathname === "/ws-report"
+                      ? "bg-primary/10 text-primary"
+                      : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+                    collapsed && "justify-center px-0",
+                  )}
+                >
+                  <FileSpreadsheet className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+                  {!collapsed && <span>Отчёт по задачам</span>}
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 
