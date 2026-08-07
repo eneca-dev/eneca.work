@@ -17573,6 +17573,89 @@ export type Database = {
           },
         ]
       }
+      ws_task_report: {
+        Row: {
+          date_added: string | null
+          date_closed: string | null
+          department: string | null
+          planned_budget: number | null
+          responsible_email: string | null
+          responsible_name: string | null
+          synced_at: string
+          total_hours: number
+          total_money: number
+          ws_object_id: string | null
+          ws_object_name: string | null
+          ws_project_id: string
+          ws_project_name: string | null
+          ws_section_id: string | null
+          ws_section_name: string | null
+          ws_status: string
+          ws_task_id: string
+          ws_task_name: string
+        }
+        Insert: {
+          date_added?: string | null
+          date_closed?: string | null
+          department?: string | null
+          planned_budget?: number | null
+          responsible_email?: string | null
+          responsible_name?: string | null
+          synced_at?: string
+          total_hours?: number
+          total_money?: number
+          ws_object_id?: string | null
+          ws_object_name?: string | null
+          ws_project_id: string
+          ws_project_name?: string | null
+          ws_section_id?: string | null
+          ws_section_name?: string | null
+          ws_status: string
+          ws_task_id: string
+          ws_task_name: string
+        }
+        Update: {
+          date_added?: string | null
+          date_closed?: string | null
+          department?: string | null
+          planned_budget?: number | null
+          responsible_email?: string | null
+          responsible_name?: string | null
+          synced_at?: string
+          total_hours?: number
+          total_money?: number
+          ws_object_id?: string | null
+          ws_object_name?: string | null
+          ws_project_id?: string
+          ws_project_name?: string | null
+          ws_section_id?: string | null
+          ws_section_name?: string | null
+          ws_status?: string
+          ws_task_id?: string
+          ws_task_name?: string
+        }
+        Relationships: []
+      }
+      ws_task_report_access: {
+        Row: {
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ws_task_report_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
     }
     Views: {
       active_loadings: {
