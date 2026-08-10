@@ -8,12 +8,16 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, Video, List, FileText, LineChart, CalendarRange, FileSpreadsheet } from "lucide-react"
+import { LogOut, Home, ChevronLeft, Users, MessageSquare, FolderOpen, Video, List, FileText, LineChart, FileSpreadsheet } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { NotificationBell } from "@/modules/notifications/components/NotificationBell"
 import { useAuthContext } from "@/modules/auth"
-import { useWsReportAccess } from "@/modules/ws-task-report"
+// Импорт из подпути, не из корневого барреля модуля: баррель заодно
+// реэкспортирует exportWsTaskReport (тянет exceljs, ~23 МБ) и WsTaskReportView.
+// Sidebar рендерится в layout дашборда на каждой странице, поэтому баррель-импорт
+// раздувал бы граф компиляции всего приложения ради одного лёгкого хука.
+import { useWsReportAccess } from "@/modules/ws-task-report/hooks"
 
 interface SidebarProps {
   user: {
@@ -112,7 +116,8 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   const menuItems = [
     { title: "Главная", href: "/", icon: Home },
     { title: "Задачи", href: "/tasks", icon: List },
-    { title: "График проекта", href: "/project-diagram", icon: CalendarRange },
+    // «График проекта» намеренно скрыт из меню (не готов к общему показу),
+    // но страница /project-diagram остаётся доступной по прямой ссылке
     { title: "Заметки", href: "/notions", icon: FolderOpen },
     { title: "Встречи", href: "/meetings", icon: Video },
   ]
