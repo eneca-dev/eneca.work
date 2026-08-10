@@ -17,7 +17,7 @@ import { formatMinsk, formatMinskDate } from '@/lib/timezone-utils'
 import { DateRangePicker, type DateRange } from '@/components/ui/date-picker'
 import { ReportTable } from './ReportTable'
 import { useWsTaskReport, useWsReportAccess } from '../hooks'
-import { exportWsTaskReport } from '../actions'
+import { exportWsTaskReport } from '../actions/export'
 import type { WsTaskStatusFilter, ReportSort } from '../types'
 
 const STATUS_TABS: Array<{ value: WsTaskStatusFilter; label: string }> = [

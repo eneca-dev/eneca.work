@@ -22,7 +22,8 @@ export type {
 } from './types'
 
 // Actions
-export { getWsTaskReport, hasWsReportAccess, exportWsTaskReport } from './actions'
+export { getWsTaskReport, hasWsReportAccess } from './actions'
+export { exportWsTaskReport } from './actions/export'
 
 // Hooks
 export { useWsTaskReport, useWsReportAccess } from './hooks'

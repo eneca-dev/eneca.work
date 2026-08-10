@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
