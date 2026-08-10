@@ -4,11 +4,17 @@
  * Строка иерархии с информацией о бюджетах.
  * Показывает: Расчётный / Распределено / Израсходовано / Выделенный.
  * Создание и удаление структуры скрыты — только редактирование бюджета.
+ *
+ * Структура:
+ * - `BudgetRowContent` — рендер ОДНОЙ строки (без рекурсии). Используется виртуализатором
+ *   на верхнем уровне (проект→объект→раздел) и рекурсивным `BudgetRow`.
+ * - `BudgetRow` — рекурсивный (строка + дети + HR-блок). Используется внутри `SectionLazyChildren`
+ *   для небольшого поддерева этапов/задач (десятки строк, виртуализация там не нужна).
  */
 
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BudgetInlineEdit } from './BudgetInlineEdit'
@@ -17,21 +23,24 @@ import { BudgetRowBadges } from './BudgetRowBadges'
 import { DepartmentBlock } from './DepartmentBlock'
 import { formatNumber } from '../utils'
 import { pluralizeLoadings } from '@/lib/pluralize'
-import type { HierarchyNode, HierarchyNodeType, ExpandedState } from '../types'
+import { useBudgetRowExpanded, useBudgetsPageUIStore } from '../stores/useBudgetsPageUIStore'
+import { useSectionBudgetItems } from '../hooks/use-budget-hierarchy'
+import { toBudgetInfo } from '../hooks/use-budgets-hierarchy'
+import type { HierarchyNode, HierarchyNodeType } from '../types'
+import type { BudgetSectionStage } from '../actions'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface BudgetRowProps {
+interface BudgetRowContentProps {
   node: HierarchyNode
-  level: number
-  expanded: ExpandedState
-  onToggle: (nodeId: string) => void
-  onExpandAll?: (nodeIds: string[]) => void
   insideSection?: boolean
-  parentAllocatedBudget?: number
   highlightSectionId?: string | null
+}
+
+interface BudgetRowProps extends BudgetRowContentProps {
+  level: number
 }
 
 // ============================================================================
@@ -47,22 +56,26 @@ function collectChildIds(node: HierarchyNode): string[] {
   return ids
 }
 
+/** Σ выделенного бюджета узла (для projectAllocatedBudget HR-блока). */
+export function sumAllocatedBudget(node: HierarchyNode): number {
+  return node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
+}
+
 // ============================================================================
-// Main Component
+// BudgetRowContent — одна строка (без рекурсии)
 // ============================================================================
 
-export const BudgetRow = React.memo(function BudgetRow({
+export const BudgetRowContent = React.memo(function BudgetRowContent({
   node,
-  level,
-  expanded,
-  onToggle,
-  onExpandAll,
   insideSection = false,
-  parentAllocatedBudget = 0,
   highlightSectionId,
-}: BudgetRowProps) {
-  const hasChildren = node.children.length > 0
-  const isExpanded = expanded[node.id] ?? false
+}: BudgetRowContentProps) {
+  // Раздел может иметь ленивых детей (этапы), ещё не загруженных → раскрывалка должна быть.
+  const hasChildren = node.children.length > 0 || !!node.hasLazyChildren
+  // Подписка на boolean раскрытия именно этого узла (per-node селектор) —
+  // toggle одного узла не перерисовывает остальные строки.
+  const { isExpanded, toggle } = useBudgetRowExpanded(node.id)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
 
   const isSection = node.type === 'section'
   const isDecompStage = node.type === 'decomposition_stage'
@@ -80,12 +93,15 @@ export const BudgetRow = React.memo(function BudgetRow({
   const loadingErrorsCount = node.loadingErrorsCount ?? 0
 
   // Выделенный бюджет
-  const allocatedBudget = node.budgets.reduce((sum, b) => sum + b.planned_amount, 0)
+  const allocatedBudget = sumAllocatedBudget(node)
 
-  // Распределено (сумма выделенных бюджетов прямых детей)
-  const distributedBudget = node.children.length > 0
-    ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
-    : allocatedBudget
+  // Распределено: для разделов — предсчитанное в БД (children грузятся лениво);
+  // для проект/объект/этап — сумма выделенного загруженных прямых детей.
+  const distributedBudget = node.distributedBudget !== undefined
+    ? node.distributedBudget
+    : node.children.length > 0
+      ? node.children.reduce((sum, child) => sum + child.budgets.reduce((s, b) => s + b.planned_amount, 0), 0)
+      : allocatedBudget
 
   const isOverBudget = calcBudget !== null && allocatedBudget < calcBudget
   const isOverDistributed = distributedBudget > allocatedBudget
@@ -114,174 +130,278 @@ export const BudgetRow = React.memo(function BudgetRow({
 
   const handleToggle = () => {
     if (!hasChildren) return
-    if (isSection && !isExpanded && onExpandAll) {
+    if (isSection && !isExpanded) {
+      // Раскрытие раздела раскрывает и его этапы/задачи. Для ленивых разделов
+      // (hasLazyChildren) node.children пуст на момент клика → раскрывается сам раздел,
+      // а этапы доберёт SectionLazyChildren.useEffect после загрузки.
       const allChildIds = collectChildIds(node)
-      onExpandAll([node.id, ...allChildIds])
+      expandMultiple([node.id, ...allChildIds])
     } else {
-      onToggle(node.id)
+      toggle()
     }
   }
 
   return (
-    <>
-      {/* Main row */}
+    <div
+      id={isSection ? `section-${node.id}` : undefined}
+      className={rowStyles}
+    >
+      {/* ===== НАИМЕНОВАНИЕ ===== */}
       <div
-        id={isSection ? `section-${node.id}` : undefined}
-        className={rowStyles}
+        className="flex items-center gap-2 min-w-[400px] w-[400px] px-2 shrink-0"
+        style={{ paddingLeft: `${8 + indent}px` }}
       >
-        {/* ===== НАИМЕНОВАНИЕ ===== */}
-        <div
-          className="flex items-center gap-2 min-w-[400px] w-[400px] px-2 shrink-0"
-          style={{ paddingLeft: `${8 + indent}px` }}
+        <BudgetRowExpander
+          indent={indent}
+          hasChildren={hasChildren}
+          isExpanded={isExpanded}
+          onToggle={handleToggle}
+        />
+
+        <BudgetRowBadges
+          nodeType={node.type}
+          stageName={node.stageName}
+        />
+
+        <span
+          className={cn(
+            'truncate text-[12px]',
+            isSection && 'font-medium text-foreground',
+            isDecompStage && 'text-foreground/80',
+            isItem && 'text-muted-foreground',
+            isTopLevel && 'font-medium text-foreground'
+          )}
+          title={node.stageName ? `${node.stageName}: ${node.name}` : node.name}
         >
-          <BudgetRowExpander
-            indent={indent}
-            hasChildren={hasChildren}
-            isExpanded={isExpanded}
-            onToggle={handleToggle}
-          />
+          {node.name}
+        </span>
+      </div>
 
-          <BudgetRowBadges
-            nodeType={node.type}
-            stageName={node.stageName}
-          />
-
-          <span
-            className={cn(
-              'truncate text-[12px]',
-              isSection && 'font-medium text-foreground',
-              isDecompStage && 'text-foreground/80',
-              isItem && 'text-muted-foreground',
-              isTopLevel && 'font-medium text-foreground'
+      {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный / Отклонение ===== */}
+      <div className="flex items-center flex-1 min-w-[480px] shrink-0 border-l border-border/30">
+        <div className="w-full flex items-center">
+          {/* Расчётный */}
+          <div className="w-[80px] px-1 text-right">
+            {calcBudget !== null && calcBudget > 0 ? (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={cn(
+                      'text-[12px] tabular-nums text-primary cursor-help',
+                      (isSection || isTopLevel) && 'font-medium',
+                      loadingErrorsCount > 0 && 'underline decoration-dotted decoration-amber-500'
+                    )}>
+                      {formatNumber(calcBudget)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    <div className="space-y-0.5">
+                      <div>{formatNumber(loadingHours)} ч / {loadingCount} {pluralizeLoadings(loadingCount)}</div>
+                      {loadingErrorsCount > 0 && (
+                        <div className="text-amber-500">
+                          ⚠ {loadingErrorsCount} без отдела или ставки
+                        </div>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
             )}
-            title={node.stageName ? `${node.stageName}: ${node.name}` : node.name}
-          >
-            {node.name}
-          </span>
-        </div>
-
-        {/* ===== БЮДЖЕТЫ: Расчётный / Распределено / Выделенный / Отклонение ===== */}
-        <div className="flex items-center flex-1 min-w-[480px] shrink-0 border-l border-border/30">
-          <div className="w-full flex items-center">
-            {/* Расчётный */}
-            <div className="w-[80px] px-1 text-right">
-              {calcBudget !== null && calcBudget > 0 ? (
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className={cn(
-                        'text-[12px] tabular-nums text-primary cursor-help',
-                        (isSection || isTopLevel) && 'font-medium',
-                        loadingErrorsCount > 0 && 'underline decoration-dotted decoration-amber-500'
-                      )}>
-                        {formatNumber(calcBudget)}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      <div className="space-y-0.5">
-                        <div>{formatNumber(loadingHours)} ч / {loadingCount} {pluralizeLoadings(loadingCount)}</div>
-                        {loadingErrorsCount > 0 && (
-                          <div className="text-amber-500">
-                            ⚠ {loadingErrorsCount} без отдела или ставки
-                          </div>
-                        )}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
-              )}
-            </div>
-            <div className="w-[10px] text-center">
-              <span className="text-[11px] text-muted-foreground/30">/</span>
-            </div>
-            {/* Распределено */}
-            <div className="w-[80px] px-1 text-center">
-              {distributedBudget > 0 ? (
+          </div>
+          <div className="w-[10px] text-center">
+            <span className="text-[11px] text-muted-foreground/30">/</span>
+          </div>
+          {/* Распределено */}
+          <div className="w-[80px] px-1 text-center">
+            {distributedBudget > 0 ? (
+              <span className={cn(
+                'text-[12px] tabular-nums',
+                isOverDistributed ? 'text-destructive' : 'text-foreground/80',
+                (isSection || isTopLevel) && 'font-medium'
+              )}>
+                {formatNumber(distributedBudget)}
+              </span>
+            ) : (
+              <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
+            )}
+          </div>
+          <div className="w-[10px] text-center">
+            <span className="text-[11px] text-muted-foreground/30">/</span>
+          </div>
+          {/* Выделенный - inline редактирование */}
+          <div className="w-[140px] shrink-0 px-1">
+            <BudgetInlineEdit
+              budgets={node.budgets}
+              entityType={node.entityType}
+              entityId={node.id}
+              entityName={node.name}
+              isOverBudget={isOverBudget}
+            />
+          </div>
+          <div className="w-[10px] text-center">
+            <span className="text-[11px] text-muted-foreground/30">/</span>
+          </div>
+          {/* Отклонение = Выделенный − Расчётный */}
+          <div className="w-[140px] shrink-0 px-1 text-left">
+            {(calcBudget !== null && calcBudget > 0) || allocatedBudget > 0 ? (() => {
+              const calc = calcBudget ?? 0
+              const deviation = allocatedBudget - calc
+              const deviationPct = calc > 0 ? (deviation / calc) * 100 : null
+              return (
                 <span className={cn(
-                  'text-[12px] tabular-nums',
-                  isOverDistributed ? 'text-destructive' : 'text-foreground/80',
+                  'text-[12px] tabular-nums font-medium',
+                  deviation >= 0 ? 'text-emerald-400' : 'text-red-400',
                   (isSection || isTopLevel) && 'font-medium'
                 )}>
-                  {formatNumber(distributedBudget)}
-                </span>
-              ) : (
-                <span className="text-[12px] text-muted-foreground/50 tabular-nums">—</span>
-              )}
-            </div>
-            <div className="w-[10px] text-center">
-              <span className="text-[11px] text-muted-foreground/30">/</span>
-            </div>
-            {/* Выделенный - inline редактирование */}
-            <div className="w-[140px] shrink-0 px-1">
-              <BudgetInlineEdit
-                budgets={node.budgets}
-                entityType={node.entityType}
-                entityId={node.id}
-                entityName={node.name}
-                isOverBudget={isOverBudget}
-              />
-            </div>
-            <div className="w-[10px] text-center">
-              <span className="text-[11px] text-muted-foreground/30">/</span>
-            </div>
-            {/* Отклонение = Выделенный − Расчётный */}
-            <div className="w-[140px] shrink-0 px-1 text-left">
-              {(calcBudget !== null && calcBudget > 0) || allocatedBudget > 0 ? (() => {
-                const calc = calcBudget ?? 0
-                const deviation = allocatedBudget - calc
-                const deviationPct = calc > 0 ? (deviation / calc) * 100 : null
-                return (
+                  {deviation >= 0 ? '+' : ''}{formatNumber(deviation, 0)}
                   <span className={cn(
-                    'text-[12px] tabular-nums font-medium',
-                    deviation >= 0 ? 'text-emerald-400' : 'text-red-400',
-                    (isSection || isTopLevel) && 'font-medium'
+                    'ml-1 text-[11px]',
+                    deviation >= 0 ? 'text-emerald-500' : 'text-red-400/90'
                   )}>
-                    {deviation >= 0 ? '+' : ''}{formatNumber(deviation, 0)}
-                    <span className={cn(
-                      'ml-1 text-[11px]',
-                      deviation >= 0 ? 'text-emerald-500' : 'text-red-400/90'
-                    )}>
-                      {deviationPct !== null
-                        ? `(${deviationPct >= 0 ? '+' : ''}${deviationPct.toFixed(1)}%)`
-                        : '(—)'}
-                    </span>
+                    {deviationPct !== null
+                      ? `(${deviationPct >= 0 ? '+' : ''}${deviationPct.toFixed(1)}%)`
+                      : '(—)'}
                   </span>
-                )
-              })() : (
-                <span className="text-[12px] text-muted-foreground/30 tabular-nums">—</span>
-              )}
-            </div>
+                </span>
+              )
+            })() : (
+              <span className="text-[12px] text-muted-foreground/30 tabular-nums">—</span>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  )
+})
 
-      {/* Children (if expanded) */}
+// ============================================================================
+// BudgetRow — рекурсивная обёртка (строка + дети + HR). Для escape-hatch поддеревьев.
+// ============================================================================
+
+export const BudgetRow = React.memo(function BudgetRow({
+  node,
+  level,
+  insideSection = false,
+  highlightSectionId,
+}: BudgetRowProps) {
+  const { isExpanded } = useBudgetRowExpanded(node.id)
+  const isSection = node.type === 'section'
+  const isProject = node.type === 'project'
+
+  return (
+    <>
+      <BudgetRowContent node={node} insideSection={insideSection} highlightSectionId={highlightSectionId} />
+
+      {/* Children (if expanded). Раздел с ленивыми детьми догружает этапы/задачи сам. */}
       {isExpanded &&
-        node.children.map((child) => (
-          <BudgetRow
-            key={child.id}
-            node={child}
-            level={level + 1}
-            expanded={expanded}
-            onToggle={onToggle}
-            onExpandAll={onExpandAll}
-            insideSection={isSection || insideSection}
-            parentAllocatedBudget={allocatedBudget}
-            highlightSectionId={highlightSectionId}
-          />
+        (isSection && node.hasLazyChildren ? (
+          <SectionLazyChildren sectionId={node.id} highlightSectionId={highlightSectionId} />
+        ) : (
+          node.children.map((child) => (
+            <BudgetRow
+              key={child.id}
+              node={child}
+              level={level + 1}
+              insideSection={isSection || insideSection}
+              highlightSectionId={highlightSectionId}
+            />
+          ))
         ))}
 
       {/* Блок агрегации бюджета по отделам (Человеческие ресурсы) */}
       {isProject && isExpanded && (
         <DepartmentBlock
           projectId={node.id}
-          projectAllocatedBudget={allocatedBudget}
-          expanded={expanded}
-          onToggle={onToggle}
+          projectAllocatedBudget={sumAllocatedBudget(node)}
         />
       )}
+    </>
+  )
+})
+
+// ============================================================================
+// Ленивые дети раздела (этапы + задачи) — грузятся при раскрытии раздела
+// ============================================================================
+
+/** Строит узлы этапов с задачами из ленивых данных (структура + бюджеты, Фаза 7) */
+function buildStageBudgetNodes(stages: BudgetSectionStage[]): HierarchyNode[] {
+  return stages.map((stage) => {
+    const items: HierarchyNode[] = stage.items.map((item) => ({
+      id: item.id,
+      name: item.description,
+      type: 'decomposition_item',
+      budgets: item.budgets.map(toBudgetInfo),
+      plannedHours: item.plannedHours,
+      children: [],
+      entityType: 'decomposition_item',
+    }))
+    const plannedHours = items.reduce((s, i) => s + (i.plannedHours || 0), 0)
+    return {
+      id: stage.id,
+      name: stage.name,
+      type: 'decomposition_stage',
+      budgets: stage.budgets.map(toBudgetInfo),
+      plannedHours,
+      children: items,
+      entityType: 'decomposition_stage',
+    }
+  })
+}
+
+interface SectionLazyChildrenProps {
+  sectionId: string
+  highlightSectionId?: string | null
+}
+
+export const SectionLazyChildren = React.memo(function SectionLazyChildren({
+  sectionId,
+  highlightSectionId,
+}: SectionLazyChildrenProps) {
+  const { data: stages, isLoading, isError } = useSectionBudgetItems(sectionId)
+  const expandMultiple = useBudgetsPageUIStore((s) => s.expandMultiple)
+  const expandedOnceRef = useRef<string | null>(null)
+
+  const stageNodes = useMemo(
+    () => (stages ? buildStageBudgetNodes(stages) : []),
+    [stages]
+  )
+
+  // Раскрытие раздела показывает этапы+задачи целиком (как было) — раскрываем этапы один раз
+  useEffect(() => {
+    if (stages && stages.length > 0 && expandedOnceRef.current !== sectionId) {
+      expandedOnceRef.current = sectionId
+      expandMultiple(stages.map((s) => s.id))
+    }
+  }, [stages, sectionId, expandMultiple])
+
+  if (isLoading) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-muted-foreground" style={{ paddingLeft: '56px' }}>
+        Загрузка задач…
+      </div>
+    )
+  }
+  if (isError) {
+    return (
+      <div className="px-2 py-1 text-[11px] text-destructive" style={{ paddingLeft: '56px' }}>
+        Ошибка загрузки задач раздела
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {stageNodes.map((node) => (
+        <BudgetRow
+          key={node.id}
+          node={node}
+          level={3}
+          insideSection
+          highlightSectionId={highlightSectionId}
+        />
+      ))}
     </>
   )
 })

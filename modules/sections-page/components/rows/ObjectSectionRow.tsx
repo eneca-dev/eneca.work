@@ -1,7 +1,6 @@
 /**
- * Object/Section Row Component
- *
- * Строка объект/раздел с агрегированными мини-барами X/Y и редактируемой ёмкостью
+ * Object/Section Row (content) Component — одна строка объект/раздел.
+ * Агрегированные мини-бары X/Y + редактируемая ёмкость. Сотрудники — через flatten.
  */
 
 'use client'
@@ -10,40 +9,40 @@ import { useMemo, useCallback } from 'react'
 import { Box, ChevronDown, ChevronRight, UserPlus } from 'lucide-react'
 import { useHasPermission, useHasAnyLoadingEditPermission } from '@/modules/permissions'
 import { useRowExpanded, useDateCapacityOverrides } from '../../stores/useSectionsPageUIStore'
-import { useSectionsPageActions } from '../../context'
 import { getCellClassNames } from '../../utils/cell-utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, OBJECT_SECTION_ROW_HEIGHT } from '../../constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
-import { EmployeeRow } from './EmployeeRow'
 import { openLoadingModalNewCreate } from '@/modules/modals'
-import { useDecompositionStages } from '@/modules/modals/hooks/useDecompositionStages'
-import type { ObjectSection, DayCell, SectionLoading } from '../../types'
+import { MockSectionPeriodBar } from '../mock/MockSectionPeriodBar'
+import { MockCapacityPlanBar } from '../mock/MockCapacityPlanBar'
+import { MOCK_PROJECT_ID } from '@/modules/resource-graph/mocks/stagePeriods'
+import type { ObjectSection, DayCell } from '../../types'
+import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
-interface ObjectSectionRowProps {
+interface ObjectSectionRowContentProps {
   objectSection: ObjectSection
-  sectionIndex: number
   projectId: string
-  projectName: string
-  departmentId: string
   dayCells: DayCell[]
+  /** Видимые колонки дня (горизонтальная виртуализация). undefined → все. */
+  columns?: VirtualColumn[]
 }
 
-export function ObjectSectionRow({
+export function ObjectSectionRowContent({
   objectSection,
-  sectionIndex,
   projectId,
-  projectName,
-  departmentId,
   dayCells,
-}: ObjectSectionRowProps) {
+  columns,
+}: ObjectSectionRowContentProps) {
   const { isExpanded, toggle } = useRowExpanded('objectSection', objectSection.id)
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const dayCols: VirtualColumn[] =
+    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
 
-  // Загрузка stages для раздела
-  const { data: stages = [] } = useDecompositionStages({
-    sectionId: objectSection.sectionId,
-    enabled: true,
-  })
+  // Для мок-проекта: верхняя зона — плановая ёмкость, нижняя — фактические загрузки
+  const MOCK_CAPACITY_ZONE_HEIGHT = 20
+  const effectiveRowHeight = projectId === MOCK_PROJECT_ID
+    ? OBJECT_SECTION_ROW_HEIGHT + MOCK_CAPACITY_ZONE_HEIGHT
+    : OBJECT_SECTION_ROW_HEIGHT
 
   const loadings = useMemo(() => objectSection.loadings, [objectSection.loadings])
 
@@ -56,41 +55,11 @@ export function ObjectSectionRow({
   // Permission: есть ли хотя бы одна edit-permission на загрузки
   const canCreateAnyLoading = useHasAnyLoadingEditPermission()
 
-  // Group loadings by employee
-  const employeesWithLoadings = useMemo(() => {
-    const employeeMap = new Map<string, {
-      employeeId: string
-      employeeName: string
-      employeeAvatarUrl: string | null
-      employeeTeamId: string | null
-      employeeDepartmentId: string | null
-      employeeDepartmentName: string | null
-      employeePosition: string | null
-      employeeCategory: string | null
-      employeeEmploymentRate: number | null
-      loadings: SectionLoading[]
-    }>()
-
-    for (const loading of objectSection.loadings) {
-      const empId = loading.employeeId
-      if (!employeeMap.has(empId)) {
-        employeeMap.set(empId, {
-          employeeId: empId,
-          employeeName: loading.employeeName,
-          employeeAvatarUrl: loading.employeeAvatarUrl ?? null,
-          employeeTeamId: loading.employeeTeamId ?? null,
-          employeeDepartmentId: loading.employeeDepartmentId,
-          employeeDepartmentName: loading.employeeDepartmentName,
-          employeePosition: loading.employeePosition ?? null,
-          employeeCategory: loading.employeeCategory ?? null,
-          employeeEmploymentRate: loading.employeeEmploymentRate ?? null,
-          loadings: [],
-        })
-      }
-      employeeMap.get(empId)!.loadings.push(loading)
-    }
-
-    return Array.from(employeeMap.values())
+  // Кол-во уникальных сотрудников раздела — для бейджа «N сотр».
+  const employeeCount = useMemo(() => {
+    const ids = new Set<string>()
+    for (const loading of objectSection.loadings) ids.add(loading.employeeId)
+    return ids.size
   }, [objectSection.loadings])
 
   // Handler для открытия модалки создания загрузки
@@ -103,100 +72,120 @@ export function ObjectSectionRow({
   }, [objectSection.sectionId, projectId])
 
   return (
-    <>
-      {/* Object/Section header row */}
-      <div className="group/row min-w-full relative border-b border-border/50">
+    <div className="group/row min-w-full relative border-b border-border/50">
+      <div
+        className="flex transition-colors"
+        style={{ minHeight: effectiveRowHeight }}
+      >
+        {/* Sidebar wrapper - sticky, provides positioning context for the tab button */}
         <div
-          className="flex transition-colors"
-          style={{ minHeight: OBJECT_SECTION_ROW_HEIGHT }}
+          className="shrink-0 sticky left-0 z-20 relative"
+          style={{ width: SIDEBAR_WIDTH, minHeight: effectiveRowHeight }}
         >
-          {/* Sidebar wrapper - sticky, provides positioning context for the tab button */}
+          {/* Clickable area - hover highlight only here, NOT on the tab button */}
           <div
-            className="shrink-0 sticky left-0 z-20 relative"
-            style={{ width: SIDEBAR_WIDTH, minHeight: OBJECT_SECTION_ROW_HEIGHT }}
+            className="flex items-center justify-between px-3 py-2 h-full border-r border-border bg-card cursor-pointer hover:bg-accent transition-colors"
+            onClick={toggle}
           >
-            {/* Clickable area - hover highlight only here, NOT on the tab button */}
-            <div
-              className="flex items-center justify-between px-3 py-2 h-full border-r border-border bg-card cursor-pointer hover:bg-accent transition-colors"
-              onClick={toggle}
-            >
-              <div className="flex items-center gap-2 min-w-0 pl-[40px]">
-                <div className="flex-shrink-0">
-                  {isExpanded ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-primary" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </div>
-                <Box className="h-3.5 w-3.5 text-cyan-600 flex-shrink-0" />
-                <span className="text-xs font-medium">
-                  {objectSection.name}
-                </span>
+            <div className="flex items-center gap-2 min-w-0 pl-[40px]">
+              <div className="flex-shrink-0">
+                {isExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-primary" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-primary" />
+                )}
               </div>
-
-              {/* Actions + metrics */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                  {employeesWithLoadings.length} сотр
-                </span>
-              </div>
+              <Box className="h-3.5 w-3.5 text-cyan-600 flex-shrink-0" />
+              <span className="text-xs font-medium">
+                {objectSection.name}
+              </span>
             </div>
 
-            {/* Create loading tab - sibling to clickable area, so hover doesn't highlight the row */}
-            {canCreateAnyLoading && (
-              <button
-                type="button"
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
-                onClick={handleCreateLoading}
-                title="Создать загрузку"
-              >
-                <UserPlus className="w-3 h-3" />
-                <span>Загрузка</span>
-              </button>
-            )}
+            {/* Actions + metrics */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                {employeeCount} сотр
+              </span>
+            </div>
           </div>
 
-          {/* Timeline cells + aggregation (editable capacity) */}
-          <div className="flex relative z-0" style={{ width: timelineWidth }}>
+          {/* Create loading tab - sibling to clickable area, so hover doesn't highlight the row */}
+          {canCreateAnyLoading && (
+            <button
+              type="button"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+              onClick={handleCreateLoading}
+              title="Создать загрузку"
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>Загрузка</span>
+            </button>
+          )}
+        </div>
+
+        {/* Timeline cells + aggregation (editable capacity) */}
+        <div className="flex relative z-0" style={{ width: timelineWidth }}>
+          {/* MOCK: подоснова дат раздела + плановая ёмкость (верхняя зона). Компоненты не само-защищены — обёртка по MOCK_PROJECT_ID. */}
+          {projectId === MOCK_PROJECT_ID && (
+            <>
+              <MockSectionPeriodBar
+                sectionId={objectSection.sectionId}
+                dayCells={dayCells}
+                rowHeight={effectiveRowHeight}
+              />
+              <MockCapacityPlanBar
+                sectionId={objectSection.sectionId}
+                dayCells={dayCells}
+              />
+            </>
+          )}
+          {/* Фактические загрузки: для мок-проекта — нижняя зона строки */}
+          {projectId === MOCK_PROJECT_ID ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: MOCK_CAPACITY_ZONE_HEIGHT,
+                left: 0,
+                right: 0,
+                height: OBJECT_SECTION_ROW_HEIGHT,
+              }}
+            >
+              <AggregatedBarsOverlay
+                loadings={loadings}
+                defaultCapacity={objectSection.defaultCapacity ?? 0}
+                dateCapacityOverrides={dateCapacityOverrides}
+                dayCells={dayCells}
+                columns={columns}
+                rowHeight={OBJECT_SECTION_ROW_HEIGHT}
+                editable={canEditCapacity}
+                osId={objectSection.sectionId}
+              />
+            </div>
+          ) : (
             <AggregatedBarsOverlay
               loadings={loadings}
               defaultCapacity={objectSection.defaultCapacity ?? 0}
               dateCapacityOverrides={dateCapacityOverrides}
               dayCells={dayCells}
+              columns={columns}
               rowHeight={OBJECT_SECTION_ROW_HEIGHT}
               editable={canEditCapacity}
               osId={objectSection.sectionId}
             />
-            {dayCells.map((cell, i) => (
+          )}
+          {dayCols.map((col) => {
+            const cell = dayCells[col.index]
+            if (!cell) return null
+            return (
               <div
-                key={i}
-                className={`${getCellClassNames(cell)} self-stretch`}
-                style={{ width: DAY_CELL_WIDTH }}
+                key={col.index}
+                className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
               />
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
-
-      {/* Employees (expanded) */}
-      {isExpanded && (
-        <>
-          {employeesWithLoadings.map((employee) => (
-            <EmployeeRow
-              key={employee.employeeId}
-              employee={employee}
-              sectionId={objectSection.sectionId}
-              sectionName={objectSection.sectionName}
-              projectId={projectId}
-              projectName={projectName}
-              objectId={objectSection.objectId}
-              objectName={objectSection.objectName}
-              dayCells={dayCells}
-              stages={stages}
-            />
-          ))}
-        </>
-      )}
-    </>
+    </div>
   )
 }

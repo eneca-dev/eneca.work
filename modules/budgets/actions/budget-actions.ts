@@ -78,7 +78,9 @@ export async function getBudgets(
     const hasPermission = await checkPermission(supabase, user.id, 'budgets.view.all')
     if (!hasPermission) return { success: false, error: 'Нет прав на просмотр бюджетов' }
 
-    const PAGE_SIZE = 1000
+    // bug-SB-01 #2: 5000 = потолок Max rows Data API. ~35k бюджетов / 5000 ≈ 8 страниц
+    // вместо ~36 (×4.5 меньше Server Action round-trip'ов → быстрее загрузка Бюджетов).
+    const PAGE_SIZE = 5000
 
     // Страница бюджетов использует lean-view без агрегации расходов (~3–5x быстрее).
     // Остальные потребители (resource-graph, modals) получают полные данные из v_cache_budgets.
@@ -91,6 +93,7 @@ export async function getBudgets(
         .from(viewName as 'v_cache_budgets' | 'v_budgets_for_page')
         .select('*', withCount ? { count: 'exact' } : undefined)
       if (filters?.entity_type) q = q.eq('entity_type', filters.entity_type)
+      if (filters?.entity_types?.length) q = q.in('entity_type', filters.entity_types)
       if (filters?.entity_id)   q = q.eq('entity_id', filters.entity_id)
       if (filters?.is_active !== undefined) q = q.eq('is_active', filters.is_active)
       if (filters?.project_ids?.length) q = q.in('project_id', filters.project_ids)
@@ -102,7 +105,6 @@ export async function getBudgets(
       .range(0, PAGE_SIZE - 1)
 
     if (firstError) {
-      console.error('[getBudgets] Supabase error:', firstError)
       captureBudgetError(firstError, { action: 'getBudgets', step: 'first_page', view: viewName, filters })
       return { success: false, error: firstError.message }
     }
@@ -118,7 +120,6 @@ export async function getBudgets(
 
     for (const [i, result] of remainingResults.entries()) {
       if (result.error) {
-        console.error('[getBudgets] Page error:', result.error)
         captureBudgetError(result.error, { action: 'getBudgets', step: 'page', page: i + 2, view: viewName, filters })
         return { success: false, error: result.error.message }
       }

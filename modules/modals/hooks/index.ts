@@ -83,6 +83,9 @@ export {
   type ProjectListItem,
 } from './useProjectsList'
 
+export { usePrefetchProjectsList } from './usePrefetchProjectsList'
+export { usePrefetchProjectTrees } from './usePrefetchProjectTrees'
+
 export {
   useProjectTree,
   type UseProjectTreeOptions,

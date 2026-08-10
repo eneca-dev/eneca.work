@@ -9,3 +9,12 @@ export {
   getSectionCalcBudgets,
   type SectionCalcBudget,
 } from './loading-money'
+
+// Budget Hierarchy — лёгкая иерархия (v_budget_hierarchy) + ленивые этапы/задачи
+export {
+  getBudgetHierarchy,
+  getSectionBudgetItems,
+  type BudgetHierarchyRow,
+  type BudgetSectionStage,
+  type BudgetSectionItem,
+} from './budget-hierarchy'

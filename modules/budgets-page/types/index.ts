@@ -63,6 +63,13 @@ export interface HierarchyNode {
     name: string | null
   } | null
   hourlyRate?: number | null
+  /**
+   * Предсчитанное в БД «Распределено» (для разделов: Σ выделенного этапов).
+   * Используется когда дети не загружены лениво. undefined → считать из children.
+   */
+  distributedBudget?: number
+  /** У раздела есть этапы, загружаемые лениво при раскрытии (children пуст до загрузки). */
+  hasLazyChildren?: boolean
 }
 
 // ============================================================================

@@ -43,8 +43,10 @@ export const budgetKeys = queryKeys.budgets
 export const useBudgets = createCacheQuery<BudgetCurrent[], BudgetFilters | undefined>({
   queryKey: (filters) => queryKeys.budgets.list(filters ? {
     entityType: filters.entity_type,
+    entityTypes: filters.entity_types?.length ? [...filters.entity_types].sort().join(',') : undefined,
     entityId: filters.entity_id,
     isActive: filters.is_active,
+    projectIds: filters.project_ids?.length ? [...filters.project_ids].sort().join(',') : undefined,
     lean: filters.lean,
   } : undefined),
   queryFn: getBudgets,

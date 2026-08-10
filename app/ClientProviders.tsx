@@ -24,7 +24,9 @@ import { LoadingModalContainer, LoadingModalNewContainer } from "@/modules/modal
  */
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
-    <QueryProvider>
+    // disableRealtime: RealtimeSync монтируется вручную ниже (внутри NoSSR + после AuthProvider).
+    // Без этого было ДВА <RealtimeSync/> на одном канале 'cache-sync' → CHANNEL_ERROR (bug-DH-09).
+    <QueryProvider disableRealtime>
       <ThemeProvider attribute="class" defaultTheme="dark">
         <NoSSR>
           {/* AuthProvider ПЕРВЫЙ — слушает auth события и синхронизирует store */}

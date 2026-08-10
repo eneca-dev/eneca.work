@@ -28,8 +28,14 @@ import { MONTH_CELL_WIDTH, MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER } from '@
 import { useIsAdmin } from '@/modules/permissions'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import type { FilterQueryParams } from '@/modules/inline-filter'
-import { DepartmentRow } from './timeline/DepartmentRow'
+import { usePrefetchProjectsList } from '@/modules/modals'
+import { DepartmentRowContent } from './timeline/DepartmentRow'
+import { TeamRowContent } from './timeline/TeamRow'
+import { EmployeeRow } from './timeline/EmployeeRow'
 import { DepartmentGroupDivider } from './timeline/DepartmentGroupDivider'
+import { TeamSubgroupDivider } from './timeline/TeamSubgroupDivider'
+import { flattenDepartments, type DeptFlatRow } from './timeline/flatten-departments'
+import { VirtualList, type VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // ============================================================================
@@ -55,6 +61,20 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   const filtersApplied = useMemo(() => {
     return Object.keys(queryParams).length > 0
   }, [queryParams])
+
+  // Idle-префетч списка проектов для модалки «Создать загрузку»: тут модалка открывается
+  // на список проектов (по employeeId, без пред-выбранного проекта) → греем 'my' список
+  // в простое после загрузки страницы, чтобы убрать спиннер «Загрузка проектов…».
+  // Дерево/этапы/breadcrumbs дальше держит общий кэш модалки (gcTime: Infinity).
+  const prefetchProjectsList = usePrefetchProjectsList()
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => prefetchProjectsList(), { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const id = setTimeout(() => prefetchProjectsList(), 1500)
+    return () => clearTimeout(id)
+  }, [prefetchProjectsList])
 
   // Определяем, нужно ли загружать данные
   const shouldFetchData = filtersApplied || loadAllEnabled
@@ -94,6 +114,8 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   const setCustomDateRange = useDepartmentsTimelineUIStore((s) => s.setCustomDateRange)
   const timelineScale = useDepartmentsTimelineUIStore((s) => s.timelineScale)
   const setTimelineScale = useDepartmentsTimelineUIStore((s) => s.setTimelineScale)
+  // Состояние раскрытия — для flatten (пересобирается при любом toggle, toggleNode создаёт новый объект).
+  const expandedNodes = useDepartmentsTimelineUIStore((s) => s.expandedNodes)
 
   const isAdmin = useIsAdmin()
   const isMonthlyMode = timelineScale === 'month'
@@ -166,6 +188,80 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
 
   // Load freshness data
   const { data: freshnessData } = useTeamsFreshness()
+
+  // Плоский список строк для виртуализации (группы → отделы → команды → сотрудники).
+  // Пересобирается при изменении данных или состояния раскрытия.
+  const flatRows = useMemo<DeptFlatRow[]>(() => {
+    const { grazhd, general, prom } = groupedDepartments
+    return flattenDepartments(
+      [
+        { key: 'grazhd', label: 'Гражданское направление', items: grazhd ?? [] },
+        { key: 'general', label: 'Общие отделы', items: general ?? [] },
+        { key: 'prom', label: 'Промышленное направление', items: prom ?? [] },
+      ],
+      expandedNodes
+    )
+  }, [groupedDepartments, expandedNodes])
+
+  // Рендер одной плоской строки по её типу (общие пропсы таймлайна замыкаются здесь).
+  // columns — видимые колонки дня (горизонтальная виртуализация); undefined в месячном режиме.
+  const renderRow = useCallback(
+    (row: DeptFlatRow, _index: number, columns?: VirtualColumn[]) => {
+      switch (row.kind) {
+        case 'groupDivider':
+          return <DepartmentGroupDivider label={row.label} width={totalWidth} />
+        case 'subgroupDivider':
+          return <TeamSubgroupDivider label={row.label} width={totalWidth} />
+        case 'dept':
+          return (
+            <DepartmentRowContent
+              department={row.dept}
+              departmentIndex={row.index}
+              dayCells={dayCells}
+              columns={columns}
+              freshnessData={freshnessData}
+              timelineScale={timelineScale}
+              monthCells={monthCells}
+              monthCellWidth={MONTH_CELL_WIDTH}
+              calendarMap={calendarMap}
+            />
+          )
+        case 'team':
+          return (
+            <TeamRowContent
+              team={row.team}
+              dayCells={dayCells}
+              columns={columns}
+              freshnessData={freshnessData}
+              timelineScale={timelineScale}
+              monthCells={monthCells}
+              monthCellWidth={MONTH_CELL_WIDTH}
+              calendarMap={calendarMap}
+            />
+          )
+        case 'employee':
+          return (
+            <EmployeeRow
+              employee={row.employee}
+              employeeIndex={0}
+              dayCells={dayCells}
+              columns={columns}
+              isTeamLead={row.isTeamLead}
+              timelineScale={timelineScale}
+              monthCells={monthCells}
+              monthCellWidth={MONTH_CELL_WIDTH}
+            />
+          )
+        default: {
+          // Exhaustiveness: при добавлении нового kind TS подсветит ошибку здесь.
+          const _exhaustive: never = row
+          void _exhaustive
+          return null
+        }
+      }
+    },
+    [totalWidth, dayCells, freshnessData, timelineScale, monthCells, calendarMap]
+  )
 
   // Expand all nodes in the tree (batch operation)
   const handleExpandAll = useCallback(() => {
@@ -375,57 +471,25 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
           </div>
         )}
 
-        {/* Timeline Content */}
+        {/* Timeline Content (виртуализировано — bug-VT-15) */}
         {!error && !isLoading && departments && departments.length > 0 && (
-          <div
-            ref={contentScrollRef}
+          <VirtualList
+            items={flatRows}
+            getKey={(r) => r.key}
+            renderItem={renderRow}
+            estimateSize={44}
+            overscan={10}
+            positionWithTop
+            minContentWidth={totalWidth}
+            scrollElementRef={contentScrollRef}
             onScroll={handleContentScroll}
-            className="overflow-auto h-full"
-          >
-            <div style={{ minWidth: totalWidth }}>
-              {(() => {
-                const { grazhd, general, prom } = groupedDepartments
-                // Группы в желаемом порядке: гражд → общие → пром.
-                // Разделитель с лейблом показываем перед каждой непустой группой,
-                // включая первую — чтобы юзер видел названия всех разделов.
-                // Структура одинакова для дневного и месячного режимов — отличаются
-                // только визуализация ячеек таймлайна и доступные интеракции.
-                const groups: Array<{ key: string; label: string; items: typeof departments }> = [
-                  { key: 'grazhd', label: 'Гражданское направление', items: grazhd },
-                  { key: 'general', label: 'Общие отделы', items: general },
-                  { key: 'prom', label: 'Промышленное направление', items: prom },
-                ]
-                let flatIndex = 0
-                const nodes: React.ReactNode[] = []
-                for (const group of groups) {
-                  if (group.items.length === 0) continue
-                  nodes.push(
-                    <DepartmentGroupDivider
-                      key={`divider-${group.key}`}
-                      label={group.label}
-                      width={totalWidth}
-                    />
-                  )
-                  for (const dept of group.items) {
-                    nodes.push(
-                      <DepartmentRow
-                        key={dept.id}
-                        department={dept}
-                        departmentIndex={flatIndex++}
-                        dayCells={dayCells}
-                        freshnessData={freshnessData}
-                        timelineScale={timelineScale}
-                        monthCells={monthCells}
-                        monthCellWidth={MONTH_CELL_WIDTH}
-                        calendarMap={calendarMap}
-                      />
-                    )
-                  }
-                }
-                return nodes
-              })()}
-            </div>
-          </div>
+            className="h-full"
+            // Горизонтальная виртуализация ячеек дня (только дневной режим; месяцы — их мало).
+            columnCount={isMonthlyMode ? undefined : dayCells.length}
+            columnWidth={DAY_CELL_WIDTH}
+            columnScrollMargin={SIDEBAR_WIDTH}
+            columnOverscan={4}
+          />
         )}
       </div>
     </div>

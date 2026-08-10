@@ -203,7 +203,9 @@ export const useUpdateLoadingDates = createCacheMutation<
 
   // Инвалидируем departments timeline + sections page после успешного обновления
   // Это важно т.к. staleTime: Infinity и данные обновляются только через Realtime или invalidation
-  invalidateKeys: [queryKeys.departmentsTimeline.all, queryKeys.sectionsPage.all],
+  // .lists() вместо .all: правка загрузки не меняет freshness команд,
+  // поэтому не дёргаем её (bug-VT-09).
+  invalidateKeys: [queryKeys.departmentsTimeline.lists(), queryKeys.sectionsPage.all],
 })
 
 // ============================================================================
@@ -222,5 +224,7 @@ export const useBulkShiftLoadings = createCacheMutation<
   BulkShiftLoadingsResult
 >({
   mutationFn: bulkShiftLoadings,
-  invalidateKeys: [queryKeys.departmentsTimeline.all, queryKeys.sectionsPage.all],
+  // .lists() вместо .all: правка загрузки не меняет freshness команд,
+  // поэтому не дёргаем её (bug-VT-09).
+  invalidateKeys: [queryKeys.departmentsTimeline.lists(), queryKeys.sectionsPage.all],
 })

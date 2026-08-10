@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Plus,
   Pencil,
@@ -54,9 +55,11 @@ function TabItem({ tab, isActive, onClick, onEdit, onDelete }: TabItemProps) {
   return (
     <div className="relative flex items-center group">
       <button
+        type="button"
         onClick={onClick}
         className={cn(
           'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
           isActive
             ? 'border-primary text-foreground'
             : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
@@ -70,6 +73,7 @@ function TabItem({ tab, isActive, onClick, onEdit, onDelete }: TabItemProps) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
+            type="button"
             className={cn(
               'absolute -right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity',
               'hover:bg-accent text-muted-foreground hover:text-foreground'
@@ -109,11 +113,25 @@ interface TasksTabsProps {
 }
 
 export function TasksTabs({ className }: TasksTabsProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   // rerender-derived-state: индивидуальные селекторы вместо подписки на весь store
   const tabs = useTasksTabsStore((s) => s.tabs)
-  const activeTabId = useTasksTabsStore((s) => s.activeTabId)
-  const setActiveTab = useTasksTabsStore((s) => s.setActiveTab)
   const deleteTab = useTasksTabsStore((s) => s.deleteTab)
+
+  // Активная вкладка определяется URL (источник истины рендера в TasksView)
+  const activeTabId = searchParams.get('tab')
+
+  const handleSelectTab = useCallback(
+    (id: string) => {
+      // replace (не push): переключение между уже открытыми вкладками в баре
+      // не должно засорять историю. Переход из пикера делает push (см. TabPicker).
+      router.replace(`${pathname}?tab=${encodeURIComponent(id)}`)
+    },
+    [router, pathname]
+  )
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTab, setEditingTab] = useState<TaskTab | null>(null)
@@ -149,7 +167,7 @@ export function TasksTabs({ className }: TasksTabsProps) {
             key={tab.id}
             tab={tab}
             isActive={activeTabId === tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleSelectTab(tab.id)}
             onEdit={() => handleEditClick(tab)}
             onDelete={() => handleDeleteClick(tab)}
           />

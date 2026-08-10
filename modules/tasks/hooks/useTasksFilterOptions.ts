@@ -14,9 +14,9 @@ import {
   queryKeys,
   staleTimePresets,
 } from '@/modules/cache'
-import { getOrgStructure, getProjectStructure, getProjectTags } from '@/modules/resource-graph/actions'
+import { getOrgStructure, getFilterProjects, getProjectTags } from '@/modules/resource-graph/actions'
 import type { FilterOption } from '@/modules/inline-filter'
-import type { OrgStructure, ProjectStructure, ProjectTag } from '@/modules/resource-graph/types'
+import type { OrgStructure, ProjectTag } from '@/modules/resource-graph/types'
 import {
   useFilterContext,
   useFilteredOptions,
@@ -34,9 +34,11 @@ const useOrgStructure = createSimpleCacheQuery<OrgStructure>({
   staleTime: staleTimePresets.static,
 })
 
-const useProjectStructure = createSimpleCacheQuery<ProjectStructure>({
-  queryKey: queryKeys.filterStructure.project(),
-  queryFn: getProjectStructure,
+// Фильтру Задач из проектной структуры нужны ТОЛЬКО проекты → лёгкий источник
+// (~132 строки вместо 4.4к section-grain из v_project_structure).
+const useFilterProjects = createSimpleCacheQuery<Array<{ id: string; name: string }>>({
+  queryKey: queryKeys.filterStructure.projectsLight(),
+  queryFn: getFilterProjects,
   staleTime: staleTimePresets.medium,
 })
 
@@ -64,7 +66,7 @@ export function useTasksFilterOptions({
   expandScopeForTasks = false,
 }: { expandScopeForTasks?: boolean } = {}) {
   const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()
-  const { data: projectStructure, isLoading: loadingProject } = useProjectStructure()
+  const { data: projects, isLoading: loadingProject } = useFilterProjects()
   const { data: tags, isLoading: loadingTags } = useProjectTags()
 
   // 🔒 Получаем контекст разрешений.
@@ -124,8 +126,8 @@ export function useTasksFilterOptions({
     }
 
     // Проекты (без parent в контексте орг структуры)
-    if (projectStructure?.projects) {
-      for (const item of projectStructure.projects) {
+    if (projects) {
+      for (const item of projects) {
         result.push({ id: item.id, name: item.name, key: 'проект' })
       }
     }
@@ -138,7 +140,7 @@ export function useTasksFilterOptions({
     }
 
     return result
-  }, [orgStructure, projectStructure, tags])
+  }, [orgStructure, projects, tags])
 
   // 🔒 Фильтруем опции по scope пользователя
   const filteredOptions = useFilteredOptions(allOptions, filterContext)

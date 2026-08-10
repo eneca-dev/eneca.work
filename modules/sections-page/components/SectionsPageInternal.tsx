@@ -24,9 +24,15 @@ import {
 import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
 import { ScissorsToggle } from '@/components/shared/timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
-import { DepartmentRow } from './rows/DepartmentRow'
+import { DepartmentRowContent } from './rows/DepartmentRow'
+import { ProjectRowContent } from './rows/ProjectRow'
+import { ObjectSectionRowContent } from './rows/ObjectSectionRow'
+import { EmployeeRow } from './rows/EmployeeRow'
+import { flattenSections, type SectFlatRow } from './flatten-sections'
+import { VirtualList, type VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { Skeleton } from '@/components/ui/skeleton'
-import { openLoadingModalNewCreate, openLoadingModalNewEdit } from '@/modules/modals'
+import { openLoadingModalNewCreate, openLoadingModalNewEdit, usePrefetchProjectsList, usePrefetchProjectTrees } from '@/modules/modals'
+import { useShallow } from 'zustand/react/shallow'
 import type { FilterQueryParams } from '@/modules/cache'
 import { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
 
@@ -43,6 +49,31 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   const filtersApplied = useMemo(() => {
     return queryParams && Object.keys(queryParams).length > 0
   }, [queryParams])
+
+  // Idle-префетч списка проектов для модалки «Создать загрузку»: греем в простое
+  // ПОСЛЕ загрузки страницы → модалка открывается мгновенно, страницу не замедляем.
+  // Единственное холодное место модалки (сотрудники уже в кэше, деревья — лениво).
+  const prefetchProjectsList = usePrefetchProjectsList()
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => prefetchProjectsList(), { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const id = setTimeout(() => prefetchProjectsList(), 1500)
+    return () => clearTimeout(id)
+  }, [prefetchProjectsList])
+
+  // Idle-префетч деревьев РАСКРЫТЫХ проектов (их id переживают перезагрузку в localStorage):
+  // открываешь «Создать загрузку» на разделе раскрытого проекта → дерево уже тёплое →
+  // модалка открывается с содержимым мгновенно. Греется последовательно, в простое.
+  const expandedProjectIds = useSectionsPageUIStore(
+    useShallow((s) =>
+      s.expandedNodes
+        .filter((n) => n.startsWith('project-'))
+        .map((n) => n.slice('project-'.length))
+    )
+  )
+  usePrefetchProjectTrees(expandedProjectIds)
 
   // Context action for editing
   const handleEditLoading = useCallback((
@@ -161,11 +192,60 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   // UI state
   const expandAll = useSectionsPageUIStore((s) => s.expandAll)
   const collapseAll = useSectionsPageUIStore((s) => s.collapseAll)
+  // Состояние раскрытия — для flatten (toggle создаёт новый массив → пересчёт).
+  const expandedNodes = useSectionsPageUIStore((s) => s.expandedNodes)
 
   // Data fetching with external query params
   const { data: departments, isLoading, error } = useSectionsHierarchy(
     filtersApplied ? queryParams : {},
     { enabled: shouldFetchData }
+  )
+
+  // Плоский список строк для виртуализации (отдел→проект→объект-раздел→сотрудник).
+  const flatRows = useMemo<SectFlatRow[]>(() => {
+    if (!departments) return []
+    return flattenSections(departments, new Set(expandedNodes))
+  }, [departments, expandedNodes])
+
+  // Рендер одной плоской строки по типу (columns — видимые колонки дня).
+  const renderRow = useCallback(
+    (row: SectFlatRow, _index: number, columns?: VirtualColumn[]) => {
+      switch (row.kind) {
+        case 'dept':
+          return <DepartmentRowContent department={row.dept} dayCells={dayCells} columns={columns} />
+        case 'project':
+          return <ProjectRowContent project={row.project} dayCells={dayCells} columns={columns} />
+        case 'objectSection':
+          return (
+            <ObjectSectionRowContent
+              objectSection={row.objectSection}
+              projectId={row.projectId}
+              dayCells={dayCells}
+              columns={columns}
+            />
+          )
+        case 'employee':
+          return (
+            <EmployeeRow
+              employee={row.employee}
+              sectionId={row.sectionId}
+              sectionName={row.sectionName}
+              projectId={row.projectId}
+              projectName={row.projectName}
+              objectId={row.objectId}
+              objectName={row.objectName}
+              dayCells={dayCells}
+              columns={columns}
+            />
+          )
+        default: {
+          const _exhaustive: never = row
+          void _exhaustive
+          return null
+        }
+      }
+    },
+    [dayCells]
   )
 
   // Expand all nodes in the tree (batch operation)
@@ -352,24 +432,24 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
             </div>
           )}
 
-          {/* Timeline Content */}
+          {/* Timeline Content (виртуализировано X+Y — bug-VT-15) */}
           {!error && !isLoading && departments && departments.length > 0 && (
-            <div
-              ref={contentScrollRef}
+            <VirtualList
+              items={flatRows}
+              getKey={(r) => r.key}
+              renderItem={renderRow}
+              estimateSize={44}
+              overscan={10}
+              positionWithTop
+              minContentWidth={totalWidth}
+              scrollElementRef={contentScrollRef}
               onScroll={handleContentScroll}
-              className="overflow-auto h-full"
-            >
-              <div style={{ minWidth: totalWidth }}>
-                {departments.map((department, index) => (
-                  <DepartmentRow
-                    key={department.id}
-                    department={department}
-                    departmentIndex={index}
-                    dayCells={dayCells}
-                  />
-                ))}
-              </div>
-            </div>
+              className="h-full"
+              columnCount={dayCells.length}
+              columnWidth={DAY_CELL_WIDTH}
+              columnScrollMargin={SIDEBAR_WIDTH}
+              columnOverscan={4}
+            />
           )}
         </div>
       </div>

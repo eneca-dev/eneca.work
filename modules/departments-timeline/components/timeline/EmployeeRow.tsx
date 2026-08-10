@@ -46,6 +46,7 @@ import { MonthlyLoadingBars, calculateMonthlyBarsRowHeight } from '@/components/
 import type { MonthlyBarLoading } from '@/components/shared/timeline'
 import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { TimelineScaleMode } from '@/components/shared/timeline'
+import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 /**
  * Контекст режима выборочного bulk-shift, передаётся в loading bars.
@@ -63,6 +64,8 @@ interface EmployeeRowProps {
   employee: Employee
   employeeIndex: number
   dayCells: DayCell[]
+  /** Видимые колонки дня (горизонтальная виртуализация фоновых ячеек). undefined → все. */
+  columns?: VirtualColumn[]
   isTeamLead: boolean
   timelineScale: TimelineScaleMode
   monthCells: MonthCell[]
@@ -496,6 +499,7 @@ export function EmployeeRow({
   employee,
   employeeIndex,
   dayCells,
+  columns,
   isTeamLead,
   timelineScale,
   monthCells,
@@ -727,6 +731,11 @@ export function EmployeeRow({
     ? monthCells.length * monthCellWidth
     : dayCells.length * DAY_CELL_WIDTH
 
+  // Видимые колонки дня (окно горизонтальной виртуализации фоновых ячеек); fallback — все.
+  const dayCols: VirtualColumn[] = !isMonthlyMode
+    ? columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
+    : []
+
   // Get initials for avatar
   const getInitials = (name?: string) => {
     if (!name) return '?'
@@ -883,22 +892,25 @@ export function EmployeeRow({
                 ))}
               </div>
 
-              {/* Background cells */}
-              {dayCells.map((cell, i) => {
+              {/* Background cells (горизонтально виртуализированы) */}
+              {dayCols.map((col) => {
+                const cell = dayCells[col.index]
+                if (!cell) return null
                 const isWeekend = cell.isWeekend && !cell.isWorkday
                 const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
 
                 return (
                   <div
-                    key={i}
+                    key={col.index}
                     className={cn(
-                      'border-r border-border/30 relative',
+                      'absolute top-0 border-r border-border/30',
                       !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
                       !cell.isToday && isWeekend && 'bg-muted/50',
                       cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
                     )}
                     style={{
-                      width: DAY_CELL_WIDTH,
+                      left: col.start,
+                      width: col.size,
                       height: rowHeight,
                     }}
                   />

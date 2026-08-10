@@ -49,9 +49,13 @@ export interface LoadingFilters extends BaseFilters {
 
 export interface BudgetFilters extends BaseFilters {
   entityType?: 'section' | 'object' | 'stage' | 'project'
+  /** Несколько уровней (сериализованы в строку для ключа) */
+  entityTypes?: string
   entityId?: string
   isActive?: boolean
   tagIds?: string[]
+  /** Проекты-фильтр (сериализованы) — чтобы scoped/полный запрос не коллизировали */
+  projectIds?: string
   lean?: boolean
 }
 
@@ -326,6 +330,10 @@ export const queryKeys = {
       [...queryKeys.budgets.all, 'section-summary', projectId] as const,
     parentCandidates: (entityType: string, entityId: string, budgetTypeId: string) =>
       [...queryKeys.budgets.all, 'parent-candidates', entityType, entityId, budgetTypeId] as const,
+    /** Лёгкая иерархия бюджетов section-grain (v_budget_hierarchy) */
+    hierarchy: (filters?: unknown) => [...queryKeys.budgets.all, 'hierarchy', filters ?? null] as const,
+    /** Ленивые этапы+задачи одного раздела (страница Бюджетов) */
+    sectionItems: (sectionId: string) => [...queryKeys.budgets.all, 'section-items', sectionId] as const,
     /** Расчётный бюджет по списку разделов из loadings (v_cache_section_calc_budget) */
     calc: () => [...queryKeys.budgets.all, 'calc'] as const,
     calcBySections: (sectionIds: string[]) =>
@@ -412,6 +420,8 @@ export const queryKeys = {
     org: () => [...queryKeys.filterStructure.all, 'org'] as const,
     /** Проектная структура (проекты) */
     project: () => [...queryKeys.filterStructure.all, 'project'] as const,
+    /** Лёгкий список проектов для фильтра (только id+name, ~132 вместо 4.4к section-grain) */
+    projectsLight: () => [...queryKeys.filterStructure.all, 'projects-light'] as const,
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
   },
@@ -499,6 +509,29 @@ export const queryKeys = {
     list: (filters?: Record<string, unknown>) => [...queryKeys.sectionsPage.lists(), filters] as const,
     /** Capacity для конкретного раздела */
     capacity: (sectionId: string) => [...queryKeys.sectionsPage.all, 'capacity', sectionId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Meetings (созвоны от Teams-бота — отдельный Supabase-проект)
+  // -------------------------------------------------------------------------
+  meetings: {
+    all: ['meetings'] as const,
+    /** Список отчётов о созвонах */
+    reports: () => [...queryKeys.meetings.all, 'reports'] as const,
+    /** Список пользователей, которым расшарен конкретный созвон */
+    shares: (reportId: string) => [...queryKeys.meetings.all, 'shares', reportId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // WS Task Report (отчёт по задачам Worksection)
+  // -------------------------------------------------------------------------
+  wsTaskReport: {
+    all: ['ws-task-report'] as const,
+    lists: () => [...queryKeys.wsTaskReport.all, 'list'] as const,
+    /** Строки отчёта с фильтрами (поиск по названию, статус, диапазон дат) */
+    list: (filters?: Record<string, unknown>) => [...queryKeys.wsTaskReport.lists(), filters] as const,
+    /** Есть ли у текущего пользователя доступ к отчёту */
+    access: () => [...queryKeys.wsTaskReport.all, 'access'] as const,
   },
 } as const
 

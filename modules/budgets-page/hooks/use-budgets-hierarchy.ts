@@ -1,242 +1,150 @@
 /**
- * Budgets Hierarchy Hook
+ * Budgets Hierarchy Hook (Вариант 1 — лёгкая live-вью, без MV)
  *
- * Загружает иерархию проектов с бюджетами для отображения в BudgetsView.
- * Использует существующие данные из resource-graph и budgets модулей.
+ * Строит дерево Проект→Объект→Раздел из section-grain строк v_budget_hierarchy
+ * (~4.3к строк, числа посчитаны в БД) + записи бюджетов для inline-редактора.
+ * Этапы/задачи раздела грузятся лениво при раскрытии (SectionLazyChildren).
+ *
+ * Базовое дерево собирается ОДИН раз (стабильные узлы) → React.memo строк не ломается.
  */
 
 'use client'
 
 import { useMemo, useCallback } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
-import { useResourceGraphData } from '@/modules/resource-graph'
 import { useBudgets } from '@/modules/budgets'
 import type { FilterQueryParams } from '@/modules/inline-filter'
-import type {
-  HierarchyNode,
-  HierarchyNodeType,
-  BudgetInfo,
-} from '../types'
-import type { Project, ProjectObject, Section, DecompositionStage, DecompositionItem } from '@/modules/resource-graph'
+import type { HierarchyNode, BudgetInfo } from '../types'
 import type { BudgetCurrent } from '@/modules/budgets'
-import { useSectionCalcBudgets } from './use-section-calc-budgets'
+import type { BudgetHierarchyRow } from '../actions'
+import { useBudgetHierarchy } from './use-budget-hierarchy'
 
-/** Агрегат расчёта по разделу из v_cache_section_calc_budget */
-interface SectionCalcSummary {
-  loadingHours: number
-  calcBudget: number
-  loadingCount: number
-  errorsCount: number
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const num = (v: number | string | null | undefined): number => {
+  if (v === null || v === undefined) return 0
+  return typeof v === 'string' ? parseFloat(v) || 0 : v
 }
 
-// ============================================================================
-// Budget Transformation Helpers
-// ============================================================================
-
-/**
- * Преобразует BudgetCurrent (V2) в BudgetInfo
- * Note: PostgreSQL numeric приходит как string, поэтому явно конвертируем в number
- */
-function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
-  const toNumber = (val: number | string | null | undefined): number => {
-    if (val === null || val === undefined) return 0
-    return typeof val === 'string' ? parseFloat(val) || 0 : val
-  }
-
+/** BudgetCurrent (V2) → BudgetInfo */
+export function toBudgetInfo(budget: BudgetCurrent): BudgetInfo {
   return {
     budget_id: budget.budget_id,
     name: budget.name,
-    planned_amount: toNumber(budget.total_amount),
-    // Страница бюджетов использует lean-view — spent-поля не нужны для UI
-    spent_amount: toNumber(budget.total_spent),
-    remaining_amount: toNumber(budget.remaining_amount),
-    spent_percentage: toNumber(budget.spent_percentage),
+    planned_amount: num(budget.total_amount),
+    spent_amount: num(budget.total_spent),
+    remaining_amount: num(budget.remaining_amount),
+    spent_percentage: num(budget.spent_percentage),
     parent_budget_id: budget.parent_budget_id,
-    parent_planned_amount: toNumber(budget.parent_total_amount),
+    parent_planned_amount: num(budget.parent_total_amount),
     is_active: budget.is_active,
   }
 }
 
-// ============================================================================
-// Hierarchy Transformation
-// ============================================================================
-
 /**
- * Преобразует DecompositionItem в HierarchyNode
+ * Собирает дерево Проект→Объект→Раздел из плоских section-grain строк.
+ * Объект/проект без раздела (section_id = null) тоже попадают (как в v_resource_graph).
+ * Числа раздела (расчётный, распределено) берутся из строки; объект/проект — роллап.
  */
-function transformDecompositionItem(
-  item: DecompositionItem,
+function buildHierarchy(
+  rows: BudgetHierarchyRow[],
   budgetsMap: Map<string, BudgetInfo[]>
-): HierarchyNode {
-  const nodeBudgets = budgetsMap.get(`decomposition_item:${item.id}`) || []
+): HierarchyNode[] {
+  const projectsMap = new Map<string, HierarchyNode>()
+  const objectsMap = new Map<string, HierarchyNode>()
+  const sectionsMap = new Map<string, HierarchyNode>()
+  const ordered: HierarchyNode[] = []
 
-  return {
-    id: item.id,
-    name: item.description,
-    type: 'decomposition_item',
-    budgets: nodeBudgets,
-    plannedHours: item.plannedHours,
-    children: [],
-    entityType: 'decomposition_item',
-    workCategoryId: item.workCategoryId,
-    workCategoryName: item.workCategoryName,
-    difficulty: item.difficulty ? {
-      id: item.difficulty.id,
-      abbr: item.difficulty.abbr,
-      name: item.difficulty.name,
-    } : null,
-  }
-}
+  for (const row of rows) {
+    if (!row.project_id) continue
 
-/**
- * Преобразует DecompositionStage в HierarchyNode
- */
-function transformDecompositionStage(
-  stage: DecompositionStage,
-  budgetsMap: Map<string, BudgetInfo[]>
-): HierarchyNode {
-  // Трансформируем items в дочерние узлы
-  const children = stage.items.map(item => transformDecompositionItem(item, budgetsMap))
+    // Проект
+    let project = projectsMap.get(row.project_id)
+    if (!project) {
+      project = {
+        id: row.project_id,
+        name: row.project_name || '',
+        type: 'project',
+        stageName: row.stage_type,
+        projectStatus: row.project_status,
+        budgets: budgetsMap.get(`project:${row.project_id}`) || [],
+        children: [],
+        entityType: 'project',
+      }
+      projectsMap.set(row.project_id, project)
+      ordered.push(project)
+    }
 
-  // Плановые часы = сумма plannedHours всех items
-  const plannedHours = stage.items.reduce((sum, item) => sum + (item.plannedHours || 0), 0)
+    if (!row.object_id) continue
 
-  const nodeBudgets = budgetsMap.get(`decomposition_stage:${stage.id}`) || []
+    // Объект
+    let object = objectsMap.get(row.object_id)
+    if (!object) {
+      object = {
+        id: row.object_id,
+        name: row.object_name || '',
+        type: 'object',
+        budgets: budgetsMap.get(`object:${row.object_id}`) || [],
+        children: [],
+        entityType: 'object',
+      }
+      objectsMap.set(row.object_id, object)
+      project.children.push(object)
+    }
 
-  const node: HierarchyNode = {
-    id: stage.id,
-    name: stage.name,
-    type: 'decomposition_stage',
-    budgets: nodeBudgets,
-    plannedHours,
-    children,
-    entityType: 'decomposition_stage',
-  }
+    if (!row.section_id) continue
 
-  return node
-}
-
-/**
- * Преобразует Section в HierarchyNode
- */
-function transformSection(
-  section: Section,
-  budgetsMap: Map<string, BudgetInfo[]>,
-  calcMap: Map<string, SectionCalcSummary>
-): HierarchyNode {
-  const children = section.decompositionStages.map(stage =>
-    transformDecompositionStage(stage, budgetsMap)
-  )
-
-  // Плановые часы (deprecated) = сумма часов всех items декомпозиции
-  const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
-
-  const nodeBudgets = budgetsMap.get(`section:${section.id}`) || []
-
-  // Новый расчёт из loadings (v_cache_section_calc_budget)
-  const calc = calcMap.get(section.id)
-
-  const node: HierarchyNode = {
-    id: section.id,
-    name: section.name,
-    type: 'section',
-    budgets: nodeBudgets,
-    plannedHours,
-    loadingHours: calc?.loadingHours ?? 0,
-    calcBudgetFromLoadings: calc?.calcBudget ?? 0,
-    loadingCount: calc?.loadingCount ?? 0,
-    loadingErrorsCount: calc?.errorsCount ?? 0,
-    children,
-    entityType: 'section',
-    hourlyRate: section.hourlyRate,
+    // Раздел (числа из строки; дети — лениво)
+    if (!sectionsMap.has(row.section_id)) {
+      const section: HierarchyNode = {
+        id: row.section_id,
+        name: row.section_name || '',
+        type: 'section',
+        budgets: budgetsMap.get(`section:${row.section_id}`) || [],
+        loadingHours: num(row.section_loading_hours),
+        calcBudgetFromLoadings: num(row.section_calc_budget),
+        loadingCount: row.section_loading_count ?? 0,
+        loadingErrorsCount: row.section_errors_count ?? 0,
+        // Раздел С этапами → «Распределено» из БД (Σ выделенного этапов).
+        // Раздел БЕЗ этапов → лист: distributedBudget=undefined, BudgetRow покажет
+        // собственный «Выделенный» (как старый код, иначе у безэтапных разделов «—»).
+        distributedBudget: row.section_has_stages ? num(row.section_distributed) : undefined,
+        hasLazyChildren: !!row.section_has_stages,
+        children: [],
+        entityType: 'section',
+        hourlyRate: row.section_hourly_rate != null ? num(row.section_hourly_rate) : null,
+      }
+      sectionsMap.set(row.section_id, section)
+      object.children.push(section)
+    }
   }
 
-  return node
-}
-
-/**
- * Преобразует ProjectObject в HierarchyNode
- */
-function transformObject(
-  object: ProjectObject,
-  budgetsMap: Map<string, BudgetInfo[]>,
-  calcMap: Map<string, SectionCalcSummary>
-): HierarchyNode {
-  const children = object.sections.map(section =>
-    transformSection(section, budgetsMap, calcMap)
-  )
-
-  const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
-
-  // Агрегация по children (sections и ниже)
-  const loadingHours = children.reduce((sum, c) => sum + (c.loadingHours || 0), 0)
-  const calcBudgetFromLoadings = children.reduce((sum, c) => sum + (c.calcBudgetFromLoadings || 0), 0)
-  const loadingCount = children.reduce((sum, c) => sum + (c.loadingCount || 0), 0)
-  const loadingErrorsCount = children.reduce((sum, c) => sum + (c.loadingErrorsCount || 0), 0)
-
-  const nodeBudgets = budgetsMap.get(`object:${object.id}`) || []
-
-  const node: HierarchyNode = {
-    id: object.id,
-    name: object.name,
-    type: 'object',
-    budgets: nodeBudgets,
-    plannedHours,
-    loadingHours,
-    calcBudgetFromLoadings,
-    loadingCount,
-    loadingErrorsCount,
-    children,
-    entityType: 'object',
+  // Роллапы расчётного/часов на объект и проект (сумма по разделам ниже)
+  for (const project of ordered) {
+    let pHours = 0, pCalc = 0, pCount = 0, pErr = 0
+    for (const object of project.children) {
+      let oHours = 0, oCalc = 0, oCount = 0, oErr = 0
+      for (const section of object.children) {
+        oHours += section.loadingHours || 0
+        oCalc += section.calcBudgetFromLoadings || 0
+        oCount += section.loadingCount || 0
+        oErr += section.loadingErrorsCount || 0
+      }
+      object.loadingHours = oHours
+      object.calcBudgetFromLoadings = oCalc
+      object.loadingCount = oCount
+      object.loadingErrorsCount = oErr
+      pHours += oHours; pCalc += oCalc; pCount += oCount; pErr += oErr
+    }
+    project.loadingHours = pHours
+    project.calcBudgetFromLoadings = pCalc
+    project.loadingCount = pCount
+    project.loadingErrorsCount = pErr
   }
 
-  return node
-}
-
-/**
- * Преобразует Project в HierarchyNode
- * Иерархия: Project → Object → Section → DecompositionStage
- */
-function transformProject(
-  project: Project,
-  budgetsMap: Map<string, BudgetInfo[]>,
-  calcMap: Map<string, SectionCalcSummary>
-): HierarchyNode {
-  // Объекты напрямую под проектом (без промежуточного уровня Stage)
-  const children = project.objects.map(object =>
-    transformObject(object, budgetsMap, calcMap)
-  )
-
-  const plannedHours = children.reduce((sum, child) => sum + (child.plannedHours || 0), 0)
-  const loadingHours = children.reduce((sum, c) => sum + (c.loadingHours || 0), 0)
-  const calcBudgetFromLoadings = children.reduce((sum, c) => sum + (c.calcBudgetFromLoadings || 0), 0)
-  const loadingCount = children.reduce((sum, c) => sum + (c.loadingCount || 0), 0)
-  const loadingErrorsCount = children.reduce((sum, c) => sum + (c.loadingErrorsCount || 0), 0)
-
-  const nodeBudgets = budgetsMap.get(`project:${project.id}`) || []
-
-  const node: HierarchyNode = {
-    id: project.id,
-    name: project.name,
-    type: 'project',
-    stageName: project.stageType,
-    projectStatus: project.status,
-    projectTags: project.tags?.map(tag => ({
-      tag_id: tag.id,
-      name: tag.name,
-      color: tag.color || '#6b7280',
-    })),
-    budgets: nodeBudgets,
-    plannedHours,
-    loadingHours,
-    calcBudgetFromLoadings,
-    loadingCount,
-    loadingErrorsCount,
-    children,
-    entityType: 'project',
-  }
-
-  return node
+  return ordered
 }
 
 // ============================================================================
@@ -256,26 +164,22 @@ export function useBudgetsHierarchy(
 ): UseBudgetsHierarchyResult {
   const { enabled = true } = options || {}
 
-  // Загружаем иерархию проектов
+  // Лёгкая иерархия (section-grain) — один запрос
   const {
-    data: projects,
-    isLoading: projectsLoading,
-    error: projectsError,
-    refetch: refetchProjects,
-  } = useResourceGraphData(filters || {}, { enabled })
+    data: rows,
+    isLoading: rowsLoading,
+    error: rowsError,
+    refetch: refetchRows,
+  } = useBudgetHierarchy(filters || {}, { enabled })
 
-  // Когда фильтры применены — берём project_ids из уже загруженной иерархии
-  // и передаём в useBudgets чтобы грузить только нужные бюджеты.
-  // Когда фильтров нет ("Загрузить всё") — грузим всё как обычно.
+  // project_ids из загруженной иерархии — чтобы грузить только нужные бюджеты при фильтрах
   const projectIds = useMemo(() => {
-    if (!filters || !projects) return undefined
-    return projects.map(p => p.id)
-  }, [filters, projects])
+    if (!filters || !rows) return undefined
+    return [...new Set(rows.map(r => r.project_id))]
+  }, [filters, rows])
 
-  // С фильтрами: ждём projects → потом budgets (waterfall, но меньше данных).
-  // Без фильтров: сразу грузим всё параллельно.
   const budgetsEnabled = filters
-    ? (projects !== undefined && projectIds !== undefined && projectIds.length > 0)
+    ? (rows !== undefined && projectIds !== undefined && projectIds.length > 0)
     : enabled
 
   const {
@@ -284,70 +188,42 @@ export function useBudgetsHierarchy(
     error: budgetsError,
     refetch: refetchBudgets,
   } = useBudgets(
-    { is_active: true, project_ids: projectIds, lean: true },
+    // Фаза 7: на старте грузим только верхние уровни (~5к вместо ~35к).
+    // Бюджеты этапов/задач приходят лениво через getSectionBudgetItems при раскрытии раздела.
+    { is_active: true, project_ids: projectIds, lean: true, entity_types: ['project', 'object', 'section'] },
     {
       enabled: budgetsEnabled,
       queryOptions: { placeholderData: keepPreviousData },
     }
   )
 
-  // Расчётный бюджет по всем разделам (loadings × ставка отдела).
-  // Загружаем весь v_cache_section_calc_budget — фильтрация по section_id происходит ниже через calcMap.
-  const {
-    data: sectionCalcs,
-    isLoading: sectionCalcsLoading,
-    error: sectionCalcsError,
-    refetch: refetchSectionCalcs,
-  } = useSectionCalcBudgets()
-
-  // Функция для обновления всех данных
   const refetch = useCallback(() => {
-    refetchProjects()
+    refetchRows()
     refetchBudgets()
-    refetchSectionCalcs()
-  }, [refetchProjects, refetchBudgets, refetchSectionCalcs])
+  }, [refetchRows, refetchBudgets])
 
-  // Создаём Map для быстрого поиска бюджетов по entity
+  // Карта бюджетов по entity (project/object/section/stage/item)
   const budgetsMap = useMemo(() => {
     const map = new Map<string, BudgetInfo[]>()
-
     if (!budgets) return map
-
     for (const budget of budgets) {
       const key = `${budget.entity_type}:${budget.entity_id}`
       const existing = map.get(key) || []
       existing.push(toBudgetInfo(budget))
       map.set(key, existing)
     }
-
     return map
   }, [budgets])
 
-  // Map: section_id → агрегат расчётного бюджета из loadings
-  const calcMap = useMemo(() => {
-    const map = new Map<string, SectionCalcSummary>()
-    if (!sectionCalcs) return map
-    for (const row of sectionCalcs) {
-      if (!row.section_id) continue
-      map.set(row.section_id, {
-        loadingHours: Number(row.total_hours ?? 0),
-        calcBudget: Number(row.calc_budget ?? 0),
-        loadingCount: row.loading_count ?? 0,
-        errorsCount: row.errors_count ?? 0,
-      })
-    }
-    return map
-  }, [sectionCalcs])
-
   const nodes = useMemo(() => {
-    if (!projects || projects.length === 0) return []
-    return projects.map(project => transformProject(project, budgetsMap, calcMap))
-  }, [projects, budgetsMap, calcMap])
+    if (!rows || rows.length === 0) return []
+    return buildHierarchy(rows, budgetsMap)
+  }, [rows, budgetsMap])
 
   return {
     nodes,
-    isLoading: projectsLoading || budgetsLoading || sectionCalcsLoading,
-    error: projectsError || budgetsError || sectionCalcsError || null,
+    isLoading: rowsLoading || budgetsLoading,
+    error: (rowsError as Error) || (budgetsError as Error) || null,
     refetch,
   }
 }

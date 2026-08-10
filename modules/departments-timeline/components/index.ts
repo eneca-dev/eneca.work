@@ -3,4 +3,4 @@
  */
 
 export { DepartmentsTimelineInternal } from './DepartmentsTimeline'
-export { DepartmentRow, TeamRow, EmployeeRow } from './timeline'
+export { DepartmentRowContent, TeamRowContent, EmployeeRow } from './timeline'

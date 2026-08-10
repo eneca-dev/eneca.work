@@ -181,6 +181,14 @@ export function getWeekBounds(date: Date): { start: Date; end: Date } {
  */
 export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
   const projectsMap = new Map<string, Project>()
+  // O(1) lookup-индексы вместо линейного .find() по массивам.
+  // Раньше для каждой из ~19k строк делался .find() по objects/sections/stages/items —
+  // это O(n²) и съедало секунды CPU на сервере. id'шники глобально уникальны (UUID),
+  // поэтому плоские Map по id корректны.
+  const objectsById = new Map<string, ProjectObject>()
+  const sectionsById = new Map<string, Section>()
+  const stagesById = new Map<string, DecompositionStage>()
+  const seenItemIds = new Set<string>()
 
   for (const row of rows) {
     // Skip rows without project_id
@@ -208,22 +216,23 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
     // Skip if no object
     if (!row.object_id) continue
 
-    // Get or create object
-    let object = project.objects.find(o => o.id === row.object_id)
+    // Get or create object (O(1) через objectsById)
+    let object = objectsById.get(row.object_id)
     if (!object) {
       object = {
         id: row.object_id,
         name: row.object_name || '',
         sections: [],
       }
+      objectsById.set(row.object_id, object)
       project.objects.push(object)
     }
 
     // Skip if no section
     if (!row.section_id) continue
 
-    // Get or create section
-    let section = object.sections.find(s => s.id === row.section_id)
+    // Get or create section (O(1) через sectionsById)
+    let section = sectionsById.get(row.section_id)
     if (!section) {
       // Парсим JSONB checkpoints (плановая готовность)
       const rawCheckpoints = row.section_readiness_checkpoints
@@ -270,16 +279,15 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         hourlyRate: row.section_hourly_rate ? Number(row.section_hourly_rate) : null,
         decompositionStages: [],
       }
+      sectionsById.set(row.section_id, section)
       object.sections.push(section)
     }
 
     // Skip if no decomposition stage
     if (!row.decomposition_stage_id) continue
 
-    // Get or create decomposition stage
-    let decompStage = section.decompositionStages.find(
-      ds => ds.id === row.decomposition_stage_id
-    )
+    // Get or create decomposition stage (O(1) через stagesById)
+    let decompStage = stagesById.get(row.decomposition_stage_id)
     if (!decompStage) {
       decompStage = {
         id: row.decomposition_stage_id,
@@ -293,17 +301,16 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         },
         items: [],
       }
+      stagesById.set(row.decomposition_stage_id, decompStage)
       section.decompositionStages.push(decompStage)
     }
 
     // Skip if no decomposition item
     if (!row.decomposition_item_id) continue
 
-    // Check if item already exists
-    const existingItem = decompStage.items.find(
-      i => i.id === row.decomposition_item_id
-    )
-    if (existingItem) continue
+    // Check if item already exists (O(1) через seenItemIds)
+    if (seenItemIds.has(row.decomposition_item_id)) continue
+    seenItemIds.add(row.decomposition_item_id)
 
     // Create decomposition item
     // Cast row to access new budget and progress history fields from v_resource_graph

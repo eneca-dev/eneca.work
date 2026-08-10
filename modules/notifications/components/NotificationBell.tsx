@@ -14,6 +14,8 @@ interface NotificationBellProps {
   collapsed?: boolean
 }
 
+import { createPortal } from "react-dom"
+
 export function NotificationBell({ collapsed = false }: NotificationBellProps) {
   const isOpen = useNotificationsUiStore((s) => s.isPanelOpen)
   const togglePanel = useNotificationsUiStore((s) => s.togglePanel)
@@ -167,7 +169,9 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
         )}
       </Button>
 
-      {isOpen && <NotificationsPanel onCloseAction={handlePanelClose} collapsed={collapsed} />}
+      {isOpen && mounted && document.body
+        ? createPortal(<NotificationsPanel onCloseAction={handlePanelClose} collapsed={collapsed} />, document.body)
+        : null}
     </div>
   )
 }

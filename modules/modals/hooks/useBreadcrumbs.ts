@@ -4,10 +4,11 @@
  * Loading Modal New - Hook для загрузки breadcrumbs по node_id
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
 import { fetchBreadcrumbs } from '../actions/projects-tree'
 import type { BreadcrumbItem } from '../actions/projects-tree'
+import { findBreadcrumbsInCache } from './project-tree-cache'
 
 export interface UseBreadcrumbsOptions {
   /** ID узла (section или decomposition_stage) */
@@ -29,12 +30,19 @@ export interface UseBreadcrumbsResult {
 
 export function useBreadcrumbs(options: UseBreadcrumbsOptions): UseBreadcrumbsResult {
   const { nodeId, enabled = true } = options
+  const queryClient = useQueryClient()
 
   const query = useQuery({
     queryKey: queryKeys.projects.breadcrumbs(nodeId || ''),
     queryFn: async () => {
       if (!nodeId) {
         return { breadcrumbs: null, projectId: null }
+      }
+
+      // cache-first: путь уже есть в загруженном дереве проекта — без сетевого запроса
+      const cached = findBreadcrumbsInCache(queryClient, nodeId)
+      if (cached) {
+        return cached
       }
 
       const result = await fetchBreadcrumbs({ nodeId })
@@ -49,8 +57,8 @@ export function useBreadcrumbs(options: UseBreadcrumbsOptions): UseBreadcrumbsRe
       }
     },
     enabled: enabled && Boolean(nodeId?.trim()),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes — после устаревания фоновый рефетч (без спиннера)
+    gcTime: Infinity, // не удаляем из кэша в течение сессии → нет крутилки при открытии модалки
   })
 
   return {

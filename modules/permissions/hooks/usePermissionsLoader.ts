@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as Sentry from '@sentry/nextjs'
 import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '../store/usePermissionsStore'
+import { queryKeys } from '@/modules/cache'
 import { getFilterContext } from '../server/get-filter-context'
 import type { OrgContext } from '../types'
 
@@ -28,6 +30,8 @@ let globalLoadedForUserId: string | null = null
 export function usePermissionsLoader() {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
   const userId = useUserStore((state) => state.id)
+
+  const queryClient = useQueryClient()
 
   const setPermissions = usePermissionsStore((s) => s.setPermissions)
   const setFilterScope = usePermissionsStore((s) => s.setFilterScope)
@@ -82,24 +86,30 @@ export function usePermissionsLoader() {
       const taskPromise = Sentry.startSpan(
         { name: 'loadUnifiedPermissions' },
         async () => {
-          const result = await getFilterContext()
+          // Дедупликация с useFilterContext (bug-VT-06): обе ветки идут через
+          // ОДИН queryKey в общий queryClient → TanStack схлопывает одновременные
+          // запросы в один сетевой вызов. Раньше getFilterContext летел дважды на
+          // маунте: из этого Zustand-лоадера и из TanStack-хука useFilterContext.
+          // queryFn идентичен useFilterContext (unwrap + throw), чтобы форма
+          // закешированного значения под этим ключом совпадала.
+          const data = await queryClient.fetchQuery({
+            queryKey: queryKeys.filterPermissions.context(),
+            queryFn: async () => {
+              const res = await getFilterContext()
+              if (!res.success) {
+                throw new Error(res.error || 'Ошибка загрузки контекста')
+              }
+              return res.data
+            },
+            staleTime: isForce ? 0 : 10 * 60 * 1000,
+          })
 
-          if (!result.success) {
-            const errorMsg = result.error || 'Ошибка загрузки контекста'
-            console.error('Ошибка загрузки permissions:', errorMsg)
-            setError(errorMsg)
-            Sentry.captureMessage(`Ошибка загрузки permissions: ${errorMsg}`)
-            return
-          }
-
-          if (!result.data) {
+          if (!data) {
             const errorMsg = 'Контекст пользователя не найден'
             console.warn(errorMsg)
             setError(errorMsg)
             return
           }
-
-          const { data } = result
 
           if (!data.permissions || data.permissions.length === 0) {
             const errorMsg = 'У пользователя нет разрешений'
@@ -145,6 +155,7 @@ export function usePermissionsLoader() {
     }
   }, [
     userId,
+    queryClient,
     setPermissions,
     setFilterScope,
     setOrgContext,

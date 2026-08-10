@@ -18,6 +18,7 @@ import { getCellDayType } from '../utils/cell-utils'
 import { computeDailyAggregation, type DailyAggregation } from '../utils/aggregate-bars'
 import { useSectionsPageUIStore } from '../stores/useSectionsPageUIStore'
 import type { SectionLoading, DayCell } from '../types'
+import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 // ============================================================================
 // Constants
@@ -88,6 +89,8 @@ interface AggregatedBarsOverlayProps {
   /** Per-date переопределения ёмкости (dateStr → capacity) */
   dateCapacityOverrides?: Record<string, number>
   dayCells: DayCell[]
+  /** Видимые колонки дня (горизонтальная виртуализация). undefined → все рабочие дни. */
+  columns?: VirtualColumn[]
   rowHeight: number
   /** Включить inline-редактирование ёмкости (только для ObjectSection) */
   editable?: boolean
@@ -107,6 +110,7 @@ export function AggregatedBarsOverlay({
   defaultCapacity,
   dateCapacityOverrides = EMPTY_OVERRIDES,
   dayCells,
+  columns,
   rowHeight,
   editable = false,
   osId,
@@ -208,8 +212,10 @@ export function AggregatedBarsOverlay({
 
   return (
     <div className="absolute inset-0 cells-container">
-        {dailyData.map((day, i) => {
+        {(columns ? columns.map((c) => c.index) : dailyData.map((_, i) => i)).map((i) => {
+        const day = dailyData[i]
         const cell = dayCells[i]
+        if (!day || !cell) return null
         const { isWeekend, isSpecialDayOff } = getCellDayType(cell)
 
         // Пропускаем только выходные и праздники

@@ -10,7 +10,6 @@
  * - deleteLoading: удаление загрузки (hard delete)
  */
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { addDays, format, parseISO } from 'date-fns'
 import type { ActionResult } from '@/modules/cache'
@@ -298,9 +297,6 @@ export async function createLoading(
       }
     }
 
-    // Revalidate paths
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return { success: true, data: mapLoadingToResult(data) }
   } catch (error) {
@@ -317,7 +313,7 @@ export async function createLoading(
 
 /**
  * Batch-создание загрузок для нескольких сотрудников.
- * Один INSERT в Supabase, один revalidatePath.
+ * Один INSERT в Supabase.
  */
 export async function createLoadingBatch(
   input: CreateLoadingBatchInput
@@ -366,9 +362,6 @@ export async function createLoadingBatch(
       }
     }
 
-    // Один revalidatePath
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return {
       success: true,
@@ -495,9 +488,6 @@ export async function updateLoading(
       }
     }
 
-    // Revalidate paths
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return { success: true, data: mapLoadingToResult(data) }
   } catch (error) {
@@ -545,9 +535,6 @@ export async function archiveLoading(
       }
     }
 
-    // Revalidate paths
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return { success: true, data: mapLoadingToResult(data) }
   } catch (error) {
@@ -774,9 +761,6 @@ export async function deleteLoading(
       }
     }
 
-    // Revalidate paths
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return { success: true, data: { id: input.loadingId } }
   } catch (error) {
@@ -907,8 +891,6 @@ export async function splitLoading(
       return { success: false, error: `Не удалось создать вторую часть: ${insertError.message}` }
     }
 
-    revalidatePath('/resource-graph')
-    revalidatePath('/tasks')
 
     return {
       success: true,

@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useCallback, useEffect, useState } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { SectionsPageInternal } from '@/modules/sections-page'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
 import { TasksTabs } from './TasksTabs'
+import { TabPicker } from './TabPicker'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
 import { usePermissionsLoader } from '@/modules/permissions'
 
@@ -27,29 +28,44 @@ import { usePermissionsLoader } from '@/modules/permissions'
 // ============================================================================
 
 export function TasksView() {
-  // Refresh permissions cache on mount — после деплоя нового кода у юзеров
-  // в Zustand могут быть устаревшие permissions. Этот reload подтянет новые
-  // ключи (loadings.edit.scope.* и tasks.tabs.view.department).
-  const { reloadPermissions } = usePermissionsLoader()
-  useEffect(() => {
-    reloadPermissions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Подтягиваем permissions через встроенный авто-loader usePermissionsLoader.
+  // Он грузит права один раз за сессию (guard globalLoadedForUserId) и делает
+  // фоновое обновление при наличии кэша — без блокировки UI и без лишних POST.
+  // Раньше здесь был форсированный reloadPermissions() на каждый маунт, который
+  // пробивал кэш и дублировал useFilterContext → шторм Server Actions (bug-VT-06).
+  usePermissionsLoader()
 
   // URL search params
   const searchParams = useSearchParams()
 
-  // Get active tab data from tabs store (proper selectors for reactivity)
+  // Get tabs + store actions (URL — источник истины активной вкладки)
   const tabs = useTasksTabsStore((s) => s.tabs)
-  const activeTabId = useTasksTabsStore((s) => s.activeTabId)
+  const storedActiveTabId = useTasksTabsStore((s) => s.activeTabId)
+  const setActiveTab = useTasksTabsStore((s) => s.setActiveTab)
   const updateActiveTabFilters = useTasksTabsStore((s) => s.updateActiveTabFilters)
   const setActiveTabLoadAll = useTasksTabsStore((s) => s.setActiveTabLoadAll)
 
-  // Find active tab from tabs array
+  // Разрешаем активную вкладку из URL. Легаси deep-link
+  // (?sectionId=...&highlight=true) потребляет только BudgetsView → открываем budgets.
+  const tabParam = searchParams.get('tab')
+  const hasLegacyHighlight =
+    searchParams.get('highlight') === 'true' && !!searchParams.get('sectionId')
+  const resolvedTabId = tabParam ?? (hasLegacyHighlight ? 'budgets' : null)
+
   const activeTab = useMemo(
-    () => tabs.find((t) => t.id === activeTabId),
-    [tabs, activeTabId]
+    () => (resolvedTabId ? tabs.find((t) => t.id === resolvedTabId) : undefined),
+    [tabs, resolvedTabId]
   )
+
+  // Нет валидной вкладки в URL → показываем пикер, тяжёлый контент не монтируем
+  const showPicker = !activeTab
+
+  // Синхронизируем persisted activeTabId с URL (для "последней активной" и префетча)
+  useEffect(() => {
+    if (activeTab && activeTab.id !== storedActiveTabId) {
+      setActiveTab(activeTab.id)
+    }
+  }, [activeTab, storedActiveTabId, setActiveTab])
 
   // Current filter and view mode from active tab
   const filterString = activeTab?.filterString ?? ''
@@ -96,8 +112,8 @@ export function TasksView() {
           <TasksTabs />
         </div>
 
-        {/* Filter row - only show when tabs exist */}
-        {tabs.length > 0 && (
+        {/* Filter row - показываем только когда открыта вкладка (не на пикере) */}
+        {!showPicker && (
           <div className="px-4 py-2 border-t border-border/50">
             <div className="flex items-center gap-2">
               {/* Locked filters */}
@@ -116,7 +132,7 @@ export function TasksView() {
               {/* Inline filter */}
               <div className="flex-1">
                 <InlineFilter
-                  key={activeTabId}
+                  key={activeTab?.id ?? 'none'}
                   config={TASKS_FILTER_CONFIG}
                   value={filterString}
                   onChange={handleFilterChange}
@@ -130,16 +146,10 @@ export function TasksView() {
 
       {/* Content - takes remaining height */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {/* Empty state when no tabs */}
-        {tabs.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-muted-foreground">
-              <p className="text-lg mb-2">Нет вкладок</p>
-              <p className="text-sm">Нажмите + чтобы создать новую вкладку</p>
-            </div>
-          </div>
-        )}
-        {tabs.length > 0 && viewMode === 'kanban' && (
+        {/* Пикер вкладок — пока вкладка не выбрана (тяжёлый контент не монтируется) */}
+        {showPicker && <TabPicker />}
+
+        {!showPicker && viewMode === 'kanban' && (
           <KanbanBoardInternal
             filterString={filterString}
             queryParams={queryParams}
@@ -148,21 +158,21 @@ export function TasksView() {
             onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
-{tabs.length > 0 && viewMode === 'departments' && (
+        {!showPicker && viewMode === 'departments' && (
           <DepartmentsTimelineInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
-        {tabs.length > 0 && viewMode === 'sections' && (
+        {!showPicker && viewMode === 'sections' && (
           <SectionsPageInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}
           />
         )}
-        {tabs.length > 0 && viewMode === 'budgets' && (
+        {!showPicker && viewMode === 'budgets' && (
           <BudgetsViewInternal
             queryParams={queryParams}
             loadAllEnabled={loadAllEnabled}
