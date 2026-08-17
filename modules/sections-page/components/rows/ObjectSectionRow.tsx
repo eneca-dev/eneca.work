@@ -8,15 +8,20 @@
 import { useMemo, useCallback } from 'react'
 import { Box, ChevronDown, ChevronRight, UserPlus } from 'lucide-react'
 import { useHasPermission, useHasAnyLoadingEditPermission } from '@/modules/permissions'
-import { useRowExpanded, useDateCapacityOverrides } from '../../stores/useSectionsPageUIStore'
-import { getCellClassNames } from '../../utils/cell-utils'
+import { useRowExpanded } from '../../stores/useSectionsPageUIStore'
+import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
+import { expandDateRange } from '../../utils/capacity'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, OBJECT_SECTION_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
+import { WeeklyAggregatedBarsOverlay } from '../WeeklyAggregatedBarsOverlay'
 import { openLoadingModalNewCreate } from '@/modules/modals'
+import { useUpsertSectionCapacityBatch } from '../../hooks'
 import { MockSectionPeriodBar } from '../mock/MockSectionPeriodBar'
 import { MockCapacityPlanBar } from '../mock/MockCapacityPlanBar'
 import { MOCK_PROJECT_ID } from '@/modules/resource-graph/mocks/stagePeriods'
 import type { ObjectSection, DayCell } from '../../types'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface ObjectSectionRowContentProps {
@@ -25,6 +30,8 @@ interface ObjectSectionRowContentProps {
   dayCells: DayCell[]
   /** Видимые колонки дня (горизонтальная виртуализация). undefined → все. */
   columns?: VirtualColumn[]
+  /** Недельные ячейки — задано только в недельном режиме */
+  weekCells?: WeekCell[]
 }
 
 export function ObjectSectionRowContent({
@@ -32,11 +39,17 @@ export function ObjectSectionRowContent({
   projectId,
   dayCells,
   columns,
+  weekCells,
 }: ObjectSectionRowContentProps) {
+  const isWeeklyMode = weekCells !== undefined
   const { isExpanded, toggle } = useRowExpanded('objectSection', objectSection.id)
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const timelineWidth = isWeeklyMode
+    ? weekCells.length * WEEK_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
   const dayCols: VirtualColumn[] =
     columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
+  const weekCols: VirtualColumn[] =
+    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   // Для мок-проекта: верхняя зона — плановая ёмкость, нижняя — фактические загрузки
   const MOCK_CAPACITY_ZONE_HEIGHT = 20
@@ -46,11 +59,24 @@ export function ObjectSectionRowContent({
 
   const loadings = useMemo(() => objectSection.loadings, [objectSection.loadings])
 
-  // Per-date capacity overrides from store
-  const dateCapacityOverrides = useDateCapacityOverrides(objectSection.sectionId)
+  // Per-date capacity overrides — с сервера (часть иерархии, отдельного запроса не требует)
+  const dateCapacityOverrides = objectSection.capacityOverrides
 
   // Permission check for capacity editing
   const canEditCapacity = useHasPermission('sections.capacity.edit')
+
+  const { mutate: saveCapacityBatch } = useUpsertSectionCapacityBatch()
+
+  const handleSaveCapacity = useCallback((startDate: string, endDate: string, value: number) => {
+    const dates = expandDateRange(startDate, endDate)
+    saveCapacityBatch(
+      dates.map((date) => ({
+        sectionId: objectSection.sectionId,
+        capacityDate: date,
+        capacityValue: value,
+      }))
+    )
+  }, [objectSection.sectionId, saveCapacityBatch])
 
   // Permission: есть ли хотя бы одна edit-permission на загрузки
   const canCreateAnyLoading = useHasAnyLoadingEditPermission()
@@ -126,7 +152,7 @@ export function ObjectSectionRowContent({
         {/* Timeline cells + aggregation (editable capacity) */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
           {/* MOCK: подоснова дат раздела + плановая ёмкость (верхняя зона). Компоненты не само-защищены — обёртка по MOCK_PROJECT_ID. */}
-          {projectId === MOCK_PROJECT_ID && (
+          {!isWeeklyMode && projectId === MOCK_PROJECT_ID && (
             <>
               <MockSectionPeriodBar
                 sectionId={objectSection.sectionId}
@@ -140,7 +166,19 @@ export function ObjectSectionRowContent({
             </>
           )}
           {/* Фактические загрузки: для мок-проекта — нижняя зона строки */}
-          {projectId === MOCK_PROJECT_ID ? (
+          {isWeeklyMode ? (
+            <WeeklyAggregatedBarsOverlay
+              loadings={loadings}
+              defaultCapacity={objectSection.defaultCapacity ?? 0}
+              dateCapacityOverrides={dateCapacityOverrides}
+              weekCells={weekCells}
+              weekCellWidth={WEEK_CELL_WIDTH}
+              columns={columns}
+              rowHeight={OBJECT_SECTION_ROW_HEIGHT}
+              editable={canEditCapacity}
+              onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
+            />
+          ) : projectId === MOCK_PROJECT_ID ? (
             <div
               style={{
                 position: 'absolute',
@@ -158,7 +196,7 @@ export function ObjectSectionRowContent({
                 columns={columns}
                 rowHeight={OBJECT_SECTION_ROW_HEIGHT}
                 editable={canEditCapacity}
-                osId={objectSection.sectionId}
+                onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
               />
             </div>
           ) : (
@@ -170,16 +208,27 @@ export function ObjectSectionRowContent({
               columns={columns}
               rowHeight={OBJECT_SECTION_ROW_HEIGHT}
               editable={canEditCapacity}
-              osId={objectSection.sectionId}
+              onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
             />
           )}
-          {dayCols.map((col) => {
+          {!isWeeklyMode && dayCols.map((col) => {
             const cell = dayCells[col.index]
             if (!cell) return null
             return (
               <div
                 key={col.index}
                 className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+          {isWeeklyMode && weekCols.map((col) => {
+            const week = weekCells?.[col.index]
+            if (!week) return null
+            return (
+              <div
+                key={col.index}
+                className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

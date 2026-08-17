@@ -38,3 +38,31 @@ export function compareProjectsByGup(
 
   return a.name.localeCompare(b.name, 'ru')
 }
+
+/**
+ * Сортировка проектов: сначала проекты с загрузками, затем без — внутри
+ * каждой группы сохраняется обычный порядок по ГУП-нумерации.
+ */
+export function compareProjectsByLoadingsThenGup(
+  a: { name: string; totalLoadings?: number },
+  b: { name: string; totalLoadings?: number }
+): number {
+  const aHas = (a.totalLoadings ?? 0) > 0
+  const bHas = (b.totalLoadings ?? 0) > 0
+  if (aHas !== bHas) return aHas ? -1 : 1
+  return compareProjectsByGup(a, b)
+}
+
+/**
+ * Сортировка разделов внутри проекта: сначала разделы с загрузками,
+ * затем без — внутри каждой группы по алфавиту (русская локаль).
+ */
+export function compareSectionsByLoadings(
+  a: { name: string; totalLoadings?: number },
+  b: { name: string; totalLoadings?: number }
+): number {
+  const aHas = (a.totalLoadings ?? 0) > 0
+  const bHas = (b.totalLoadings ?? 0) > 0
+  if (aHas !== bHas) return aHas ? -1 : 1
+  return a.name.localeCompare(b.name, 'ru')
+}

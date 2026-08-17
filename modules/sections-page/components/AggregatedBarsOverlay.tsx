@@ -16,7 +16,6 @@ import { DAY_CELL_WIDTH } from '../constants'
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { getCellDayType } from '../utils/cell-utils'
 import { computeDailyAggregation, type DailyAggregation } from '../utils/aggregate-bars'
-import { useSectionsPageUIStore } from '../stores/useSectionsPageUIStore'
 import type { SectionLoading, DayCell } from '../types'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
@@ -92,10 +91,10 @@ interface AggregatedBarsOverlayProps {
   /** Видимые колонки дня (горизонтальная виртуализация). undefined → все рабочие дни. */
   columns?: VirtualColumn[]
   rowHeight: number
-  /** Включить inline-редактирование ёмкости (только для ObjectSection) */
+  /** Включить inline-редактирование ёмкости */
   editable?: boolean
-  /** ID ObjectSection для сохранения ёмкости в store */
-  osId?: string
+  /** Сохранить ёмкость на диапазон дат (вызывается при editable=true) */
+  onSaveCapacity?: (startDate: string, endDate: string, value: number) => void
   /** Подсказка в тултипе (например, где можно ввести ёмкость) */
   capacityHint?: string
 }
@@ -113,7 +112,7 @@ export function AggregatedBarsOverlay({
   columns,
   rowHeight,
   editable = false,
-  osId,
+  onSaveCapacity,
   capacityHint,
 }: AggregatedBarsOverlayProps) {
   // State for inline editing with range support
@@ -130,10 +129,6 @@ export function AggregatedBarsOverlay({
     hintTimerRef.current = setTimeout(() => setHintCellIndex(null), 2500)
   }, [])
 
-  // Store methods
-  const setCapacity = useSectionsPageUIStore((s) => s.setCapacity)
-  const setCapacityRange = useSectionsPageUIStore((s) => s.setCapacityRange)
-
   useEffect(() => {
     if (editRange !== null && inputRef.current) {
       inputRef.current.focus()
@@ -142,36 +137,28 @@ export function AggregatedBarsOverlay({
   }, [editRange])
 
   const handleCellClick = useCallback((index: number) => {
-    if (!editable || !osId) return
+    if (!editable || !onSaveCapacity) return
 
     // Start editing - single cell initially
     const dateStr = formatMinskDate(dayCells[index].date)
     const currentCapacity = dateCapacityOverrides[dateStr] ?? defaultCapacity
     setEditValue(String(currentCapacity))
     setEditRange({ start: index, end: index })
-  }, [editable, osId, defaultCapacity, dateCapacityOverrides, dayCells])
+  }, [editable, onSaveCapacity, defaultCapacity, dateCapacityOverrides, dayCells])
 
   const handleSave = useCallback(() => {
-    if (osId && editRange !== null && editValue !== '') {
+    if (onSaveCapacity && editRange !== null && editValue !== '') {
       const parsed = parseFloat(editValue)
       if (!isNaN(parsed) && parsed >= 0 && parsed <= 99) {
         const start = Math.min(editRange.start, editRange.end)
         const end = Math.max(editRange.start, editRange.end)
-
-        if (start === end) {
-          // Single cell
-          const dateStr = formatMinskDate(dayCells[start].date)
-          setCapacity(osId, dateStr, parsed)
-        } else {
-          // Range
-          const startDate = formatMinskDate(dayCells[start].date)
-          const endDate = formatMinskDate(dayCells[end].date)
-          setCapacityRange(osId, startDate, endDate, parsed)
-        }
+        const startDate = formatMinskDate(dayCells[start].date)
+        const endDate = formatMinskDate(dayCells[end].date)
+        onSaveCapacity(startDate, endDate, parsed)
       }
     }
     setEditRange(null)
-  }, [osId, editRange, editValue, setCapacity, setCapacityRange, dayCells])
+  }, [onSaveCapacity, editRange, editValue, dayCells])
 
   const dailyData = useMemo(
     () => computeDailyAggregation(loadings, defaultCapacity, dateCapacityOverrides, dayCells),

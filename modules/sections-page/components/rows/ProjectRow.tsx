@@ -1,18 +1,24 @@
 /**
  * Project Row (content) Component — одна строка проекта на таймлайне разделов.
- * При свёрнутом проекте показывает агрегированные мини-бары. Дети — через flatten.
+ * Агрегированные мини-бары + редактирование ёмкости видны независимо от expand state. Дети — через flatten.
  */
 
 'use client'
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { ChevronDown, ChevronRight, FolderKanban } from 'lucide-react'
-import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
+import { useHasPermission } from '@/modules/permissions'
+import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, PROJECT_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
-import { getCellClassNames } from '../../utils/cell-utils'
+import { WeeklyAggregatedBarsOverlay } from '../WeeklyAggregatedBarsOverlay'
+import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
+import { expandDateRange } from '../../utils/capacity'
 import { MockProjectDateBars } from '../mock/MockProjectDateBars'
+import { useUpsertSectionCapacityBatch } from '../../hooks'
 import type { Project, DayCell, SectionLoading } from '../../types'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface ProjectRowContentProps {
@@ -20,13 +26,17 @@ interface ProjectRowContentProps {
   dayCells: DayCell[]
   /** Видимые колонки дня (горизонтальная виртуализация). undefined → все. */
   columns?: VirtualColumn[]
+  /** Недельные ячейки — задано только в недельном режиме */
+  weekCells?: WeekCell[]
 }
 
 export function ProjectRowContent({
   project,
   dayCells,
   columns,
+  weekCells,
 }: ProjectRowContentProps) {
+  const isWeeklyMode = weekCells !== undefined
   const isExpanded = useSectionsPageUIStore((s) => s.isExpanded(`project-${project.id}`))
   const toggle = useSectionsPageUIStore((s) => s.toggle)
 
@@ -34,9 +44,13 @@ export function ProjectRowContent({
     toggle(`project-${project.id}`)
   }
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const timelineWidth = isWeeklyMode
+    ? weekCells.length * WEEK_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
   const dayCols: VirtualColumn[] =
     columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
+  const weekCols: VirtualColumn[] =
+    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   // Aggregate all loadings from all object sections for collapsed view
   const allProjectLoadings = useMemo((): SectionLoading[] => {
@@ -50,27 +64,49 @@ export function ProjectRowContent({
     }, 0)
   }, [project.objectSections])
 
-  // rerender-derived-state: подписка только на overrides релевantных разделов (useShallow)
-  const sectionIds = useMemo(
-    () => project.objectSections.map((os) => os.sectionId),
-    [project.objectSections]
-  )
-  const capacityOverrides = useMultipleSectionsCapacityOverrides(sectionIds)
-
-  // Compute per-date aggregated capacity
+  // Compute per-date aggregated capacity (источник — серверные capacityOverrides разделов)
   const projectDateCapacityOverrides = useMemo(() => {
     const allDates = new Set(
-      project.objectSections.flatMap((os) => Object.keys(capacityOverrides[os.sectionId] ?? {}))
+      project.objectSections.flatMap((os) => Object.keys(os.capacityOverrides ?? {}))
     )
     if (allDates.size === 0) return {}
     const result: Record<string, number> = {}
     for (const dateStr of allDates) {
       result[dateStr] = project.objectSections.reduce((sum, os) => {
-        return sum + (capacityOverrides[os.sectionId]?.[dateStr] ?? (os.defaultCapacity ?? 0))
+        return sum + (os.capacityOverrides?.[dateStr] ?? (os.defaultCapacity ?? 0))
       }, 0)
     }
     return result
-  }, [project.objectSections, capacityOverrides])
+  }, [project.objectSections])
+
+  // Permission check for capacity editing
+  const canEditCapacity = useHasPermission('sections.capacity.edit')
+
+  const { mutate: saveCapacityBatch } = useUpsertSectionCapacityBatch()
+
+  // Ввод ёмкости на строке проекта делит введённое число поровну на все разделы
+  // проекта (чтобы сумма при агрегации совпадала с тем, что ввёл пользователь,
+  // а не умножалась на количество разделов). Округляем до 0.01, остаток от
+  // округления уходит на последний раздел — чтобы сумма точно билась.
+  const handleSaveCapacity = useCallback((startDate: string, endDate: string, value: number) => {
+    const dates = expandDateRange(startDate, endDate)
+    const sectionCount = project.objectSections.length
+    if (sectionCount === 0) return
+
+    const base = Math.floor((value / sectionCount) * 100) / 100
+    const inputs = project.objectSections.flatMap((os, index) => {
+      const isLast = index === sectionCount - 1
+      const sectionValue = isLast
+        ? Math.round((value - base * (sectionCount - 1)) * 100) / 100
+        : base
+      return dates.map((date) => ({
+        sectionId: os.sectionId,
+        capacityDate: date,
+        capacityValue: sectionValue,
+      }))
+    })
+    saveCapacityBatch(inputs)
+  }, [project.objectSections, saveCapacityBatch])
 
   return (
     <div className="group/row min-w-full relative border-b border-border/50">
@@ -114,33 +150,60 @@ export function ProjectRowContent({
           </div>
         </div>
 
-        {/* Timeline cells with aggregation when collapsed */}
+        {/* Timeline cells with aggregation (видна и свёрнутой, и развёрнутой — редактирование ёмкости не завязано на expand state) */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
           {/* MOCK: плановые даты проекта (мануальные + из разделов). Self-guard по MOCK_PROJECT_ID. */}
-          <MockProjectDateBars
-            projectId={project.id}
-            dayCells={dayCells}
-            rowHeight={PROJECT_ROW_HEIGHT}
-          />
-          {!isExpanded && allProjectLoadings.length > 0 && (
-            <AggregatedBarsOverlay
-              loadings={allProjectLoadings}
-              defaultCapacity={totalCapacity}
-              dateCapacityOverrides={projectDateCapacityOverrides}
+          {!isWeeklyMode && (
+            <MockProjectDateBars
+              projectId={project.id}
               dayCells={dayCells}
-              columns={columns}
               rowHeight={PROJECT_ROW_HEIGHT}
-              editable={false}
-              capacityHint="Ёмкость задаётся на строке раздела"
             />
           )}
-          {dayCols.map((col) => {
+          {(allProjectLoadings.length > 0 || canEditCapacity) && (
+            isWeeklyMode ? (
+              <WeeklyAggregatedBarsOverlay
+                loadings={allProjectLoadings}
+                defaultCapacity={totalCapacity}
+                dateCapacityOverrides={projectDateCapacityOverrides}
+                weekCells={weekCells}
+                weekCellWidth={WEEK_CELL_WIDTH}
+                columns={columns}
+                rowHeight={PROJECT_ROW_HEIGHT}
+                editable={canEditCapacity}
+                onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
+              />
+            ) : (
+              <AggregatedBarsOverlay
+                loadings={allProjectLoadings}
+                defaultCapacity={totalCapacity}
+                dateCapacityOverrides={projectDateCapacityOverrides}
+                dayCells={dayCells}
+                columns={columns}
+                rowHeight={PROJECT_ROW_HEIGHT}
+                editable={canEditCapacity}
+                onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
+              />
+            )
+          )}
+          {!isWeeklyMode && dayCols.map((col) => {
             const cell = dayCells[col.index]
             if (!cell) return null
             return (
               <div
                 key={col.index}
                 className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+          {isWeeklyMode && weekCols.map((col) => {
+            const week = weekCells?.[col.index]
+            if (!week) return null
+            return (
+              <div
+                key={col.index}
+                className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

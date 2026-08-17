@@ -3,17 +3,17 @@
  *
  * Zustand store для UI состояния страницы разделов:
  * - Expand/collapse узлов дерева
- * - Capacity overrides (клиентские, до сохранения на сервер)
+ *
+ * Ёмкость (capacity) хранится на сервере (таблица section_capacity) и приходит
+ * как часть иерархии — см. modules/sections-page/hooks/index.ts (useUpsertSectionCapacityBatch).
  */
 
 import { create } from 'zustand'
-import { useShallow } from 'zustand/react/shallow'
 import { persist } from 'zustand/middleware'
-import { eachDayOfInterval } from 'date-fns'
-import { parseMinskDate, formatMinskDate } from '@/lib/timezone-utils'
 import type { CustomDateRange } from '@/modules/resource-graph/components/timeline'
+import type { TimelineScaleMode } from '@/components/shared/timeline'
 
-export type { CustomDateRange }
+export type { CustomDateRange, TimelineScaleMode }
 
 interface SectionsPageUIState {
   // ============================================================================
@@ -25,6 +25,16 @@ interface SectionsPageUIState {
 
   /** Установить кастомный диапазон */
   setCustomDateRange: (range: CustomDateRange | null) => void
+
+  // ============================================================================
+  // Timeline Scale
+  // ============================================================================
+
+  /** Масштаб таймлайна: 'day' | 'week' (страница «Разделы» месячный режим не использует) */
+  timelineScale: TimelineScaleMode
+
+  /** Установить масштаб */
+  setTimelineScale: (scale: TimelineScaleMode) => void
 
   // ============================================================================
   // Expand/Collapse State
@@ -50,64 +60,6 @@ interface SectionsPageUIState {
 
   /** Свернуть все узлы типа */
   collapseAll: (nodeIds: string[]) => void
-
-  // ============================================================================
-  // Capacity Overrides (клиентские)
-  // ============================================================================
-
-  /**
-   * Capacity overrides для конкретных дат (до сохранения на сервер)
-   * Map: sectionId -> date -> value
-   */
-  capacityOverrides: Record<string, Record<string, number>>
-
-  /** Установить capacity override */
-  setCapacity: (sectionId: string, date: string, value: number) => void
-
-  /** Установить capacity для диапазона дат */
-  setCapacityRange: (sectionId: string, startDate: string, endDate: string, value: number) => void
-
-  /** Удалить capacity override */
-  deleteCapacity: (sectionId: string, date: string) => void
-
-  /** Очистить все overrides для раздела */
-  clearSectionOverrides: (sectionId: string) => void
-
-  /** Очистить все overrides */
-  clearAllOverrides: () => void
-}
-
-// Константа для пустого объекта (предотвращает создание нового объекта на каждый рендер)
-const EMPTY_CAPACITY_OVERRIDES: Record<string, number> = {}
-
-/**
- * Selector hook для получения capacity overrides конкретного раздела
- */
-export function useDateCapacityOverrides(sectionId: string): Record<string, number> {
-  return useSectionsPageUIStore((state) => state.capacityOverrides[sectionId] || EMPTY_CAPACITY_OVERRIDES)
-}
-
-/**
- * Selector hook для получения capacity overrides нескольких разделов
- *
- * Использует useShallow для предотвращения ре-рендеров при изменении
- * нерелевантных разделов (только shallow-сравнение выбранных ключей)
- */
-export function useMultipleSectionsCapacityOverrides(
-  sectionIds: string[]
-): Record<string, Record<string, number>> {
-  return useSectionsPageUIStore(
-    useShallow((state) => {
-      const result: Record<string, Record<string, number>> = {}
-      for (const id of sectionIds) {
-        const overrides = state.capacityOverrides[id]
-        if (overrides) {
-          result[id] = overrides
-        }
-      }
-      return result
-    })
-  )
 }
 
 /**
@@ -133,6 +85,13 @@ export const useSectionsPageUIStore = create<SectionsPageUIState>()(
 
       customDateRange: null,
       setCustomDateRange: (range) => set({ customDateRange: range }),
+
+      // ============================================================================
+      // Timeline Scale Implementation
+      // ============================================================================
+
+      timelineScale: 'day',
+      setTimelineScale: (scale) => set({ timelineScale: scale }),
 
       // ============================================================================
       // Expand/Collapse Implementation
@@ -182,88 +141,14 @@ export const useSectionsPageUIStore = create<SectionsPageUIState>()(
           }
         })
       },
-
-      // ============================================================================
-      // Capacity Overrides Implementation
-      // ============================================================================
-
-      capacityOverrides: {},
-
-      setCapacity: (sectionId, date, value) => {
-        set((state) => ({
-          capacityOverrides: {
-            ...state.capacityOverrides,
-            [sectionId]: {
-              ...(state.capacityOverrides[sectionId] || {}),
-              [date]: value,
-            },
-          },
-        }))
-      },
-
-      setCapacityRange: (sectionId, startDate, endDate, value) => {
-        set((state) => {
-          // Generate all dates in range
-          const dates = eachDayOfInterval({
-            start: parseMinskDate(startDate),
-            end: parseMinskDate(endDate),
-          })
-
-          // Build overrides for all dates
-          const newOverrides = { ...(state.capacityOverrides[sectionId] || {}) }
-          dates.forEach((date) => {
-            const dateStr = formatMinskDate(date)
-            newOverrides[dateStr] = value
-          })
-
-          return {
-            capacityOverrides: {
-              ...state.capacityOverrides,
-              [sectionId]: newOverrides,
-            },
-          }
-        })
-      },
-
-      deleteCapacity: (sectionId, date) => {
-        set((state) => {
-          const sectionOverrides = state.capacityOverrides[sectionId]
-          if (!sectionOverrides) return state
-
-          const { [date]: _, ...rest } = sectionOverrides
-
-          if (Object.keys(rest).length === 0) {
-            const { [sectionId]: __, ...restSections } = state.capacityOverrides
-            return { capacityOverrides: restSections }
-          }
-
-          return {
-            capacityOverrides: {
-              ...state.capacityOverrides,
-              [sectionId]: rest,
-            },
-          }
-        })
-      },
-
-      clearSectionOverrides: (sectionId) => {
-        set((state) => {
-          const { [sectionId]: _, ...rest } = state.capacityOverrides
-          return { capacityOverrides: rest }
-        })
-      },
-
-      clearAllOverrides: () => {
-        set({ capacityOverrides: {} })
-      },
     }),
     {
       name: 'sections-page-ui',
       // Сериализация Set → Array для localStorage
       partialize: (state) => ({
         expandedNodes: state.expandedNodes,
-        capacityOverrides: state.capacityOverrides,
         customDateRange: state.customDateRange,
+        timelineScale: state.timelineScale,
       }),
     }
   )

@@ -24502,6 +24502,7 @@ export type Database = {
       view_departments_sections_loadings: {
         Row: {
           capacity_date: string | null
+          capacity_overrides: Json | null
           capacity_value: number | null
           default_capacity: number | null
           department_head_avatar_url: string | null

@@ -22,7 +22,13 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
-import { ScissorsToggle } from '@/components/shared/timeline'
+import { ScissorsToggle, ScaleToggle, WeeklyHeader } from '@/components/shared/timeline'
+import { generateWeekCells } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import {
+  WEEK_CELL_WIDTH,
+  WEEKLY_WEEKS_BEFORE,
+  WEEKLY_WEEKS_AFTER,
+} from '@/modules/resource-graph/constants'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import { DepartmentRowContent } from './rows/DepartmentRow'
 import { ProjectRowContent } from './rows/ProjectRow'
@@ -172,6 +178,10 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   // Custom date range from store
   const customDateRange = useSectionsPageUIStore((s) => s.customDateRange)
   const setCustomDateRange = useSectionsPageUIStore((s) => s.setCustomDateRange)
+  const timelineScale = useSectionsPageUIStore((s) => s.timelineScale)
+  const setTimelineScale = useSectionsPageUIStore((s) => s.setTimelineScale)
+
+  const isWeeklyMode = timelineScale === 'week'
 
   // Timeline range and cells
   const range = useMemo(
@@ -186,8 +196,22 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     [range, calendarEvents]
   )
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  // Weekly cells (computed only in weekly mode)
+  const weekCells = useMemo(() => {
+    if (!isWeeklyMode) return []
+    return generateWeekCells(0, WEEKLY_WEEKS_BEFORE, WEEKLY_WEEKS_AFTER, calendarEvents)
+  }, [isWeeklyMode, calendarEvents])
+
+  const timelineWidth = isWeeklyMode
+    ? weekCells.length * WEEK_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
+
+  // Index of current week for auto-scroll
+  const currentWeekIndex = useMemo(
+    () => weekCells.findIndex((c) => c.isCurrentWeek),
+    [weekCells]
+  )
 
   // UI state
   const expandAll = useSectionsPageUIStore((s) => s.expandAll)
@@ -212,9 +236,23 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     (row: SectFlatRow, _index: number, columns?: VirtualColumn[]) => {
       switch (row.kind) {
         case 'dept':
-          return <DepartmentRowContent department={row.dept} dayCells={dayCells} columns={columns} />
+          return (
+            <DepartmentRowContent
+              department={row.dept}
+              dayCells={dayCells}
+              columns={columns}
+              weekCells={isWeeklyMode ? weekCells : undefined}
+            />
+          )
         case 'project':
-          return <ProjectRowContent project={row.project} dayCells={dayCells} columns={columns} />
+          return (
+            <ProjectRowContent
+              project={row.project}
+              dayCells={dayCells}
+              columns={columns}
+              weekCells={isWeeklyMode ? weekCells : undefined}
+            />
+          )
         case 'objectSection':
           return (
             <ObjectSectionRowContent
@@ -222,6 +260,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               projectId={row.projectId}
               dayCells={dayCells}
               columns={columns}
+              weekCells={isWeeklyMode ? weekCells : undefined}
             />
           )
         case 'employee':
@@ -236,6 +275,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               objectName={row.objectName}
               dayCells={dayCells}
               columns={columns}
+              weekCells={isWeeklyMode ? weekCells : undefined}
             />
           )
         default: {
@@ -245,7 +285,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
         }
       }
     },
-    [dayCells]
+    [dayCells, isWeeklyMode, weekCells]
   )
 
   // Expand all nodes in the tree (batch operation)
@@ -278,26 +318,107 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     return differenceInDays(today, range.start)
   }, [range.start])
 
-  // Scroll to show today with a small margin (7 days) to maximize forward view
-  const handleScrollToToday = useCallback(() => {
-    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-    if (contentScrollRef.current) contentScrollRef.current.scrollLeft = scrollLeft
-    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = scrollLeft
-  }, [todayOffsetDays])
+  // Смещение скролла к «сегодня»: в днях — today-7, в неделях — предыдущая неделя
+  const todayScrollLeft = useMemo(() => {
+    if (isWeeklyMode) {
+      return Math.max(0, (currentWeekIndex - 1) * WEEK_CELL_WIDTH)
+    }
+    return Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
+  }, [isWeeklyMode, currentWeekIndex, todayOffsetDays])
 
-  // Scroll header to today as soon as it renders (fires when shouldFetchData becomes true)
+  const handleScrollToToday = useCallback(() => {
+    if (contentScrollRef.current) contentScrollRef.current.scrollLeft = todayScrollLeft
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = todayScrollLeft
+  }, [todayScrollLeft])
+
+
+  // Scroll header to today as soon as it renders (fires when shouldFetchData becomes true).
+  // Шапка не зависит от загрузки данных, её раскладка уже стабильна к этому моменту.
   useEffect(() => {
     if (!shouldFetchData || !headerScrollRef.current) return
-    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-    headerScrollRef.current.scrollLeft = scrollLeft
-  }, [shouldFetchData, todayOffsetDays])
+    headerScrollRef.current.scrollLeft = todayScrollLeft
+  }, [shouldFetchData, todayScrollLeft])
 
-  // Scroll content to today-7 when data finishes loading
+  /**
+   * Первичная прокрутка таймлайна к «сегодня» (в дневном режиме — сегодня и 7 дней
+   * до него, в недельном — текущая неделя и одна до неё).
+   *
+   * Почему не одно присвоение scrollLeft: сразу после загрузки данных VirtualList
+   * только монтируется, строки ещё измеряются, и позиция прокрутки в этот момент
+   * либо обрезается браузером до 0, либо сбрасывается доезжающей раскладкой —
+   * таймлайн оставался в начале диапазона. Поэтому УДЕРЖИВАЕМ позицию: каждый кадр
+   * возвращаем её на место, пока она не устоится на нескольких кадрах подряд.
+   *
+   * Как только пользователь сам трогает прокрутку — немедленно прекращаем, чтобы
+   * не выдёргивать таймлайн у него из-под рук. Повторно срабатывает только при
+   * смене режима день/неделя или диапазона дат (меняется ключ).
+   */
+  const scrollAppliedKeyRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (isLoading || !contentScrollRef.current) return
-    const scrollLeft = Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-    contentScrollRef.current.scrollLeft = scrollLeft
-  }, [isLoading, todayOffsetDays])
+    if (isLoading) return
+
+    const key = `${isWeeklyMode ? 'week' : 'day'}:${todayScrollLeft}`
+    if (scrollAppliedKeyRef.current === key) return
+
+    let raf = 0
+    let frames = 0
+    let stableFrames = 0
+    let cancelled = false
+
+    const stopHolding = () => {
+      cancelled = true
+      scrollAppliedKeyRef.current = key
+    }
+
+    // Контейнер прокрутки может появиться на кадр-два позже эффекта (VirtualList
+    // монтируется вместе с данными) — вешаем слушатели, как только он возник.
+    let listenersOn: HTMLDivElement | null = null
+    const attachListeners = (node: HTMLDivElement) => {
+      if (listenersOn) return
+      listenersOn = node
+      // Ручное вмешательство пользователя важнее автопозиционирования
+      node.addEventListener('wheel', stopHolding, { passive: true })
+      node.addEventListener('pointerdown', stopHolding, { passive: true })
+      node.addEventListener('keydown', stopHolding)
+    }
+
+    const tick = () => {
+      if (cancelled) return
+      const node = contentScrollRef.current
+      if (node) attachListeners(node)
+      frames++
+
+      if (node && node.scrollWidth > node.clientWidth) {
+        if (Math.abs(node.scrollLeft - todayScrollLeft) > 1) {
+          node.scrollLeft = todayScrollLeft
+          if (headerScrollRef.current) headerScrollRef.current.scrollLeft = todayScrollLeft
+          stableFrames = 0
+        } else {
+          stableFrames++
+        }
+      }
+
+      // Позиция держится 10 кадров подряд → раскладка устоялась, отпускаем.
+      // Потолок в 180 кадров (~3 сек) — страховка от бесконечного цикла.
+      if (stableFrames >= 10 || frames >= 180) {
+        scrollAppliedKeyRef.current = key
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    }
+
+    tick()
+
+    return () => {
+      cancelAnimationFrame(raf)
+      if (listenersOn) {
+        listenersOn.removeEventListener('wheel', stopHolding)
+        listenersOn.removeEventListener('pointerdown', stopHolding)
+        listenersOn.removeEventListener('keydown', stopHolding)
+      }
+    }
+  }, [isLoading, isWeeklyMode, todayScrollLeft])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -349,7 +470,14 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Отделы / Проекты / Разделы
                   </span>
-                  <ScissorsToggle />
+                  <div className="flex items-center gap-1.5">
+                    <ScaleToggle
+                      value={timelineScale}
+                      onChange={setTimelineScale}
+                      modes={['day', 'week']}
+                    />
+                    {!isWeeklyMode && <ScissorsToggle />}
+                  </div>
                   {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                   <TooltipProvider>
                     <div className="flex items-center gap-1">
@@ -384,16 +512,20 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                   */}
                 </div>
                 {/* Timeline header with dates */}
-                <TimelineHeader
-                  dayCells={dayCells}
-                  datePopoverConfig={{
-                    customRange: customDateRange,
-                    onRangeChange: setCustomDateRange,
-                    onScrollToToday: handleScrollToToday,
-                    defaultDaysBefore: DAYS_BEFORE_TODAY,
-                    defaultDaysAfter: DAYS_AFTER_TODAY,
-                  }}
-                />
+                {isWeeklyMode ? (
+                  <WeeklyHeader weekCells={weekCells} weekCellWidth={WEEK_CELL_WIDTH} />
+                ) : (
+                  <TimelineHeader
+                    dayCells={dayCells}
+                    datePopoverConfig={{
+                      customRange: customDateRange,
+                      onRangeChange: setCustomDateRange,
+                      onScrollToToday: handleScrollToToday,
+                      defaultDaysBefore: DAYS_BEFORE_TODAY,
+                      defaultDaysAfter: DAYS_AFTER_TODAY,
+                    }}
+                  />
+                )}
               </div>
             </div>
           </header>
@@ -445,8 +577,8 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               scrollElementRef={contentScrollRef}
               onScroll={handleContentScroll}
               className="h-full"
-              columnCount={dayCells.length}
-              columnWidth={DAY_CELL_WIDTH}
+              columnCount={isWeeklyMode ? weekCells.length : dayCells.length}
+              columnWidth={isWeeklyMode ? WEEK_CELL_WIDTH : DAY_CELL_WIDTH}
               columnScrollMargin={SIDEBAR_WIDTH}
               columnOverscan={4}
             />

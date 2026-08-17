@@ -30,7 +30,7 @@ import type {
   CapacityInput,
   SectionCapacity,
 } from '../types'
-import { compareProjectsByGup } from '../utils/sort-projects'
+import { compareProjectsByLoadingsThenGup, compareSectionsByLoadings } from '../utils/sort-projects'
 
 // ============================================================================
 // Helper Functions
@@ -41,6 +41,22 @@ import { compareProjectsByGup } from '../utils/sort-projects'
  */
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+/**
+ * Нормализует capacity_overrides из вью (jsonb `{"YYYY-MM-DD": число}`) в
+ * `Record<string, number>`. Значение приходит из numeric-колонки, поэтому
+ * приводим к числу явно — на случай, если драйвер отдаст его строкой.
+ */
+function parseCapacityOverrides(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') return {}
+
+  const result: Record<string, number> = {}
+  for (const [date, raw] of Object.entries(value as Record<string, unknown>)) {
+    const parsed = parseFloat(String(raw))
+    if (!isNaN(parsed)) result[date] = parsed
+  }
+  return result
 }
 
 /**
@@ -479,7 +495,7 @@ export async function getSectionsHierarchy(
             startDate: row.section_start_date,
             endDate: row.section_end_date,
             defaultCapacity: row.default_capacity != null ? parseFloat(String(row.default_capacity)) : null,
-            capacityOverrides: {},
+            capacityOverrides: parseCapacityOverrides(row.capacity_overrides),
 dailyWorkloads: {},
             loadings: [],
             totalLoadings: 0,
@@ -487,11 +503,6 @@ dailyWorkloads: {},
           project.objectSections.push(objectSection)
           project.totalSections++
           department.totalSections++
-        }
-
-        // Добавляем capacity override только один раз (в отделе ответственного)
-        if (deptId === responsibleDeptId && row.capacity_date && row.capacity_value !== null) {
-          objectSection.capacityOverrides![row.capacity_date] = row.capacity_value
         }
 
         // Добавляем загрузку только в отдел сотрудника
@@ -542,13 +553,14 @@ dailyWorkloads: {},
       }
     }
 
-    // Присваиваем totalEmployees из Set.size и сортируем проекты по ГУП-нумерации
+    // Присваиваем totalEmployees из Set.size и сортируем: сначала с загрузками, затем без
     for (const dept of departmentsMap.values()) {
       dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
       for (const project of dept.projects) {
         project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
+        project.objectSections.sort(compareSectionsByLoadings)
       }
-      dept.projects.sort(compareProjectsByGup)
+      dept.projects.sort(compareProjectsByLoadingsThenGup)
     }
 
     // Преобразуем Map в массив
@@ -592,12 +604,13 @@ export async function upsertSectionCapacity(
       }
     }
 
-    // Получаем текущего пользователя
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    // Auth + permission check
+    const ctxResult = await getFilterContext()
+    if (!ctxResult.success || !ctxResult.data) {
       return { success: false, error: 'Unauthorized' }
+    }
+    if (!ctxResult.data.permissions.includes('sections.capacity.edit')) {
+      return { success: false, error: 'Нет прав на редактирование ёмкости' }
     }
 
     // Upsert capacity
@@ -608,7 +621,7 @@ export async function upsertSectionCapacity(
           section_id: input.sectionId,
           capacity_date: input.capacityDate,
           capacity_value: input.capacityValue,
-          created_by: user.id,
+          created_by: ctxResult.data.userId,
           updated_at: new Date().toISOString(),
         },
         {
@@ -657,6 +670,92 @@ export async function upsertSectionCapacity(
 }
 
 /**
+ * Установить/обновить ёмкость сразу для нескольких разделов/дат одним запросом.
+ * Используется для массового редактирования (например, ввод ёмкости на строке
+ * проекта раздаёт одно значение на все разделы проекта за выбранные даты).
+ */
+export async function upsertSectionCapacityBatch(
+  inputs: CapacityInput[]
+): Promise<ActionResult<SectionCapacity[]>> {
+  return Sentry.startSpan(
+    { name: 'upsertSectionCapacityBatch', op: 'db.mutation', attributes: { count: inputs.length } },
+    async () => {
+  try {
+    if (inputs.length === 0) {
+      return { success: true, data: [] }
+    }
+
+    for (const input of inputs) {
+      if (input.capacityValue <= 0 || input.capacityValue > 99) {
+        return { success: false, error: 'Ёмкость должна быть от 0.1 до 99' }
+      }
+    }
+
+    const supabase = await createClient()
+
+    const ctxResult = await getFilterContext()
+    if (!ctxResult.success || !ctxResult.data) {
+      return { success: false, error: 'Unauthorized' }
+    }
+    const ctx = ctxResult.data
+    if (!ctx.permissions.includes('sections.capacity.edit')) {
+      return { success: false, error: 'Нет прав на редактирование ёмкости' }
+    }
+
+    const updatedAt = new Date().toISOString()
+    const { data, error } = await supabase
+      .from('section_capacity')
+      .upsert(
+        inputs.map((input) => ({
+          section_id: input.sectionId,
+          capacity_date: input.capacityDate,
+          capacity_value: input.capacityValue,
+          created_by: ctx.userId,
+          updated_at: updatedAt,
+        })),
+        { onConflict: 'section_id,capacity_date' }
+      )
+      .select()
+
+    if (error) {
+      console.error('Error upserting section capacity batch:', error)
+      Sentry.captureException(new Error(error.message), {
+        tags: { module: 'sections-page', action: 'upsertSectionCapacityBatch', error_type: 'db_error', user_facing: 'true' },
+        extra: { count: inputs.length },
+      })
+      return {
+        success: false,
+        error: `Ошибка сохранения ёмкости: ${error.message}`,
+      }
+    }
+
+    return {
+      success: true,
+      data: (data ?? []).map((row) => ({
+        capacityId: row.capacity_id,
+        sectionId: row.section_id,
+        capacityDate: row.capacity_date,
+        capacityValue: row.capacity_value,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        createdBy: row.created_by,
+      })),
+    }
+  } catch (error) {
+    console.error('Unexpected error in upsertSectionCapacityBatch:', error)
+    Sentry.captureException(error, {
+      tags: { module: 'sections-page', action: 'upsertSectionCapacityBatch', error_type: 'unexpected_error', user_facing: 'true' },
+      extra: { count: inputs.length },
+    })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+    }
+  }
+  }) // end Sentry.startSpan
+}
+
+/**
  * Удалить capacity override для конкретной даты (вернёт к default)
  */
 export async function deleteSectionCapacityOverride(
@@ -669,12 +768,13 @@ export async function deleteSectionCapacityOverride(
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    // Auth + permission check
+    const ctxResult = await getFilterContext()
+    if (!ctxResult.success || !ctxResult.data) {
       return { success: false, error: 'Unauthorized' }
+    }
+    if (!ctxResult.data.permissions.includes('sections.capacity.edit')) {
+      return { success: false, error: 'Нет прав на редактирование ёмкости' }
     }
 
     const { error } = await supabase

@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import {
   getSectionsHierarchy,
   upsertSectionCapacity,
+  upsertSectionCapacityBatch,
   deleteSectionCapacityOverride,
 } from '../actions'
 import type {
@@ -49,6 +50,20 @@ export const useUpsertSectionCapacity = createCacheMutation({
   invalidateKeys: (input) => [
     [...queryKeys.sectionsPage.lists()],
     [...queryKeys.sectionsPage.capacity(input.sectionId)],
+  ],
+  onSuccess: () => {
+    toast.success('Ёмкость обновлена')
+  },
+})
+
+/**
+ * Установить/обновить ёмкость сразу для нескольких разделов/дат одним запросом
+ * (например, ввод ёмкости на строке проекта — раздаётся на все разделы проекта)
+ */
+export const useUpsertSectionCapacityBatch = createCacheMutation({
+  mutationFn: upsertSectionCapacityBatch,
+  invalidateKeys: () => [
+    [...queryKeys.sectionsPage.lists()],
   ],
   onSuccess: () => {
     toast.success('Ёмкость обновлена')

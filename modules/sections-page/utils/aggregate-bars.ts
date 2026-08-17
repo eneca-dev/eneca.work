@@ -7,6 +7,7 @@
 
 import { formatMinskDate } from '@/lib/timezone-utils'
 import type { SectionLoading, DayCell } from '../types'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 
 // ============================================================================
 // Types
@@ -52,5 +53,48 @@ export function computeDailyAggregation(
     }
 
     return { rateSum, capacity }
+  })
+}
+
+// ============================================================================
+// Compute weekly aggregation from loadings (для недельного режима)
+// ============================================================================
+
+/**
+ * Per-week aggregated data — те же rateSum/capacity, что и DailyAggregation,
+ * но усреднённые по рабочим дням недели (WeekCell.workingDates), чтобы проценты
+ * оставались сравнимы с дневным режимом (среднедневная загрузка недели).
+ */
+export type WeeklyAggregation = DailyAggregation
+
+/**
+ * Compute per-week aggregation for a list of loadings + capacity.
+ * Суммирует rateSum/capacity ТОЛЬКО по рабочим дням недели (week.workingDates) —
+ * выходные и праздники не участвуют ни в сумме, ни в делителе, поэтому среднее
+ * не завышается (раньше сумма шла по всем 7 дням, а делилась на workingDays,
+ * что задирало результат при ненулевой ёмкости на выходных).
+ * Возвращает массив, выровненный по weekCells.
+ */
+export function computeWeeklyAggregation(
+  loadings: SectionLoading[],
+  defaultCapacity: number,
+  dateCapacityOverrides: Record<string, number>,
+  weekCells: WeekCell[]
+): WeeklyAggregation[] {
+  return weekCells.map((week) => {
+    let rateSum = 0
+    let capacity = 0
+    for (const dateStr of week.workingDates) {
+      capacity += dateCapacityOverrides[dateStr] ?? defaultCapacity
+
+      for (const loading of loadings) {
+        if (isDateInRange(dateStr, loading.startDate, loading.endDate)) {
+          rateSum += loading.rate
+        }
+      }
+    }
+
+    const divisor = week.workingDates.length || 1
+    return { rateSum: rateSum / divisor, capacity: capacity / divisor }
   })
 }

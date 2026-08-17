@@ -34,9 +34,12 @@ import {
   COMMENT_GAP,
 } from '../../utils/loading-bars-utils'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
+import { WeeklyLoadingBars, calculateWeeklyBarsRowHeight, type WeeklyBarLoading } from '@/components/shared/timeline'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import type { SectionLoading, DayCell, TimelineRange } from '../../types'
 import type { TimelineUnit } from '@/types/planning'
-import { getCellClassNames } from '../../utils/cell-utils'
+import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
 import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
 import { useScissorsModeStore } from '@/stores'
@@ -66,6 +69,8 @@ interface EmployeeRowProps {
   dayCells: DayCell[]
   /** Видимые колонки дня (горизонтальная виртуализация фоновых ячеек). undefined → все. */
   columns?: VirtualColumn[]
+  /** Недельные ячейки — задано только в недельном режиме */
+  weekCells?: WeekCell[]
 }
 
 
@@ -447,7 +452,9 @@ export function EmployeeRow({
   objectName,
   dayCells,
   columns,
+  weekCells,
 }: EmployeeRowProps) {
+  const isWeeklyMode = weekCells !== undefined
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const { onEditLoading } = useSectionsPageActions()
 
@@ -567,11 +574,45 @@ export function EmployeeRow({
     return Math.max(EMPLOYEE_ROW_HEIGHT, maxBottom + 8)
   }, [barRenders])
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
-  const rowHeight = actualRowHeight
+  // Недельный режим: загрузки в generic-формат баров широкой сетки
+  const weeklyBarLoadings = useMemo((): WeeklyBarLoading[] => {
+    if (!isWeeklyMode) return []
+    return employee.loadings.map((l) => ({
+      id: l.id,
+      startDate: l.startDate,
+      endDate: l.endDate,
+      rate: l.rate,
+      projectId: l.projectId,
+      projectName: l.projectName,
+      sectionId: l.sectionId,
+      sectionName: l.sectionName,
+      stageId: l.stageId ?? undefined,
+      stageName: l.stageName ?? undefined,
+      comment: l.comment ?? undefined,
+      employeeId: l.employeeId,
+    }))
+  }, [isWeeklyMode, employee.loadings])
+
+  const weeklyRowHeight = useMemo(() => {
+    if (!isWeeklyMode) return EMPLOYEE_ROW_HEIGHT
+    return calculateWeeklyBarsRowHeight(weeklyBarLoadings, weekCells, WEEK_CELL_WIDTH)
+  }, [isWeeklyMode, weeklyBarLoadings, weekCells])
+
+  // Клик по недельному бару → та же модалка редактирования, что и в дневном режиме
+  const handleWeeklyBarClick = useCallback((loadingId: string) => {
+    const loading = employee.loadings.find((l) => l.id === loadingId)
+    if (loading) handleLoadingClick(loading)
+  }, [employee.loadings, handleLoadingClick])
+
+  const timelineWidth = isWeeklyMode
+    ? weekCells.length * WEEK_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
+  const rowHeight = isWeeklyMode ? weeklyRowHeight : actualRowHeight
   const employmentRate = employee.employeeEmploymentRate ?? 1
   const dayCols: VirtualColumn[] =
     columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
+  const weekCols: VirtualColumn[] =
+    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">
@@ -650,35 +691,60 @@ export function EmployeeRow({
 
         {/* Timeline cells with loading bars */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
-          {/* Loading bars overlay */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
-            {barRenders.map((bar, idx) => (
-              <LoadingBar
-                key={`${bar.period.id}-${idx}`}
-                bar={bar}
-                barRenders={barRenders}
-                timeUnits={timeUnits}
-                timelineRange={timelineRange}
-                onLoadingClick={handleLoadingClick}
-                onLoadingResize={handleLoadingResize}
-                onSplitLoading={handleSplitLoading}
-                canEdit={canEdit}
+          {isWeeklyMode ? (
+            /* Недельный режим: без resize/ножниц — клик по бару открывает модалку */
+            <>
+              {weekCols.map((col) => {
+                const week = weekCells?.[col.index]
+                if (!week) return null
+                return (
+                  <div
+                    key={col.index}
+                    className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
+                    style={{ left: col.start, width: col.size }}
+                  />
+                )
+              })}
+              <WeeklyLoadingBars
+                loadings={weeklyBarLoadings}
+                weekCells={weekCells}
+                weekCellWidth={WEEK_CELL_WIDTH}
+                onLoadingClick={handleWeeklyBarClick}
               />
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              {/* Loading bars overlay */}
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
+                {barRenders.map((bar, idx) => (
+                  <LoadingBar
+                    key={`${bar.period.id}-${idx}`}
+                    bar={bar}
+                    barRenders={barRenders}
+                    timeUnits={timeUnits}
+                    timelineRange={timelineRange}
+                    onLoadingClick={handleLoadingClick}
+                    onLoadingResize={handleLoadingResize}
+                    onSplitLoading={handleSplitLoading}
+                    canEdit={canEdit}
+                  />
+                ))}
+              </div>
 
-          {/* Background cells (горизонтально виртуализированы) */}
-          {dayCols.map((col) => {
-            const cell = dayCells[col.index]
-            if (!cell) return null
-            return (
-              <div
-                key={col.index}
-                className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
-                style={{ left: col.start, width: col.size }}
-              />
-            )
-          })}
+              {/* Background cells (горизонтально виртуализированы) */}
+              {dayCols.map((col) => {
+                const cell = dayCells[col.index]
+                if (!cell) return null
+                return (
+                  <div
+                    key={col.index}
+                    className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                    style={{ left: col.start, width: col.size }}
+                  />
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>

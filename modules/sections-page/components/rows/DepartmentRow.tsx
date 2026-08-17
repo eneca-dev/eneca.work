@@ -7,11 +7,14 @@
 
 import { useMemo } from 'react'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
-import { useSectionsPageUIStore, useMultipleSectionsCapacityOverrides } from '../../stores/useSectionsPageUIStore'
+import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
-import { getCellClassNames } from '../../utils/cell-utils'
+import { WeeklyAggregatedBarsOverlay } from '../WeeklyAggregatedBarsOverlay'
+import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
 import type { Department, DayCell, SectionLoading } from '../../types'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface DepartmentRowContentProps {
@@ -19,13 +22,17 @@ interface DepartmentRowContentProps {
   dayCells: DayCell[]
   /** Видимые колонки дня (горизонтальная виртуализация). undefined → все. */
   columns?: VirtualColumn[]
+  /** Недельные ячейки — задано только в недельном режиме */
+  weekCells?: WeekCell[]
 }
 
 export function DepartmentRowContent({
   department,
   dayCells,
   columns,
+  weekCells,
 }: DepartmentRowContentProps) {
+  const isWeeklyMode = weekCells !== undefined
   const isExpanded = useSectionsPageUIStore((s) => s.isExpanded(`department-${department.id}`))
   const toggle = useSectionsPageUIStore((s) => s.toggle)
 
@@ -33,9 +40,13 @@ export function DepartmentRowContent({
     toggle(`department-${department.id}`)
   }
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const timelineWidth = isWeeklyMode
+    ? weekCells.length * WEEK_CELL_WIDTH
+    : dayCells.length * DAY_CELL_WIDTH
   const dayCols: VirtualColumn[] =
     columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
+  const weekCols: VirtualColumn[] =
+    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   // X: агрегация всех загрузок из всех проектов и разделов отдела
   const allDepartmentLoadings = useMemo((): SectionLoading[] => {
@@ -51,28 +62,26 @@ export function DepartmentRowContent({
     , 0)
   }, [department.projects])
 
-  // rerender-derived-state: подписка только на overrides релевантных разделов (useShallow)
+  // Агрегация по всем разделам всех проектов отдела (источник — серверные capacityOverrides)
   const allSections = useMemo(
     () => department.projects.flatMap((p) => p.objectSections),
     [department.projects]
   )
-  const sectionIds = useMemo(() => allSections.map((os) => os.sectionId), [allSections])
-  const capacityOverrides = useMultipleSectionsCapacityOverrides(sectionIds)
 
   // Compute per-date aggregated capacity across all sections of all projects
   const departmentDateCapacityOverrides = useMemo(() => {
     const allDates = new Set(
-      allSections.flatMap((os) => Object.keys(capacityOverrides[os.sectionId] ?? {}))
+      allSections.flatMap((os) => Object.keys(os.capacityOverrides ?? {}))
     )
     if (allDates.size === 0) return {}
     const result: Record<string, number> = {}
     for (const dateStr of allDates) {
       result[dateStr] = allSections.reduce((sum, os) => {
-        return sum + (capacityOverrides[os.sectionId]?.[dateStr] ?? (os.defaultCapacity ?? 0))
+        return sum + (os.capacityOverrides?.[dateStr] ?? (os.defaultCapacity ?? 0))
       }, 0)
     }
     return result
-  }, [allSections, capacityOverrides])
+  }, [allSections])
 
   return (
     <div className="group/row min-w-full relative border-b border-border">
@@ -119,23 +128,47 @@ export function DepartmentRowContent({
         {/* Timeline cells with department-level capacity aggregation */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
           {allDepartmentLoadings.length > 0 && (
-            <AggregatedBarsOverlay
-              loadings={allDepartmentLoadings}
-              defaultCapacity={totalDepartmentCapacity}
-              dateCapacityOverrides={departmentDateCapacityOverrides}
-              dayCells={dayCells}
-              columns={columns}
-              rowHeight={DEPARTMENT_ROW_HEIGHT}
-              editable={false}
-            />
+            isWeeklyMode ? (
+              <WeeklyAggregatedBarsOverlay
+                loadings={allDepartmentLoadings}
+                defaultCapacity={totalDepartmentCapacity}
+                dateCapacityOverrides={departmentDateCapacityOverrides}
+                weekCells={weekCells}
+                weekCellWidth={WEEK_CELL_WIDTH}
+                columns={columns}
+                rowHeight={DEPARTMENT_ROW_HEIGHT}
+                editable={false}
+              />
+            ) : (
+              <AggregatedBarsOverlay
+                loadings={allDepartmentLoadings}
+                defaultCapacity={totalDepartmentCapacity}
+                dateCapacityOverrides={departmentDateCapacityOverrides}
+                dayCells={dayCells}
+                columns={columns}
+                rowHeight={DEPARTMENT_ROW_HEIGHT}
+                editable={false}
+              />
+            )
           )}
-          {dayCols.map((col) => {
+          {!isWeeklyMode && dayCols.map((col) => {
             const cell = dayCells[col.index]
             if (!cell) return null
             return (
               <div
                 key={col.index}
                 className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+          {isWeeklyMode && weekCols.map((col) => {
+            const week = weekCells?.[col.index]
+            if (!week) return null
+            return (
+              <div
+                key={col.index}
+                className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )
