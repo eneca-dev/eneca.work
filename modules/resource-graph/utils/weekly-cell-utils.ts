@@ -12,11 +12,13 @@ import {
   format,
   eachDayOfInterval,
   getWeek,
+  differenceInDays,
 } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { getTodayMinsk, formatMinskDate } from '@/lib/timezone-utils'
+import { getTodayMinsk, formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
 import { buildCalendarMap, getDayInfo } from './index'
 import type { CompanyCalendarEvent } from '../types'
+import { isValidCustomRange, type CustomDateRange } from '../components/timeline/TimelineDatePopover'
 
 // ============================================================================
 // Types
@@ -48,24 +50,60 @@ export interface WeekCell {
 }
 
 // ============================================================================
+// Range resolution
+// ============================================================================
+
+export interface WeeklyRange {
+  /** Первый день окна, понедельник */
+  firstWeekStart: Date
+  /** Количество недель в окне */
+  totalWeeks: number
+}
+
+interface ResolveWeeklyRangeOptions {
+  weeksBefore: number
+  weeksAfter: number
+}
+
+/**
+ * Вычисляет недельное окно таймлайна — аналог resolveTimelineRange для дневного
+ * режима (см. TimelineHeader.tsx). При наличии валидного customRange окно
+ * растягивается по неделям, полностью покрывающим выбранный диапазон дат
+ * (начало/конец snap-ятся к границам недели, Пн-старт). Иначе — окно из
+ * weeksBefore недель до текущей + weeksAfter после, центрировано на сегодня.
+ */
+export function resolveWeeklyRange(
+  customRange: CustomDateRange | null | undefined,
+  options: ResolveWeeklyRangeOptions
+): WeeklyRange {
+  if (customRange && isValidCustomRange(customRange)) {
+    const start = parseMinskDate(customRange.startDate)
+    const end = parseMinskDate(customRange.endDate)
+    const firstWeekStart = startOfWeek(start, { weekStartsOn: 1 })
+    const lastWeekStart = startOfWeek(end, { weekStartsOn: 1 })
+    const totalWeeks = differenceInDays(lastWeekStart, firstWeekStart) / 7 + 1
+    return { firstWeekStart, totalWeeks }
+  }
+  const today = getTodayMinsk()
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+  const firstWeekStart = addWeeks(currentWeekStart, -options.weeksBefore)
+  const totalWeeks = options.weeksBefore + options.weeksAfter
+  return { firstWeekStart, totalWeeks }
+}
+
+// ============================================================================
 // Generation
 // ============================================================================
 
 /**
- * Генерирует массив WeekCell для заданного диапазона.
+ * Генерирует массив WeekCell для заданного окна (см. resolveWeeklyRange).
+ * Недели — Пн-Вс, как и нумерация недель в дневном режиме (TimelineHeader).
  *
- * Окно: [текущая неделя - weeksBefore + offset, + weeksAfter). Недели — Пн-Вс,
- * как и нумерация недель в дневном режиме (TimelineHeader).
- *
- * @param offset - Сдвиг окна в неделях (0 = центрировано на текущую неделю)
- * @param weeksBefore - Недель до текущей
- * @param weeksAfter - Недель после текущей (включая текущую)
+ * @param range - Окно недель (firstWeekStart/totalWeeks), см. resolveWeeklyRange
  * @param calendarEvents - События компании (праздники, переносы)
  */
 export function generateWeekCells(
-  offset: number,
-  weeksBefore: number,
-  weeksAfter: number,
+  range: WeeklyRange,
   calendarEvents: CompanyCalendarEvent[] = []
 ): WeekCell[] {
   const today = getTodayMinsk()
@@ -75,8 +113,7 @@ export function generateWeekCells(
   const calendarMap = buildCalendarMap(calendarEvents)
   const cells: WeekCell[] = []
 
-  const firstWeekStart = addWeeks(currentWeekStart, -weeksBefore + offset)
-  const totalWeeks = weeksBefore + weeksAfter
+  const { firstWeekStart, totalWeeks } = range
 
   let monthIdx = -1
   let prevMonth = -1

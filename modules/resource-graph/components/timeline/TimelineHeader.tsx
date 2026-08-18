@@ -118,7 +118,7 @@ export function generateDayCells(
   return cells
 }
 
-interface TimelineDatePopoverConfig {
+export interface TimelineDatePopoverConfig {
   customRange: CustomDateRange | null
   onRangeChange: (range: CustomDateRange | null) => void
   onScrollToToday: () => void

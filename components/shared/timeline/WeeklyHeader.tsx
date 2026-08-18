@@ -9,12 +9,20 @@
 'use client'
 
 import { useMemo } from 'react'
+import { Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import { TimelineDatePopover } from '@/modules/resource-graph/components/timeline/TimelineDatePopover'
+import type { TimelineDatePopoverConfig } from '@/modules/resource-graph/components/timeline/TimelineHeader'
 
 interface WeeklyHeaderProps {
   weekCells: WeekCell[]
   weekCellWidth: number
+  /** Simple scroll-to-today button (legacy) */
+  onScrollToToday?: () => void
+  /** Full date range popover config (replaces onScrollToToday when provided) — та же логика, что и в дневном режиме (TimelineHeader) */
+  datePopoverConfig?: TimelineDatePopoverConfig
 }
 
 // Минимальное число недель в месяце, чтобы уместилось название
@@ -23,6 +31,8 @@ const MIN_WEEKS_FOR_MONTH_NAME = 2
 export function WeeklyHeader({
   weekCells,
   weekCellWidth,
+  onScrollToToday,
+  datePopoverConfig,
 }: WeeklyHeaderProps) {
   const totalWidth = weekCells.length * weekCellWidth
 
@@ -86,6 +96,24 @@ export function WeeklyHeader({
             {month.weeksCount >= MIN_WEEKS_FOR_MONTH_NAME && month.name}
           </div>
         ))}
+        {/* Кнопка настройки дат / перехода к сегодня — та же логика, что и в дневном режиме */}
+        {(datePopoverConfig || onScrollToToday) && (
+          <div className="sticky right-0 ml-auto flex items-center pr-2 bg-card z-10 border-l border-border/50">
+            {datePopoverConfig ? (
+              <TimelineDatePopover {...datePopoverConfig} />
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                onClick={onScrollToToday}
+                title="Перейти к сегодняшней дате"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Row 2: Недели */}

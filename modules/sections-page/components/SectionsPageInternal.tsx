@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/tooltip'
 import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
 import { ScissorsToggle, ScaleToggle, WeeklyHeader } from '@/components/shared/timeline'
-import { generateWeekCells } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import { generateWeekCells, resolveWeeklyRange } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import {
   WEEK_CELL_WIDTH,
   WEEKLY_WEEKS_BEFORE,
@@ -197,11 +197,17 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     [range, calendarEvents]
   )
 
+  // Недельное окно — тот же customDateRange, что и в дневном режиме (см. resolveWeeklyRange)
+  const weeklyRange = useMemo(
+    () => resolveWeeklyRange(customDateRange, { weeksBefore: WEEKLY_WEEKS_BEFORE, weeksAfter: WEEKLY_WEEKS_AFTER }),
+    [customDateRange]
+  )
+
   // Weekly cells (computed only in weekly mode)
   const weekCells = useMemo(() => {
     if (!isWeeklyMode) return []
-    return generateWeekCells(0, WEEKLY_WEEKS_BEFORE, WEEKLY_WEEKS_AFTER, calendarEvents)
-  }, [isWeeklyMode, calendarEvents])
+    return generateWeekCells(weeklyRange, calendarEvents)
+  }, [isWeeklyMode, weeklyRange, calendarEvents])
 
   const timelineWidth = isWeeklyMode
     ? weekCells.length * WEEK_CELL_WIDTH
@@ -529,7 +535,17 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                 </div>
                 {/* Timeline header with dates */}
                 {isWeeklyMode ? (
-                  <WeeklyHeader weekCells={weekCells} weekCellWidth={WEEK_CELL_WIDTH} />
+                  <WeeklyHeader
+                    weekCells={weekCells}
+                    weekCellWidth={WEEK_CELL_WIDTH}
+                    datePopoverConfig={{
+                      customRange: customDateRange,
+                      onRangeChange: setCustomDateRange,
+                      onScrollToToday: handleScrollToToday,
+                      defaultDaysBefore: WEEKLY_WEEKS_BEFORE * 7,
+                      defaultDaysAfter: WEEKLY_WEEKS_AFTER * 7,
+                    }}
+                  />
                 ) : (
                   <TimelineHeader
                     dayCells={dayCells}
