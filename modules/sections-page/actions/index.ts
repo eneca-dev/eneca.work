@@ -665,11 +665,12 @@ export async function upsertSectionCapacity(
   try {
     const supabase = await createClient()
 
-    // Валидация
-    if (input.capacityValue <= 0 || input.capacityValue > 99) {
+    // Валидация. 0 — валидное значение (явно "ёмкость не нужна на эту дату",
+    // отображается как пустая ячейка — см. getWeekCellClassNames/getCellClassNames).
+    if (input.capacityValue < 0 || input.capacityValue > 99) {
       return {
         success: false,
-        error: 'Ёмкость должна быть от 0.1 до 99',
+        error: 'Ёмкость должна быть от 0 до 99',
       }
     }
 
@@ -755,8 +756,8 @@ export async function upsertSectionCapacityBatch(
     }
 
     for (const input of inputs) {
-      if (input.capacityValue <= 0 || input.capacityValue > 99) {
-        return { success: false, error: 'Ёмкость должна быть от 0.1 до 99' }
+      if (input.capacityValue < 0 || input.capacityValue > 99) {
+        return { success: false, error: 'Ёмкость должна быть от 0 до 99' }
       }
     }
 

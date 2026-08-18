@@ -9,7 +9,7 @@
  */
 
 import type { Department, Project, ObjectSection, SectionLoading } from '../types'
-import { hasActivityInPeriod, type DateRange } from '../utils/period-activity'
+import { hasActivityInPeriod, hasEmployeeLoadingInPeriod, type DateRange } from '../utils/period-activity'
 
 /** Сгруппированный по сотруднику набор загрузок раздела (как employeesWithLoadings в ObjectSectionRow). */
 export interface SectEmployee {
@@ -80,7 +80,13 @@ export function staleGroupNodeId(departmentId: string): string {
 // отдела разом (отдел ответственного + отдел сотрудника — см. "полное дублирование"
 // в getSectionsHierarchy), поэтому project.id/os.id сами по себе не уникальны
 // в плоском списке всех отделов — без deptId React получал два ряда с одним key.
-function pushProjectRows(out: SectFlatRow[], deptId: string, project: Project, expanded: Set<string>): void {
+function pushProjectRows(
+  out: SectFlatRow[],
+  deptId: string,
+  project: Project,
+  expanded: Set<string>,
+  activePeriod?: DateRange | null
+): void {
   out.push({ kind: 'project', key: `proj:${deptId}:${project.id}`, project })
   if (!expanded.has(`project-${project.id}`)) return
 
@@ -88,7 +94,10 @@ function pushProjectRows(out: SectFlatRow[], deptId: string, project: Project, e
     out.push({ kind: 'objectSection', key: `os:${deptId}:${os.id}`, objectSection: os, projectId: project.id })
     if (!expanded.has(`objectSection-${os.id}`)) continue
 
-    for (const emp of groupEmployees(os)) {
+    const employees = groupEmployees(os).filter(
+      (emp) => !activePeriod || hasEmployeeLoadingInPeriod(emp.loadings, activePeriod)
+    )
+    for (const emp of employees) {
       out.push({
         kind: 'employee',
         key: `emp:${deptId}:${os.id}:${emp.employeeId}`,
@@ -133,7 +142,7 @@ export function flattenSections(
     const excludedProjects = dept.projects.filter((p) => isExcluded(p))
 
     for (const project of activeProjects) {
-      pushProjectRows(out, dept.id, project, expanded)
+      pushProjectRows(out, dept.id, project, expanded, activePeriod)
     }
 
     if (excludedProjects.length > 0) {
@@ -153,7 +162,7 @@ export function flattenSections(
       })
       if (expanded.has(groupNodeId)) {
         for (const project of excludedProjects) {
-          pushProjectRows(out, dept.id, project, expanded)
+          pushProjectRows(out, dept.id, project, expanded, activePeriod)
         }
       }
     }

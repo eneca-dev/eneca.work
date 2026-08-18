@@ -98,6 +98,9 @@ export const useUpsertSectionCapacity = createCacheMutation({
   onSuccess: () => {
     toast.success('Ёмкость обновлена')
   },
+  onError: (error) => {
+    toast.error(error.message || 'Не удалось сохранить ёмкость')
+  },
 })
 
 /**
@@ -142,6 +145,9 @@ export const useUpsertSectionCapacityBatch = createCacheMutation<
   ],
   onSuccess: () => {
     toast.success('Ёмкость обновлена')
+  },
+  onError: (error) => {
+    toast.error(error.message || 'Не удалось сохранить ёмкость')
   },
 })
 
