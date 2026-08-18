@@ -30,7 +30,7 @@ import type {
   CapacityInput,
   SectionCapacity,
 } from '../types'
-import { compareProjectsByLoadingsThenGup, compareSectionsByLoadings } from '../utils/sort-projects'
+import { compareProjectsByActuality, compareSectionsByLoadings } from '../utils/sort-projects'
 
 // ============================================================================
 // Helper Functions
@@ -337,6 +337,23 @@ export async function getSectionsHierarchy(
     // Трекеры уникальных сотрудников (department_id/project_id → Set<employee_id>)
     const deptEmployeeIds = new Map<string, Set<string>>()
     const projectEmployeeIds = new Map<string, Set<string>>()
+    // Трекер активности проекта — для isStale (maxDate/hasFuture) и для сортировки
+    // по актуальности загрузок (hasActiveNow/nearestFutureStart/mostRecentPastFinish,
+    // считается только по loading_start/loading_finish — см. compareProjectsByActuality).
+    // project_status в БД не актуален — не используем нигде.
+    // Ключ — `${deptId}:${projectId}`, как у projectEmployeeIds выше
+    const projectActivity = new Map<string, {
+      maxDate: string | null
+      hasFuture: boolean
+      hasActiveLoadingNow: boolean
+      nearestFutureLoadingStart: string | null
+      mostRecentPastLoadingFinish: string | null
+    }>()
+    const now = new Date()
+    const todayStr = now.toISOString().slice(0, 10)
+    const staleCutoffDate = new Date(now)
+    staleCutoffDate.setMonth(staleCutoffDate.getMonth() - 3)
+    const staleCutoffStr = staleCutoffDate.toISOString().slice(0, 10)
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
@@ -464,11 +481,22 @@ export async function getSectionsHierarchy(
             totalLoadings: 0,
             totalEmployees: 0,
             dailyWorkloads: {},
+            isStale: false, // финализируется ниже, в цикле после обработки всех строк
+            hasActiveLoadingNow: false,
+            nearestFutureLoadingStart: null,
+            mostRecentPastLoadingFinish: null,
             objectSections: [],
           }
           department.projects.push(project)
           projectEmployeeIds.set(`${deptId}:${project.id}`, new Set())
           department.totalProjects++
+          projectActivity.set(`${deptId}:${project.id}`, {
+            maxDate: null,
+            hasFuture: false,
+            hasActiveLoadingNow: false,
+            nearestFutureLoadingStart: null,
+            mostRecentPastLoadingFinish: null,
+          })
         }
 
         // Получаем или создаём объект/раздел
@@ -503,6 +531,18 @@ dailyWorkloads: {},
           project.objectSections.push(objectSection)
           project.totalSections++
           department.totalSections++
+
+          // Учитываем срок и дату создания раздела в активности проекта (для isStale)
+          const activity = projectActivity.get(`${deptId}:${project.id}`)
+          if (activity) {
+            if (row.section_end_date) {
+              if (!activity.maxDate || row.section_end_date > activity.maxDate) activity.maxDate = row.section_end_date
+              if (row.section_end_date >= todayStr) activity.hasFuture = true
+            }
+            if (row.section_created && (!activity.maxDate || row.section_created > activity.maxDate)) {
+              activity.maxDate = row.section_created
+            }
+          }
         }
 
         // Добавляем загрузку только в отдел сотрудника
@@ -546,6 +586,28 @@ dailyWorkloads: {},
           project.totalLoadings++
           department.totalLoadings++
 
+          // Учитываем окончание загрузки в активности проекта (для isStale)
+          const activity = projectActivity.get(`${deptId}:${project.id}`)
+          if (activity && row.loading_finish) {
+            if (!activity.maxDate || row.loading_finish > activity.maxDate) activity.maxDate = row.loading_finish
+            if (row.loading_finish >= todayStr) activity.hasFuture = true
+          }
+
+          // Актуальность загрузки (для сортировки — см. compareProjectsByActuality)
+          if (activity && row.loading_start && row.loading_finish) {
+            if (row.loading_start <= todayStr && row.loading_finish >= todayStr) {
+              activity.hasActiveLoadingNow = true
+            } else if (row.loading_start > todayStr) {
+              if (!activity.nearestFutureLoadingStart || row.loading_start < activity.nearestFutureLoadingStart) {
+                activity.nearestFutureLoadingStart = row.loading_start
+              }
+            } else if (row.loading_finish < todayStr) {
+              if (!activity.mostRecentPastLoadingFinish || row.loading_finish > activity.mostRecentPastLoadingFinish) {
+                activity.mostRecentPastLoadingFinish = row.loading_finish
+              }
+            }
+          }
+
           // Track unique employees
           projectEmployeeIds.get(`${deptId}:${project.id}`)!.add(row.employee_id)
           deptEmployeeIds.get(deptId)!.add(row.employee_id)
@@ -553,14 +615,21 @@ dailyWorkloads: {},
       }
     }
 
-    // Присваиваем totalEmployees из Set.size и сортируем: сначала с загрузками, затем без
+    // Присваиваем totalEmployees, isStale и актуальность из трекера, сортируем:
+    // сначала по актуальности загрузок (см. compareProjectsByActuality)
     for (const dept of departmentsMap.values()) {
       dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
       for (const project of dept.projects) {
         project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
         project.objectSections.sort(compareSectionsByLoadings)
+
+        const activity = projectActivity.get(`${dept.id}:${project.id}`)
+        project.isStale = !!activity && !activity.hasFuture && activity.maxDate !== null && activity.maxDate < staleCutoffStr
+        project.hasActiveLoadingNow = activity?.hasActiveLoadingNow ?? false
+        project.nearestFutureLoadingStart = activity?.nearestFutureLoadingStart ?? null
+        project.mostRecentPastLoadingFinish = activity?.mostRecentPastLoadingFinish ?? null
       }
-      dept.projects.sort(compareProjectsByLoadingsThenGup)
+      dept.projects.sort(compareProjectsByActuality)
     }
 
     // Преобразуем Map в массив

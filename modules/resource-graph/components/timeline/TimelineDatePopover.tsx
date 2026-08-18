@@ -18,7 +18,7 @@ const MIN_YEAR = 2000
 const MAX_YEAR = 2100
 
 const DATE_PICKER_INPUT_CLASS =
-  'w-full h-7 px-1.5 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary'
+  'w-full h-7 px-1.5 text-xs rounded border border-border bg-popover focus:outline-none focus:ring-1 focus:ring-primary'
 
 function dateStringToDate(s: string | undefined | null): Date | null {
   if (!s) return null

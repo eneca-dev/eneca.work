@@ -94,6 +94,19 @@ export interface Project {
   totalLoadings: number
   totalEmployees: number
   dailyWorkloads?: Record<string, number>
+  /**
+   * Нет активности (загрузок/сроков разделов) более 3 месяцев и ничего не
+   * запланировано вперёд — см. вычисление в getSectionsHierarchy.
+   * Такие проекты уходят в свёрнутую группу внизу списка отдела.
+   */
+  isStale: boolean
+  // Актуальность загрузок проекта (для сортировки — см. compareProjectsByActuality)
+  /** Есть загрузка, идущая прямо сейчас (её диапазон дат включает сегодня) */
+  hasActiveLoadingNow: boolean
+  /** Ближайшая дата начала будущей загрузки (если нет текущей) */
+  nearestFutureLoadingStart: string | null
+  /** Дата окончания самой недавней прошедшей загрузки (если нет текущей и будущей) */
+  mostRecentPastLoadingFinish: string | null
   objectSections: ObjectSection[]
 }
 

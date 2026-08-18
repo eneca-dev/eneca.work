@@ -1,15 +1,15 @@
 ---
 id: "bug-SB-02"
-status: "review"
+status: "done"
 priority: "medium"
 assignee: "Саша Бирило"
 epic: "bug"
 dueDate: null
 created: "2026-06-17T12:00:00.000Z"
-modified: "2026-06-17T12:00:00.000Z"
-completedAt: null
+modified: "2026-08-18T11:27:13.919Z"
+completedAt: "2026-08-18T11:27:13.919Z"
 labels: ["v1.5.0"]
-order: "a18"
+order: "a14G"
 ---
 # bug-SB-02 Двойной рендер `<RealtimeSync />` → двойная подписка на канал `cache-sync`
 

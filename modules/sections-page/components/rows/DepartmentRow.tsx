@@ -55,11 +55,14 @@ export function DepartmentRowContent({
     )
   }, [department.projects])
 
-  // Y: суммарная ёмкость всех разделов всех проектов отдела
+  // Y: суммарная ёмкость всех разделов всех проектов отдела.
+  // Округляем до 0.01 — иначе сумма чисел с плавающей точкой (0.2+0.2+0.2)
+  // даёт 0.6000000000000001 вместо 0.6.
   const totalDepartmentCapacity = useMemo(() => {
-    return department.projects.reduce((sum, p) =>
+    const rawSum = department.projects.reduce((sum, p) =>
       sum + p.objectSections.reduce((s, os) => s + (os.defaultCapacity ?? 0), 0)
     , 0)
+    return Math.round(rawSum * 100) / 100
   }, [department.projects])
 
   // Агрегация по всем разделам всех проектов отдела (источник — серверные capacityOverrides)
@@ -76,9 +79,10 @@ export function DepartmentRowContent({
     if (allDates.size === 0) return {}
     const result: Record<string, number> = {}
     for (const dateStr of allDates) {
-      result[dateStr] = allSections.reduce((sum, os) => {
+      const rawSum = allSections.reduce((sum, os) => {
         return sum + (os.capacityOverrides?.[dateStr] ?? (os.defaultCapacity ?? 0))
       }, 0)
+      result[dateStr] = Math.round(rawSum * 100) / 100
     }
     return result
   }, [allSections])
@@ -168,7 +172,7 @@ export function DepartmentRowContent({
             return (
               <div
                 key={col.index}
-                className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
+                className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

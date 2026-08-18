@@ -41,6 +41,10 @@ export interface WeekCell {
   workingDates: string[]
   /** Праздничные даты внутри недели — для информационных маркеров в шапке */
   holidayDates: string[]
+  /** Индекс месяца (по дате начала недели) — для группировки шапки и чередования цвета */
+  monthIndex: number
+  /** Название месяца недели, с заглавной буквы: "Август 2026" */
+  monthName: string
 }
 
 // ============================================================================
@@ -74,6 +78,9 @@ export function generateWeekCells(
   const firstWeekStart = addWeeks(currentWeekStart, -weeksBefore + offset)
   const totalWeeks = weeksBefore + weeksAfter
 
+  let monthIdx = -1
+  let prevMonth = -1
+
   for (let i = 0; i < totalWeeks; i++) {
     const weekStart = addWeeks(firstWeekStart, i)
     const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
@@ -96,6 +103,12 @@ export function generateWeekCells(
       ? `${format(weekStart, 'd')}–${format(weekEnd, 'd MMM', { locale: ru })}`
       : `${format(weekStart, 'd MMM', { locale: ru })} – ${format(weekEnd, 'd MMM', { locale: ru })}`
 
+    const month = weekStart.getMonth()
+    if (month !== prevMonth) {
+      prevMonth = month
+      monthIdx++
+    }
+
     cells.push({
       weekNumber: getWeek(weekStart, { weekStartsOn: 1, locale: ru }),
       label,
@@ -106,6 +119,8 @@ export function generateWeekCells(
       workingDays,
       workingDates,
       holidayDates,
+      monthIndex: monthIdx,
+      monthName: format(weekStart, 'LLLL yyyy', { locale: ru }),
     })
   }
 

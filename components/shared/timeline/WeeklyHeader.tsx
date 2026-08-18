@@ -2,12 +2,13 @@
  * Weekly Header Component
  *
  * Заголовок таймлайна в режиме "Неделя".
- * Структура аналогична MonthlyHeader: недели → рабочие дни.
+ * Структура аналогична TimelineHeader (дневной режим): месяцы → недели → рабочие дни.
  * Праздники внутри недели показаны маркером — чисто информативно (title-тултип), без интерактива.
  */
 
 'use client'
 
+import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 
@@ -16,27 +17,80 @@ interface WeeklyHeaderProps {
   weekCellWidth: number
 }
 
+// Минимальное число недель в месяце, чтобы уместилось название
+const MIN_WEEKS_FOR_MONTH_NAME = 2
+
 export function WeeklyHeader({
   weekCells,
   weekCellWidth,
 }: WeeklyHeaderProps) {
   const totalWidth = weekCells.length * weekCellWidth
 
+  // Группировка по месяцам (используем monthIndex — см. weekly-cell-utils)
+  const months = useMemo(() => {
+    const result: { name: string; weeksCount: number }[] = []
+    let prevIndex = -1
+
+    weekCells.forEach((cell) => {
+      if (cell.monthIndex !== prevIndex) {
+        prevIndex = cell.monthIndex
+        result.push({ name: cell.monthName, weeksCount: 1 })
+      } else {
+        result[result.length - 1].weeksCount++
+      }
+    })
+
+    return result
+  }, [weekCells])
+
+  // Позиции месяцев для фоновых полос чередования (переиспользуется во всех 3 строках)
+  const monthSpans = useMemo(() => {
+    let left = 0
+    return months.map((month, i) => {
+      const span = { left, width: month.weeksCount * weekCellWidth, isOdd: i % 2 === 1 }
+      left += span.width
+      return span
+    })
+  }, [months, weekCellWidth])
+
+  const monthAlternationBg = useMemo(() => (
+    <>
+      {monthSpans.map((span, i) => span.isOdd ? (
+        <div
+          key={`month-bg-${i}`}
+          className="absolute top-0 bottom-0 bg-black/[0.07] dark:bg-white/[0.06] pointer-events-none"
+          style={{ left: span.left, width: span.width }}
+        />
+      ) : null)}
+      {monthSpans.slice(1).map((span, i) => (
+        <div
+          key={`month-border-${i}`}
+          className="absolute top-0 bottom-0 w-0.5 bg-border pointer-events-none"
+          style={{ left: span.left - 1 }}
+        />
+      ))}
+    </>
+  ), [monthSpans])
+
   return (
     <div className="flex flex-col bg-card border-b border-border" style={{ width: totalWidth }}>
-      {/* Row 1: Недели */}
-      <div className="relative h-7 border-b border-border/50">
-        {/* Фон чередования */}
-        {weekCells.map((_, i) => (
+      {/* Row 1: Месяцы */}
+      <div className="flex h-7 border-b border-border/50 relative">
+        {monthAlternationBg}
+        {months.map((month, i) => (
           <div
-            key={`bg-${i}`}
-            className={cn(
-              'absolute top-0 bottom-0 pointer-events-none',
-              i % 2 === 1 && 'bg-black/[0.07] dark:bg-white/[0.06]'
-            )}
-            style={{ left: i * weekCellWidth, width: weekCellWidth }}
-          />
+            key={i}
+            className="flex items-center justify-center text-xs font-medium text-muted-foreground capitalize overflow-hidden relative z-[1]"
+            style={{ width: month.weeksCount * weekCellWidth }}
+          >
+            {month.weeksCount >= MIN_WEEKS_FOR_MONTH_NAME && month.name}
+          </div>
         ))}
+      </div>
+
+      {/* Row 2: Недели */}
+      <div className="relative h-7 border-b border-border/50">
+        {monthAlternationBg}
         {/* Разделители недель — 2px, полный border */}
         {weekCells.slice(1).map((_, i) => (
           <div
@@ -72,19 +126,9 @@ export function WeeklyHeader({
         </div>
       </div>
 
-      {/* Row 2: Диапазон дат недели (число месяца) */}
+      {/* Row 3: Диапазон дат недели (число месяца) */}
       <div className="relative h-5">
-        {/* Фон чередования */}
-        {weekCells.map((_, i) => (
-          <div
-            key={`wd-bg-${i}`}
-            className={cn(
-              'absolute top-0 bottom-0 pointer-events-none',
-              i % 2 === 1 && 'bg-black/[0.07] dark:bg-white/[0.06]'
-            )}
-            style={{ left: i * weekCellWidth, width: weekCellWidth }}
-          />
-        ))}
+        {monthAlternationBg}
         {/* Разделители недель — 2px, полный border */}
         {weekCells.slice(1).map((_, i) => (
           <div

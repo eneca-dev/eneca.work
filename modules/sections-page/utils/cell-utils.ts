@@ -34,12 +34,12 @@ export function getCellClassNames(cell: DayCell): string {
 
 /**
  * Get week cell background class names (недельный режим).
- * Чередование — по индексу колонки (как в WeeklyHeader), текущая неделя — зелёным.
+ * Чередование — по месяцу (как в дневном режиме и WeeklyHeader), текущая неделя — зелёным.
  */
-export function getWeekCellClassNames(week: WeekCell, index: number): string {
+export function getWeekCellClassNames(week: WeekCell): string {
   return cn(
     'border-r border-border/30',
-    index % 2 === 1 && 'bg-black/[0.03] dark:bg-white/[0.035]',
+    week.monthIndex % 2 === 1 && 'bg-black/[0.03] dark:bg-white/[0.035]',
     // Текущая неделя - применяется последним, но за загрузками
     week.isCurrentWeek && 'bg-green-300/60 dark:bg-green-700/25'
   )

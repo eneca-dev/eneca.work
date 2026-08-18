@@ -34,6 +34,7 @@ import { DepartmentRowContent } from './rows/DepartmentRow'
 import { ProjectRowContent } from './rows/ProjectRow'
 import { ObjectSectionRowContent } from './rows/ObjectSectionRow'
 import { EmployeeRow } from './rows/EmployeeRow'
+import { StaleGroupRow } from './rows/StaleGroupRow'
 import { flattenSections, type SectFlatRow } from './flatten-sections'
 import { VirtualList, type VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -225,11 +226,17 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     { enabled: shouldFetchData }
   )
 
+  // Задан ли в календаре валидный период — тогда группа «Завершённые» в flattenSections
+  // заменяется на «Нет загрузок за период» (см. flattenSections/hasActivityInPeriod).
+  const activePeriod = customDateRange && customDateRange.startDate <= customDateRange.endDate
+    ? customDateRange
+    : null
+
   // Плоский список строк для виртуализации (отдел→проект→объект-раздел→сотрудник).
   const flatRows = useMemo<SectFlatRow[]>(() => {
     if (!departments) return []
-    return flattenSections(departments, new Set(expandedNodes))
-  }, [departments, expandedNodes])
+    return flattenSections(departments, new Set(expandedNodes), activePeriod)
+  }, [departments, expandedNodes, activePeriod])
 
   // Рендер одной плоской строки по типу (columns — видимые колонки дня).
   const renderRow = useCallback(
@@ -276,6 +283,15 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               dayCells={dayCells}
               columns={columns}
               weekCells={isWeeklyMode ? weekCells : undefined}
+            />
+          )
+        case 'staleGroup':
+          return (
+            <StaleGroupRow
+              departmentId={row.departmentId}
+              count={row.count}
+              label={row.label}
+              title={row.title}
             />
           )
         default: {

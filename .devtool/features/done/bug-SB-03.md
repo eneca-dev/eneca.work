@@ -1,15 +1,15 @@
 ---
 id: "bug-SB-03"
-status: "review"
+status: "done"
 priority: "medium"
 assignee: "Саша Бирило"
 epic: "bug"
 dueDate: null
 created: "2026-06-18T12:00:00.000Z"
-modified: "2026-06-18T13:23:48.098Z"
-completedAt: null
+modified: "2026-08-18T11:27:15.973Z"
+completedAt: "2026-08-18T11:27:15.973Z"
 labels: ["v1.5.0"]
-order: "a19"
+order: "a148"
 ---
 # bug-SB-03 Бюджеты: скоуп `getBudgets` (\~35k→5k) + ленивые бюджеты этапов/задач + realtime-свежесть
 

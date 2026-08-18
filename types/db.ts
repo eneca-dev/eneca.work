@@ -24539,6 +24539,7 @@ export type Database = {
           responsible_first_name: string | null
           responsible_id: string | null
           responsible_last_name: string | null
+          section_created: string | null
           section_description: string | null
           section_end_date: string | null
           section_id: string | null

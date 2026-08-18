@@ -57,11 +57,14 @@ export function ProjectRowContent({
     return project.objectSections.flatMap(os => os.loadings)
   }, [project.objectSections])
 
-  // Calculate aggregated capacity (sum of all sections' default capacities)
+  // Calculate aggregated capacity (sum of all sections' default capacities).
+  // Округляем до 0.01 — иначе сумма чисел с плавающей точкой (0.2+0.2+0.2)
+  // даёт 0.6000000000000001 вместо 0.6.
   const totalCapacity = useMemo(() => {
-    return project.objectSections.reduce((sum, os) => {
+    const rawSum = project.objectSections.reduce((sum, os) => {
       return sum + (os.defaultCapacity ?? 0)
     }, 0)
+    return Math.round(rawSum * 100) / 100
   }, [project.objectSections])
 
   // Compute per-date aggregated capacity (источник — серверные capacityOverrides разделов)
@@ -72,9 +75,10 @@ export function ProjectRowContent({
     if (allDates.size === 0) return {}
     const result: Record<string, number> = {}
     for (const dateStr of allDates) {
-      result[dateStr] = project.objectSections.reduce((sum, os) => {
+      const rawSum = project.objectSections.reduce((sum, os) => {
         return sum + (os.capacityOverrides?.[dateStr] ?? (os.defaultCapacity ?? 0))
       }, 0)
+      result[dateStr] = Math.round(rawSum * 100) / 100
     }
     return result
   }, [project.objectSections])
@@ -203,7 +207,7 @@ export function ProjectRowContent({
             return (
               <div
                 key={col.index}
-                className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
+                className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

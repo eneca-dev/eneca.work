@@ -700,7 +700,7 @@ export function EmployeeRow({
                 return (
                   <div
                     key={col.index}
-                    className={`${getWeekCellClassNames(week, col.index)} absolute top-0 bottom-0`}
+                    className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
                     style={{ left: col.start, width: col.size }}
                   />
                 )

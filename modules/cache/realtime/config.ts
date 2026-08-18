@@ -64,6 +64,12 @@ export const realtimeSubscriptions: TableSubscription[] = [
       [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (разделы)
     ],
   },
+  {
+    table: 'section_capacity',
+    invalidateKeys: [
+      queryKeys.sectionsPage.all, // Страница разделов (ёмкость на проекте/разделе)
+    ],
+  },
 
   // ============================================================================
   // Сотрудники
