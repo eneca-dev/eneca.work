@@ -3,8 +3,10 @@
  *
  * Стиль «эквалайзер»: полупрозрачные столбики снизу вверх.
  *   Высота = % загрузки (X / Y)
- *   Цвет зависит от уровня: зелёный → жёлтый → оранжевый → красный
- *   При перегрузе (>100%) — красный бар + линия отсечки
+ *   Недогруз (X < Y, не хватает людей): зелёный (баланс) → оранжевый → красный,
+ *     чем сильнее нехватка тем краснее
+ *   Перегруз (X > Y, людей больше чем нужно): нейтральный серо-голубой + линия
+ *     отсечки того же оттенка (см. utils/bar-color.ts)
  *
  * На уровне ObjectSection — клик по ячейке открывает inline-редактор ёмкости (Y).
  */
@@ -15,7 +17,8 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { DAY_CELL_WIDTH } from '../constants'
 import { formatMinskDate } from '@/lib/timezone-utils'
 import { getCellDayType } from '../utils/cell-utils'
-import { computeDailyAggregation, type DailyAggregation } from '../utils/aggregate-bars'
+import { computeDailyAggregation, formatBarNumber, type DailyAggregation } from '../utils/aggregate-bars'
+import { getBarStyle, SURPLUS_ACCENT_COLOR } from '../utils/bar-color'
 import type { SectionLoading, DayCell } from '../types'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
@@ -27,55 +30,6 @@ const EMPTY_OVERRIDES: Record<string, number> = {}
 const BAR_WIDTH = 24
 const CELL_PADDING_BOTTOM = 3
 const TEXT_AREA_HEIGHT = 13
-
-// ============================================================================
-// Color logic
-// ============================================================================
-
-interface BarStyle {
-  bg: string
-  textColor: string
-  glow?: string
-}
-
-function getBarStyle(percentage: number, isEmpty: boolean): BarStyle {
-  // Пустая ячейка (нет загрузки) - серый приглушенный
-  if (isEmpty) return {
-    bg: 'rgba(148, 163, 184, 0.25)',
-    textColor: 'rgba(148, 163, 184, 0.7)',
-  }
-
-  // Перегруз (X > Y) - красный
-  if (percentage > 100) return {
-    bg: 'rgba(239, 68, 68, 0.7)',
-    textColor: 'rgba(248, 113, 113, 0.95)',
-    glow: '0 0 8px rgba(239, 68, 68, 0.35)',
-  }
-
-  // Идеальная загрузка (95-100%) - зеленый насыщенный
-  if (percentage >= 95) return {
-    bg: 'rgba(34, 197, 94, 0.6)',
-    textColor: 'rgba(74, 222, 128, 0.95)',
-  }
-
-  // Высокая загрузка (70-94%) - желто-зеленый (lime)
-  if (percentage >= 70) return {
-    bg: 'rgba(132, 204, 22, 0.55)',
-    textColor: 'rgba(163, 230, 53, 0.9)',
-  }
-
-  // Средняя загрузка (40-69%) - желтый
-  if (percentage >= 40) return {
-    bg: 'rgba(234, 179, 8, 0.5)',
-    textColor: 'rgba(250, 204, 21, 0.85)',
-  }
-
-  // Низкая загрузка (1-39%) - оранжевый
-  return {
-    bg: 'rgba(249, 115, 22, 0.45)',
-    textColor: 'rgba(251, 146, 60, 0.8)',
-  }
-}
 
 // ============================================================================
 // Public component
@@ -97,11 +51,8 @@ interface AggregatedBarsOverlayProps {
   onSaveCapacity?: (startDate: string, endDate: string, value: number) => void
   /** Подсказка в тултипе (например, где можно ввести ёмкость) */
   capacityHint?: string
-}
-
-/** Format rate for display: 2.25 → "2.25", 1 → "1", 0.5 → "0.5" */
-function formatRate(rate: number): string {
-  return Number(rate.toFixed(2)).toString()
+  /** Знаков после запятой в тексте бара (не влияет на % для высоты/цвета). По умолчанию 2. */
+  decimals?: number
 }
 
 export function AggregatedBarsOverlay({
@@ -114,6 +65,7 @@ export function AggregatedBarsOverlay({
   editable = false,
   onSaveCapacity,
   capacityHint,
+  decimals,
 }: AggregatedBarsOverlayProps) {
   // State for inline editing with range support
   const [editRange, setEditRange] = useState<{ start: number; end: number } | null>(null)
@@ -219,6 +171,7 @@ export function AggregatedBarsOverlay({
             onCellClick={handleCellClick}
             capacityHint={capacityHint}
             onHintShow={handleHintShow}
+            decimals={decimals}
           />
         )
       })}
@@ -360,9 +313,11 @@ interface BarCellProps {
   onCellClick?: (index: number) => void
   capacityHint?: string
   onHintShow?: (cellIndex: number) => void
+  /** Знаков после запятой в тексте бара. По умолчанию 2. */
+  decimals?: number
 }
 
-function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, onHintShow }: BarCellProps) {
+function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, onHintShow, decimals = 2 }: BarCellProps) {
   const handleHintClick = (e: React.MouseEvent) => {
     if (!capacityHint) return
     e.stopPropagation()
@@ -406,11 +361,11 @@ function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, o
   // Label
   let label: string
   if (isEmpty) {
-    label = String(day.capacity)
+    label = formatBarNumber(day.capacity, decimals)
   } else if (hasLoadingWithoutCapacity) {
-    label = `${formatRate(day.rateSum)}/0` // Загрузка с /0
+    label = `${formatBarNumber(day.rateSum, decimals)}/0` // Загрузка с /0
   } else {
-    label = `${formatRate(day.rateSum)}/${day.capacity}`
+    label = `${formatBarNumber(day.rateSum, decimals)}/${formatBarNumber(day.capacity, decimals)}`
   }
 
   const handleClick = editable
@@ -449,10 +404,10 @@ function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, o
       }}
       title={
         isEmpty
-          ? [`Capacity: ${day.capacity}`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
+          ? [`Capacity: ${formatBarNumber(day.capacity, decimals)}`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
           : hasLoadingWithoutCapacity
-          ? [`Загрузка: ${formatRate(day.rateSum)} (ёмкость не установлена)`, editable ? 'Нажмите для установки ёмкости' : capacityHint].filter(Boolean).join('\n')
-          : [`Загрузка: ${formatRate(day.rateSum)} / ${day.capacity} (${Math.round(percentage)}%)`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
+          ? [`Загрузка: ${formatBarNumber(day.rateSum, decimals)} (ёмкость не установлена)`, editable ? 'Нажмите для установки ёмкости' : capacityHint].filter(Boolean).join('\n')
+          : [`Загрузка: ${formatBarNumber(day.rateSum, decimals)} / ${formatBarNumber(day.capacity, decimals)} (${Math.round(percentage)}%)`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
       }
       onClick={handleClick}
     >
@@ -485,7 +440,7 @@ function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, o
         }}
       />
 
-      {/* Overload cutoff line */}
+      {/* Overload cutoff line — перегруз (X > Y) нейтральный, не тревожный (см. bar-color.ts) */}
       {isOverload && (
         <div
           className="absolute left-1/2 -translate-x-1/2"
@@ -493,7 +448,7 @@ function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, o
             bottom: CELL_PADDING_BOTTOM + maxBarHeight,
             width: BAR_WIDTH + 8,
             height: 2,
-            background: 'linear-gradient(90deg, transparent 0%, rgba(239,68,68,0.8) 20%, rgba(239,68,68,0.8) 80%, transparent 100%)',
+            background: `linear-gradient(90deg, transparent 0%, ${SURPLUS_ACCENT_COLOR} 20%, ${SURPLUS_ACCENT_COLOR} 80%, transparent 100%)`,
             borderRadius: 1,
           }}
         />

@@ -90,9 +90,7 @@ export interface Project {
   departmentName: string
   stageType?: string | null
   // Агрегированные данные
-  totalSections: number
   totalLoadings: number
-  totalEmployees: number
   dailyWorkloads?: Record<string, number>
   /**
    * Нет активности (загрузок/сроков разделов) более 3 месяцев и ничего не
@@ -123,10 +121,21 @@ export interface Department {
   departmentHeadEmail?: string | null
   departmentHeadAvatarUrl?: string | null
   // Агрегированные данные
-  totalProjects: number
-  totalSections: number
   totalLoadings: number
-  totalEmployees: number
+  /**
+   * Весь штат отдела — все профили с department_id = этот отдел, независимо
+   * от того, есть ли у них загрузки. Источник — view_organizational_structure
+   * (см. modules/departments-timeline). feature-AB-06.
+   *
+   * `null` — знаменатель недоступен/несопоставим с busyTodayCount: либо запрос
+   * штата не удался, либо активен фильтр (team_id/project_id), сужающий
+   * busyTodayCount ниже уровня всего отдела — UI в этом случае прячет "из Y".
+   */
+  departmentHeadcount: number | null
+  /** Сколько из штата загружены именно сегодня (диапазон загрузки включает текущую дату). */
+  busyTodayCount: number
+  /** Из busyTodayCount — сколько заняты ТОЛЬКО служебными "проектами" (Отпуск/Прочие работы/Непроектные загрузки). */
+  busyOnNonProjectCount: number
   dailyWorkloads?: Record<string, number>
   projects: Project[]
 }

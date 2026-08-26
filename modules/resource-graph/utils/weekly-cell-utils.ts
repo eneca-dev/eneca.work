@@ -135,10 +135,12 @@ export function generateWeekCells(
       if (info.isHoliday) holidayDates.push(formatMinskDate(day))
     }
 
+    // Дефис вместо длинного тире и без пробелов вокруг — подпись должна влезать
+    // в WEEK_CELL_WIDTH, особенно на стыке месяцев ("28 сент.-4 окт.").
     const sameMonth = weekStart.getMonth() === weekEnd.getMonth()
     const label = sameMonth
-      ? `${format(weekStart, 'd')}–${format(weekEnd, 'd MMM', { locale: ru })}`
-      : `${format(weekStart, 'd MMM', { locale: ru })} – ${format(weekEnd, 'd MMM', { locale: ru })}`
+      ? `${format(weekStart, 'd')}-${format(weekEnd, 'd MMM', { locale: ru })}`
+      : `${format(weekStart, 'd MMM', { locale: ru })}-${format(weekEnd, 'd MMM', { locale: ru })}`
 
     const month = weekStart.getMonth()
     if (month !== prevMonth) {

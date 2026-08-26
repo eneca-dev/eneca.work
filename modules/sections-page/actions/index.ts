@@ -8,6 +8,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
+import { formatMinskDate } from '@/lib/timezone-utils'
 import type { ActionResult } from '@/modules/cache'
 import { type FilterQueryParams, getNegatedParams } from '@/modules/inline-filter'
 import {
@@ -30,7 +31,7 @@ import type {
   CapacityInput,
   SectionCapacity,
 } from '../types'
-import { compareProjectsByActuality, compareSectionsByLoadings } from '../utils/sort-projects'
+import { compareProjectsByActuality, compareSectionsByLoadings, isNonProjectBucket } from '../utils/sort-projects'
 
 // ============================================================================
 // Helper Functions
@@ -307,9 +308,8 @@ export async function getSectionsHierarchy(
       return { success: true, data: [] }
     }
 
-    // Получаем team_id для каждого уникального исполнителя загрузок.
-    // view_departments_sections_loadings не отдаёт employee_team_id, нужно для UI gating
-    // (определение что это команда team_lead'а на клиенте).
+    // Уникальные исполнители загрузок — team_id для UI gating (view_departments_sections_loadings
+    // его не отдаёт, нужен для определения "это команда team_lead'а" на клиенте).
     const uniqueEmployeeIds = Array.from(
       new Set(
         rows
@@ -317,16 +317,57 @@ export async function getSectionsHierarchy(
           .map((r) => r.employee_id as string)
       )
     )
+
+    // feature-AB-06: штат отдела (view_organizational_structure.department_employee_count —
+    // все профили с department_id = этот отдел, независимо от загрузок). deptIds собираем
+    // из СЫРЫХ строк (не из уже построенной иерархии) — надмножество ответственный ∪
+    // сотрудник безвредно, зато запрос уходит параллельно с employeeTeamMap ниже, а не
+    // отдельным round-trip'ом после всей остальной обработки.
+    const headcountDeptIds = Array.from(
+      new Set(
+        rows
+          .flatMap((r) => [r.department_id, r.employee_department_id])
+          .filter((id): id is string => !!id)
+      )
+    )
+
+    const [usersResult, orgResult] = await Promise.all([
+      uniqueEmployeeIds.length > 0
+        ? supabase.from('view_users').select('user_id, team_id').in('user_id', uniqueEmployeeIds)
+        : Promise.resolve({ data: null, error: null }),
+      headcountDeptIds.length > 0
+        ? supabase
+            .from('view_organizational_structure')
+            .select('department_id, department_employee_count')
+            .in('department_id', headcountDeptIds)
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
     const employeeTeamMap = new Map<string, string | null>()
-    if (uniqueEmployeeIds.length > 0) {
-      const { data: usersData } = await supabase
-        .from('view_users')
-        .select('user_id, team_id')
-        .in('user_id', uniqueEmployeeIds)
-      for (const u of usersData ?? []) {
-        if (u.user_id) employeeTeamMap.set(u.user_id, u.team_id ?? null)
+    for (const u of usersResult.data ?? []) {
+      if (u.user_id) employeeTeamMap.set(u.user_id, u.team_id ?? null)
+    }
+
+    const deptHeadcountMap = new Map<string, number>()
+    if (orgResult.error) {
+      console.error('Error fetching department headcount:', orgResult.error)
+      Sentry.captureException(new Error(orgResult.error.message), {
+        tags: { module: 'sections-page', action: 'getSectionsHierarchy', error_type: 'db_error', user_facing: 'false' },
+        extra: { step: 'department_headcount' },
+      })
+    } else {
+      for (const row of orgResult.data ?? []) {
+        if (row.department_id) {
+          deptHeadcountMap.set(row.department_id, row.department_employee_count || 0)
+        }
       }
     }
+
+    // X (busyTodayCount) уже сужен фильтром team_id/project_id, если он активен, тогда
+    // как Y (штат) — всегда весь отдел целиком. Показывать оба вместе в этом случае
+    // вводит в заблуждение ("занято 2 из 57" при фильтре по одной команде) — скрываем
+    // знаменатель (departmentHeadcount = null), когда штат недоступен или сужен фильтром.
+    const headcountUnavailable = !!orgResult.error || !!effectiveFilters?.team_id || !!effectiveFilters?.project_id
 
     // Трансформация плоских строк в иерархию
     // Логика размещения раздела по отделам зависит от scope пользователя:
@@ -334,14 +375,22 @@ export async function getSectionsHierarchy(
     // - dept scope (нач. отдела): только свой отдел (через ответственного или сотрудника)
     // - admin/subdivision scope: полное дублирование (отдел ответственного + отдел сотрудника)
     const departmentsMap = new Map<string, Department>()
-    // Трекеры уникальных сотрудников (department_id/project_id → Set<employee_id>)
-    const deptEmployeeIds = new Map<string, Set<string>>()
-    const projectEmployeeIds = new Map<string, Set<string>>()
+    // feature-AB-06: "занято X из Y (Z на непроектных)" на строке отдела.
+    // busyTodayEmployeeIds — у кого есть загрузка, активная именно сегодня.
+    // employeeHasOtherWorkToday — подмножество busyTodayEmployeeIds, у кого хотя бы
+    // одна из сегодняшних загрузок лежит ВНЕ корзины «Непроектные загрузки» (т.е.
+    // на реальном проекте, либо на «Отпуск»/«Прочие работы»). Кто в него не попал —
+    // занят исключительно непроектными загрузками и идёт в busyOnNonProjectCount.
+    // Отпуск и Прочие работы в «непроектные» намеренно НЕ входят — см.
+    // isNonProjectBucket в utils/sort-projects.ts.
+    const deptBusyTodayEmployeeIds = new Map<string, Set<string>>()
+    const deptEmployeeHasOtherWorkToday = new Map<string, Set<string>>()
     // Трекер активности проекта — для isStale (maxDate/hasFuture) и для сортировки
     // по актуальности загрузок (hasActiveNow/nearestFutureStart/mostRecentPastFinish,
     // считается только по loading_start/loading_finish — см. compareProjectsByActuality).
     // project_status в БД не актуален — не используем нигде.
-    // Ключ — `${deptId}:${projectId}`, как у projectEmployeeIds выше
+    // Ключ — `${deptId}:${projectId}`, чтобы не путать один и тот же projectId,
+    // легитимно встречающийся в двух разных отделах (ответственного и сотрудника).
     const projectActivity = new Map<string, {
       maxDate: string | null
       hasFuture: boolean
@@ -349,11 +398,13 @@ export async function getSectionsHierarchy(
       nearestFutureLoadingStart: string | null
       mostRecentPastLoadingFinish: string | null
     }>()
+    // formatMinskDate, а не toISOString().slice(0, 10) — проект работает в Europe/Minsk
+    // (UTC+3), сырой UTC-срез даёт "вчера" вместо "сегодня" с полуночи до 3:00 по Минску.
     const now = new Date()
-    const todayStr = now.toISOString().slice(0, 10)
+    const todayStr = formatMinskDate(now)
     const staleCutoffDate = new Date(now)
     staleCutoffDate.setMonth(staleCutoffDate.getMonth() - 3)
-    const staleCutoffStr = staleCutoffDate.toISOString().slice(0, 10)
+    const staleCutoffStr = formatMinskDate(staleCutoffDate)
 
     // Определяем scope по наличию mandatory-фильтров (устанавливаются applyMandatoryFilters)
     const isTeamScoped = !!secureFilters?.team_id
@@ -452,15 +503,16 @@ export async function getSectionsHierarchy(
             departmentHeadName: deptId === responsibleDeptId ? row.department_head_name : null,
             departmentHeadEmail: deptId === responsibleDeptId ? row.department_head_email : null,
             departmentHeadAvatarUrl: deptId === responsibleDeptId ? row.department_head_avatar_url : null,
-            totalProjects: 0,
-            totalSections: 0,
             totalLoadings: 0,
-            totalEmployees: 0,
+            departmentHeadcount: 0, // заполняется ниже отдельным запросом к view_organizational_structure
+            busyTodayCount: 0,
+            busyOnNonProjectCount: 0,
             dailyWorkloads: {},
             projects: [],
           }
           departmentsMap.set(deptId, department)
-          deptEmployeeIds.set(deptId, new Set())
+          deptBusyTodayEmployeeIds.set(deptId, new Set())
+          deptEmployeeHasOtherWorkToday.set(deptId, new Set())
         }
 
         // Получаем или создаём проект
@@ -477,9 +529,7 @@ export async function getSectionsHierarchy(
             departmentId: deptId,
             departmentName: deptInfo.name,
             stageType: null,
-            totalSections: 0,
             totalLoadings: 0,
-            totalEmployees: 0,
             dailyWorkloads: {},
             isStale: false, // финализируется ниже, в цикле после обработки всех строк
             hasActiveLoadingNow: false,
@@ -488,8 +538,6 @@ export async function getSectionsHierarchy(
             objectSections: [],
           }
           department.projects.push(project)
-          projectEmployeeIds.set(`${deptId}:${project.id}`, new Set())
-          department.totalProjects++
           projectActivity.set(`${deptId}:${project.id}`, {
             maxDate: null,
             hasFuture: false,
@@ -529,8 +577,6 @@ dailyWorkloads: {},
             totalLoadings: 0,
           }
           project.objectSections.push(objectSection)
-          project.totalSections++
-          department.totalSections++
 
           // Учитываем срок и дату создания раздела в активности проекта (для isStale)
           const activity = projectActivity.get(`${deptId}:${project.id}`)
@@ -608,19 +654,38 @@ dailyWorkloads: {},
             }
           }
 
-          // Track unique employees
-          projectEmployeeIds.get(`${deptId}:${project.id}`)!.add(row.employee_id)
-          deptEmployeeIds.get(deptId)!.add(row.employee_id)
+          // feature-AB-06: занятость сегодня + непроектные
+          if (row.loading_start <= todayStr && row.loading_finish >= todayStr) {
+            deptBusyTodayEmployeeIds.get(deptId)!.add(row.employee_id)
+            if (!isNonProjectBucket(row.project_name)) {
+              deptEmployeeHasOtherWorkToday.get(deptId)!.add(row.employee_id)
+            }
+          }
         }
       }
     }
 
-    // Присваиваем totalEmployees, isStale и актуальность из трекера, сортируем:
+    // Присваиваем isStale и актуальность из трекера, сортируем:
     // сначала по актуальности загрузок (см. compareProjectsByActuality)
     for (const dept of departmentsMap.values()) {
-      dept.totalEmployees = deptEmployeeIds.get(dept.id)?.size ?? 0
+      // null — штат недоступен (запрос упал) ИЛИ активен фильтр team_id/project_id:
+      // тогда busyTodayCount уже сужен фильтром, а штат отдела — всегда весь отдел
+      // целиком, показывать оба числа вместе ("занято 2 из 57" при фильтре по одной
+      // команде) вводит в заблуждение — UI прячет знаменатель при null.
+      dept.departmentHeadcount = headcountUnavailable
+        ? null
+        : (deptHeadcountMap.get(dept.id) ?? 0)
+      dept.busyTodayCount = deptBusyTodayEmployeeIds.get(dept.id)?.size ?? 0
+      {
+        const busyToday = deptBusyTodayEmployeeIds.get(dept.id) ?? new Set<string>()
+        const hasOtherWork = deptEmployeeHasOtherWorkToday.get(dept.id) ?? new Set<string>()
+        let onlyNonProject = 0
+        for (const empId of busyToday) {
+          if (!hasOtherWork.has(empId)) onlyNonProject++
+        }
+        dept.busyOnNonProjectCount = onlyNonProject
+      }
       for (const project of dept.projects) {
-        project.totalEmployees = projectEmployeeIds.get(`${dept.id}:${project.id}`)?.size ?? 0
         project.objectSections.sort(compareSectionsByLoadings)
 
         const activity = projectActivity.get(`${dept.id}:${project.id}`)

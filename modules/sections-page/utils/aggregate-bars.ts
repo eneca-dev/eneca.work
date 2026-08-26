@@ -31,6 +31,21 @@ function isDateInRange(dateStr: string, startDate: string, endDate: string): boo
 }
 
 /**
+ * Единая точка форматирования для любого числа, показываемого в баре
+ * загрузки (ставка ИЛИ ёмкость) — 2.25 → "2.25", 1 → "1", 0.5 → "0.5".
+ * Устраняет хвосты float (0.30000000000000004 → "0.3"), которые иначе
+ * могли просочиться из сумм/делений при агрегации по отделу/неделе.
+ *
+ * `decimals` — по умолчанию 2 (проект/раздел, где дробная ставка значима).
+ * Строка отдела (bug-AB-10) передаёт 0 — на уровне десятков сотрудников
+ * дробная точность не несёт смысла, «48 из 52» читается легче, чем
+ * «47.83 из 52.14».
+ */
+export function formatBarNumber(value: number, decimals: number = 2): string {
+  return Number(value.toFixed(decimals)).toString()
+}
+
+/**
  * Compute per-day aggregation for a list of loadings + capacity.
  * Supports per-date capacity overrides: each day can have its own capacity.
  * Returns array aligned with dayCells.

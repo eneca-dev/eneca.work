@@ -11,7 +11,8 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { computeWeeklyAggregation, type WeeklyAggregation } from '../utils/aggregate-bars'
+import { computeWeeklyAggregation, formatBarNumber, type WeeklyAggregation } from '../utils/aggregate-bars'
+import { getBarStyle, SURPLUS_ACCENT_COLOR, type BarStyle } from '../utils/bar-color'
 import type { SectionLoading } from '../types'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
@@ -24,49 +25,6 @@ const EMPTY_OVERRIDES: Record<string, number> = {}
 const BAR_WIDTH = 26
 const CELL_PADDING_BOTTOM = 3
 const TEXT_AREA_HEIGHT = 13
-
-// ============================================================================
-// Color logic — идентична дневному режиму (AggregatedBarsOverlay.getBarStyle)
-// ============================================================================
-
-interface BarStyle {
-  bg: string
-  textColor: string
-  glow?: string
-}
-
-function getBarStyle(percentage: number, isEmpty: boolean): BarStyle {
-  if (isEmpty) return {
-    bg: 'rgba(148, 163, 184, 0.25)',
-    textColor: 'rgba(148, 163, 184, 0.7)',
-  }
-  if (percentage > 100) return {
-    bg: 'rgba(239, 68, 68, 0.7)',
-    textColor: 'rgba(248, 113, 113, 0.95)',
-    glow: '0 0 8px rgba(239, 68, 68, 0.35)',
-  }
-  if (percentage >= 95) return {
-    bg: 'rgba(34, 197, 94, 0.6)',
-    textColor: 'rgba(74, 222, 128, 0.95)',
-  }
-  if (percentage >= 70) return {
-    bg: 'rgba(132, 204, 22, 0.55)',
-    textColor: 'rgba(163, 230, 53, 0.9)',
-  }
-  if (percentage >= 40) return {
-    bg: 'rgba(234, 179, 8, 0.5)',
-    textColor: 'rgba(250, 204, 21, 0.85)',
-  }
-  return {
-    bg: 'rgba(249, 115, 22, 0.45)',
-    textColor: 'rgba(251, 146, 60, 0.8)',
-  }
-}
-
-/** Format rate for display: 2.25 → "2.25", 1 → "1", 0.5 → "0.5" */
-function formatRate(rate: number): string {
-  return Number(rate.toFixed(2)).toString()
-}
 
 // ============================================================================
 // Public component
@@ -87,6 +45,8 @@ interface WeeklyAggregatedBarsOverlayProps {
   editable?: boolean
   /** Сохранить ёмкость на диапазон дат (границы недели) */
   onSaveCapacity?: (startDate: string, endDate: string, value: number) => void
+  /** Знаков после запятой в тексте бара (не влияет на % для высоты/цвета). По умолчанию 2. */
+  decimals?: number
 }
 
 export function WeeklyAggregatedBarsOverlay({
@@ -99,6 +59,7 @@ export function WeeklyAggregatedBarsOverlay({
   columns,
   editable = false,
   onSaveCapacity,
+  decimals,
 }: WeeklyAggregatedBarsOverlayProps) {
   // Диапазон редактирования в индексах недель (как в дневном режиме — там в днях)
   const [editRange, setEditRange] = useState<{ start: number; end: number } | null>(null)
@@ -184,6 +145,7 @@ export function WeeklyAggregatedBarsOverlay({
             rowHeight={rowHeight}
             editable={editable}
             onCellClick={handleCellClick}
+            decimals={decimals}
           />
         )
       })}
@@ -283,9 +245,11 @@ interface WeekBarCellProps {
   rowHeight: number
   editable?: boolean
   onCellClick?: (index: number) => void
+  /** Знаков после запятой в тексте бара. По умолчанию 2. */
+  decimals?: number
 }
 
-function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCellClick }: WeekBarCellProps) {
+function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCellClick, decimals = 2 }: WeekBarCellProps) {
   const isEmpty = data.rateSum === 0
   const hasNoCapacity = data.capacity === 0
   const hasLoadingWithoutCapacity = hasNoCapacity && !isEmpty
@@ -316,11 +280,11 @@ function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCell
 
   let label: string
   if (isEmpty) {
-    label = String(Math.round(data.capacity * 10) / 10)
+    label = formatBarNumber(data.capacity, decimals)
   } else if (hasLoadingWithoutCapacity) {
-    label = `${formatRate(data.rateSum)}/0`
+    label = `${formatBarNumber(data.rateSum, decimals)}/0`
   } else {
-    label = `${formatRate(data.rateSum)}/${Math.round(data.capacity * 10) / 10}`
+    label = `${formatBarNumber(data.rateSum, decimals)}/${formatBarNumber(data.capacity, decimals)}`
   }
 
   const handleClick = editable
@@ -346,12 +310,12 @@ function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCell
   }
 
   const title = [
-    `${week.label} (${week.workingDays} р.д.)`,
+    week.label,
     isEmpty
-      ? `Ёмкость: ${data.capacity}`
+      ? `Ёмкость: ${formatBarNumber(data.capacity, decimals)}`
       : hasLoadingWithoutCapacity
-      ? `Загрузка: ${formatRate(data.rateSum)} (ёмкость не установлена)`
-      : `Загрузка: ${formatRate(data.rateSum)} / ${Math.round(data.capacity * 10) / 10} (${Math.round(percentage)}%)`,
+      ? `Загрузка: ${formatBarNumber(data.rateSum, decimals)} (ёмкость не установлена)`
+      : `Загрузка: ${formatBarNumber(data.rateSum, decimals)} / ${formatBarNumber(data.capacity, decimals)} (${Math.round(percentage)}%)`,
     editable ? 'Нажмите для изменения ёмкости' : null,
   ].filter(Boolean).join('\n')
 
@@ -388,6 +352,7 @@ function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCell
         }}
       />
 
+      {/* Перегруз (X > Y) нейтральный, не тревожный (см. bar-color.ts) */}
       {isOverload && (
         <div
           className="absolute left-1/2 -translate-x-1/2"
@@ -395,7 +360,7 @@ function WeekBarCell({ week, data, index, cellWidth, rowHeight, editable, onCell
             bottom: CELL_PADDING_BOTTOM + maxBarHeight,
             width: BAR_WIDTH + 8,
             height: 2,
-            background: 'linear-gradient(90deg, transparent 0%, rgba(239,68,68,0.8) 20%, rgba(239,68,68,0.8) 80%, transparent 100%)',
+            background: `linear-gradient(90deg, transparent 0%, ${SURPLUS_ACCENT_COLOR} 20%, ${SURPLUS_ACCENT_COLOR} 80%, transparent 100%)`,
             borderRadius: 1,
           }}
         />

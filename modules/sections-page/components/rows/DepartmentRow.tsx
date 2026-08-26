@@ -121,10 +121,17 @@ export function DepartmentRowContent({
             </div>
           </div>
 
-          {/* Right: metrics */}
+          {/* Right: занятость сегодня относительно штата отдела (feature-AB-06).
+              departmentHeadcount === null — знаменатель недоступен (запрос штата не
+              удался) или несопоставим с busyTodayCount (активен фильтр team/project,
+              сужающий занятость ниже уровня всего отдела) — показываем без "из Y". */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-              {department.totalProjects} пр. · {department.totalSections} разд. · {department.totalEmployees} сотр.
+              занято {department.busyTodayCount}
+              {department.departmentHeadcount !== null && <> из {department.departmentHeadcount}</>}
+              {department.busyOnNonProjectCount > 0 && (
+                <> · {department.busyOnNonProjectCount} на непроектных</>
+              )}
             </div>
           </div>
         </div>
@@ -142,6 +149,7 @@ export function DepartmentRowContent({
                 columns={columns}
                 rowHeight={DEPARTMENT_ROW_HEIGHT}
                 editable={false}
+                decimals={0}
               />
             ) : (
               <AggregatedBarsOverlay
@@ -152,6 +160,7 @@ export function DepartmentRowContent({
                 columns={columns}
                 rowHeight={DEPARTMENT_ROW_HEIGHT}
                 editable={false}
+                decimals={0}
               />
             )
           )}

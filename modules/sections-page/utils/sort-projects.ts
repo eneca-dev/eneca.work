@@ -56,8 +56,23 @@ interface ProjectActuality {
  */
 const SPECIAL_PROJECT_NAMES = new Set(['отпуск', 'прочие работы', 'непроектные загрузки'])
 
+/** Все служебные корзины — для сортировки (все три всегда уходят в низ списка). */
 function isSpecialProject(name: string): boolean {
   return SPECIAL_PROJECT_NAMES.has(name.trim().toLowerCase())
+}
+
+/**
+ * Только корзина «Непроектные загрузки» — строго уже, чем isSpecialProject.
+ *
+ * Для бейджа «N на непроектных» на строке отдела считается ТОЛЬКО эта корзина:
+ * «Отпуск» и «Прочие работы» намеренно не входят — отпуск это не непроектная
+ * работа, а отсутствие работы. Для сортировки по-прежнему используется полный
+ * список SPECIAL_PROJECT_NAMES — там все три ведут себя одинаково.
+ */
+const NON_PROJECT_BUCKET_NAME = 'непроектные загрузки'
+
+export function isNonProjectBucket(name: string): boolean {
+  return name.trim().toLowerCase() === NON_PROJECT_BUCKET_NAME
 }
 
 function actualityTier(p: ProjectActuality): 0 | 1 | 2 | 3 | 4 {

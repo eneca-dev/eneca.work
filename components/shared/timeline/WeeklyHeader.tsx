@@ -169,7 +169,7 @@ export function WeeklyHeader({
           {weekCells.map((cell, i) => (
             <div
               key={`wd-${i}`}
-              className="flex items-center justify-center text-[10px] text-muted-foreground/60 truncate px-0.5"
+              className="flex items-center justify-center text-[9px] text-muted-foreground/60 truncate px-px whitespace-nowrap"
               style={{ width: weekCellWidth }}
               title={cell.label}
             >
