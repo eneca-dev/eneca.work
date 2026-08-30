@@ -7,6 +7,7 @@
 import { cn } from '@/lib/utils'
 import type { DayCell } from '../types'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import { getCellDayType } from '@/components/shared/timeline/cell-utils'
 
 export { getCellDayType }
@@ -42,5 +43,19 @@ export function getWeekCellClassNames(week: WeekCell): string {
     week.monthIndex % 2 === 1 && 'bg-black/[0.03] dark:bg-white/[0.035]',
     // Текущая неделя - применяется последним, но за загрузками
     week.isCurrentWeek && 'bg-green-300/60 dark:bg-green-700/25'
+  )
+}
+
+/**
+ * Get month cell background class names (месячный режим).
+ * Чередование — по самому месяцу (в дневном и недельном режимах чередование тоже
+ * помесячное), текущий месяц — зелёным, как текущий день и текущая неделя.
+ */
+export function getMonthCellClassNames(month: MonthCell, index: number): string {
+  return cn(
+    'border-r border-border/30',
+    index % 2 === 1 && 'bg-black/[0.03] dark:bg-white/[0.035]',
+    // Текущий месяц - применяется последним, но за загрузками
+    month.isCurrentMonth && 'bg-green-300/60 dark:bg-green-700/25'
   )
 }

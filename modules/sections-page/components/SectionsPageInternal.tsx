@@ -21,13 +21,17 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { TimelineHeader, generateDayCells, resolveTimelineRange } from '@/modules/resource-graph/components/timeline'
+import { TimelineHeader, generateDayCells, resolveTimelineRange, MonthlyHeader } from '@/modules/resource-graph/components/timeline'
 import { ScissorsToggle, ScaleToggle, WeeklyHeader } from '@/components/shared/timeline'
 import { generateWeekCells, resolveWeeklyRange } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import { generateMonthCellsInRange, resolveMonthlyRange } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import {
   WEEK_CELL_WIDTH,
   WEEKLY_WEEKS_BEFORE,
   WEEKLY_WEEKS_AFTER,
+  SECTIONS_MONTH_CELL_WIDTH,
+  MONTHLY_MONTHS_BEFORE_SECTIONS,
+  MONTHLY_MONTHS_AFTER_SECTIONS,
 } from '@/modules/resource-graph/constants'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DAYS_BEFORE_TODAY, DAYS_AFTER_TODAY } from '../constants'
 import { DepartmentRowContent } from './rows/DepartmentRow'
@@ -42,6 +46,10 @@ import { openLoadingModalNewCreate, openLoadingModalNewEdit, usePrefetchProjects
 import { useShallow } from 'zustand/react/shallow'
 import type { FilterQueryParams } from '@/modules/cache'
 import { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
+import type { CompanyCalendarEvent } from '@/modules/resource-graph/types'
+
+/** Стабильная ссылка на «календарь ещё не загружен» — см. использование ниже */
+const EMPTY_CALENDAR_EVENTS: CompanyCalendarEvent[] = []
 
 interface SectionsPageInternalProps {
   queryParams?: FilterQueryParams
@@ -183,6 +191,8 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   const setTimelineScale = useSectionsPageUIStore((s) => s.setTimelineScale)
 
   const isWeeklyMode = timelineScale === 'week'
+  const isMonthlyMode = timelineScale === 'month'
+  const isDailyMode = !isWeeklyMode && !isMonthlyMode
 
   // Timeline range and cells
   const range = useMemo(
@@ -190,7 +200,10 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     [customDateRange]
   )
 
-  const { data: calendarEvents = [] } = useCompanyCalendarEvents()
+  // Дефолт — модульная константа, а не литерал `[]`: пока календарь грузится,
+  // новый пустой массив на каждый рендер сбрасывал бы useMemo дневных/недельных/
+  // месячных ячеек, и вся сетка пересчитывалась бы вхолостую.
+  const { data: calendarEvents = EMPTY_CALENDAR_EVENTS } = useCompanyCalendarEvents()
 
   const dayCells = useMemo(
     () => generateDayCells(range, calendarEvents),
@@ -209,8 +222,25 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     return generateWeekCells(weeklyRange, calendarEvents)
   }, [isWeeklyMode, weeklyRange, calendarEvents])
 
+  // Месячное окно — тот же customDateRange, что и в остальных режимах (см. resolveMonthlyRange)
+  const monthlyRange = useMemo(
+    () => resolveMonthlyRange(customDateRange, {
+      monthsBefore: MONTHLY_MONTHS_BEFORE_SECTIONS,
+      monthsAfter: MONTHLY_MONTHS_AFTER_SECTIONS,
+    }),
+    [customDateRange]
+  )
+
+  // Monthly cells (computed only in monthly mode)
+  const monthCells = useMemo(() => {
+    if (!isMonthlyMode) return []
+    return generateMonthCellsInRange(monthlyRange, calendarEvents)
+  }, [isMonthlyMode, monthlyRange, calendarEvents])
+
   const timelineWidth = isWeeklyMode
     ? weekCells.length * WEEK_CELL_WIDTH
+    : isMonthlyMode
+    ? monthCells.length * SECTIONS_MONTH_CELL_WIDTH
     : dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
@@ -218,6 +248,12 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
   const currentWeekIndex = useMemo(
     () => weekCells.findIndex((c) => c.isCurrentWeek),
     [weekCells]
+  )
+
+  // Index of current month for auto-scroll
+  const currentMonthIndex = useMemo(
+    () => monthCells.findIndex((c) => c.isCurrentMonth),
+    [monthCells]
   )
 
   // UI state
@@ -255,6 +291,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               dayCells={dayCells}
               columns={columns}
               weekCells={isWeeklyMode ? weekCells : undefined}
+              monthCells={isMonthlyMode ? monthCells : undefined}
             />
           )
         case 'project':
@@ -264,6 +301,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               dayCells={dayCells}
               columns={columns}
               weekCells={isWeeklyMode ? weekCells : undefined}
+              monthCells={isMonthlyMode ? monthCells : undefined}
             />
           )
         case 'objectSection':
@@ -274,6 +312,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               dayCells={dayCells}
               columns={columns}
               weekCells={isWeeklyMode ? weekCells : undefined}
+              monthCells={isMonthlyMode ? monthCells : undefined}
             />
           )
         case 'employee':
@@ -289,6 +328,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               dayCells={dayCells}
               columns={columns}
               weekCells={isWeeklyMode ? weekCells : undefined}
+              monthCells={isMonthlyMode ? monthCells : undefined}
             />
           )
         case 'staleGroup':
@@ -307,7 +347,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
         }
       }
     },
-    [dayCells, isWeeklyMode, weekCells]
+    [dayCells, isWeeklyMode, weekCells, isMonthlyMode, monthCells]
   )
 
   // Expand all nodes in the tree (batch operation)
@@ -340,13 +380,17 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
     return differenceInDays(today, range.start)
   }, [range.start])
 
-  // Смещение скролла к «сегодня»: в днях — today-7, в неделях — предыдущая неделя
+  // Смещение скролла к «сегодня»: в днях — today-7, в неделях — предыдущая неделя,
+  // в месяцах — предыдущий месяц
   const todayScrollLeft = useMemo(() => {
     if (isWeeklyMode) {
       return Math.max(0, (currentWeekIndex - 1) * WEEK_CELL_WIDTH)
     }
+    if (isMonthlyMode) {
+      return Math.max(0, (currentMonthIndex - 1) * SECTIONS_MONTH_CELL_WIDTH)
+    }
     return Math.max(0, (todayOffsetDays - 7) * DAY_CELL_WIDTH)
-  }, [isWeeklyMode, currentWeekIndex, todayOffsetDays])
+  }, [isWeeklyMode, isMonthlyMode, currentWeekIndex, currentMonthIndex, todayOffsetDays])
 
   const handleScrollToToday = useCallback(() => {
     if (contentScrollRef.current) contentScrollRef.current.scrollLeft = todayScrollLeft
@@ -363,7 +407,8 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
 
   /**
    * Первичная прокрутка таймлайна к «сегодня» (в дневном режиме — сегодня и 7 дней
-   * до него, в недельном — текущая неделя и одна до неё).
+   * до него, в недельном — текущая неделя и одна до неё, в месячном — текущий месяц
+   * и один до него).
    *
    * Почему не одно присвоение scrollLeft: сразу после загрузки данных VirtualList
    * только монтируется, строки ещё измеряются, и позиция прокрутки в этот момент
@@ -373,14 +418,14 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
    *
    * Как только пользователь сам трогает прокрутку — немедленно прекращаем, чтобы
    * не выдёргивать таймлайн у него из-под рук. Повторно срабатывает только при
-   * смене режима день/неделя или диапазона дат (меняется ключ).
+   * смене масштаба (день/неделя/месяц) или диапазона дат (меняется ключ).
    */
   const scrollAppliedKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (isLoading) return
 
-    const key = `${isWeeklyMode ? 'week' : 'day'}:${todayScrollLeft}`
+    const key = `${timelineScale}:${todayScrollLeft}`
     if (scrollAppliedKeyRef.current === key) return
 
     let raf = 0
@@ -440,7 +485,7 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
         listenersOn.removeEventListener('keydown', stopHolding)
       }
     }
-  }, [isLoading, isWeeklyMode, todayScrollLeft])
+  }, [isLoading, timelineScale, todayScrollLeft])
 
   // Empty state - before data fetch (no filters, no loadAll)
   if (!shouldFetchData) {
@@ -496,9 +541,9 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                     <ScaleToggle
                       value={timelineScale}
                       onChange={setTimelineScale}
-                      modes={['day', 'week']}
+                      modes={['day', 'week', 'month']}
                     />
-                    {!isWeeklyMode && <ScissorsToggle />}
+                    {isDailyMode && <ScissorsToggle />}
                   </div>
                   {/* TODO: временно скрыты кнопки "Развернуть всё" / "Свернуть всё"
                   <TooltipProvider>
@@ -544,6 +589,18 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
                       onScrollToToday: handleScrollToToday,
                       defaultDaysBefore: WEEKLY_WEEKS_BEFORE * 7,
                       defaultDaysAfter: WEEKLY_WEEKS_AFTER * 7,
+                    }}
+                  />
+                ) : isMonthlyMode ? (
+                  <MonthlyHeader
+                    monthCells={monthCells}
+                    monthCellWidth={SECTIONS_MONTH_CELL_WIDTH}
+                    datePopoverConfig={{
+                      customRange: customDateRange,
+                      onRangeChange: setCustomDateRange,
+                      onScrollToToday: handleScrollToToday,
+                      defaultDaysBefore: MONTHLY_MONTHS_BEFORE_SECTIONS * 30,
+                      defaultDaysAfter: MONTHLY_MONTHS_AFTER_SECTIONS * 30,
                     }}
                   />
                 ) : (
@@ -609,8 +666,8 @@ export function SectionsPageInternal({ queryParams, loadAllEnabled, onLoadAll }:
               scrollElementRef={contentScrollRef}
               onScroll={handleContentScroll}
               className="h-full"
-              columnCount={isWeeklyMode ? weekCells.length : dayCells.length}
-              columnWidth={isWeeklyMode ? WEEK_CELL_WIDTH : DAY_CELL_WIDTH}
+              columnCount={isWeeklyMode ? weekCells.length : isMonthlyMode ? monthCells.length : dayCells.length}
+              columnWidth={isWeeklyMode ? WEEK_CELL_WIDTH : isMonthlyMode ? SECTIONS_MONTH_CELL_WIDTH : DAY_CELL_WIDTH}
               columnScrollMargin={SIDEBAR_WIDTH}
               columnOverscan={4}
             />

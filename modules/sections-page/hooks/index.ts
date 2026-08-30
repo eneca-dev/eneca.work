@@ -4,6 +4,7 @@
  * React Query хуки для работы с иерархией разделов
  */
 
+import { useQueryClient } from '@tanstack/react-query'
 import {
   createCacheQuery,
   createCacheMutation,
@@ -127,13 +128,48 @@ function asCapacityMutationShape(departments: Department[] | undefined): Section
   return (departments ?? []) as unknown as SectionCapacity[]
 }
 
-export const useUpsertSectionCapacityBatch = createCacheMutation<
+/**
+ * Максимум записей ёмкости в одном вызове server action.
+ *
+ * Месячный режим (feature-AB-11) сохраняет ёмкость сразу на все дни месяца, а с
+ * растягиванием диапазона — на несколько месяцев; на строке проекта значение ещё и
+ * делится между всеми его разделами. Год × 12 разделов ≈ 4500 записей — это и тело
+ * запроса под лимит server action, и такой же по объёму ответ из `.select()`.
+ * Режем на части: пользовательский жест тот же, запросы остаются нормального размера.
+ */
+const CAPACITY_BATCH_CHUNK_SIZE = 1000
+
+async function upsertSectionCapacityChunked(inputs: CapacityInput[]) {
+  if (inputs.length <= CAPACITY_BATCH_CHUNK_SIZE) {
+    return upsertSectionCapacityBatch(inputs)
+  }
+
+  for (let i = 0; i < inputs.length; i += CAPACITY_BATCH_CHUNK_SIZE) {
+    const result = await upsertSectionCapacityBatch(inputs.slice(i, i + CAPACITY_BATCH_CHUNK_SIZE))
+    if (!result.success) {
+      // Первая же ошибка прекращает сохранение. Если предыдущие чанки уже
+      // записаны — говорим об этом прямо: в БД лежит часть диапазона, и после
+      // отката оптимистики (onSettled ниже) с сервера приедет именно она.
+      return i === 0
+        ? result
+        : { success: false as const, error: `Ёмкость сохранена частично. ${result.error}` }
+    }
+  }
+  // Записанные строки не собираем — action их не возвращает (лишний трафик),
+  // потребителя у них нет.
+  return { success: true as const, data: [] as SectionCapacity[] }
+}
+
+const useUpsertSectionCapacityBatchMutation = createCacheMutation<
   CapacityInput[],
   SectionCapacity[]
 >({
-  mutationFn: upsertSectionCapacityBatch,
+  mutationFn: upsertSectionCapacityChunked,
   optimisticUpdate: {
-    queryKey: queryKeys.sectionsPage.all,
+    // lists(), а не all: updater безусловно читает department.projects, а под
+    // префиксом ['sections-page'] могут появиться запросы другой формы
+    // (например, sectionsPage.capacity) — тогда onMutate упал бы с TypeError.
+    queryKey: queryKeys.sectionsPage.lists(),
     updater: (oldData, input) => {
       const departments = asDepartmentsCache(oldData)
       if (!departments) return asCapacityMutationShape(undefined)
@@ -150,6 +186,33 @@ export const useUpsertSectionCapacityBatch = createCacheMutation<
     toast.error(error.message || 'Не удалось сохранить ёмкость')
   },
 })
+
+/**
+ * Сохранение ёмкости батчем.
+ *
+ * Обёртка над мутацией нужна ради `onSettled`: фабрика `createCacheMutation`
+ * инвалидирует ключи ТОЛЬКО в `onSuccess`, а запись теперь идёт чанками
+ * (см. upsertSectionCapacityChunked). При падении, скажем, третьего чанка из
+ * пяти первые два уже в БД, оптимистика откатывается к состоянию «до жеста»,
+ * а иерархия живёт со `staleTime: Infinity` — без принудительного рефетча
+ * пользователь остался бы со старыми числами на экране и новыми в базе.
+ * `onSettled` срабатывает и на успехе, и на ошибке, поэтому расхождение
+ * закрывается в обоих случаях.
+ *
+ * Спред `...options?.mutationOptions` в фабрике идёт последним, так что наш
+ * `onSettled` перекрывает `config.onSettled` (он здесь не задан) и не влияет
+ * на onMutate/onError/onSuccess.
+ */
+export function useUpsertSectionCapacityBatch() {
+  const queryClient = useQueryClient()
+  return useUpsertSectionCapacityBatchMutation({
+    mutationOptions: {
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.lists() })
+      },
+    },
+  })
+}
 
 /**
  * Удалить capacity override (вернуть к default)

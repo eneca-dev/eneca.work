@@ -290,23 +290,92 @@ export async function getSectionsHierarchy(
       }
     }
 
-    const { data: rows, error } = await query
+    // Детерминированный порядок — обязателен при постраничном чтении (bug-AB-12).
+    // Без ORDER BY Postgres не гарантирует одинаковую сортировку между отдельными
+    // запросами страниц: соседние .range() могут перекрыться (одна строка приходит
+    // дважды) и одновременно пропустить другие. Дубли доезжали до UI — одна и та же
+    // загрузка попадала в objectSection.loadings два раза (в недельном/месячном
+    // режиме это ловил React как «two children with the same key», в дневном тихо
+    // задваивало полоску и сумму X на мини-барах).
+    // (section_id, loading_id) в этой вью уникальна — проверено на всех 9102 строках.
+    query = query
+      .order('section_id', { ascending: true })
+      .order('loading_id', { ascending: true, nullsFirst: true })
 
-    if (error) {
-      console.error('Error fetching sections hierarchy:', error)
-      Sentry.captureException(new Error(error.message), {
-        tags: { module: 'sections-page', action: 'getSectionsHierarchy', error_type: 'db_error', user_facing: 'true' },
-        extra: { appliedFilters: Object.keys(secureFilters || {}) },
-      })
-      return {
-        success: false,
-        error: `Ошибка загрузки данных: ${error.message}`,
+    // Пагинация: без .range() PostgREST молча режет select('*') на db-max-rows
+    // проекта (в этом проекте — 5000) и возвращает частичный результат БЕЗ
+    // ошибки (206 Partial Content) — при >5000 подходящих строк часть данных
+    // (например, только что созданный раздел) тихо пропадала из ответа.
+    // Дочитываем страницами, пока страница не вернёт меньше PAGE_SIZE.
+    // PAGE_SIZE = db-max-rows проекта: на текущих ~9k строк это 2-3 запроса
+    // вместо 10, и во столько же раз уже окно, в котором конкурентная вставка
+    // может сдвинуть постраничную выборку (см. bug-AB-12).
+    const PAGE_SIZE = 5000
+    const MAX_PAGES = 40 // защита от бесконечного цикла — 200k строк с запасом
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let rows: any[] = []
+    let from = 0
+    let pageCount = 0
+
+    while (true) {
+      const { data: page, error } = await query.range(from, from + PAGE_SIZE - 1)
+
+      if (error) {
+        console.error('Error fetching sections hierarchy:', error)
+        Sentry.captureException(new Error(error.message), {
+          tags: { module: 'sections-page', action: 'getSectionsHierarchy', error_type: 'db_error', user_facing: 'true' },
+          extra: { appliedFilters: Object.keys(secureFilters || {}) },
+        })
+        return {
+          success: false,
+          error: `Ошибка загрузки данных: ${error.message}`,
+        }
       }
+
+      if (!page || page.length === 0) break
+      rows.push(...page)
+      pageCount++
+
+      if (page.length < PAGE_SIZE) break
+
+      if (pageCount >= MAX_PAGES) {
+        Sentry.captureMessage('getSectionsHierarchy: MAX_PAGES reached, data may be truncated', {
+          level: 'warning',
+          tags: { module: 'sections-page', action: 'getSectionsHierarchy' },
+          extra: { rowsFetched: rows.length },
+        })
+        break
+      }
+
+      from += PAGE_SIZE
     }
 
     if (!rows || rows.length === 0) {
       return { success: true, data: [] }
     }
+
+    // Страховка поверх сортировки (bug-AB-12): режем дубли строк по ключу
+    // (section_id, loading_id) — уникальному в этой вью. Если порядок всё же
+    // «поедет» (изменится план запроса, конкурентная запись между страницами),
+    // задвоенная строка не дойдёт ни до loadings, ни до счётчиков и агрегаций.
+    const seenRowKeys = new Set<string>()
+    const uniqueRows = rows.filter((r) => {
+      const key = `${r.section_id}|${r.loading_id ?? ''}`
+      if (seenRowKeys.has(key)) return false
+      seenRowKeys.add(key)
+      return true
+    })
+    if (uniqueRows.length !== rows.length) {
+      Sentry.captureMessage('getSectionsHierarchy: duplicate rows across pages', {
+        level: 'warning',
+        tags: { module: 'sections-page', action: 'getSectionsHierarchy' },
+        extra: { fetched: rows.length, unique: uniqueRows.length },
+      })
+    }
+    // Переприсваиваем, а не мутируем через push(...uniqueRows): потолок цикла —
+    // MAX_PAGES × PAGE_SIZE = 200k строк, а спред такого размера в аргументы
+    // функции роняет движок с RangeError.
+    rows = uniqueRows
 
     // Уникальные исполнители загрузок — team_id для UI gating (view_departments_sections_loadings
     // его не отдаёт, нужен для определения "это команда team_lead'а" на клиенте).
@@ -837,8 +906,12 @@ export async function upsertSectionCapacityBatch(
       return { success: false, error: 'Нет прав на редактирование ёмкости' }
     }
 
+    // Без .select(): единственный потребитель — useUpsertSectionCapacityBatch,
+    // а он строит оптимистичное обновление из входных данных и записанные строки
+    // не читает. Возврат до 1000 строк на чанк удваивал трафик жеста впустую
+    // (месячный drag пишет тысячи записей — см. feature-AB-11).
     const updatedAt = new Date().toISOString()
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('section_capacity')
       .upsert(
         inputs.map((input) => ({
@@ -850,7 +923,6 @@ export async function upsertSectionCapacityBatch(
         })),
         { onConflict: 'section_id,capacity_date' }
       )
-      .select()
 
     if (error) {
       console.error('Error upserting section capacity batch:', error)
@@ -864,18 +936,9 @@ export async function upsertSectionCapacityBatch(
       }
     }
 
-    return {
-      success: true,
-      data: (data ?? []).map((row) => ({
-        capacityId: row.capacity_id,
-        sectionId: row.section_id,
-        capacityDate: row.capacity_date,
-        capacityValue: row.capacity_value,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        createdBy: row.created_by,
-      })),
-    }
+    // Записанные строки не возвращаем (см. комментарий у .upsert выше) —
+    // актуальное состояние приезжает рефетчем иерархии в onSettled мутации.
+    return { success: true, data: [] }
   } catch (error) {
     console.error('Unexpected error in upsertSectionCapacityBatch:', error)
     Sentry.captureException(error, {

@@ -402,12 +402,14 @@ function BarCell({ day, index, rowHeight, editable, onCellClick, capacityHint, o
         height: rowHeight,
         cursor: editable || capacityHint ? 'pointer' : undefined,
       }}
+      // В тултипе — точные числа, без огрубления из `decimals` (на строке отдела
+      // подпись бара округляется до целых, см. bug-AB-10)
       title={
         isEmpty
-          ? [`Capacity: ${formatBarNumber(day.capacity, decimals)}`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
+          ? [`Ёмкость: ${formatBarNumber(day.capacity)}`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
           : hasLoadingWithoutCapacity
-          ? [`Загрузка: ${formatBarNumber(day.rateSum, decimals)} (ёмкость не установлена)`, editable ? 'Нажмите для установки ёмкости' : capacityHint].filter(Boolean).join('\n')
-          : [`Загрузка: ${formatBarNumber(day.rateSum, decimals)} / ${formatBarNumber(day.capacity, decimals)} (${Math.round(percentage)}%)`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
+          ? [`Загрузка: ${formatBarNumber(day.rateSum)} (ёмкость не установлена)`, editable ? 'Нажмите для установки ёмкости' : capacityHint].filter(Boolean).join('\n')
+          : [`Загрузка: ${formatBarNumber(day.rateSum)} / ${formatBarNumber(day.capacity)} (${Math.round(percentage)}%)`, editable ? 'Нажмите для изменения ёмкости' : capacityHint].filter(Boolean).join('\n')
       }
       onClick={handleClick}
     >

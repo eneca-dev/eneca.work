@@ -9,12 +9,14 @@ import { useMemo, useCallback } from 'react'
 import { Box, ChevronDown, ChevronRight, UserPlus } from 'lucide-react'
 import { useHasPermission, useHasAnyLoadingEditPermission } from '@/modules/permissions'
 import { useRowExpanded } from '../../stores/useSectionsPageUIStore'
-import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
+import { getCellClassNames, getWeekCellClassNames, getMonthCellClassNames } from '../../utils/cell-utils'
 import { expandDateRange } from '../../utils/capacity'
-import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, OBJECT_SECTION_ROW_HEIGHT } from '../../constants'
-import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
+import { getTimelineGrid } from '../../utils/timeline-grid'
+import { SIDEBAR_WIDTH, OBJECT_SECTION_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH, SECTIONS_MONTH_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
 import { WeeklyAggregatedBarsOverlay } from '../WeeklyAggregatedBarsOverlay'
+import { MonthlyAggregatedBarsOverlay } from '../MonthlyAggregatedBarsOverlay'
 import { openLoadingModalNewCreate } from '@/modules/modals'
 import { useUpsertSectionCapacityBatch } from '../../hooks'
 import { MockSectionPeriodBar } from '../mock/MockSectionPeriodBar'
@@ -22,6 +24,7 @@ import { MockCapacityPlanBar } from '../mock/MockCapacityPlanBar'
 import { MOCK_PROJECT_ID } from '@/modules/resource-graph/mocks/stagePeriods'
 import type { ObjectSection, DayCell } from '../../types'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface ObjectSectionRowContentProps {
@@ -32,6 +35,8 @@ interface ObjectSectionRowContentProps {
   columns?: VirtualColumn[]
   /** Недельные ячейки — задано только в недельном режиме */
   weekCells?: WeekCell[]
+  /** Месячные ячейки — задано только в месячном режиме */
+  monthCells?: MonthCell[]
 }
 
 export function ObjectSectionRowContent({
@@ -40,16 +45,11 @@ export function ObjectSectionRowContent({
   dayCells,
   columns,
   weekCells,
+  monthCells,
 }: ObjectSectionRowContentProps) {
-  const isWeeklyMode = weekCells !== undefined
+  const { isDailyMode, timelineWidth, dayCols, weekCols, monthCols } =
+    getTimelineGrid({ dayCells, weekCells, monthCells, columns })
   const { isExpanded, toggle } = useRowExpanded('objectSection', objectSection.id)
-  const timelineWidth = isWeeklyMode
-    ? weekCells.length * WEEK_CELL_WIDTH
-    : dayCells.length * DAY_CELL_WIDTH
-  const dayCols: VirtualColumn[] =
-    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
-  const weekCols: VirtualColumn[] =
-    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   // Для мок-проекта: верхняя зона — плановая ёмкость, нижняя — фактические загрузки
   const MOCK_CAPACITY_ZONE_HEIGHT = 20
@@ -152,7 +152,7 @@ export function ObjectSectionRowContent({
         {/* Timeline cells + aggregation (editable capacity) */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
           {/* MOCK: подоснова дат раздела + плановая ёмкость (верхняя зона). Компоненты не само-защищены — обёртка по MOCK_PROJECT_ID. */}
-          {!isWeeklyMode && projectId === MOCK_PROJECT_ID && (
+          {isDailyMode && projectId === MOCK_PROJECT_ID && (
             <>
               <MockSectionPeriodBar
                 sectionId={objectSection.sectionId}
@@ -166,13 +166,27 @@ export function ObjectSectionRowContent({
             </>
           )}
           {/* Фактические загрузки: для мок-проекта — нижняя зона строки */}
-          {isWeeklyMode ? (
+          {/* Ветвим по самим ячейкам, а не по флагам режима: так TypeScript сужает
+              weekCells/monthCells до непустых и их можно передать вниз без `!`. */}
+          {weekCells ? (
             <WeeklyAggregatedBarsOverlay
               loadings={loadings}
               defaultCapacity={objectSection.defaultCapacity ?? 0}
               dateCapacityOverrides={dateCapacityOverrides}
               weekCells={weekCells}
               weekCellWidth={WEEK_CELL_WIDTH}
+              columns={columns}
+              rowHeight={OBJECT_SECTION_ROW_HEIGHT}
+              editable={canEditCapacity}
+              onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
+            />
+          ) : monthCells ? (
+            <MonthlyAggregatedBarsOverlay
+              loadings={loadings}
+              defaultCapacity={objectSection.defaultCapacity ?? 0}
+              dateCapacityOverrides={dateCapacityOverrides}
+              monthCells={monthCells}
+              monthCellWidth={SECTIONS_MONTH_CELL_WIDTH}
               columns={columns}
               rowHeight={OBJECT_SECTION_ROW_HEIGHT}
               editable={canEditCapacity}
@@ -211,24 +225,37 @@ export function ObjectSectionRowContent({
               onSaveCapacity={canEditCapacity ? handleSaveCapacity : undefined}
             />
           )}
-          {!isWeeklyMode && dayCols.map((col) => {
+          {/* Колонки неактивных режимов — пустые массивы (см. getTimelineGrid),
+              поэтому отдельные флаги режима здесь не нужны. */}
+          {dayCols.map((col) => {
             const cell = dayCells[col.index]
             if (!cell) return null
             return (
               <div
-                key={col.index}
+                key={`d-${col.index}`}
                 className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )
           })}
-          {isWeeklyMode && weekCols.map((col) => {
+          {weekCols.map((col) => {
             const week = weekCells?.[col.index]
             if (!week) return null
             return (
               <div
-                key={col.index}
+                key={`w-${col.index}`}
                 className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+          {monthCols.map((col) => {
+            const month = monthCells?.[col.index]
+            if (!month) return null
+            return (
+              <div
+                key={`m-${col.index}`}
+                className={`${getMonthCellClassNames(month, col.index)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

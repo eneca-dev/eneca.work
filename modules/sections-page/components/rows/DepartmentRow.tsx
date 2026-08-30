@@ -8,13 +8,16 @@
 import { useMemo } from 'react'
 import { ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useSectionsPageUIStore } from '../../stores/useSectionsPageUIStore'
-import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
-import { WEEK_CELL_WIDTH } from '@/modules/resource-graph/constants'
+import { SIDEBAR_WIDTH, DEPARTMENT_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH, SECTIONS_MONTH_CELL_WIDTH } from '@/modules/resource-graph/constants'
 import { AggregatedBarsOverlay } from '../AggregatedBarsOverlay'
 import { WeeklyAggregatedBarsOverlay } from '../WeeklyAggregatedBarsOverlay'
-import { getCellClassNames, getWeekCellClassNames } from '../../utils/cell-utils'
+import { MonthlyAggregatedBarsOverlay } from '../MonthlyAggregatedBarsOverlay'
+import { getCellClassNames, getWeekCellClassNames, getMonthCellClassNames } from '../../utils/cell-utils'
+import { getTimelineGrid } from '../../utils/timeline-grid'
 import type { Department, DayCell, SectionLoading } from '../../types'
 import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 
 interface DepartmentRowContentProps {
@@ -24,6 +27,8 @@ interface DepartmentRowContentProps {
   columns?: VirtualColumn[]
   /** Недельные ячейки — задано только в недельном режиме */
   weekCells?: WeekCell[]
+  /** Месячные ячейки — задано только в месячном режиме */
+  monthCells?: MonthCell[]
 }
 
 export function DepartmentRowContent({
@@ -31,22 +36,16 @@ export function DepartmentRowContent({
   dayCells,
   columns,
   weekCells,
+  monthCells,
 }: DepartmentRowContentProps) {
-  const isWeeklyMode = weekCells !== undefined
+  const { isDailyMode, isWeeklyMode, isMonthlyMode, timelineWidth, dayCols, weekCols, monthCols } =
+    getTimelineGrid({ dayCells, weekCells, monthCells, columns })
   const isExpanded = useSectionsPageUIStore((s) => s.isExpanded(`department-${department.id}`))
   const toggle = useSectionsPageUIStore((s) => s.toggle)
 
   const handleToggle = () => {
     toggle(`department-${department.id}`)
   }
-
-  const timelineWidth = isWeeklyMode
-    ? weekCells.length * WEEK_CELL_WIDTH
-    : dayCells.length * DAY_CELL_WIDTH
-  const dayCols: VirtualColumn[] =
-    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
-  const weekCols: VirtualColumn[] =
-    columns ?? (weekCells ?? []).map((_, idx) => ({ index: idx, start: idx * WEEK_CELL_WIDTH, size: WEEK_CELL_WIDTH }))
 
   // X: агрегация всех загрузок из всех проектов и разделов отдела
   const allDepartmentLoadings = useMemo((): SectionLoading[] => {
@@ -138,14 +137,28 @@ export function DepartmentRowContent({
 
         {/* Timeline cells with department-level capacity aggregation */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
+          {/* Ветвим по самим ячейкам, а не по флагам режима: так TypeScript сужает
+              weekCells/monthCells до непустых и их можно передать вниз без `!`. */}
           {allDepartmentLoadings.length > 0 && (
-            isWeeklyMode ? (
+            weekCells ? (
               <WeeklyAggregatedBarsOverlay
                 loadings={allDepartmentLoadings}
                 defaultCapacity={totalDepartmentCapacity}
                 dateCapacityOverrides={departmentDateCapacityOverrides}
                 weekCells={weekCells}
                 weekCellWidth={WEEK_CELL_WIDTH}
+                columns={columns}
+                rowHeight={DEPARTMENT_ROW_HEIGHT}
+                editable={false}
+                decimals={0}
+              />
+            ) : monthCells ? (
+              <MonthlyAggregatedBarsOverlay
+                loadings={allDepartmentLoadings}
+                defaultCapacity={totalDepartmentCapacity}
+                dateCapacityOverrides={departmentDateCapacityOverrides}
+                monthCells={monthCells}
+                monthCellWidth={SECTIONS_MONTH_CELL_WIDTH}
                 columns={columns}
                 rowHeight={DEPARTMENT_ROW_HEIGHT}
                 editable={false}
@@ -164,24 +177,37 @@ export function DepartmentRowContent({
               />
             )
           )}
-          {!isWeeklyMode && dayCols.map((col) => {
+          {/* Колонки неактивных режимов — пустые массивы (см. getTimelineGrid),
+              поэтому отдельные флаги режима здесь не нужны. */}
+          {dayCols.map((col) => {
             const cell = dayCells[col.index]
             if (!cell) return null
             return (
               <div
-                key={col.index}
+                key={`d-${col.index}`}
                 className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )
           })}
-          {isWeeklyMode && weekCols.map((col) => {
+          {weekCols.map((col) => {
             const week = weekCells?.[col.index]
             if (!week) return null
             return (
               <div
-                key={col.index}
+                key={`w-${col.index}`}
                 className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
+                style={{ left: col.start, width: col.size }}
+              />
+            )
+          })}
+          {monthCols.map((col) => {
+            const month = monthCells?.[col.index]
+            if (!month) return null
+            return (
+              <div
+                key={`m-${col.index}`}
+                className={`${getMonthCellClassNames(month, col.index)} absolute top-0 bottom-0`}
                 style={{ left: col.start, width: col.size }}
               />
             )

@@ -6907,6 +6907,8 @@ export type Database = {
       }
       loadings: {
         Row: {
+          external_id: string | null
+          external_source: string | null
           is_shortage: boolean
           loading_comment: string | null
           loading_created: string | null
@@ -6925,6 +6927,8 @@ export type Database = {
           shortage_team_id: string | null
         }
         Insert: {
+          external_id?: string | null
+          external_source?: string | null
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null
@@ -6943,6 +6947,8 @@ export type Database = {
           shortage_team_id?: string | null
         }
         Update: {
+          external_id?: string | null
+          external_source?: string | null
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null

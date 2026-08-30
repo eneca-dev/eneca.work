@@ -72,34 +72,34 @@ export function computeDailyAggregation(
 }
 
 // ============================================================================
-// Compute weekly aggregation from loadings (для недельного режима)
+// Compute period aggregation from loadings (недельный и месячный режимы)
 // ============================================================================
 
 /**
- * Per-week aggregated data — те же rateSum/capacity, что и DailyAggregation,
- * но усреднённые по рабочим дням недели (WeekCell.workingDates), чтобы проценты
- * оставались сравнимы с дневным режимом (среднедневная загрузка недели).
+ * Per-period aggregated data — те же rateSum/capacity, что и DailyAggregation,
+ * но усреднённые по рабочим дням периода (WeekCell/MonthCell.workingDates), чтобы
+ * проценты оставались сравнимы с дневным режимом (среднедневная загрузка периода).
  */
-export type WeeklyAggregation = DailyAggregation
+export type PeriodAggregation = DailyAggregation
 
 /**
- * Compute per-week aggregation for a list of loadings + capacity.
- * Суммирует rateSum/capacity ТОЛЬКО по рабочим дням недели (week.workingDates) —
+ * Compute per-period aggregation for a list of loadings + capacity.
+ * Суммирует rateSum/capacity ТОЛЬКО по рабочим дням периода (cell.workingDates) —
  * выходные и праздники не участвуют ни в сумме, ни в делителе, поэтому среднее
- * не завышается (раньше сумма шла по всем 7 дням, а делилась на workingDays,
+ * не завышается (раньше сумма шла по всем 7 дням недели, а делилась на workingDays,
  * что задирало результат при ненулевой ёмкости на выходных).
- * Возвращает массив, выровненный по weekCells.
+ * Возвращает массив, выровненный по cells.
  */
-export function computeWeeklyAggregation(
+export function computePeriodAggregation(
   loadings: SectionLoading[],
   defaultCapacity: number,
   dateCapacityOverrides: Record<string, number>,
-  weekCells: WeekCell[]
-): WeeklyAggregation[] {
-  return weekCells.map((week) => {
+  cells: Array<Pick<WeekCell, 'workingDates'>>
+): PeriodAggregation[] {
+  return cells.map((cell) => {
     let rateSum = 0
     let capacity = 0
-    for (const dateStr of week.workingDates) {
+    for (const dateStr of cell.workingDates) {
       capacity += dateCapacityOverrides[dateStr] ?? defaultCapacity
 
       for (const loading of loadings) {
@@ -109,7 +109,7 @@ export function computeWeeklyAggregation(
       }
     }
 
-    const divisor = week.workingDates.length || 1
+    const divisor = cell.workingDates.length || 1
     return { rateSum: rateSum / divisor, capacity: capacity / divisor }
   })
 }
