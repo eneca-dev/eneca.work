@@ -31,6 +31,7 @@ export function RealtimeSync() {
   const channelRef = useRef<RealtimeChannel | null>(null)
   const pendingInvalidationsRef = useRef<Set<string>>(new Set())
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /**
    * Выполняет накопленные инвалидации
@@ -96,9 +97,23 @@ export function RealtimeSync() {
 
     const supabase = createClient()
     let reconnectAttempts = 0
+    let isActive = true
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY_MS = 3000
-    let isAuthChecked = false
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+    }
+
+    const removeCurrentChannel = (channel: RealtimeChannel) => {
+      if (channelRef.current !== channel) return false
+      channelRef.current = null
+      void supabase.removeChannel(channel)
+      return true
+    }
 
     /**
      * Создаёт и настраивает канал с подписками
@@ -131,23 +146,25 @@ export function RealtimeSync() {
      * Подписывается на канал с обработкой переподключения
      */
     const subscribeWithReconnect = async () => {
-      // Проверяем авторизацию перед подключением
-      if (!isAuthChecked) {
-        const { data: { session } } = await supabase.auth.getSession()
-        isAuthChecked = true
-
-        if (!session) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[RealtimeSync] No session, skipping Realtime connection')
-          }
-          return
+      clearReconnectTimer()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!isActive || !session) {
+        if (process.env.NODE_ENV === 'development' && isActive) {
+          console.log('[RealtimeSync] No session, skipping Realtime connection')
         }
+        return
       }
+
+      // Явно обновляем JWT на socket перед каждой новой подпиской. Это важно
+      // после refresh токена: иначе Realtime может отклонить канал по старому JWT.
+      supabase.realtime.setAuth(session.access_token)
 
       const channel = createChannel()
       channelRef.current = channel
 
       channel.subscribe((status, err) => {
+        if (!isActive || channelRef.current !== channel) return
+
         if (process.env.NODE_ENV === 'development') {
           console.log('[RealtimeSync] Subscription status:', status, err || '')
         }
@@ -155,7 +172,12 @@ export function RealtimeSync() {
         if (status === 'SUBSCRIBED') {
           reconnectAttempts = 0 // Сбрасываем счётчик при успешном подключении
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[RealtimeSync] Channel error/timeout, attempting reconnect...')
+          console.warn('[RealtimeSync] Channel error/timeout, attempting reconnect...', {
+            status,
+            error: err?.message,
+            attempt: reconnectAttempts + 1,
+            tableCount: realtimeSubscriptions.length,
+          })
 
           Sentry.addBreadcrumb({
             message: `Realtime ${status}`,
@@ -164,17 +186,15 @@ export function RealtimeSync() {
             data: { status, error: err?.message, attempt: reconnectAttempts + 1, maxAttempts: MAX_RECONNECT_ATTEMPTS },
           })
 
-          // Удаляем старый канал
-          if (channelRef.current) {
-            supabase.removeChannel(channelRef.current)
-            channelRef.current = null
-          }
+          removeCurrentChannel(channel)
 
           // Пробуем переподключиться
           if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++
-            // console.log(`[RealtimeSync] Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
-            setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS * reconnectAttempts)
+            reconnectTimerRef.current = setTimeout(
+              subscribeWithReconnect,
+              RECONNECT_DELAY_MS * reconnectAttempts,
+            )
           } else {
             console.error('[RealtimeSync] Max reconnect attempts reached')
             Sentry.captureMessage('Realtime connection failed after max retries', {
@@ -186,8 +206,7 @@ export function RealtimeSync() {
           }
         } else if (status === 'CLOSED') {
           // Канал закрыт - пробуем переподключиться
-          if (channelRef.current) {
-            channelRef.current = null
+          if (removeCurrentChannel(channel)) {
 
             Sentry.addBreadcrumb({
               message: 'Realtime CLOSED',
@@ -198,8 +217,7 @@ export function RealtimeSync() {
 
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
               reconnectAttempts++
-              // console.log(`[RealtimeSync] Channel closed, reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
-              setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS)
+              reconnectTimerRef.current = setTimeout(subscribeWithReconnect, RECONNECT_DELAY_MS)
             } else {
               Sentry.captureMessage('Realtime channel closed, max retries exhausted', {
                 level: 'error',
@@ -213,19 +231,23 @@ export function RealtimeSync() {
       })
     }
 
-    // Запускаем подписку
-    subscribeWithReconnect()
+    // Запускаем подписку. Повторный запуск после обновления JWT не оставляет
+    // старый таймер или канал в памяти.
+    void subscribeWithReconnect()
 
     // Cleanup - всегда удаляем канал если он был создан
     return () => {
+      isActive = false
+      clearReconnectTimer()
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
       }
 
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        const channel = channelRef.current
         channelRef.current = null
+        void supabase.removeChannel(channel)
       }
     }
   }, [handleChange])

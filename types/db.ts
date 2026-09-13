@@ -3272,6 +3272,57 @@ export type Database = {
         }
         Relationships: []
       }
+      department_board_placements: {
+        Row: {
+          department_id: string
+          employee_id: string
+          id: string
+          placed_at: string
+          placed_by: string | null
+          project_id: string
+        }
+        Insert: {
+          department_id: string
+          employee_id: string
+          id?: string
+          placed_at?: string
+          placed_by?: string | null
+          project_id: string
+        }
+        Update: {
+          department_id?: string
+          employee_id?: string
+          id?: string
+          placed_at?: string
+          placed_by?: string | null
+          project_id?: string
+        }
+        Relationships: []
+      }
+      department_pinned_projects: {
+        Row: {
+          department_id: string
+          id: string
+          pinned_at: string
+          pinned_by: string | null
+          project_id: string
+        }
+        Insert: {
+          department_id: string
+          id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+          project_id: string
+        }
+        Update: {
+          department_id?: string
+          id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+          project_id?: string
+        }
+        Relationships: []
+      }
       dec_template_stages: {
         Row: {
           created_at: string

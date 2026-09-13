@@ -75,6 +75,10 @@ export function UserAvatar({
             src={avatarUrl}
             alt={`Аватар ${name}`}
             fill
+            // Изображения в браузере draggable по умолчанию и перехватывают
+            // drag у родительского элемента (аватар внутри перетаскиваемой
+            // карточки/чипа) — тогда в dataTransfer уходит URL картинки.
+            draggable={false}
             className={cn(
               'object-cover transition-opacity duration-200',
               imageLoading ? 'opacity-0' : 'opacity-100'
