@@ -9,12 +9,15 @@ import {
   Users,
   Wallet,
   FolderTree,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
 import { useTasksPrefetch } from '../hooks'
 import { TabModal } from './TabModal'
+import { useHasPermission, usePermissions } from '@/modules/permissions'
+import { EMPLOYMENT_BOARD_VIEW } from '@/modules/employment-board'
 
 const VIEW_MODE_ICON_MAP: Record<TasksViewMode, LucideIcon> = {
   kanban: LayoutGrid,
@@ -22,6 +25,7 @@ const VIEW_MODE_ICON_MAP: Record<TasksViewMode, LucideIcon> = {
   departments: Users,
   budgets: Wallet,
   sections: FolderTree,
+  employment: LayoutDashboard,
 }
 
 // ⚠️ Фоновый префетч /tasks ВРЕМЕННО ОТКЛЮЧЁН (bug-DH-06/07/11/12):
@@ -64,8 +68,15 @@ export function TabPicker() {
 
   const tabs = useTasksTabsStore((s) => s.tabs)
   const activeTabId = useTasksTabsStore((s) => s.activeTabId)
+  const canViewEmploymentBoard = useHasPermission(EMPLOYMENT_BOARD_VIEW)
+  const { isLoading: permissionsLoading } = usePermissions()
 
-  const sortedTabs = useMemo(() => [...tabs].sort((a, b) => a.order - b.order), [tabs])
+  const sortedTabs = useMemo(() =>
+    tabs
+      .filter((tab) => permissionsLoading || canViewEmploymentBoard || tab.viewMode !== 'employment')
+      .sort((a, b) => a.order - b.order),
+    [tabs, canViewEmploymentBoard, permissionsLoading],
+  )
 
   // Префетч включается только при TASKS_PREFETCH_ENABLED (сейчас выключен, см. флаг выше)
   const { prefetchTab } = useTasksPrefetch({ tabs, activeTabId, enabled: TASKS_PREFETCH_ENABLED })

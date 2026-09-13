@@ -72,6 +72,7 @@
     "@types/lodash": "^4.17.20",
     "@types/lodash.throttle": "^4.1.9",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@upstash/redis": "^1.38.3",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

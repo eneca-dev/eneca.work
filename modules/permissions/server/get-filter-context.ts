@@ -92,9 +92,13 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
           return { success: false, error: 'Некорректный формат идентификатора пользователя' }
         }
 
-        // Phase 1: Параллельная загрузка профиля, ролей и permissions
+        // Phase 1: Параллельная загрузка профиля, ролей и permissions.
+        // Разрешения берём из поддерживаемого триггерами server-side кэша, а
+        // не пересчитываем join'ом на каждом server action. Это безопасно: кэш
+        // находится в Postgres, привязан RLS к текущему user_id и обновляется
+        // синхронно при смене user_roles / role_permissions.
         // Эти 3 запроса независимы друг от друга — выполняем через Promise.all()
-        const [profileResult, rolesResult, permissionsResult] = await Promise.all([
+        const [profileResult, rolesResult, permissionsCacheResult] = await Promise.all([
           // Профиль из view_users
           supabase
             .from('view_users')
@@ -109,8 +113,12 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
             .eq('user_id', user.id)
             .returns<{ role: { name: string } }[]>(),
 
-          // Permissions через RPC
-          supabase.rpc('get_user_permissions', { p_user_id: user.id }),
+          // Одна строка с готовым JSON-массивом разрешений.
+          supabase
+            .from('user_permissions_cache')
+            .select('permissions')
+            .eq('user_id', user.id)
+            .maybeSingle(),
         ])
 
         // Обработка профиля
@@ -144,56 +152,41 @@ export async function getFilterContext(): Promise<ActionResult<UserFilterContext
         const roles =
           rolesResult.data?.map((r) => (r.role as { name: string }).name) || ['user']
 
-        // Обработка permissions
-        if (permissionsResult.error) {
-          Sentry.captureException(permissionsResult.error, {
-            extra: { context: 'getFilterContext', step: 'loadPermissions' },
-          })
-        }
-
         let allPermissions: string[] = []
         let filterPermissions: FilterScopePermission[] = []
 
-        if (permissionsResult.data?.length) {
-          allPermissions = permissionsResult.data as string[]
+        const cachedPermissions = permissionsCacheResult.data?.permissions
+        if (Array.isArray(cachedPermissions) && cachedPermissions.every((item) => typeof item === 'string')) {
+          allPermissions = cachedPermissions
           filterPermissions = extractFilterPermissions(allPermissions)
         }
 
-        // Fallback: если RPC не вернул результатов, получаем permissions через join
-        if (allPermissions.length === 0) {
+        // У пользователя без прав корректно хранится пустой массив. К прямому
+        // запросу возвращаемся только если строка кэша отсутствует, повреждена
+        // или недоступна по ошибке — так авторизация не «разрешит лишнее».
+        const needsPermissionsFallback =
+          permissionsCacheResult.error !== null ||
+          permissionsCacheResult.data === null ||
+          !Array.isArray(cachedPermissions) ||
+          !cachedPermissions.every((item) => typeof item === 'string')
+
+        if (needsPermissionsFallback) {
           Sentry.addBreadcrumb({
             category: 'permissions',
-            message: 'RPC get_user_permissions returned empty, falling back to join query',
-            level: 'info',
+            message: 'Permissions cache unavailable, falling back to direct RPC',
+            level: 'warning',
+            data: { error: permissionsCacheResult.error?.message },
           })
 
-          const { data: directPerms } = await supabase
-            .from('user_roles')
-            .select(`
-              roles!inner(
-                role_permissions!inner(
-                  permissions!inner(name)
-                )
-              )
-            ` as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-            .eq('user_id', user.id)
-            .returns<{ roles: { role_permissions: { permissions: { name: string } }[] } }[]>()
+          const { data: directPermissions, error: directPermissionsError } = await supabase
+            .rpc('get_user_permissions', { p_user_id: user.id })
 
-          if (directPerms) {
-            const permNames = new Set<string>()
-            for (const ur of directPerms) {
-              const roleData = ur.roles as {
-                role_permissions: { permissions: { name: string } }[]
-              }
-              if (roleData?.role_permissions) {
-                for (const rp of roleData.role_permissions) {
-                  if (rp.permissions?.name) {
-                    permNames.add(rp.permissions.name)
-                  }
-                }
-              }
-            }
-            allPermissions = Array.from(permNames)
+          if (directPermissionsError) {
+            Sentry.captureException(directPermissionsError, {
+              extra: { context: 'getFilterContext', step: 'fallbackPermissions' },
+            })
+          } else if (Array.isArray(directPermissions)) {
+            allPermissions = directPermissions
             filterPermissions = extractFilterPermissions(allPermissions)
           }
         }
