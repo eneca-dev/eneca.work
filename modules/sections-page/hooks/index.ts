@@ -4,6 +4,7 @@
  * React Query хуки для работы с иерархией разделов
  */
 
+import { useQueryClient } from '@tanstack/react-query'
 import {
   createCacheQuery,
   createCacheMutation,
@@ -14,10 +15,13 @@ import { toast } from 'sonner'
 import {
   getSectionsHierarchy,
   upsertSectionCapacity,
+  upsertSectionCapacityBatch,
   deleteSectionCapacityOverride,
 } from '../actions'
 import type {
   Department,
+  CapacityInput,
+  SectionCapacity,
 } from '../types'
 
 // ============================================================================
@@ -42,6 +46,48 @@ export const useSectionsHierarchy = createCacheQuery<Department[], FilterQueryPa
 // ============================================================================
 
 /**
+ * Обновляет capacityOverrides разделов в иерархической структуре Department[]
+ *
+ * Рекурсивно проходит по Department → Project → ObjectSection и мёржит новые
+ * значения ёмкости в capacityOverrides разделов, чей sectionId встретился
+ * среди входных данных батча — по образцу updateLoadingDatesInCache
+ * (useSectionLoadingMutations.ts).
+ */
+function updateCapacityInCache(
+  departments: Department[] | undefined,
+  inputs: CapacityInput[]
+): Department[] | undefined {
+  if (!departments || !Array.isArray(departments)) {
+    return departments
+  }
+
+  const bySection = new Map<string, CapacityInput[]>()
+  for (const input of inputs) {
+    if (!input.capacityDate) continue // NULL-дата — дефолтная ёмкость, вне охвата этой мутации
+    const list = bySection.get(input.sectionId)
+    if (list) list.push(input)
+    else bySection.set(input.sectionId, [input])
+  }
+  if (bySection.size === 0) return departments
+
+  return departments.map((department) => ({
+    ...department,
+    projects: department.projects.map((project) => ({
+      ...project,
+      objectSections: project.objectSections.map((section) => {
+        const updates = bySection.get(section.sectionId)
+        if (!updates) return section
+        const capacityOverrides = { ...(section.capacityOverrides ?? {}) }
+        for (const u of updates) {
+          capacityOverrides[u.capacityDate as string] = u.capacityValue
+        }
+        return { ...section, capacityOverrides }
+      }),
+    })),
+  }))
+}
+
+/**
  * Установить/обновить capacity раздела
  */
 export const useUpsertSectionCapacity = createCacheMutation({
@@ -53,7 +99,120 @@ export const useUpsertSectionCapacity = createCacheMutation({
   onSuccess: () => {
     toast.success('Ёмкость обновлена')
   },
+  onError: (error) => {
+    toast.error(error.message || 'Не удалось сохранить ёмкость')
+  },
 })
+
+/**
+ * Установить/обновить ёмкость сразу для нескольких разделов/дат одним запросом
+ * (например, ввод ёмкости на строке проекта — раздаётся на все разделы проекта)
+ *
+ * Optimistic update: значение появляется в UI сразу, не дожидаясь ни записи на
+ * сервер, ни последующего рефетча всей иерархии (getSectionsHierarchy — тяжёлый
+ * запрос). invalidateKeys ниже — фоновая сверка с сервером, не блокирует UI.
+ */
+/**
+ * `createCacheMutation<CapacityInput[], SectionCapacity[]>` типизирует updater как
+ * `(SectionCapacity[] | undefined) => SectionCapacity[]`, но кеш по ключу
+ * queryKeys.sectionsPage.all реально хранит Department[] (иерархию, не список
+ * ёмкостей) — фабрика не разделяет тип данных мутации и тип кеша, который
+ * обновляет optimisticUpdate. Тот же обход — в updateLoadingDatesInCache
+ * (useSectionLoadingMutations.ts). Эти два хелпера называют обе стороны каста
+ * явно вместо голых `as unknown as` инлайн.
+ */
+function asDepartmentsCache(data: unknown): Department[] | undefined {
+  return Array.isArray(data) ? (data as unknown as Department[]) : undefined
+}
+function asCapacityMutationShape(departments: Department[] | undefined): SectionCapacity[] {
+  return (departments ?? []) as unknown as SectionCapacity[]
+}
+
+/**
+ * Максимум записей ёмкости в одном вызове server action.
+ *
+ * Месячный режим (feature-AB-11) сохраняет ёмкость сразу на все дни месяца, а с
+ * растягиванием диапазона — на несколько месяцев; на строке проекта значение ещё и
+ * делится между всеми его разделами. Год × 12 разделов ≈ 4500 записей — это и тело
+ * запроса под лимит server action, и такой же по объёму ответ из `.select()`.
+ * Режем на части: пользовательский жест тот же, запросы остаются нормального размера.
+ */
+const CAPACITY_BATCH_CHUNK_SIZE = 1000
+
+async function upsertSectionCapacityChunked(inputs: CapacityInput[]) {
+  if (inputs.length <= CAPACITY_BATCH_CHUNK_SIZE) {
+    return upsertSectionCapacityBatch(inputs)
+  }
+
+  for (let i = 0; i < inputs.length; i += CAPACITY_BATCH_CHUNK_SIZE) {
+    const result = await upsertSectionCapacityBatch(inputs.slice(i, i + CAPACITY_BATCH_CHUNK_SIZE))
+    if (!result.success) {
+      // Первая же ошибка прекращает сохранение. Если предыдущие чанки уже
+      // записаны — говорим об этом прямо: в БД лежит часть диапазона, и после
+      // отката оптимистики (onSettled ниже) с сервера приедет именно она.
+      return i === 0
+        ? result
+        : { success: false as const, error: `Ёмкость сохранена частично. ${result.error}` }
+    }
+  }
+  // Записанные строки не собираем — action их не возвращает (лишний трафик),
+  // потребителя у них нет.
+  return { success: true as const, data: [] as SectionCapacity[] }
+}
+
+const useUpsertSectionCapacityBatchMutation = createCacheMutation<
+  CapacityInput[],
+  SectionCapacity[]
+>({
+  mutationFn: upsertSectionCapacityChunked,
+  optimisticUpdate: {
+    // lists(), а не all: updater безусловно читает department.projects, а под
+    // префиксом ['sections-page'] могут появиться запросы другой формы
+    // (например, sectionsPage.capacity) — тогда onMutate упал бы с TypeError.
+    queryKey: queryKeys.sectionsPage.lists(),
+    updater: (oldData, input) => {
+      const departments = asDepartmentsCache(oldData)
+      if (!departments) return asCapacityMutationShape(undefined)
+      return asCapacityMutationShape(updateCapacityInCache(departments, input))
+    },
+  },
+  invalidateKeys: () => [
+    [...queryKeys.sectionsPage.lists()],
+  ],
+  onSuccess: () => {
+    toast.success('Ёмкость обновлена')
+  },
+  onError: (error) => {
+    toast.error(error.message || 'Не удалось сохранить ёмкость')
+  },
+})
+
+/**
+ * Сохранение ёмкости батчем.
+ *
+ * Обёртка над мутацией нужна ради `onSettled`: фабрика `createCacheMutation`
+ * инвалидирует ключи ТОЛЬКО в `onSuccess`, а запись теперь идёт чанками
+ * (см. upsertSectionCapacityChunked). При падении, скажем, третьего чанка из
+ * пяти первые два уже в БД, оптимистика откатывается к состоянию «до жеста»,
+ * а иерархия живёт со `staleTime: Infinity` — без принудительного рефетча
+ * пользователь остался бы со старыми числами на экране и новыми в базе.
+ * `onSettled` срабатывает и на успехе, и на ошибке, поэтому расхождение
+ * закрывается в обоих случаях.
+ *
+ * Спред `...options?.mutationOptions` в фабрике идёт последним, так что наш
+ * `onSettled` перекрывает `config.onSettled` (он здесь не задан) и не влияет
+ * на onMutate/onError/onSuccess.
+ */
+export function useUpsertSectionCapacityBatch() {
+  const queryClient = useQueryClient()
+  return useUpsertSectionCapacityBatchMutation({
+    mutationOptions: {
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.sectionsPage.lists() })
+      },
+    },
+  })
+}
 
 /**
  * Удалить capacity override (вернуть к default)

@@ -162,11 +162,12 @@ function isOptionAllowedForScope(
       return true
 
     case 'проект':
-      // Если есть проектный scope - только управляемые проекты
-      if (scope.projectIds?.length) {
+      // Сужаем список только для "чистых" project manager без орг-scope.
+      // Если есть орг-уровень (department/team/subdivision/all) - показываем все проекты,
+      // т.к. getFilterProjects() и так не фильтрует по отделу/команде.
+      if (scope.level === 'projects' && scope.projectIds?.length) {
         return scope.projectIds.includes(option.id)
       }
-      // Для орг. ролей - показываем все проекты
       return true
 
     case 'метка':

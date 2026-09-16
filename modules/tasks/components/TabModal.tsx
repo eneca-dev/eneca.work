@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, LayoutGrid, Users, Wallet, FolderTree } from 'lucide-react'
+import { X, Plus, LayoutGrid, Users, Wallet, FolderTree, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTasksTabsStore, type TaskTab, type TasksViewMode } from '../stores'
 import { useHasPermission } from '@/modules/permissions'
+import { EMPLOYMENT_BOARD_VIEW } from '@/modules/employment-board'
 
 // ============================================================================
 // Types
@@ -37,13 +38,18 @@ const BASE_VIEW_MODE_OPTIONS: {
 export function TabModal({ open, onClose, editingTab }: TabModalProps) {
   const { createTab, updateTab } = useTasksTabsStore()
   const canViewBudgets = useHasPermission('budgets.view.all')
+  const canViewEmploymentBoard = useHasPermission(EMPLOYMENT_BOARD_VIEW)
 
-  const VIEW_MODE_OPTIONS = useMemo(
-    () => canViewBudgets
-      ? [...BASE_VIEW_MODE_OPTIONS, { value: 'budgets' as TasksViewMode, label: 'Бюджеты', icon: Wallet }]
-      : BASE_VIEW_MODE_OPTIONS,
-    [canViewBudgets]
-  )
+  const VIEW_MODE_OPTIONS = useMemo(() => {
+    const options = [...BASE_VIEW_MODE_OPTIONS]
+    if (canViewEmploymentBoard) {
+      options.push({ value: 'employment' as TasksViewMode, label: 'Занятость', icon: LayoutDashboard })
+    }
+    if (canViewBudgets) {
+      options.push({ value: 'budgets' as TasksViewMode, label: 'Бюджеты', icon: Wallet })
+    }
+    return options
+  }, [canViewBudgets, canViewEmploymentBoard])
 
   // Form state
   const [name, setName] = useState('')

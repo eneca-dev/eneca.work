@@ -8,17 +8,27 @@
 
 'use client'
 
+import { Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import type { MonthCell } from '../../utils/monthly-cell-utils'
+import { TimelineDatePopover } from './TimelineDatePopover'
+import type { TimelineDatePopoverConfig } from './TimelineHeader'
 
 interface MonthlyHeaderProps {
   monthCells: MonthCell[]
   monthCellWidth: number
+  /** Simple scroll-to-today button (legacy) */
+  onScrollToToday?: () => void
+  /** Full date range popover config (replaces onScrollToToday when provided) — та же логика, что и в дневном/недельном режиме */
+  datePopoverConfig?: TimelineDatePopoverConfig
 }
 
 export function MonthlyHeader({
   monthCells,
   monthCellWidth,
+  onScrollToToday,
+  datePopoverConfig,
 }: MonthlyHeaderProps) {
   const totalWidth = monthCells.length * monthCellWidth
 
@@ -61,6 +71,24 @@ export function MonthlyHeader({
               {cell.label}
             </div>
           ))}
+          {/* Кнопка настройки дат / перехода к сегодня — та же логика, что и в дневном и недельном режимах */}
+          {(datePopoverConfig || onScrollToToday) && (
+            <div className="sticky right-0 ml-auto flex items-center pr-2 bg-card z-10 border-l border-border/50">
+              {datePopoverConfig ? (
+                <TimelineDatePopover {...datePopoverConfig} />
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={onScrollToToday}
+                  title="Перейти к сегодняшней дате"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

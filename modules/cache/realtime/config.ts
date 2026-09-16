@@ -40,6 +40,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'projects',
     invalidateKeys: [
       queryKeys.projects.all,
+      queryKeys.employmentBoard.all, // Карточки доски: название и restricted-статус проекта
       [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (название/статус/стадия проекта)
     ],
   },
@@ -59,9 +60,16 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.sections.all,
       queryKeys.projects.all, // Структура проекта тоже обновляется
+      queryKeys.employmentBoard.all, // Раздел связывает loading с проектом на доске
       queryKeys.resourceGraph.all, // График ресурсов
       queryKeys.sectionsPage.all, // Страница разделов (иерархия отделы → проекты → разделы)
       [...queryKeys.budgets.all, 'hierarchy'], // Дерево Бюджетов (разделы)
+    ],
+  },
+  {
+    table: 'section_capacity',
+    invalidateKeys: [
+      queryKeys.sectionsPage.all, // Страница разделов (ёмкость на проекте/разделе)
     ],
   },
 
@@ -72,6 +80,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'profiles',
     invalidateKeys: [
       queryKeys.users.all,
+      queryKeys.employmentBoard.all, // Состав отдела, имена и аватары на доске
       queryKeys.departmentsTimeline.all, // Таймлайн отделов (сотрудники в командах)
       queryKeys.sectionsPage.all, // Страница разделов (сотрудники с загрузками)
     ],
@@ -84,6 +93,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'loadings',
     invalidateKeys: [
       queryKeys.loadings.all,
+      queryKeys.employmentBoard.all, // Автоматические размещения на доске
       // НЕ инвалидируем sections.all - слишком агрессивно, вызывает лаги
       // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
@@ -105,6 +115,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
       [...queryKeys.budgets.all, 'hierarchy'], // Расчётный в дереве Бюджетов (ставка → calc)
     ],
   },
+  // Ручные действия доски имеют отдельный фильтрованный канал в
+  // useEmploymentBoardRealtime: не добавляем их в большой глобальный канал.
   {
     table: 'decomposition_stages',
     invalidateKeys: [
@@ -162,6 +174,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'departments',
     invalidateKeys: [
       queryKeys.departments.all,
+      queryKeys.employmentBoard.all, // Название отдела и доступная область доски
       queryKeys.admin.departments(), // Admin панель — отделы
       queryKeys.departmentsTimeline.all, // Таймлайн отделов
       queryKeys.sectionsPage.all, // Страница разделов (группировка по отделам)

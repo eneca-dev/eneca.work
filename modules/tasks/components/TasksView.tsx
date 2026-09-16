@@ -8,20 +8,22 @@
 'use client'
 
 import { useMemo, useCallback, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
+import { InlineFilter, parseFilterString, tokensToQueryParams, type FilterOption } from '@/modules/inline-filter'
 import { useTasksTabsStore, TASKS_FILTER_CONFIG } from '../stores'
 import { useTasksFilterOptions } from '../hooks'
 import { KanbanBoardInternal } from '@/modules/kanban/components/KanbanBoard'
 import { DepartmentsTimelineInternal } from '@/modules/departments-timeline'
 import { SectionsPageInternal } from '@/modules/sections-page'
 import { BudgetsViewInternal } from '@/modules/budgets-page'
+import { EMPLOYMENT_BOARD_FILTER_CONFIG, EmploymentBoardInternal } from '@/modules/employment-board'
 import { TasksTabs } from './TasksTabs'
 import { TabPicker } from './TabPicker'
 import { PermissionsDebugPanel } from './PermissionsDebugPanel'
-import { usePermissionsLoader } from '@/modules/permissions'
+import { useHasPermission, usePermissions, usePermissionsLoader } from '@/modules/permissions'
+import { EMPLOYMENT_BOARD_VIEW } from '@/modules/employment-board'
 
 // ============================================================================
 // Main Component
@@ -37,6 +39,10 @@ export function TasksView() {
 
   // URL search params
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const canViewEmploymentBoard = useHasPermission(EMPLOYMENT_BOARD_VIEW)
+  const { isLoading: permissionsLoading } = usePermissions()
 
   // Get tabs + store actions (URL — источник истины активной вкладки)
   const tabs = useTasksTabsStore((s) => s.tabs)
@@ -52,10 +58,30 @@ export function TasksView() {
     searchParams.get('highlight') === 'true' && !!searchParams.get('sectionId')
   const resolvedTabId = tabParam ?? (hasLegacyHighlight ? 'budgets' : null)
 
-  const activeTab = useMemo(
+  const requestedTab = useMemo(
     () => (resolvedTabId ? tabs.find((t) => t.id === resolvedTabId) : undefined),
     [tabs, resolvedTabId]
   )
+  const activeTab =
+    requestedTab?.viewMode === 'employment' && !permissionsLoading && !canViewEmploymentBoard
+      ? undefined
+      : requestedTab
+
+  // Не оставляем недоступную или уже удалённую локальную вкладку в прямой ссылке.
+  // В частности, после отзыва права вкладка employment может отсутствовать в
+  // persisted-store другого пользователя. Это UI-барьер; Server Action и RLS
+  // остаются защитой данных.
+  useEffect(() => {
+    const isForbiddenEmploymentTab =
+      requestedTab?.viewMode === 'employment' && !canViewEmploymentBoard
+    const isMissingTab = Boolean(tabParam) && !requestedTab
+
+    // Для несуществующего id не нужно ждать permissions: он не может стать
+    // валидной вкладкой после загрузки прав.
+    if (isMissingTab || (!permissionsLoading && isForbiddenEmploymentTab)) {
+      router.replace(`${pathname}?tab=kanban`)
+    }
+  }, [requestedTab, tabParam, permissionsLoading, canViewEmploymentBoard, router, pathname])
 
   // Нет валидной вкладки в URL → показываем пикер, тяжёлый контент не монтируем
   const showPicker = !activeTab
@@ -76,9 +102,44 @@ export function TasksView() {
   // На Sections/Departments вкладках расширяем scope до отдела, чтобы UI
   // соответствовал серверной выборке (whole department, не только своя команда).
   const expandScopeForTasks = viewMode === 'sections' || viewMode === 'departments'
-  const { options: filterOptions, lockedFilters } = useTasksFilterOptions({
+  const { options: filterOptions, allOptions, filterContext, lockedFilters } = useTasksFilterOptions({
     expandScopeForTasks,
   })
+
+  const isEmploymentBoard = viewMode === 'employment'
+  const activeFilterConfig = isEmploymentBoard
+    ? EMPLOYMENT_BOARD_FILTER_CONFIG
+    : TASKS_FILTER_CONFIG
+
+  // У доски свой небольшой словарь, но источник опций и применение scope —
+  // те же, что у остальных вкладок. `ответственный` переименовываем только
+  // в UI: значение остаётся UUID сотрудника.
+  const activeFilterOptions = useMemo<FilterOption[]>(() => {
+    if (!isEmploymentBoard) return filterOptions
+
+    // У руководителя подразделения доступ к доске определяется его
+    // `headSubdivisionId`, а не общим tasks filter-scope. Поэтому список
+    // отделов строим из его подразделения прямо здесь; другие вкладки
+    // продолжают пользоваться только общим scope без изменений.
+    const departmentOptions = filterContext?.headSubdivisionId
+      ? allOptions.filter(
+          (option) => option.key === 'отдел' && option.parentId === filterContext.headSubdivisionId,
+        )
+      : filterOptions.filter((option) => option.key === 'отдел')
+
+    return [
+      ...departmentOptions,
+      ...filterOptions.flatMap((option) => {
+        if (option.key === 'ответственный') return [{ ...option, key: 'сотрудник' }]
+        return []
+      }),
+    ]
+  }, [allOptions, filterContext?.headSubdivisionId, filterOptions, isEmploymentBoard])
+
+  const activeLockedFilters = useMemo(
+    () => isEmploymentBoard ? lockedFilters.filter((filter) => filter.key === 'отдел') : lockedFilters,
+    [isEmploymentBoard, lockedFilters],
+  )
 
   // // Log URL params for debugging
   // useEffect(() => {
@@ -91,9 +152,9 @@ export function TasksView() {
 
   // Parse filter string to query params (shared between views)
   const queryParams = useMemo(() => {
-    const parsed = parseFilterString(filterString, TASKS_FILTER_CONFIG)
-    return tokensToQueryParams(parsed.tokens, TASKS_FILTER_CONFIG)
-  }, [filterString])
+    const parsed = parseFilterString(filterString, activeFilterConfig)
+    return tokensToQueryParams(parsed.tokens, activeFilterConfig)
+  }, [filterString, activeFilterConfig])
 
   // Handler for filter changes
   const handleFilterChange = useCallback((newFilterString: string) => {
@@ -117,7 +178,7 @@ export function TasksView() {
           <div className="px-4 py-2 border-t border-border/50">
             <div className="flex items-center gap-2">
               {/* Locked filters */}
-              {lockedFilters.map((lock) => (
+              {activeLockedFilters.map((lock) => (
                 <Badge
                   key={lock.key}
                   variant="secondary"
@@ -133,10 +194,10 @@ export function TasksView() {
               <div className="flex-1">
                 <InlineFilter
                   key={activeTab?.id ?? 'none'}
-                  config={TASKS_FILTER_CONFIG}
+                  config={activeFilterConfig}
                   value={filterString}
                   onChange={handleFilterChange}
-                  options={filterOptions}
+                  options={activeFilterOptions}
                 />
               </div>
             </div>
@@ -171,6 +232,9 @@ export function TasksView() {
             loadAllEnabled={loadAllEnabled}
             onLoadAll={() => setActiveTabLoadAll(true)}
           />
+        )}
+        {!showPicker && viewMode === 'employment' && (
+          <EmploymentBoardInternal queryParams={queryParams} />
         )}
         {!showPicker && viewMode === 'budgets' && (
           <BudgetsViewInternal
