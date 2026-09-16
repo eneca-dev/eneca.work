@@ -33,10 +33,21 @@ import {
   COMMENT_HEIGHT,
   COMMENT_GAP,
 } from '../../utils/loading-bars-utils'
+import { getTimelineGrid } from '../../utils/timeline-grid'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH, EMPLOYEE_ROW_HEIGHT } from '../../constants'
+import { WEEK_CELL_WIDTH, SECTIONS_MONTH_CELL_WIDTH } from '@/modules/resource-graph/constants'
+import {
+  WeeklyLoadingBars,
+  calculateWeeklyBarsRowHeight,
+  MonthlyLoadingBars,
+  calculateMonthlyBarsRowHeight,
+  type WeeklyBarLoading,
+} from '@/components/shared/timeline'
+import type { WeekCell } from '@/modules/resource-graph/utils/weekly-cell-utils'
+import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { SectionLoading, DayCell, TimelineRange } from '../../types'
 import type { TimelineUnit } from '@/types/planning'
-import { getCellClassNames } from '../../utils/cell-utils'
+import { getCellClassNames, getWeekCellClassNames, getMonthCellClassNames } from '../../utils/cell-utils'
 import { useTimelineResize } from '@/modules/resource-graph/hooks'
 import { useScissorsInteraction } from '@/hooks/useScissorsInteraction'
 import { useScissorsModeStore } from '@/stores'
@@ -66,6 +77,10 @@ interface EmployeeRowProps {
   dayCells: DayCell[]
   /** Видимые колонки дня (горизонтальная виртуализация фоновых ячеек). undefined → все. */
   columns?: VirtualColumn[]
+  /** Недельные ячейки — задано только в недельном режиме */
+  weekCells?: WeekCell[]
+  /** Месячные ячейки — задано только в месячном режиме */
+  monthCells?: MonthCell[]
 }
 
 
@@ -447,7 +462,12 @@ export function EmployeeRow({
   objectName,
   dayCells,
   columns,
+  weekCells,
+  monthCells,
 }: EmployeeRowProps) {
+  // isWideGrid — неделя или месяц: бары без resize/ножниц, клик открывает модалку
+  const { isWeeklyMode, isMonthlyMode, isWideGrid, timelineWidth, dayCols, weekCols, monthCols } =
+    getTimelineGrid({ dayCells, weekCells, monthCells, columns })
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const { onEditLoading } = useSectionsPageActions()
 
@@ -567,11 +587,47 @@ export function EmployeeRow({
     return Math.max(EMPLOYEE_ROW_HEIGHT, maxBottom + 8)
   }, [barRenders])
 
-  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
-  const rowHeight = actualRowHeight
+  // Недельный/месячный режим: загрузки в generic-формат баров широкой сетки
+  // (WeeklyBarLoading === MonthlyBarLoading, см. WeeklyLoadingBars.tsx)
+  const wideBarLoadings = useMemo((): WeeklyBarLoading[] => {
+    if (!isWideGrid) return []
+    return employee.loadings.map((l) => ({
+      id: l.id,
+      startDate: l.startDate,
+      endDate: l.endDate,
+      rate: l.rate,
+      projectId: l.projectId,
+      projectName: l.projectName,
+      sectionId: l.sectionId,
+      sectionName: l.sectionName,
+      stageId: l.stageId ?? undefined,
+      stageName: l.stageName ?? undefined,
+      comment: l.comment ?? undefined,
+      employeeId: l.employeeId,
+    }))
+  }, [isWideGrid, employee.loadings])
+
+  // Высота строки на широкой сетке: этажей столько, сколько загрузок пересекается
+  // по датам — то же правило, что и в дневном режиме (calculateBarRenders), но бар
+  // ниже (24px против 32px) и без комментариев, поэтому строка не выше дневной.
+  const wideGridRowHeight = useMemo(() => {
+    if (weekCells) {
+      return calculateWeeklyBarsRowHeight(wideBarLoadings, weekCells, WEEK_CELL_WIDTH)
+    }
+    if (monthCells) {
+      return calculateMonthlyBarsRowHeight(wideBarLoadings, monthCells, SECTIONS_MONTH_CELL_WIDTH)
+    }
+    return EMPLOYEE_ROW_HEIGHT
+  }, [wideBarLoadings, weekCells, monthCells])
+
+  // Клик по бару широкой сетки → та же модалка редактирования, что и в дневном режиме
+  const handleWideBarClick = useCallback((loadingId: string) => {
+    const loading = employee.loadings.find((l) => l.id === loadingId)
+    if (loading) handleLoadingClick(loading)
+  }, [employee.loadings, handleLoadingClick])
+
+  const rowHeight = isWideGrid ? wideGridRowHeight : actualRowHeight
   const employmentRate = employee.employeeEmploymentRate ?? 1
-  const dayCols: VirtualColumn[] =
-    columns ?? dayCells.map((_, idx) => ({ index: idx, start: idx * DAY_CELL_WIDTH, size: DAY_CELL_WIDTH }))
 
   return (
     <div className="group/employee min-w-full relative border-b border-border/30">
@@ -650,35 +706,83 @@ export function EmployeeRow({
 
         {/* Timeline cells with loading bars */}
         <div className="flex relative z-0" style={{ width: timelineWidth }}>
-          {/* Loading bars overlay */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
-            {barRenders.map((bar, idx) => (
-              <LoadingBar
-                key={`${bar.period.id}-${idx}`}
-                bar={bar}
-                barRenders={barRenders}
-                timeUnits={timeUnits}
-                timelineRange={timelineRange}
-                onLoadingClick={handleLoadingClick}
-                onLoadingResize={handleLoadingResize}
-                onSplitLoading={handleSplitLoading}
-                canEdit={canEdit}
+          {/* Ветвим по самим ячейкам, а не по флагам режима: так TypeScript сужает
+              weekCells/monthCells до непустых и их можно передать вниз без `!`. */}
+          {weekCells ? (
+            /* Недельный режим: без resize/ножниц — клик по бару открывает модалку */
+            <>
+              {weekCols.map((col) => {
+                const week = weekCells?.[col.index]
+                if (!week) return null
+                return (
+                  <div
+                    key={col.index}
+                    className={`${getWeekCellClassNames(week)} absolute top-0 bottom-0`}
+                    style={{ left: col.start, width: col.size }}
+                  />
+                )
+              })}
+              <WeeklyLoadingBars
+                loadings={wideBarLoadings}
+                weekCells={weekCells}
+                weekCellWidth={WEEK_CELL_WIDTH}
+                onLoadingClick={handleWideBarClick}
               />
-            ))}
-          </div>
+            </>
+          ) : monthCells ? (
+            /* Месячный режим: то же, что недельный — клик по бару открывает модалку */
+            <>
+              {monthCols.map((col) => {
+                const month = monthCells?.[col.index]
+                if (!month) return null
+                return (
+                  <div
+                    key={col.index}
+                    className={`${getMonthCellClassNames(month, col.index)} absolute top-0 bottom-0`}
+                    style={{ left: col.start, width: col.size }}
+                  />
+                )
+              })}
+              <MonthlyLoadingBars
+                loadings={wideBarLoadings}
+                monthCells={monthCells}
+                monthCellWidth={SECTIONS_MONTH_CELL_WIDTH}
+                onLoadingClick={handleWideBarClick}
+              />
+            </>
+          ) : (
+            <>
+              {/* Loading bars overlay */}
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
+                {barRenders.map((bar, idx) => (
+                  <LoadingBar
+                    key={`${bar.period.id}-${idx}`}
+                    bar={bar}
+                    barRenders={barRenders}
+                    timeUnits={timeUnits}
+                    timelineRange={timelineRange}
+                    onLoadingClick={handleLoadingClick}
+                    onLoadingResize={handleLoadingResize}
+                    onSplitLoading={handleSplitLoading}
+                    canEdit={canEdit}
+                  />
+                ))}
+              </div>
 
-          {/* Background cells (горизонтально виртуализированы) */}
-          {dayCols.map((col) => {
-            const cell = dayCells[col.index]
-            if (!cell) return null
-            return (
-              <div
-                key={col.index}
-                className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
-                style={{ left: col.start, width: col.size }}
-              />
-            )
-          })}
+              {/* Background cells (горизонтально виртуализированы) */}
+              {dayCols.map((col) => {
+                const cell = dayCells[col.index]
+                if (!cell) return null
+                return (
+                  <div
+                    key={col.index}
+                    className={`${getCellClassNames(cell)} absolute top-0 bottom-0`}
+                    style={{ left: col.start, width: col.size }}
+                  />
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -3272,6 +3272,57 @@ export type Database = {
         }
         Relationships: []
       }
+      department_board_placements: {
+        Row: {
+          department_id: string
+          employee_id: string
+          id: string
+          placed_at: string
+          placed_by: string | null
+          project_id: string
+        }
+        Insert: {
+          department_id: string
+          employee_id: string
+          id?: string
+          placed_at?: string
+          placed_by?: string | null
+          project_id: string
+        }
+        Update: {
+          department_id?: string
+          employee_id?: string
+          id?: string
+          placed_at?: string
+          placed_by?: string | null
+          project_id?: string
+        }
+        Relationships: []
+      }
+      department_pinned_projects: {
+        Row: {
+          department_id: string
+          id: string
+          pinned_at: string
+          pinned_by: string | null
+          project_id: string
+        }
+        Insert: {
+          department_id: string
+          id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+          project_id: string
+        }
+        Update: {
+          department_id?: string
+          id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+          project_id?: string
+        }
+        Relationships: []
+      }
       dec_template_stages: {
         Row: {
           created_at: string
@@ -6907,6 +6958,8 @@ export type Database = {
       }
       loadings: {
         Row: {
+          external_id: string | null
+          external_source: string | null
           is_shortage: boolean
           loading_comment: string | null
           loading_created: string | null
@@ -6925,6 +6978,8 @@ export type Database = {
           shortage_team_id: string | null
         }
         Insert: {
+          external_id?: string | null
+          external_source?: string | null
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null
@@ -6943,6 +6998,8 @@ export type Database = {
           shortage_team_id?: string | null
         }
         Update: {
+          external_id?: string | null
+          external_source?: string | null
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null
@@ -24502,6 +24559,7 @@ export type Database = {
       view_departments_sections_loadings: {
         Row: {
           capacity_date: string | null
+          capacity_overrides: Json | null
           capacity_value: number | null
           default_capacity: number | null
           department_head_avatar_url: string | null
@@ -24538,6 +24596,7 @@ export type Database = {
           responsible_first_name: string | null
           responsible_id: string | null
           responsible_last_name: string | null
+          section_created: string | null
           section_description: string | null
           section_end_date: string | null
           section_id: string | null

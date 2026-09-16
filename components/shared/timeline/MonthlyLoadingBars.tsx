@@ -8,15 +8,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn } from '@/lib/utils'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider,
-} from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
-import { getSectionColor } from './loading-bars-utils'
+import { LoadingBarButton, BAR_HEIGHT, BAR_GAP, BAR_TOP_OFFSET, type BarPosition, type BarRender } from './LoadingBarButton'
 
 // ============================================================================
 // Types
@@ -45,21 +39,8 @@ interface MonthlyLoadingBarsProps {
 }
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-const BAR_HEIGHT = 24
-const BAR_GAP = 3
-const BAR_TOP_OFFSET = 4
-
-// ============================================================================
 // Position Calculation
 // ============================================================================
-
-interface BarPosition {
-  left: number
-  width: number
-}
 
 /**
  * Рассчитывает позицию полоски загрузки на месячной сетке.
@@ -131,12 +112,6 @@ function daysBetween(a: string, b: string): number {
 // Row height calculation
 // ============================================================================
 
-interface BarRender {
-  loading: MonthlyBarLoading
-  position: BarPosition
-  row: number // вертикальный ряд (для стекинга)
-}
-
 /**
  * Раскладывает загрузки по рядам, чтобы не перекрывались
  */
@@ -201,48 +176,7 @@ export function MonthlyLoadingBars({
     <TooltipProvider>
       <div className="absolute inset-0" style={{ zIndex: 4 }}>
         {bars.map((bar) => (
-          <Tooltip key={bar.loading.id}>
-            <TooltipTrigger asChild>
-              <button
-                className={cn(
-                  'absolute rounded-sm flex items-center gap-1 px-1.5 cursor-pointer',
-                  'hover:brightness-110 transition-all pointer-events-auto',
-                  'text-white text-[10px] font-medium leading-none truncate'
-                )}
-                style={{
-                  left: bar.position.left,
-                  width: bar.position.width,
-                  height: BAR_HEIGHT,
-                  top: BAR_TOP_OFFSET + bar.row * (BAR_HEIGHT + BAR_GAP),
-                  backgroundColor: getSectionColor(bar.loading.projectId, bar.loading.sectionId, bar.loading.stageId, true),
-                }}
-                onClick={() => onLoadingClick?.(bar.loading.id)}
-              >
-                <span className="shrink-0 font-semibold">{bar.loading.rate}</span>
-                {bar.position.width > 50 && (
-                  <span className="truncate opacity-80">
-                    {bar.loading.projectName || bar.loading.sectionName || ''}
-                  </span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px]">
-              <div className="text-xs space-y-1">
-                {bar.loading.projectName && (
-                  <p className="font-medium">{bar.loading.projectName}</p>
-                )}
-                {bar.loading.sectionName && (
-                  <p className="text-muted-foreground">{bar.loading.sectionName}</p>
-                )}
-                <p>
-                  Ставка: {bar.loading.rate} · {bar.loading.startDate} → {bar.loading.endDate}
-                </p>
-                {bar.loading.comment && (
-                  <p className="text-muted-foreground italic">{bar.loading.comment}</p>
-                )}
-              </div>
-            </TooltipContent>
-          </Tooltip>
+          <LoadingBarButton key={bar.loading.id} bar={bar} onLoadingClick={onLoadingClick} />
         ))}
       </div>
     </TooltipProvider>

@@ -269,14 +269,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         className={cn(
           variant === 'minimal'
             ? "w-full px-2.5 py-1.5 border-0 bg-transparent outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px]"
-            : "w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white placeholder:text-sm text-sm",
+            : "w-full px-2.5 py-1.5 border border-border rounded-md bg-popover text-foreground placeholder:text-sm text-sm",
           inputClassName
         )}
       />
       {open && (!renderToBody ? (
         <div
           ref={popupRef}
-          className="absolute z-50 shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+          className="absolute z-50 shadow-lg rounded-lg bg-popover border border-border"
           style={
             openPlacement === 'right'
               ? { left: '100%', top: offsetY, marginLeft: `${offsetX}px`, position: 'absolute' as const }
@@ -291,11 +291,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                       : { left: 0, top: `calc(100% + ${offsetY}px)`, marginTop: '4px', position: 'absolute' as const })
           }
         >
-          <div className="font-sans bg-background rounded-lg p-1.5 dark:bg-slate-700" style={{ width: calendarWidth }}>
+          <div className="font-sans bg-popover rounded-lg p-1.5" style={{ width: calendarWidth }}>
             <div className="flex items-center justify-between mb-0.5">
-              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
+              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-accent transition-colors" onClick={handlePrev}>←</button>
               <div className="text-center font-bold text-foreground text-xs px-1 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
-              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
+              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-accent transition-colors" onClick={handleNext}>→</button>
             </div>
             {renderMonth(currentMonth)}
           </div>
@@ -330,14 +330,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             <div
               key={recalcKey}
               ref={popupRef}
-              className="fixed z-[1000] shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+              className="fixed z-[1000] shadow-lg rounded-lg bg-popover border border-border"
               style={{ left, top, width: calendarWidth as any }}
             >
-              <div className="font-sans bg-background rounded-lg p-1.5 dark:bg-slate-700" style={{ width: calendarWidth }}>
+              <div className="font-sans bg-popover rounded-lg p-1.5" style={{ width: calendarWidth }}>
                 <div className="flex items-center justify-between mb-0.5">
-                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
+                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-accent transition-colors" onClick={handlePrev}>←</button>
                   <div className="text-center font-bold text-foreground text-xs px-1 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
-                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
+                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-accent transition-colors" onClick={handleNext}>→</button>
                 </div>
                 {renderMonth(currentMonth)}
               </div>

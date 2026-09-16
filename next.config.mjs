@@ -49,7 +49,12 @@ const nextConfig = {
       };
       config.cache.cacheDirectory = join(__dirname, '.next', 'cache');
       config.cache.maxMemoryGenerations = 1;
-      config.cache.compression = 'gzip';
+      // В dev сжатие кэша отключено: gzip-сериализация PackFileCacheStrategy
+      // требует крупных непрерывных буферов и на машинах с малым объёмом
+      // свободной RAM падает с "RangeError: Array buffer allocation failed",
+      // роняя компиляцию. Файлы кэша становятся больше на диске — но dev
+      // перестаёт падать. Для прод-сборки сжатие сохраняем.
+      config.cache.compression = dev ? false : 'gzip';
       config.cache.hashAlgorithm = 'md4';
     }
 

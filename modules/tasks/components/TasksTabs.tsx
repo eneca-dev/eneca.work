@@ -12,6 +12,7 @@ import {
   Users,
   Wallet,
   FolderTree,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { useTasksTabsStore, MAX_USER_TABS, type TaskTab, type TasksViewMode } from '../stores'
 import { TabModal } from './TabModal'
+import { useHasPermission, usePermissions } from '@/modules/permissions'
+import { EMPLOYMENT_BOARD_VIEW } from '@/modules/employment-board'
 
 // ============================================================================
 // Icon Mapping
@@ -35,6 +38,7 @@ const VIEW_MODE_ICON_MAP: Record<TasksViewMode, LucideIcon> = {
   departments: Users,
   budgets: Wallet,
   sections: FolderTree,
+  employment: LayoutDashboard,
 }
 
 // ============================================================================
@@ -120,6 +124,8 @@ export function TasksTabs({ className }: TasksTabsProps) {
   // rerender-derived-state: индивидуальные селекторы вместо подписки на весь store
   const tabs = useTasksTabsStore((s) => s.tabs)
   const deleteTab = useTasksTabsStore((s) => s.deleteTab)
+  const canViewEmploymentBoard = useHasPermission(EMPLOYMENT_BOARD_VIEW)
+  const { isLoading: permissionsLoading } = usePermissions()
 
   // Активная вкладка определяется URL (источник истины рендера в TasksView)
   const activeTabId = searchParams.get('tab')
@@ -136,7 +142,15 @@ export function TasksTabs({ className }: TasksTabsProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTab, setEditingTab] = useState<TaskTab | null>(null)
 
-  const sortedTabs = useMemo(() => [...tabs].sort((a, b) => a.order - b.order), [tabs])
+  const sortedTabs = useMemo(() =>
+    tabs
+      .filter((tab) => permissionsLoading || canViewEmploymentBoard || tab.viewMode !== 'employment')
+      .sort((a, b) => a.order - b.order),
+    [tabs, canViewEmploymentBoard, permissionsLoading],
+  )
+  // Скрытая после отзыва права вкладка всё ещё занимает слот в persisted-store.
+  // Считаем все вкладки, чтобы не показывать кнопку, которая затем не сможет
+  // создать одиннадцатую вкладку.
   const tabsCount = tabs.length
   const canAddMore = tabsCount < MAX_USER_TABS
 

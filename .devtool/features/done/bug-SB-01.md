@@ -1,15 +1,15 @@
 ---
 id: "bug-SB-01"
-status: "review"
+status: "done"
 priority: "high"
 assignee: "Саша Бирило"
 epic: "bug"
 dueDate: null
 created: "2026-06-17T09:00:00.000Z"
-modified: "2026-06-18T08:54:37.345Z"
-completedAt: null
+modified: "2026-08-18T11:27:07.151Z"
+completedAt: "2026-08-18T11:27:07.151Z"
 labels: ["v1.5.0"]
-order: "Zz"
+order: "a14V"
 ---
 # bug-SB-01 Вкладка «Бюджеты» грузится 7–12с и падает с таймаутом `57014`
 

@@ -6,10 +6,10 @@ assignee: "Саша Бирило"
 epic: "bug"
 dueDate: null
 created: "2026-06-26T09:00:00.000Z"
-modified: "2026-06-26T09:00:00.000Z"
+modified: "2026-08-18T11:27:29.071Z"
 completedAt: null
 labels: ["v1.5.0"]
-order: "a22"
+order: "a7V"
 ---
 # bug-SB-06 Чистка шумных Sentry-ошибок: getFilterContext Auth error + «Object captured» в календаре
 

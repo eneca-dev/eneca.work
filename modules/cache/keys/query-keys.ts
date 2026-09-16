@@ -512,6 +512,23 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Employment Board (доска занятости отдела)
+  // -------------------------------------------------------------------------
+  employmentBoard: {
+    all: ['employment-board'] as const,
+    lists: () => [...queryKeys.employmentBoard.all, 'list'] as const,
+    /**
+     * Доска отдела. В ключ входит только department_id — остальные фильтры
+     * страницы сервер не использует, и их включение плодило бы одинаковые
+     * записи кэша под разными ключами.
+     */
+    list: (departmentId?: string | string[]) =>
+      [...queryKeys.employmentBoard.lists(), departmentId ?? null] as const,
+    /** Поиск проектов для ручного добавления на доску */
+    search: (term: string) => [...queryKeys.employmentBoard.all, 'search', term] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Meetings (созвоны от Teams-бота — отдельный Supabase-проект)
   // -------------------------------------------------------------------------
   meetings: {
