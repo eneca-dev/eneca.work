@@ -45,6 +45,37 @@ function escapePostgRESTValue(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
 }
 
+const WORKLOADS_PAGE_SIZE = 1000
+
+type PaginatedQueryResult<T> = {
+  data: T[] | null
+  error: { message: string } | null
+}
+
+type PaginatedQuery<T> = {
+  range: (from: number, to: number) => PromiseLike<PaginatedQueryResult<T>>
+}
+
+/**
+ * Читает весь результат PostgREST страницами. Лимит API остаётся защитой от
+ * слишком большого одиночного ответа; `.range()` позволяет безопасно пройти
+ * через результаты, которые этот лимит превышают.
+ */
+async function fetchAllPages<T>(query: PaginatedQuery<T>): Promise<PaginatedQueryResult<T>> {
+  const rows: T[] = []
+
+  for (let from = 0; ; from += WORKLOADS_PAGE_SIZE) {
+    const result = await query.range(from, from + WORKLOADS_PAGE_SIZE - 1)
+    if (result.error) return { data: null, error: result.error }
+
+    const page = result.data ?? []
+    rows.push(...page)
+    if (page.length < WORKLOADS_PAGE_SIZE) {
+      return { data: rows, error: null }
+    }
+  }
+}
+
 /**
  * Применяет фильтр с поддержкой нескольких значений (UUID и/или имена) к Supabase query.
  *
@@ -428,12 +459,34 @@ export async function getDepartmentsData(
       guestQueryBuilder = applyLoadingLevelFilters(guestQueryBuilder)
     }
 
+    // Порядок обязателен для пагинации: без него Postgres не гарантирует,
+    // что две соседние страницы не пересекутся и не пропустят строки.
+    // user_id + loading_id завершают порядок для сотрудников с одинаковыми ФИО.
+    employeeQuery = employeeQuery
+      .order('final_department_name')
+      .order('final_team_name')
+      .order('last_name')
+      .order('first_name')
+      .order('user_id')
+      .order('loading_id')
+    if (guestQueryBuilder) {
+      guestQueryBuilder = guestQueryBuilder
+        .order('final_department_name')
+        .order('final_team_name')
+        .order('last_name')
+        .order('first_name')
+        .order('user_id')
+        .order('loading_id')
+    }
+
     // Параллельно: основная выборка + гостевые сотрудники.
     // Гости идут отдельно потому что фильтры по final_department_id / final_team_id
     // их бы отбросили (у гостя эти поля = его родного отдела, не получателя).
     const [employeeResult, guestResult] = await Promise.all([
-      employeeQuery,
-      guestQueryBuilder ?? Promise.resolve({ data: null, error: null }),
+      fetchAllPages(employeeQuery),
+      guestQueryBuilder
+        ? fetchAllPages(guestQueryBuilder)
+        : Promise.resolve({ data: [], error: null }),
     ])
 
     const { data: employeeData, error: employeeError } = employeeResult
