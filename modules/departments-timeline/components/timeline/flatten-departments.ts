@@ -23,8 +23,8 @@ export interface DeptGroup {
   items: Department[]
 }
 
-/** ВК: команды 1/3/4 — гражданское направление, остальные — промышленное. */
-const CIVIL_VK_TEAMS = new Set(['ВК - 1', 'ВК - 3', 'ВК - 4'])
+/** ВК: команды 1/2/3 — гражданское направление, остальные — промышленное. */
+const CIVIL_VK_TEAMS = new Set(['ВК - 1', 'ВК - 2', 'ВК - 3'])
 
 /** Сотрудники команды: тимлид первым, остальные в исходном порядке. */
 function sortTeamEmployees(team: Team): Employee[] {
