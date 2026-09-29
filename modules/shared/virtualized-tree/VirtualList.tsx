@@ -18,7 +18,7 @@
 
 'use client'
 
-import { useCallback, useImperativeHandle, useRef } from 'react'
+import { memo, useCallback, useImperativeHandle, useMemo, useRef } from 'react'
 import type { CSSProperties, ReactNode, Ref, RefCallback, UIEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
@@ -72,6 +72,21 @@ interface VirtualListProps<T> {
   ref?: Ref<VirtualListHandle>
 }
 
+interface VirtualRowContentProps<T> {
+  item: T
+  index: number
+  columns?: VirtualColumn[]
+  renderItem: VirtualListProps<T>['renderItem']
+}
+
+function VirtualRowContent<T>({ item, index, columns, renderItem }: VirtualRowContentProps<T>) {
+  return renderItem(item, index, columns)
+}
+
+// Горизонтальный virtualizer обновляет родителя на каждом scroll event. Сложную строку
+// перерисовываем только когда изменились сама строка, renderer или окно колонок.
+const MemoizedVirtualRowContent = memo(VirtualRowContent) as typeof VirtualRowContent
+
 export function VirtualList<T>({
   items,
   getKey,
@@ -90,6 +105,7 @@ export function VirtualList<T>({
   ref,
 }: VirtualListProps<T>) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const isColumnVirtualizationEnabled = Boolean(columnCount && columnWidth)
 
   // Сетим внутренний ref и (если передан) внешний scrollElementRef одним callback-ref.
   const setScrollEl = useCallback(
@@ -111,22 +127,37 @@ export function VirtualList<T>({
 
   // Горизонтальный виртуализатор колонок (тот же скролл-элемент). Активен при columnCount.
   const columnVirtualizer = useVirtualizer({
+    enabled: isColumnVirtualizationEnabled,
     horizontal: true,
     count: columnCount ?? 0,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => columnWidth ?? 1,
     overscan: columnOverscan,
     scrollMargin: columnScrollMargin,
+    // Горизонтальный drag генерирует частые scroll events. Синхронный flushSync
+    // на каждом событии блокирует нативное движение scrollbar сложным ререндером строк.
+    // Вертикальный virtualizer оставляем синхронным: там важны динамические высоты.
+    useFlushSync: false,
   })
 
-  // start приводим к координатам области контента (вычитаем scrollMargin сайдбара).
-  const columns: VirtualColumn[] | undefined = columnCount
-    ? columnVirtualizer.getVirtualItems().map((v) => ({
-        index: v.index,
-        start: v.start - columnScrollMargin,
-        size: v.size,
-      }))
-    : undefined
+  const columnVirtualItems = columnVirtualizer.getVirtualItems()
+  const firstColumnIndex = columnVirtualItems[0]?.index
+  const lastColumnIndex = columnVirtualItems[columnVirtualItems.length - 1]?.index
+
+  // Сохраняем ссылку на columns между scroll events, пока фактическое окно дней
+  // не изменилось. Это позволяет memo-строкам не рендерить весь таймлайн на каждый px.
+  const columns = useMemo<VirtualColumn[] | undefined>(() => {
+    if (!isColumnVirtualizationEnabled) return undefined
+    // Активный virtualizer до первого измерения ещё не знает окно. Пустой массив
+    // не даёт строкам уйти в fallback и временно отрисовать все сотни колонок.
+    if (firstColumnIndex === undefined || lastColumnIndex === undefined) return []
+
+    const size = columnWidth ?? 1
+    return Array.from({ length: lastColumnIndex - firstColumnIndex + 1 }, (_, offset) => {
+      const index = firstColumnIndex + offset
+      return { index, start: index * size, size }
+    })
+  }, [isColumnVirtualizationEnabled, columnWidth, firstColumnIndex, lastColumnIndex])
 
   useImperativeHandle(
     ref,
@@ -163,7 +194,12 @@ export function VirtualList<T>({
               className="absolute left-0 w-max min-w-full"
               style={positionStyle}
             >
-              {renderItem(items[vi.index], vi.index, columns)}
+              <MemoizedVirtualRowContent
+                item={items[vi.index]}
+                index={vi.index}
+                columns={columns}
+                renderItem={renderItem}
+              />
             </div>
           )
         })}

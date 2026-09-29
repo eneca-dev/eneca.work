@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Встречи — протоколы созвонов автоматически | eneca.work</title>
+<meta name="description" content="Бот фиксирует созвон в Microsoft Teams, а eneca.work хранит готовый протокол: тема, участники, решения и файлы .docx. Без ручного конспектирования." />
+<style>
+  :root{
+    --teal:#1e7260; --teal-dark:#155446; --teal-50:#e8f2ef;
+    --ink:#0f1f1b; --muted:#5b6b66; --line:#e3e9e7; --bg:#f6f8f7; --card:#ffffff;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  a{color:inherit}
+  .btn{
+    display:inline-block; background:var(--teal); color:#fff; text-decoration:none;
+    padding:13px 24px; border-radius:10px; font-weight:600; font-size:15px;
+    transition:background .15s ease; border:1px solid var(--teal);
+  }
+  .btn:hover{background:var(--teal-dark); border-color:var(--teal-dark)}
+  .btn--ghost{background:transparent; color:var(--teal)}
+  .btn--ghost:hover{background:var(--teal-50)}
+
+  /* Header */
+  header{border-bottom:1px solid var(--line); background:#fff}
+  .nav{display:flex; align-items:center; justify-content:space-between; height:64px}
+  .brand{font-weight:700; font-size:20px; letter-spacing:-.5px; white-space:nowrap}
+  .brand .e{color:var(--teal)}
+  .brand .w{color:var(--muted); font-weight:600}
+
+  /* Hero */
+  .hero{padding:40px 0 52px}
+  .eyebrow{
+    display:inline-block; font-size:13px; font-weight:600; letter-spacing:.3px;
+    color:var(--teal); background:var(--teal-50); padding:6px 12px; border-radius:999px; margin-bottom:20px;
+  }
+  .hero h1{font-size:44px; line-height:1.1; letter-spacing:-1px; margin:0 0 18px; max-width:18ch}
+  .hero p{font-size:19px; color:var(--muted); margin:0 0 30px; max-width:62ch}
+  .hero .actions{display:flex; gap:12px; flex-wrap:wrap}
+
+  /* Sections */
+  section{padding:56px 0}
+  .section-head{max-width:60ch; margin-bottom:36px}
+  .section-head h2{font-size:30px; letter-spacing:-.5px; margin:0 0 10px}
+  .section-head p{color:var(--muted); font-size:17px; margin:0}
+
+  /* Feature grid */
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:20px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px;
+  }
+  .card .ic{
+    width:42px; height:42px; border-radius:10px; background:var(--teal-50);
+    display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--teal);
+  }
+  .card h3{margin:0 0 8px; font-size:18px; letter-spacing:-.2px}
+  .card p{margin:0; color:var(--muted); font-size:15px}
+
+  /* Steps */
+  .steps{background:#fff; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .steps .grid{grid-template-columns:repeat(3,1fr)}
+  .step{padding:6px 0}
+  .step .num{
+    width:34px; height:34px; border-radius:50%; background:var(--teal); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:700; margin-bottom:14px;
+  }
+  .step h3{margin:0 0 6px; font-size:17px}
+  .step p{margin:0; color:var(--muted); font-size:15px}
+
+  /* CTA */
+  .cta{text-align:center; padding:72px 0}
+  .cta h2{font-size:30px; letter-spacing:-.5px; margin:0 0 10px}
+  .cta p{color:var(--muted); font-size:17px; margin:0 0 26px}
+
+  footer{border-top:1px solid var(--line); background:#fff; color:var(--muted); font-size:14px}
+  footer .wrap{display:flex; align-items:center; justify-content:space-between; height:64px; flex-wrap:wrap; gap:8px}
+
+  @media (max-width:760px){
+    .hero h1{font-size:34px}
+    .hero p{font-size:17px}
+    .grid, .steps .grid{grid-template-columns:1fr}
+    section{padding:44px 0}
+    .hero{padding:48px 0 36px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="brand"><span class="e">eneca</span><span class="w">.work</span></div>
+    <a class="btn btn--ghost" href="#start">Начать</a>
+  </div>
+</header>
+
+<main>
+  <!-- Hero -->
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Модуль: Встречи</span>
+      <h1>Встречи: готовые протоколы созвонов</h1>
+      <p>Бот фиксирует созвон в Microsoft Teams, а eneca.work хранит готовый протокол — с темой, участниками, решениями и файлами&nbsp;.docx. Без ручного конспектирования.</p>
+      <div class="actions">
+        <a class="btn" href="#start">Открыть модуль</a>
+        <a class="btn btn--ghost" href="#how">Как это работает</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Что внутри</h2>
+        <p>Протоколы собираются автоматически — команде остаётся только читать, искать и делиться.</p>
+      </div>
+      <div class="grid">
+
+        <div class="card">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+          </div>
+          <h3>Готовые протоколы</h3>
+          <p>После каждого созвона — структурированный протокол: краткое содержание, участники, обсуждённые пункты и решения с ответственными.</p>
+        </div>
+
+        <div class="card">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <h3>Поиск по всем созвонам</h3>
+          <p>Мгновенный поиск по теме, участникам и содержанию протокола — с подсветкой найденных фрагментов прямо в тексте.</p>
+        </div>
+
+        <div class="card">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a3 3 0 1 0-2.83-4"/><circle cx="6" cy="12" r="3"/><path d="M18 16a3 3 0 1 0-2.83 4"/><path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5"/></svg>
+          </div>
+          <h3>Контроль доступа</h3>
+          <p>Созвон видит его владелец. Доступ коллегам открывается в один клик и так же отзывается — лишнего никто не увидит.</p>
+        </div>
+
+        <div class="card">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>
+          </div>
+          <h3>Папки и документы</h3>
+          <p>Раскладывайте созвоны по проектам в папки. Протокол и транскрипт всегда доступны для скачивания в формате&nbsp;.docx.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="steps" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Как это работает</h2>
+        <p>Три шага — от приглашения бота до готового протокола в eneca.work.</p>
+      </div>
+      <div class="grid">
+        <div class="step">
+          <div class="num">1</div>
+          <h3>Пригласите бота</h3>
+          <p>Добавьте бота в созвон Microsoft Teams — он подключится к встрече.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h3>Бот записывает</h3>
+          <p>Встреча фиксируется, после завершения автоматически формируется протокол.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h3>Откройте «Встречи»</h3>
+          <p>В eneca.work в разделе «Встречи» протокол уже готов — читайте, ищите, делитесь.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta" id="start">
+    <div class="wrap">
+      <h2>Меньше конспектов — больше дела</h2>
+      <p>Протоколы собираются сами. Откройте раздел «Встречи» и оцените.</p>
+      <!-- TODO: подставить реальный URL раздела -->
+      <a class="btn" href="https://enecawork.vercel.app/meetings">Открыть «Встречи»</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="brand" style="font-size:16px"><span class="e">eneca</span><span class="w">.work</span></div>
+    <div>© 2026 eneca.work · Модуль «Встречи»</div>
+  </div>
+</footer>
+
+</body>
+</html>

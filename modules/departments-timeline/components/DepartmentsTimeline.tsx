@@ -82,28 +82,16 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   // Refs for scroll synchronization
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const contentScrollRef = useRef<HTMLDivElement>(null)
-  const isScrollingSyncRef = useRef(false)
-
-  // Sync scroll between header and content
-  const handleHeaderScroll = useCallback(() => {
-    if (isScrollingSyncRef.current) return
-    if (headerScrollRef.current && contentScrollRef.current) {
-      isScrollingSyncRef.current = true
-      contentScrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft
-      requestAnimationFrame(() => {
-        isScrollingSyncRef.current = false
-      })
-    }
-  }, [])
 
   const handleContentScroll = useCallback(() => {
-    if (isScrollingSyncRef.current) return
-    if (headerScrollRef.current && contentScrollRef.current) {
-      isScrollingSyncRef.current = true
-      headerScrollRef.current.scrollLeft = contentScrollRef.current.scrollLeft
-      requestAnimationFrame(() => {
-        isScrollingSyncRef.current = false
-      })
+    const content = contentScrollRef.current
+    if (content) {
+      // Одна CSS-переменная заменяет отдельный scroll-listener на каждом loading bar.
+      content.style.setProperty('--timeline-scroll-left', `${content.scrollLeft}px`)
+    }
+
+    if (headerScrollRef.current && content) {
+      headerScrollRef.current.scrollLeft = content.scrollLeft
     }
   }, [])
 
@@ -363,8 +351,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
         <header className="sticky top-0 z-20 bg-card border-b shadow-sm">
           <div
             ref={headerScrollRef}
-            onScroll={handleHeaderScroll}
-            className="bg-background overflow-x-auto"
+            className="bg-background overflow-x-hidden"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             <div className="flex" style={{ minWidth: totalWidth }}>
@@ -484,11 +471,12 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
             scrollElementRef={contentScrollRef}
             onScroll={handleContentScroll}
             className="h-full"
-            // Горизонтальная виртуализация ячеек дня (только дневной режим; месяцы — их мало).
+            // После мемоизации ячеек окно сдвигается по одной колонке: существующие
+            // ячейки переиспользуются, монтируется только новый день у края viewport.
             columnCount={isMonthlyMode ? undefined : dayCells.length}
             columnWidth={DAY_CELL_WIDTH}
             columnScrollMargin={SIDEBAR_WIDTH}
-            columnOverscan={4}
+            columnOverscan={8}
           />
         )}
       </div>
