@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useMemo, useState, Fragment, useCallback, useRef, useEffect } from 'react'
+import { memo, useMemo, useState, Fragment, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Building2, MessageSquare, UserPlus, Check, ArrowLeftRight } from 'lucide-react'
 import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
@@ -72,6 +72,35 @@ interface EmployeeRowProps {
   monthCellWidth: number
 }
 
+interface EmployeeDayCellProps {
+  cell: DayCell
+  left: number
+  width: number
+  height: number
+}
+
+const EmployeeDayCell = memo(function EmployeeDayCell({
+  cell,
+  left,
+  width,
+  height,
+}: EmployeeDayCellProps) {
+  const isWeekend = cell.isWeekend && !cell.isWorkday
+  const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+
+  return (
+    <div
+      className={cn(
+        'absolute top-0 border-r border-border/30',
+        !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
+        !cell.isToday && isWeekend && 'bg-muted/50',
+        cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
+      )}
+      style={{ left, width, height }}
+    />
+  )
+})
+
 /**
  * Loading Bar с поддержкой drag-to-resize
  */
@@ -89,7 +118,7 @@ interface LoadingBarWithResizeProps {
   selectionContext: SelectionContext
 }
 
-function LoadingBarWithResize({
+const LoadingBarWithResize = memo(function LoadingBarWithResize({
   bar,
   barRenders,
   timeUnits,
@@ -100,11 +129,6 @@ function LoadingBarWithResize({
   canEdit,
   selectionContext,
 }: LoadingBarWithResizeProps) {
-  // Refs for containers (to update transform without re-render)
-  const textRef = useRef<HTMLDivElement>(null)
-  const commentRef = useRef<HTMLDivElement>(null)
-  const rateBadgeRef = useRef<HTMLDivElement>(null)
-
   // Bulk-shift selection state для этого bar
   const isLoadingType = bar.period.type === 'loading'
   const barProjectId = isLoadingType ? bar.period.projectId : undefined
@@ -195,28 +219,6 @@ function LoadingBarWithResize({
   // Показываем preview даты в tooltip во время resize
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : startDateString
   const displayEndDate = isResizing && previewDates ? previewDates.endDate : endDateString
-
-  // Unified scroll effect: single listener updates text, comment, and rate badge
-  useEffect(() => {
-    const container = textRef.current?.closest('.overflow-auto')
-    if (!container) return
-
-    const update = () => {
-      const scrollLeft = container.scrollLeft
-      const overlap = Math.max(0, scrollLeft - displayLeft)
-
-      if (textRef.current) textRef.current.style.transform = `translateX(${overlap}px)`
-      if (commentRef.current) commentRef.current.style.transform = `translateX(${overlap}px)`
-      if (rateBadgeRef.current) {
-        const clampedOffset = Math.min(overlap, Math.max(0, displayWidth - 48))
-        rateBadgeRef.current.style.transform = `translateX(${clampedOffset}px)`
-      }
-    }
-
-    update()
-    container.addEventListener('scroll', update, { passive: true })
-    return () => container.removeEventListener('scroll', update)
-  }, [displayLeft, displayWidth])
 
   return (
     <Fragment>
@@ -310,9 +312,11 @@ function LoadingBarWithResize({
 
         {/* Sticky rate badge (always visible, stops at right edge) */}
         <div
-          ref={rateBadgeRef}
-          className="absolute left-0.5 top-0 bottom-0 flex items-center flex-shrink-0 transition-transform duration-150 ease-out"
-          style={{ zIndex: 10 }}
+          className="absolute left-0.5 top-0 bottom-0 flex items-center flex-shrink-0"
+          style={{
+            zIndex: 10,
+            transform: `translateX(clamp(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px), ${Math.max(0, displayWidth - 48)}px))`,
+          }}
         >
           <span className="inline-flex items-center justify-center w-[36px] h-[20px] bg-black/20 text-white text-[10px] font-semibold tabular-nums rounded shadow-sm">
             {bar.period.rate || 1}
@@ -321,9 +325,11 @@ function LoadingBarWithResize({
 
         {/* Bar content */}
         <div
-          ref={textRef}
-          className="absolute left-[42px] top-0 bottom-0 flex items-center transition-transform duration-200 ease-out"
-          style={{ zIndex: 2 }}
+          className="absolute left-[42px] top-0 bottom-0 flex items-center"
+          style={{
+            zIndex: 2,
+            transform: `translateX(max(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px)))`,
+          }}
         >
           {bar.period.type === 'loading' && (() => {
             const labelParts = getBarLabelParts(bar.period, displayWidth)
@@ -479,9 +485,11 @@ function LoadingBarWithResize({
             title={bar.period.comment}
           >
             <div
-              ref={commentRef}
-              className="flex items-center gap-1 px-2 transition-transform duration-200 ease-out"
-              style={{ height: COMMENT_HEIGHT }}
+              className="flex items-center gap-1 px-2"
+              style={{
+                height: COMMENT_HEIGHT,
+                transform: `translateX(max(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px)))`,
+              }}
             >
               <MessageSquare size={11} className="text-white flex-shrink-0" />
               <span className="text-[10px] leading-tight truncate text-white font-medium">
@@ -493,7 +501,7 @@ function LoadingBarWithResize({
       )}
     </Fragment>
   )
-}
+})
 
 export function EmployeeRow({
   employee,
@@ -523,10 +531,10 @@ export function EmployeeRow({
   })
 
   // Mutation hook для обновления дат загрузки
-  const updateLoadingDates = useUpdateLoadingDates()
+  const { mutate: mutateLoadingDates } = useUpdateLoadingDates()
 
   // Mutation hook для разрезания загрузки
-  const { split: splitMutation } = useLoadingMutations()
+  const { split: { mutate: splitLoading } } = useLoadingMutations()
 
   // Selection mode context (для bulk-shift с выбором)
   const isSelectionActive = useBulkShiftSelectionStore(
@@ -569,23 +577,23 @@ export function EmployeeRow({
       // Блокируем resize для оптимистичных записей с temp ID (ещё не сохранены в БД)
       if (loadingId.startsWith('temp-')) return
 
-      updateLoadingDates.mutate({
+      mutateLoadingDates({
         loadingId,
         employeeId: employee.id,
         startDate,
         finishDate,
       })
     },
-    [employee.id, updateLoadingDates]
+    [employee.id, mutateLoadingDates]
   )
 
   // Обработчик разрезания загрузки (ножницы)
   const handleSplitLoading = useCallback(
     (loadingId: string, splitDate: string) => {
       if (loadingId.startsWith('temp-')) return
-      splitMutation.mutate({ loadingId, splitDate })
+      splitLoading({ loadingId, splitDate })
     },
-    [splitMutation]
+    [splitLoading]
   )
 
   // Обработчик клика на loading bar для открытия модалки редактирования
@@ -896,23 +904,13 @@ export function EmployeeRow({
               {dayCols.map((col) => {
                 const cell = dayCells[col.index]
                 if (!cell) return null
-                const isWeekend = cell.isWeekend && !cell.isWorkday
-                const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
-
                 return (
-                  <div
+                  <EmployeeDayCell
                     key={col.index}
-                    className={cn(
-                      'absolute top-0 border-r border-border/30',
-                      !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
-                      !cell.isToday && isWeekend && 'bg-muted/50',
-                      cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
-                    )}
-                    style={{
-                      left: col.start,
-                      width: col.size,
-                      height: rowHeight,
-                    }}
+                    cell={cell}
+                    left={col.start}
+                    width={col.size}
+                    height={rowHeight}
                   />
                 )
               })}

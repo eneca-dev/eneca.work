@@ -8,7 +8,7 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Users, ArrowLeftRight } from 'lucide-react'
 import { formatMinskDate } from '@/lib/timezone-utils'
@@ -33,6 +33,88 @@ interface TeamRowContentProps {
   monthCellWidth: number
   calendarMap?: Map<string, Partial<DayInfo>>
 }
+
+const formatWorkload = (value: number) => parseFloat(value.toFixed(2)).toString()
+
+interface TeamDayCellProps {
+  cell: DayCell
+  dailyWorkloads: Team['dailyWorkloads']
+  totalCapacity: number
+  left: number
+  width: number
+}
+
+const TeamDayCell = memo(function TeamDayCell({
+  cell,
+  dailyWorkloads,
+  totalCapacity,
+  left,
+  width,
+}: TeamDayCellProps) {
+  const isWeekend = cell.isWeekend && !cell.isWorkday
+  const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+  const workload = dailyWorkloads?.[formatMinskDate(cell.date)] || 0
+  const loadPercentage = !isWeekend && !isSpecialDayOff && totalCapacity > 0
+    ? Math.round((workload / totalCapacity) * 100)
+    : 0
+
+  return (
+    <div
+      className={cn(
+        'absolute top-0 border-r border-border/50',
+        !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
+        !cell.isToday && isWeekend && 'bg-muted/50',
+        cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
+      )}
+      style={{ left, width, height: TEAM_ROW_HEIGHT }}
+    >
+      {loadPercentage > 0 && (
+        <div
+          className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
+          title={`Загрузка команды: ${loadPercentage}%`}
+        >
+          <div
+            className={cn(
+              'w-full rounded-sm border relative overflow-hidden',
+              loadPercentage > 100
+                ? 'border-red-500'
+                : loadPercentage >= 90
+                  ? 'border-primary'
+                  : 'border-amber-500'
+            )}
+            style={{ height: TEAM_ROW_HEIGHT - 10 }}
+          >
+            <div
+              className={cn(
+                'absolute bottom-0 left-0 right-0 rounded-sm',
+                loadPercentage > 100
+                  ? 'bg-red-500'
+                  : loadPercentage >= 90
+                    ? 'bg-primary'
+                    : 'bg-amber-500'
+              )}
+              style={{ height: `${Math.min(loadPercentage, 100)}%`, opacity: 0.6 }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <span
+                className={cn(
+                  'text-[8px] font-semibold leading-none',
+                  loadPercentage > 100
+                    ? 'text-red-700 dark:text-red-300'
+                    : loadPercentage >= 90
+                      ? 'text-primary'
+                      : 'text-amber-700 dark:text-amber-400'
+                )}
+              >
+                {formatWorkload(workload)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
 
 export function TeamRowContent({
   team,
@@ -68,9 +150,6 @@ export function TeamRowContent({
       return sum + (emp.employmentRate || 1)
     }, 0)
   }, [team.employees])
-
-  const formatWorkload = (value: number) =>
-    parseFloat(value.toFixed(2)).toString()
 
   const timelineWidth = isMonthlyMode
     ? monthCells.length * monthCellWidth
@@ -223,78 +302,15 @@ export function TeamRowContent({
             dayCols.map((col) => {
               const cell = dayCells[col.index]
               if (!cell) return null
-              const isWeekend = cell.isWeekend && !cell.isWorkday
-              const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
-              const dateKey = formatMinskDate(cell.date)
-              const teamWorkload = team.dailyWorkloads?.[dateKey] || 0
-              const loadPercentage =
-                !isWeekend && !isSpecialDayOff && totalTeamCapacity > 0
-                  ? Math.round((teamWorkload / totalTeamCapacity) * 100)
-                  : 0
-
               return (
-                <div
+                <TeamDayCell
                   key={col.index}
-                  className={cn(
-                    'absolute top-0 border-r border-border/50',
-                    !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
-                    !cell.isToday && isWeekend && 'bg-muted/50',
-                    cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
-                  )}
-                  style={{
-                    left: col.start,
-                    width: col.size,
-                    height: TEAM_ROW_HEIGHT,
-                  }}
-                >
-                  {loadPercentage > 0 && (
-                    <div
-                      className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
-                      title={`Загрузка команды: ${loadPercentage}%`}
-                    >
-                      <div
-                        className={cn(
-                          'w-full rounded-sm border relative overflow-hidden',
-                          loadPercentage > 100
-                            ? 'border-red-500'
-                            : loadPercentage >= 90
-                              ? 'border-primary'
-                              : 'border-amber-500'
-                        )}
-                        style={{ height: TEAM_ROW_HEIGHT - 10 }}
-                      >
-                        <div
-                          className={cn(
-                            'absolute bottom-0 left-0 right-0 rounded-sm',
-                            loadPercentage > 100
-                              ? 'bg-red-500'
-                              : loadPercentage >= 90
-                                ? 'bg-primary'
-                                : 'bg-amber-500'
-                          )}
-                          style={{
-                            height: `${Math.min(loadPercentage, 100)}%`,
-                            opacity: 0.6,
-                          }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center z-10">
-                          <span
-                            className={cn(
-                              'text-[8px] font-semibold leading-none',
-                              loadPercentage > 100
-                                ? 'text-red-700 dark:text-red-300'
-                                : loadPercentage >= 90
-                                  ? 'text-primary'
-                                  : 'text-amber-700 dark:text-amber-400'
-                            )}
-                          >
-                            {formatWorkload(teamWorkload)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  cell={cell}
+                  dailyWorkloads={team.dailyWorkloads}
+                  totalCapacity={totalTeamCapacity}
+                  left={col.start}
+                  width={col.size}
+                />
               )
             })
           )}
