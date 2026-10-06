@@ -234,7 +234,7 @@ export function TasksView() {
           />
         )}
         {!showPicker && viewMode === 'employment' && (
-          <EmploymentBoardInternal queryParams={queryParams} />
+          <EmploymentBoardInternal key={activeTab?.id ?? 'employment'} queryParams={queryParams} />
         )}
         {!showPicker && viewMode === 'budgets' && (
           <BudgetsViewInternal
