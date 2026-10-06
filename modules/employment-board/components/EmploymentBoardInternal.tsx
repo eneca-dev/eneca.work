@@ -16,13 +16,20 @@ import {
   useUnpinProject,
 } from '../hooks/useEmploymentBoard'
 import { useEmploymentBoardRealtime } from '../hooks/useEmploymentBoardRealtime'
+import { useEmploymentBoardDate } from '../hooks/useEmploymentBoardDate'
 
 interface EmploymentBoardInternalProps {
   queryParams?: FilterQueryParams
 }
 
 export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternalProps) {
-  const { data: board, isLoading, error } = useEmploymentBoard(queryParams)
+  const boardDate = useEmploymentBoardDate()
+  const { data: board, isLoading, error } = useEmploymentBoard({
+    filters: queryParams,
+    selectedDate: boardDate.selectedDate,
+    expectedDateMode: boardDate.mode,
+    onDateBoundary: boardDate.refreshCurrentMinskDate,
+  })
   const canEdit = useHasPermission(EMPLOYMENT_BOARD_EDIT)
   const rawEmployeeFilter = queryParams?.employee_id
   const selectedEmployeeValue = Array.isArray(rawEmployeeFilter)
@@ -68,10 +75,15 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
   const handleDropEmployee = useCallback(
     (employeeId: string, projectId: string) => {
       if (!departmentId) return
-      placeEmployee.mutate({ departmentId, projectId, employeeId })
+      placeEmployee.mutate({
+        departmentId,
+        projectId,
+        employeeId,
+        selectedDate: boardDate.selectedDate,
+      })
       setDropTargetId(null)
     },
-    [departmentId, placeEmployee],
+    [boardDate.selectedDate, departmentId, placeEmployee],
   )
 
   const handleDropProject = useCallback(
@@ -214,6 +226,7 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
                       departmentId: filteredBoard.departmentId,
                       projectId: project.id,
                       employeeId,
+                      selectedDate: boardDate.selectedDate,
                     })
                   }
                 />

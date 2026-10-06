@@ -10,7 +10,7 @@ import {
 
 const MIDNIGHT_TIMER_MARGIN_MS = 50
 
-export function useEmploymentBoardDate(tabId: string) {
+export function useEmploymentBoardDate() {
   const [currentMinskDate, setCurrentMinskDate] = useState(getCurrentMinskDate)
   const [selectedDate, setSelectedDate] = useState(getCurrentMinskDate)
   const [followsToday, setFollowsToday] = useState(true)
@@ -39,12 +39,6 @@ export function useEmploymentBoardDate(tabId: string) {
     setFollowsToday(true)
     setSelectedDate(refreshCurrentMinskDate())
   }, [refreshCurrentMinskDate])
-
-  useEffect(() => {
-    followsTodayRef.current = true
-    setFollowsToday(true)
-    setSelectedDate(refreshCurrentMinskDate())
-  }, [tabId, refreshCurrentMinskDate])
 
   useEffect(() => {
     const timerId = window.setTimeout(

@@ -10,7 +10,6 @@
 import { createHash } from 'node:crypto'
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
-import { formatMinskDate } from '@/lib/timezone-utils'
 import type { ActionResult } from '@/modules/cache'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import {
@@ -18,7 +17,6 @@ import {
   getFilterContextForTasksTabs,
 } from '@/modules/permissions'
 import type { UserFilterContext } from '@/modules/permissions/types'
-import { compareProjectsByGup } from '@/modules/sections-page/utils/sort-projects'
 import {
   EMPLOYMENT_BOARD_EDIT,
   EMPLOYMENT_BOARD_VIEW,
@@ -39,10 +37,19 @@ import {
   touchBoardPresence,
   writeBoardCache,
 } from '../lib/redis'
+import {
+  assertEmploymentBoardDate,
+  getCurrentMinskDate,
+  getEmploymentBoardDateMode,
+  isValidEmploymentBoardDate,
+} from '../lib/board-date'
+import { applyEmploymentBoardLoadingFilters } from '../lib/loading-query'
+import { buildEmploymentBoard } from '../lib/build-board'
+import { shouldUseEmploymentBoardRedis } from '../lib/cache-policy'
 import type {
   BoardEmployee,
-  BoardProject,
   EmploymentBoard,
+  EmploymentBoardRequest,
   PinProjectInput,
   PlacementInput,
 } from '../types'
@@ -51,6 +58,11 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_REGEX.test(value)
+}
+
+/** Защита от команды устаревшего UI; проверка permission выполняется отдельно. */
+function isValidTodayPlacementDate(selectedDate: unknown): selectedDate is string {
+  return isValidEmploymentBoardDate(selectedDate) && selectedDate === getCurrentMinskDate()
 }
 
 const CACHE_WAIT_ATTEMPTS = 4
@@ -226,7 +238,7 @@ async function resolveBoardDepartment(
  * Cache-aside: сначала Redis, при промахе — сборка из Postgres и запись в кэш.
  */
 export async function getDepartmentEmploymentBoard(
-  filters?: FilterQueryParams,
+  request: EmploymentBoardRequest,
 ): Promise<ActionResult<EmploymentBoard>> {
   return Sentry.startSpan(
     { name: 'getDepartmentEmploymentBoard', op: 'server.action' },
@@ -246,6 +258,14 @@ export async function getDepartmentEmploymentBoard(
         })
       }
       try {
+        try {
+          assertEmploymentBoardDate(request.selectedDate)
+        } catch {
+          return { success: false, error: 'Некорректная дата доски' }
+        }
+        const { filters, selectedDate } = request
+        const dateMode = getEmploymentBoardDateMode(selectedDate, getCurrentMinskDate())
+        const useRedis = shouldUseEmploymentBoardRedis(request.cachePolicy)
         const resolveStartedAt = Date.now()
         const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_VIEW, filters)
         measure('access_ms', resolveStartedAt)
@@ -255,12 +275,14 @@ export async function getDepartmentEmploymentBoard(
         // Версию читаем ДО сборки: если параллельная запись сделает INCR, наш
         // ответ уйдёт в кэш под старой версией и никем прочитан не будет.
         const versionStartedAt = Date.now()
-        const version = await getBoardVersion(departmentId)
-        measure('redis_version_ms', versionStartedAt)
-        const cacheKey = boardCacheKey(departmentId, isAdmin, scopeHash(ctx), version)
+        const version = useRedis ? await getBoardVersion(departmentId) : 0
+        if (useRedis) measure('redis_version_ms', versionStartedAt)
+        const cacheKey = useRedis
+          ? boardCacheKey(departmentId, selectedDate, dateMode, isAdmin, scopeHash(ctx), version)
+          : null
         const cacheReadStartedAt = Date.now()
-        const cached = await readBoardCache<EmploymentBoard>(cacheKey)
-        measure('redis_read_ms', cacheReadStartedAt)
+        const cached = cacheKey ? await readBoardCache<EmploymentBoard>(cacheKey) : null
+        if (useRedis) measure('redis_read_ms', cacheReadStartedAt)
         if (cached) {
           Sentry.addBreadcrumb({
             category: 'employment-board.cache',
@@ -275,21 +297,28 @@ export async function getDepartmentEmploymentBoard(
         // Один запрос строит холодный снимок; остальные коротко ждут и
         // перечитывают Redis. Если первый запрос упал, ожидатели сами
         // продолжат сборку — доступность важнее идеальной дедупликации.
-        const lockStartedAt = Date.now()
-        const acquiredBuildLock = await acquireBoardBuildLock(departmentId, version)
-        measure('redis_lock_ms', lockStartedAt)
-        if (acquiredBuildLock.acquired) {
-          buildLock = {
-            key: boardBuildLockKey(departmentId, version),
-            token: acquiredBuildLock.token,
-          }
-        } else {
-          const peerWaitStartedAt = Date.now()
-          const filledByPeer = await waitForBoardCache<EmploymentBoard>(cacheKey)
-          measure('peer_wait_ms', peerWaitStartedAt)
-          if (filledByPeer) {
-            reportTimings('peer-hit')
-            return { success: true, data: filledByPeer }
+        if (cacheKey) {
+          const lockStartedAt = Date.now()
+          const acquiredBuildLock = await acquireBoardBuildLock(
+            departmentId,
+            selectedDate,
+            dateMode,
+            version,
+          )
+          measure('redis_lock_ms', lockStartedAt)
+          if (acquiredBuildLock.acquired) {
+            buildLock = {
+              key: boardBuildLockKey(departmentId, selectedDate, dateMode, version),
+              token: acquiredBuildLock.token,
+            }
+          } else {
+            const peerWaitStartedAt = Date.now()
+            const filledByPeer = await waitForBoardCache<EmploymentBoard>(cacheKey)
+            measure('peer_wait_ms', peerWaitStartedAt)
+            if (filledByPeer) {
+              reportTimings('peer-hit')
+              return { success: true, data: filledByPeer }
+            }
           }
         }
 
@@ -302,8 +331,6 @@ export async function getDepartmentEmploymentBoard(
 
         const databaseBuildStartedAt = Date.now()
         const supabase = await createClient()
-        const today = formatMinskDate(new Date())
-
         const fail = (message: string): ActionResult<EmploymentBoard> => {
           Sentry.captureException(new Error(message), {
             tags: {
@@ -331,10 +358,12 @@ export async function getDepartmentEmploymentBoard(
             .from('department_pinned_projects')
             .select('project_id')
             .eq('department_id', departmentId),
-          supabase
-            .from('department_board_placements')
-            .select('project_id, employee_id')
-            .eq('department_id', departmentId),
+          dateMode === 'today'
+            ? supabase
+                .from('department_board_placements')
+                .select('project_id, employee_id')
+                .eq('department_id', departmentId)
+            : Promise.resolve({ data: [], error: null }),
           supabase
             .from('departments')
             .select('department_name')
@@ -353,21 +382,19 @@ export async function getDepartmentEmploymentBoard(
           positionName: (u.position_name as string | null) ?? null,
           teamName: (u.team_name as string | null) ?? null,
         }))
-        const employeeById = new Map(employees.map((e) => [e.id, e]))
         const employeeIds = employees.map((e) => e.id)
 
         // ─── Шаг 2: активные загрузки сотрудников отдела на сегодня ───
         // Индексный доступ по (loading_responsible, даты) — см.
         // idx_loadings_responsible_status_composite.
         const loadingsResult = employeeIds.length
-          ? await supabase
-              .from('loadings')
-              .select('loading_responsible, loading_rate, loading_section')
-              .in('loading_responsible', employeeIds)
-              .eq('loading_status', 'active')
-              .eq('is_shortage', false)
-              .lte('loading_start', today)
-              .gte('loading_finish', today)
+          ? await applyEmploymentBoardLoadingFilters(
+              supabase
+                .from('loadings')
+                .select('loading_responsible, loading_rate, loading_section')
+                .in('loading_responsible', employeeIds),
+              selectedDate,
+            )
           : { data: [], error: null }
 
         if (loadingsResult.error) return fail(loadingsResult.error.message)
@@ -414,97 +441,37 @@ export async function getDepartmentEmploymentBoard(
         // Restricted-проекты отсекаем прямо здесь: признак пришёл вместе с
         // названием, отдельный запрос не нужен, и при сбое запроса мы уже
         // вышли с ошибкой — «тихого» открытия доступа быть не может.
-        const projectNameById = new Map<string, string>()
-        for (const p of projectsResult.data ?? []) {
-          if (!isAdmin && p.is_restricted) continue
-          projectNameById.set(p.project_id as string, (p.project_name as string) ?? 'Без названия')
-        }
-
-        // ─── Сборка доски ───
-        const projectsMap = new Map<string, BoardProject>()
-        const employeeRateByProject = new Map<string, Map<string, number>>()
-
-        const ensureProject = (projectId: string): BoardProject | null => {
-          const existing = projectsMap.get(projectId)
-          if (existing) return existing
-
-          // Проекта нет в projectNameById → он restricted и скрыт от этого
-          // пользователя (либо удалён между запросами). На доску не попадает.
-          const name = projectNameById.get(projectId)
-          if (!name) return null
-
-          const project: BoardProject = { id: projectId, name, isPinned: false, employees: [] }
-          projectsMap.set(projectId, project)
-          return project
-        }
-
-        // Проекты и ставки из активных загрузок
-        for (const row of loadingsResult.data ?? []) {
-          const employeeId = row.loading_responsible as string | null
-          const sectionId = row.loading_section as string | null
-          if (!employeeId || !sectionId) continue
-
-          const projectId = projectIdBySection.get(sectionId)
-          if (!projectId || !ensureProject(projectId)) continue
-
-          if (!employeeRateByProject.has(projectId)) {
-            employeeRateByProject.set(projectId, new Map())
-          }
-          const rates = employeeRateByProject.get(projectId)!
-          const rate = Number(row.loading_rate ?? 0)
-          rates.set(employeeId, (rates.get(employeeId) ?? 0) + (isNaN(rate) ? 0 : rate))
-        }
-
-        for (const [projectId, rates] of employeeRateByProject) {
-          const project = projectsMap.get(projectId)!
-          for (const [employeeId, rate] of rates) {
-            const employee = employeeById.get(employeeId)
-            if (!employee) continue
-            project.employees.push({ ...employee, source: 'loading', rate })
-          }
-        }
-
-        // Вручную закреплённые проекты (могут быть без загрузок)
-        for (const id of pinnedIdsRaw) {
-          const project = ensureProject(id)
-          if (project) project.isPinned = true
-        }
-
-        // Ручные размещения поверх авто-размещений
-        for (const row of placementsResult.data ?? []) {
-          const projectId = row.project_id as string
-          const employeeId = row.employee_id as string
-          const project = projectsMap.get(projectId)
-          const employee = employeeById.get(employeeId)
-          if (!project || !employee) continue
-          if (project.employees.some((e) => e.id === employeeId)) continue
-          project.employees.push({ ...employee, source: 'manual', rate: null })
-        }
-
-        const projects = Array.from(projectsMap.values()).sort(compareProjectsByGup)
-        for (const project of projects) {
-          project.employees.sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-        }
-
-        const placedIds = new Set<string>()
-        for (const project of projects) {
-          for (const e of project.employees) placedIds.add(e.id)
-        }
-
-        const board: EmploymentBoard = {
+        const board = buildEmploymentBoard({
+          selectedDate,
+          dateMode,
           departmentId,
-          departmentName: (deptResult.data?.department_name as string) ?? 'Отдел',
-          projects,
-          employees: employees.sort((a, b) => a.name.localeCompare(b.name, 'ru')),
-          unassignedEmployeeIds: employees
-            .filter((e) => !placedIds.has(e.id))
-            .map((e) => e.id),
-        }
+          departmentName: deptResult.data?.department_name ?? null,
+          isAdmin,
+          employees,
+          loadings: (loadingsResult.data ?? []).map((row) => ({
+            employeeId: row.loading_responsible,
+            rate: row.loading_rate,
+            sectionId: row.loading_section,
+          })),
+          projectIdBySection,
+          projects: (projectsResult.data ?? []).map((project) => ({
+            id: project.project_id,
+            name: project.project_name,
+            isRestricted: project.is_restricted,
+          })),
+          pinnedProjectIds: pinnedIdsRaw,
+          placements: (placementsResult.data ?? []).map((placement) => ({
+            projectId: placement.project_id,
+            employeeId: placement.employee_id,
+          })),
+        })
 
         measure('database_build_ms', databaseBuildStartedAt)
         const cacheWriteStartedAt = Date.now()
-        await writeBoardCache(cacheKey, board)
-        measure('redis_write_ms', cacheWriteStartedAt)
+        if (cacheKey) {
+          await writeBoardCache(cacheKey, board)
+          measure('redis_write_ms', cacheWriteStartedAt)
+        }
         Sentry.addBreadcrumb({
           category: 'employment-board.cache',
           message: 'Board cache rebuilt',
@@ -698,6 +665,9 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
     if (!resolved.ok) return { success: false, error: resolved.error }
+    if (!isValidTodayPlacementDate(input.selectedDate)) {
+      return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
+    }
     if (!isUuid(input.projectId) || !isUuid(input.employeeId)) {
       return { success: false, error: 'Некорректные данные' }
     }
@@ -780,6 +750,9 @@ export async function removePlacement(input: PlacementInput): Promise<ActionResu
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
     if (!resolved.ok) return { success: false, error: resolved.error }
+    if (!isValidTodayPlacementDate(input.selectedDate)) {
+      return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
+    }
     if (!isUuid(input.projectId) || !isUuid(input.employeeId)) {
       return { success: false, error: 'Некорректные данные' }
     }

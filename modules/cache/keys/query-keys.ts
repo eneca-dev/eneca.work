@@ -517,13 +517,12 @@ export const queryKeys = {
   employmentBoard: {
     all: ['employment-board'] as const,
     lists: () => [...queryKeys.employmentBoard.all, 'list'] as const,
-    /**
-     * Доска отдела. В ключ входит только department_id — остальные фильтры
-     * страницы сервер не использует, и их включение плодило бы одинаковые
-     * записи кэша под разными ключами.
-     */
-    list: (departmentId?: string | string[]) =>
-      [...queryKeys.employmentBoard.lists(), departmentId ?? null] as const,
+    /** Доска отдела. Дата и вычисленный режим изолируют снимки вокруг минской полуночи. */
+    list: (
+      departmentId: string | string[] | undefined,
+      selectedDate: string,
+      dateMode: 'today' | 'dated',
+    ) => [...queryKeys.employmentBoard.lists(), departmentId ?? null, selectedDate, dateMode] as const,
     /** Поиск проектов для ручного добавления на доску */
     search: (term: string) => [...queryKeys.employmentBoard.all, 'search', term] as const,
   },

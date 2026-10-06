@@ -13,7 +13,7 @@ describe('useEmploymentBoardDate', () => {
   })
 
   it('starts on the current Minsk date', () => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
 
     expect(result.current).toMatchObject({
       currentMinskDate: '2026-10-07',
@@ -24,7 +24,7 @@ describe('useEmploymentBoardDate', () => {
   })
 
   it('follows the new Minsk day at midnight', () => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
 
     act(() => {
       vi.advanceTimersByTime(1_050)
@@ -39,7 +39,7 @@ describe('useEmploymentBoardDate', () => {
   })
 
   it('updates the current date but keeps a manually selected date at midnight', () => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
 
     act(() => result.current.selectDate('2026-10-20'))
     act(() => {
@@ -55,7 +55,7 @@ describe('useEmploymentBoardDate', () => {
   })
 
   it('returns to today explicitly', () => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
 
     act(() => result.current.selectDate('2026-10-20'))
     act(() => result.current.selectToday())
@@ -71,7 +71,7 @@ describe('useEmploymentBoardDate', () => {
     ['focus', () => window.dispatchEvent(new Event('focus'))],
     ['visibilitychange', () => document.dispatchEvent(new Event('visibilitychange'))],
   ])('refreshes the current date on %s without changing a manual date', (_event, dispatch) => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
     act(() => result.current.selectDate('2026-10-20'))
     vi.setSystemTime(new Date('2026-10-08T12:00:00.000Z'))
 
@@ -82,16 +82,15 @@ describe('useEmploymentBoardDate', () => {
     expect(result.current.followsToday).toBe(false)
   })
 
-  it('resets to today when another employment tab is opened', () => {
-    const { result, rerender } = renderHook(
-      ({ tabId }) => useEmploymentBoardDate(tabId),
-      { initialProps: { tabId: 'employment-1' } },
-    )
+  it('resets to today when the keyed board is remounted', () => {
+    const firstBoard = renderHook(() => useEmploymentBoardDate())
+    const { result } = firstBoard
     act(() => result.current.selectDate('2026-10-20'))
+    firstBoard.unmount()
 
-    rerender({ tabId: 'employment-2' })
+    const secondBoard = renderHook(() => useEmploymentBoardDate())
 
-    expect(result.current).toMatchObject({
+    expect(secondBoard.result.current).toMatchObject({
       selectedDate: '2026-10-07',
       followsToday: true,
       mode: 'today',
@@ -99,7 +98,7 @@ describe('useEmploymentBoardDate', () => {
   })
 
   it('rejects a normalized but nonexistent calendar date', () => {
-    const { result } = renderHook(() => useEmploymentBoardDate('employment-1'))
+    const { result } = renderHook(() => useEmploymentBoardDate())
 
     expect(() => {
       act(() => result.current.selectDate('2026-02-30'))

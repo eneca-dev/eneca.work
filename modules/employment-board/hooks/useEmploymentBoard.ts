@@ -1,8 +1,11 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { createCacheQuery, queryKeys, staleTimePresets } from '@/modules/cache'
+import { createCacheQuery } from '@/modules/cache/hooks/use-cache-query'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+import { staleTimePresets } from '@/modules/cache/client/query-client'
 import type { FilterQueryParams } from '@/modules/inline-filter'
+import { getCurrentMinskDate, getEmploymentBoardDateMode } from '../lib/board-date'
 import {
   getDepartmentEmploymentBoard,
   pinProject,
@@ -12,7 +15,13 @@ import {
   searchBoardProjects,
   unpinProject,
 } from '../actions'
-import type { EmploymentBoard, PinProjectInput, PlacementInput } from '../types'
+import type {
+  EmploymentBoard,
+  EmploymentBoardCachePolicy,
+  EmploymentBoardDateMode,
+  PinProjectInput,
+  PlacementInput,
+} from '../types'
 
 type BoardCacheSnapshot = readonly [QueryKey, EmploymentBoard | undefined]
 
@@ -25,10 +34,11 @@ function updateDepartmentBoardCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   departmentId: string,
   updater: (board: EmploymentBoard) => EmploymentBoard,
+  predicate: (board: EmploymentBoard) => boolean = () => true,
 ): BoardCacheSnapshot[] {
   const snapshots = queryClient
     .getQueriesData<EmploymentBoard>({ queryKey: queryKeys.employmentBoard.all })
-    .filter(([, board]) => board?.departmentId === departmentId)
+    .filter(([, board]) => board?.departmentId === departmentId && predicate(board))
 
   snapshots.forEach(([queryKey, board]) => {
     if (board) queryClient.setQueryData<EmploymentBoard>(queryKey, updater(board))
@@ -49,11 +59,84 @@ interface BoardMutationOptions {
   onMutationSuccess?: () => void
 }
 
-export const useEmploymentBoard = createCacheQuery<EmploymentBoard, FilterQueryParams | undefined>({
-  queryKey: (filters) => queryKeys.employmentBoard.list(filters?.department_id),
-  queryFn: (filters) => getDepartmentEmploymentBoard(filters),
-  staleTime: staleTimePresets.realtime,
-})
+export class BoardDateBoundaryError extends Error {
+  constructor() {
+    super('Employment board date boundary crossed')
+    this.name = 'BoardDateBoundaryError'
+  }
+}
+
+function cancelTodayBoardQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.cancelQueries({
+    queryKey: queryKeys.employmentBoard.lists(),
+    predicate: (query) =>
+      (query.state.data as EmploymentBoard | undefined)?.dateMode === 'today',
+  })
+}
+
+interface UseEmploymentBoardInput {
+  filters?: FilterQueryParams
+  selectedDate: string
+  expectedDateMode: EmploymentBoardDateMode
+  cachePolicy?: EmploymentBoardCachePolicy
+  onDateBoundary: () => void
+}
+
+export function assertBoardResponseDate(
+  board: EmploymentBoard,
+  selectedDate: string,
+  expectedDateMode: EmploymentBoardDateMode,
+  currentMinskDate = getCurrentMinskDate(),
+): void {
+  const arrivalMode = getEmploymentBoardDateMode(selectedDate, currentMinskDate)
+  if (
+    board.selectedDate !== selectedDate ||
+    board.dateMode !== expectedDateMode ||
+    board.dateMode !== arrivalMode
+  ) {
+    throw new BoardDateBoundaryError()
+  }
+}
+
+export function useEmploymentBoard({
+  filters,
+  selectedDate,
+  expectedDateMode,
+  cachePolicy = 'cache-aside',
+  onDateBoundary,
+}: UseEmploymentBoardInput) {
+  const query = useQuery({
+    queryKey: queryKeys.employmentBoard.list(
+      filters?.department_id,
+      selectedDate,
+      expectedDateMode,
+    ),
+    queryFn: async () => {
+      const result = await getDepartmentEmploymentBoard({ filters, selectedDate, cachePolicy })
+      if (!result.success) throw new Error(result.error)
+
+      try {
+        assertBoardResponseDate(result.data, selectedDate, expectedDateMode)
+      } catch (error) {
+        if (error instanceof BoardDateBoundaryError) onDateBoundary()
+        throw error
+      }
+      return result.data
+    },
+    staleTime: staleTimePresets.realtime,
+    gcTime: 5 * 60 * 1000,
+    retry: (failureCount, error) =>
+      !(error instanceof BoardDateBoundaryError) && failureCount < 2,
+  })
+  const isDateBoundary = query.error instanceof BoardDateBoundaryError
+
+  return {
+    ...query,
+    error: isDateBoundary ? null : query.error,
+    isLoading: query.isLoading || isDateBoundary,
+    isPending: query.isPending || isDateBoundary,
+  }
+}
 
 /**
  * Поиск проектов для правой панели. Term должен быть уже задебаунсен вызывающим.
@@ -171,7 +254,7 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
       return result.data
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
+      await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const employee = old.employees.find((item) => item.id === input.employeeId)
         if (!employee) return old
@@ -188,7 +271,7 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
           ),
           unassignedEmployeeIds: old.unassignedEmployeeIds.filter((id) => id !== input.employeeId),
         }
-      })
+      }, (board) => board.dateMode === 'today')
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
@@ -207,7 +290,7 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
               }
             : project,
         ),
-      }))
+      }), (board) => board.dateMode === 'today')
       onMutationSuccess?.()
     },
   })
@@ -222,7 +305,7 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
       return result.data
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
+      await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const projects = old.projects.map((project) =>
           project.id === input.projectId
@@ -244,7 +327,7 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
             ? old.unassignedEmployeeIds
             : [...old.unassignedEmployeeIds, input.employeeId],
         }
-      })
+      }, (board) => board.dateMode === 'today')
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),

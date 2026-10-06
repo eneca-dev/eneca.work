@@ -1,8 +1,7 @@
 import { ru } from 'date-fns/locale'
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { formatMinskDate, MINSK_TZ } from '@/lib/timezone-utils'
-
-export type EmploymentBoardDateMode = 'today' | 'dated'
+import type { EmploymentBoardDateMode } from '../types'
 
 const BOARD_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 

@@ -69,12 +69,14 @@ export async function getBoardVersion(departmentId: string): Promise<number> {
  */
 export function boardCacheKey(
   departmentId: string,
+  selectedDate: string,
+  dateMode: 'today' | 'dated',
   isAdmin: boolean,
   scopeHash: string,
   version: number,
 ): string {
   // v1 в namespace отделяет формат ключа от более ранних реализаций модуля.
-  return `employment-board:v1:${departmentId}:${isAdmin ? 'a' : 'u'}:${scopeHash}:v${version}`
+  return `employment-board:v2:${departmentId}:${selectedDate}:${dateMode}:${isAdmin ? 'a' : 'u'}:${scopeHash}:v${version}`
 }
 
 export async function readBoardCache<T>(key: string): Promise<T | null> {
@@ -141,12 +143,22 @@ export function placementLockKey(departmentId: string, employeeId: string): stri
   return `lock:placement:${departmentId}:${employeeId}`
 }
 
-export function boardBuildLockKey(departmentId: string, version: number): string {
-  return `lock:employment-board:build:${departmentId}:v${version}`
+export function boardBuildLockKey(
+  departmentId: string,
+  selectedDate: string,
+  dateMode: 'today' | 'dated',
+  version: number,
+): string {
+  return `lock:employment-board:build:v2:${departmentId}:${selectedDate}:${dateMode}:v${version}`
 }
 
-export async function acquireBoardBuildLock(departmentId: string, version: number): Promise<Lock> {
-  return acquireLock(boardBuildLockKey(departmentId, version), BUILD_LOCK_TTL_MS)
+export async function acquireBoardBuildLock(
+  departmentId: string,
+  selectedDate: string,
+  dateMode: 'today' | 'dated',
+  version: number,
+): Promise<Lock> {
+  return acquireLock(boardBuildLockKey(departmentId, selectedDate, dateMode, version), BUILD_LOCK_TTL_MS)
 }
 
 export function presenceKey(departmentId: string, userId: string): string {
