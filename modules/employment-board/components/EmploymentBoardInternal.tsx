@@ -6,6 +6,7 @@ import { useHasPermission } from '@/modules/permissions'
 import { EMPLOYMENT_BOARD_EDIT } from '../constants'
 import { ProjectCard } from './ProjectCard'
 import { SidePanel } from './SidePanel'
+import { BoardDatePicker } from './BoardDatePicker'
 import { useBoardDnd } from '../hooks/useBoardDnd'
 import {
   useEmploymentBoard,
@@ -44,6 +45,8 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
     requestEpochRef,
   })
   const canEdit = useHasPermission(EMPLOYMENT_BOARD_EDIT)
+  const canManageProjects = canEdit
+  const canManagePlacements = canEdit && boardDate.mode === 'today'
   const rawEmployeeFilter = queryParams?.employee_id
   const selectedEmployeeValue = Array.isArray(rawEmployeeFilter)
     ? rawEmployeeFilter[0]
@@ -77,6 +80,9 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
   }, [board?.employees, selectedEmployeeValue])
 
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!canManagePlacements) setDropTargetId(null)
+  }, [canManagePlacements])
   const departmentId = board?.departmentId
   const { beginMutation, finishMutation } = useEmploymentBoardRealtime({
     departmentId,
@@ -98,7 +104,7 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
 
   const handleDropEmployee = useCallback(
     (employeeId: string, projectId: string) => {
-      if (!departmentId) return
+      if (!departmentId || !canManagePlacements) return
       placeEmployee.mutate({
         departmentId,
         projectId,
@@ -107,23 +113,23 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
       })
       setDropTargetId(null)
     },
-    [boardDate.selectedDate, departmentId, placeEmployee],
+    [boardDate.selectedDate, canManagePlacements, departmentId, placeEmployee],
   )
 
   const handleDropProject = useCallback(
     (projectId: string) => {
-      if (!departmentId) return
+      if (!departmentId || !canManageProjects) return
       pinProject.mutate({ departmentId, projectId })
     },
-    [departmentId, pinProject],
+    [canManageProjects, departmentId, pinProject],
   )
 
   const handlePinProject = useCallback(
     (project: { id: string; name: string }) => {
-      if (!departmentId) return
+      if (!departmentId || !canManageProjects) return
       pinProject.mutate({ departmentId, projectId: project.id, projectName: project.name })
     },
-    [departmentId, pinProject],
+    [canManageProjects, departmentId, pinProject],
   )
 
   const dnd = useBoardDnd({
@@ -159,28 +165,49 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
     [presenceIds],
   )
 
+  const datePicker = (
+    <BoardDatePicker
+      selectedDate={boardDate.selectedDate}
+      currentMinskDate={boardDate.currentMinskDate}
+      followsToday={boardDate.followsToday}
+      onSelectDate={boardDate.selectDate}
+      onSelectToday={boardDate.selectToday}
+    />
+  )
+
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Загрузка доски…
+      <div className="flex h-full min-h-0 flex-col bg-muted/20">
+        <header className="flex shrink-0 justify-end border-b bg-card px-3 py-2">
+          {datePicker}
+        </header>
+        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+          Загрузка доски…
+        </div>
       </div>
     )
   }
 
   if (error || !filteredBoard) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-destructive">
-        {error instanceof Error ? error.message : 'Не удалось загрузить доску'}
+      <div className="flex h-full min-h-0 flex-col bg-muted/20">
+        <header className="flex shrink-0 justify-end border-b bg-card px-3 py-2">
+          {datePicker}
+        </header>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-sm text-destructive">
+          {error instanceof Error ? error.message : 'Не удалось загрузить доску'}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-muted/20">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/20 md:flex-row">
       <SidePanel
         employees={filteredBoard.employees}
         unassignedIds={unassignedIds}
-        canEdit={canEdit}
+        canManageProjects={canManageProjects}
+        canManagePlacements={canManagePlacements}
         onDragStartEmployee={(employeeId, e) =>
           dnd.handleDragStart({ kind: 'employee', employeeId }, e)
         }
@@ -191,8 +218,8 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
         onPinProject={handlePinProject}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-card px-5 py-3">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 flex-wrap items-center gap-1.5 border-b bg-card px-3 py-2">
           <h1 className="mr-1 text-base font-semibold tracking-tight">{filteredBoard.departmentName}</h1>
           <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
             Проектов: <span className="font-medium text-foreground">{filteredBoard.projects.length}</span>
@@ -205,30 +232,33 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
               На доске: <span className="font-medium text-foreground">{watchingCount}</span>
             </span>
           )}
+          <div className="ml-auto">{datePicker}</div>
         </header>
 
         <div
+          data-testid="employment-board-projects"
           onDragOver={dnd.handleBoardDragOver}
           onDrop={dnd.handleBoardDrop}
-          className="min-h-0 flex-1 overflow-y-auto p-5"
+          className="min-h-0 flex-1 overflow-y-auto p-3"
         >
           {filteredBoard.projects.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {selectedEmployeeId
                 ? 'У выбранного сотрудника нет проектов на этой доске.'
-                : canEdit
+                : canManageProjects
                 ? 'Нет активных проектов. Добавьте проект через панель слева.'
                 : 'Нет активных проектов.'}
             </p>
           ) : (
             // CSS multi-column masonry: карточки перетекают по колонкам,
             // число колонок зависит от ширины экрана
-            <div className="columns-1 gap-4 lg:columns-2 2xl:columns-3">
+            <div data-testid="employment-board-columns" className="columns-1 gap-3 lg:columns-2 2xl:columns-3">
               {filteredBoard.projects.map((project) => (
                 <ProjectCard
                   key={project.id}
                   project={project}
-                  canEdit={canEdit}
+                  canManageProjects={canManageProjects}
+                  canManagePlacements={canManagePlacements}
                   isDropTarget={dropTargetId === project.id}
                   onDragOver={(e) => {
                     dnd.handleProjectDragOver(e)
@@ -242,17 +272,19 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
                     }
                   }}
                   onDrop={(e) => dnd.handleProjectDrop(project.id, e)}
-                  onUnpin={() =>
+                  onUnpin={() => {
+                    if (!canManageProjects) return
                     unpinProject.mutate({ departmentId: filteredBoard.departmentId, projectId: project.id })
-                  }
-                  onRemoveEmployee={(employeeId) =>
+                  }}
+                  onRemoveEmployee={(employeeId) => {
+                    if (!canManagePlacements) return
                     removePlacement.mutate({
                       departmentId: filteredBoard.departmentId,
                       projectId: project.id,
                       employeeId,
                       selectedDate: boardDate.selectedDate,
                     })
-                  }
+                  }}
                 />
               ))}
             </div>

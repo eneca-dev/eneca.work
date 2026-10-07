@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertEmploymentBoardDate,
+  boardDateToCalendarDate,
+  calendarDateToBoardDate,
   formatEmploymentBoardDateLabel,
   getCurrentMinskDate,
   getEmploymentBoardDateMode,
@@ -53,5 +55,14 @@ describe('employment board date utilities', () => {
     expect(formatEmploymentBoardDateLabel('2026-10-08', '2026-10-08')).toBe('Сегодня')
     expect(formatEmploymentBoardDateLabel('2026-10-02', '2026-10-08')).toBe('2 октября')
     expect(formatEmploymentBoardDateLabel('2027-10-08', '2026-10-08')).toBe('8 октября 2027')
+  })
+
+  it('round-trips a board date through the local calendar without a timezone shift', () => {
+    const calendarDate = boardDateToCalendarDate('2026-10-08')
+
+    expect(calendarDate.getHours()).toBe(12)
+    expect(calendarDateToBoardDate(calendarDate)).toBe('2026-10-08')
+    expect(calendarDateToBoardDate(boardDateToCalendarDate('0001-01-01'))).toBe('0001-01-01')
+    expect(() => calendarDateToBoardDate(new Date(Number.NaN))).toThrow(RangeError)
   })
 })

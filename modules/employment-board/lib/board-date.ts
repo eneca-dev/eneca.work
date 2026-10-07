@@ -24,6 +24,28 @@ function boardDateToUtcDate(date: string): Date {
   return result
 }
 
+export function boardDateToCalendarDate(date: string): Date {
+  assertEmploymentBoardDate(date)
+  const year = Number(date.slice(0, 4))
+  const month = Number(date.slice(5, 7))
+  const day = Number(date.slice(8, 10))
+  const result = new Date(0)
+  result.setHours(12, 0, 0, 0)
+  result.setFullYear(year, month - 1, day)
+  return result
+}
+
+export function calendarDateToBoardDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) throw new RangeError('Некорректная дата календаря')
+  const result = [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+  assertEmploymentBoardDate(result)
+  return result
+}
+
 export function isValidEmploymentBoardDate(value: unknown): value is string {
   if (typeof value !== 'string') return false
 

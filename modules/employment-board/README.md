@@ -4,7 +4,7 @@
 
 ## Ключевые концепции
 
-**Авто-размещение.** Сотрудник появляется под проектом автоматически, если у него есть активная сегодня загрузка (`view_departments_sections_loadings`, `employee_department_id = отдел`). Перетаскивать вручную для этого не нужно — доска актуальна каждый день сама.
+**Авто-размещение.** Сотрудник появляется под проектом автоматически, если у него есть активная на выбранную дату загрузка (`view_departments_sections_loadings`, `employee_department_id = отдел`). Перетаскивать вручную для этого не нужно.
 
 **Ручные действия — исключение, а не основной путь:**
 - закрепить проект, у которого пока нет активных загрузок (`department_pinned_projects`);
@@ -12,7 +12,7 @@
 
 Ручное размещение — **лёгкая аннотация только для доски**: в `loadings` ничего не пишется, планирование её не видит. Снять можно только ручное размещение; авто-размещение снимается изменением самой загрузки в модуле планирования.
 
-**Свободные сотрудники** — те, кто не попал ни на одну карточку. Подсвечены в правой панели: это и есть индикация незанятости.
+**Свободные сотрудники** — те, кто не попал ни на одну карточку. Подсвечены в боковой панели: это и есть индикация незанятости.
 
 ## Схема данных
 
@@ -70,7 +70,7 @@ RLS на таблицах включён; политики разрешают д
 - restricted-проекты скрываются от не-админов через `getRestrictedProjectIds()`;
 - `placeEmployee` дополнительно проверяет, что сотрудник действительно состоит в этом отделе.
 
-В интерфейсе вкладка «Занятость» не предлагается без `employment_board.view`, а без `employment_board.edit` скрываются поиск проектов, перетаскивание и кнопки снятия.
+В интерфейсе вкладка «Занятость» не предлагается без `employment_board.view`. Разрешение `employment_board.edit` позволяет управлять закреплёнными проектами на любой дате; ручное размещение и снятие сотрудников дополнительно доступны только в режиме `today`.
 
 ## Redis (Upstash)
 
@@ -102,26 +102,29 @@ Redis-снимок имеет TTL 60 секунд **от момента запи
 
 ```typescript
 // Server Actions (actions/index.ts)
-getDepartmentEmploymentBoard(filters?): ActionResult<EmploymentBoard>   // employment_board.view
+getDepartmentEmploymentBoard({ filters, selectedDate, cachePolicy }): ActionResult<EmploymentBoard>
 searchBoardProjects(query: string): ActionResult<{ id, name }[]>        // employment_board.edit
 pinProject({ departmentId, projectId }): ActionResult<null>             // employment_board.edit
 unpinProject({ departmentId, projectId }): ActionResult<null>           // employment_board.edit
-placeEmployee({ departmentId, projectId, employeeId }): ActionResult<null>    // employment_board.edit
-removePlacement({ departmentId, projectId, employeeId }): ActionResult<null>  // employment_board.edit
+placeEmployee({ departmentId, projectId, employeeId, selectedDate }): ActionResult<null>
+removePlacement({ departmentId, projectId, employeeId, selectedDate }): ActionResult<null>
 
 // Хуки (hooks/useEmploymentBoard.ts)
-useEmploymentBoard(queryParams)
+useEmploymentBoard({ filters, selectedDate, expectedDateMode, cachePolicy, onDateBoundary })
 useBoardProjectSearch(debouncedTerm, { enabled })
 usePinProject() / useUnpinProject() / usePlaceEmployee() / useRemovePlacement()
 ```
 
-Optimistic update не используется: ответ пересобирает всю доску целиком (авто + ручные размещения), воспроизводить эту сборку на клиенте — источник рассинхрона.
+Ручные действия сразу отражаются в подходящих TanStack-снимках, а затем подтверждаются одним fresh-чтением. Rollback восстанавливает только тот снимок, который всё ещё содержит конкретный optimistic-результат, и не может затереть более свежий Realtime-ответ.
 
 ## UI
 
-- Раскладка карточек — CSS multi-column masonry (`columns-*` + `break-inside-avoid`): карточки перетекают по колонкам без пересечений при любом количестве проектов и сотрудников. Число колонок адаптируется под ширину экрана.
+- В шапке находится календарь одной даты с действием «Сегодня». Выбор живёт только до размонтирования пользовательской вкладки.
+- Раскладка карточек — CSS multi-column masonry (`columns-*` + `break-inside-avoid`): одна колонка на узком экране, две на широком и три на очень широком.
+- На ширине меньше `md` боковая панель переносится наверх, ограничивается `min(40dvh, 20rem)` и прокручивается независимо от карточек. На широком экране её ширина — `16rem`.
 - Drag & drop — нативный HTML5 API по паттерну `modules/kanban/hooks/useDragHandlers.ts`. `@dnd-kit` здесь не используется осознанно, см. `modules/kanban/drag-and-drop-implementation.md`.
 - Карточка проекта принимает только сотрудников; фон доски — только проекты (закрепление).
+- `teamName === 'Расчётная группа'` выделяется спокойным фиолетовым кольцом и пояснением; признаки свободного сотрудника и ручного размещения сохраняются.
 
 ## Файлы
 
@@ -131,6 +134,7 @@ modules/employment-board/
 ├── lib/redis.ts                          # Upstash: cache-aside + lock
 ├── hooks/useEmploymentBoard.ts           # TanStack Query
 ├── hooks/useBoardDnd.ts                  # нативный HTML5 DnD
+├── components/BoardDatePicker.tsx
 ├── components/EmploymentBoardInternal.tsx
 ├── components/ProjectCard.tsx
 ├── components/EmployeeChip.tsx
