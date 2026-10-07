@@ -32,6 +32,7 @@ export function ProjectCard({
 
   return (
     <div
+      data-testid="employment-board-project-card"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

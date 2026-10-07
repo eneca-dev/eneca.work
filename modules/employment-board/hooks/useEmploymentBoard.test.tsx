@@ -213,6 +213,36 @@ describe('useEmploymentBoard date boundary', () => {
     expect(queryClient.getQueryData(queryKey)).toBeUndefined()
   })
 
+  it('restores the previous snapshot when the current optimistic mutation fails', async () => {
+    const snapshot = board('2026-10-07', 'today')
+    const employee = { id: 'employee', name: 'Сотрудник', avatarUrl: null, positionName: null, teamName: null }
+    snapshot.employees = [employee]
+    snapshot.unassignedEmployeeIds = [employee.id]
+    snapshot.projects = [{ id: 'project', name: 'Проект', isPinned: true, employees: [] }]
+    const queryKey = ['employment-board', 'list', null, '2026-10-07', 'today']
+    queryClient.setQueryData(queryKey, snapshot)
+    const response = deferred<ActionResult<null>>()
+    actionMocks.placeEmployee.mockReturnValueOnce(response.promise)
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const mutation = renderHook(() => usePlaceEmployee(), { wrapper })
+
+    act(() => mutation.result.current.mutate({
+      departmentId: 'department',
+      projectId: 'project',
+      employeeId: employee.id,
+      selectedDate: '2026-10-07',
+    }))
+    await waitFor(() => expect(
+      queryClient.getQueryData<EmploymentBoard>(queryKey)?.projects[0].employees,
+    ).toHaveLength(1))
+
+    response.resolve({ success: false, error: 'failed' })
+
+    await waitFor(() => expect(mutation.result.current.isError).toBe(true))
+    expect(queryClient.getQueryData(queryKey)).toEqual(snapshot)
+  })
+
   it('does not overwrite a fresh active snapshot during mutation rollback', async () => {
     const snapshot = board('2026-10-07', 'today')
     const employee = { id: 'employee', name: 'Сотрудник', avatarUrl: null, positionName: null, teamName: null }

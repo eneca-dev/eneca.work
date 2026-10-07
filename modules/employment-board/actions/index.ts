@@ -38,7 +38,6 @@ import {
   writeBoardCache,
 } from '../lib/redis'
 import {
-  assertEmploymentBoardDate,
   getCurrentMinskDate,
   getEmploymentBoardDateMode,
   isValidEmploymentBoardDate,
@@ -58,6 +57,54 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_REGEX.test(value)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isFilterQueryParams(value: unknown): value is FilterQueryParams {
+  return isRecord(value) && Object.values(value).every(
+    (filterValue) => typeof filterValue === 'string'
+      || (Array.isArray(filterValue) && filterValue.every((item) => typeof item === 'string')),
+  )
+}
+
+function isEmploymentBoardRequest(value: unknown): value is EmploymentBoardRequest {
+  if (!isRecord(value) || !isValidEmploymentBoardDate(value.selectedDate)) return false
+  if (value.filters !== undefined && !isFilterQueryParams(value.filters)) return false
+  return value.cachePolicy === undefined || value.cachePolicy === 'cache-aside' || value.cachePolicy === 'fresh'
+}
+
+function isPinProjectInput(value: unknown): value is PinProjectInput {
+  return isRecord(value)
+    && isUuid(value.departmentId)
+    && isUuid(value.projectId)
+    && (value.projectName === undefined || typeof value.projectName === 'string')
+}
+
+function isPlacementInput(value: unknown): value is PlacementInput {
+  return isRecord(value)
+    && isUuid(value.departmentId)
+    && isUuid(value.projectId)
+    && isUuid(value.employeeId)
+    && isValidEmploymentBoardDate(value.selectedDate)
+}
+
+function databaseFailure<T>(
+  action: string,
+  userMessage: string,
+  error: { message: string; code?: string },
+): ActionResult<T> {
+  Sentry.captureException(new Error(error.message), {
+    tags: {
+      module: 'employment-board',
+      action,
+      error_type: 'db_error',
+      ...(error.code ? { error_code: error.code } : {}),
+    },
+  })
+  return { success: false, error: userMessage }
 }
 
 /** Защита от команды устаревшего UI; проверка permission выполняется отдельно. */
@@ -258,10 +305,8 @@ export async function getDepartmentEmploymentBoard(
         })
       }
       try {
-        try {
-          assertEmploymentBoardDate(request.selectedDate)
-        } catch {
-          return { success: false, error: 'Некорректная дата доски' }
+        if (!isEmploymentBoardRequest(request)) {
+          return { success: false, error: 'Некорректный запрос доски' }
         }
         const { filters, selectedDate } = request
         const dateMode = getEmploymentBoardDateMode(selectedDate, getCurrentMinskDate())
@@ -340,7 +385,7 @@ export async function getDepartmentEmploymentBoard(
               user_facing: 'true',
             },
           })
-          return { success: false, error: `Ошибка загрузки доски: ${message}` }
+          return { success: false, error: 'Не удалось загрузить доску' }
         }
 
         // ─── Шаг 1: состав отдела и ручные данные доски (параллельно) ───
@@ -491,7 +536,7 @@ export async function getDepartmentEmploymentBoard(
         })
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+          error: 'Не удалось загрузить доску',
         }
       } finally {
         if (buildLock) await releaseLock(buildLock.key, buildLock.token)
@@ -533,7 +578,7 @@ export async function searchBoardProjects(
 
     const { data, error } = await projectsQuery
     if (error) {
-      return { success: false, error: `Ошибка поиска проектов: ${error.message}` }
+      return databaseFailure('searchBoardProjects', 'Не удалось выполнить поиск проектов', error)
     }
 
     return {
@@ -549,7 +594,7 @@ export async function searchBoardProjects(
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      error: 'Не удалось выполнить поиск проектов',
     }
   }
 }
@@ -558,14 +603,13 @@ export async function searchBoardProjects(
 export async function pinProject(input: PinProjectInput): Promise<ActionResult<null>> {
   const metrics = createMutationMetrics('pinProject')
   try {
+    if (!isPinProjectInput(input)) {
+      return { success: false, error: 'Некорректные данные' }
+    }
     const permissionStartedAt = Date.now()
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
     if (!resolved.ok) return { success: false, error: resolved.error }
-    if (!isUuid(input.projectId)) {
-      return { success: false, error: 'Некорректный проект' }
-    }
-
     const supabase = await createClient()
     // resolveBoardDepartment уже проверил сессию через getFilterContext.
     // Не делаем второй сетевой auth.getUser() за тем же userId.
@@ -585,7 +629,7 @@ export async function pinProject(input: PinProjectInput): Promise<ActionResult<n
 
     // 23505 — проект уже закреплён, это не ошибка для пользователя
     if (error && error.code !== '23505') {
-      return { success: false, error: `Не удалось закрепить проект: ${error.message}` }
+      return databaseFailure('pinProject', 'Не удалось закрепить проект', error)
     }
 
     const redisInvalidateStartedAt = Date.now()
@@ -598,7 +642,7 @@ export async function pinProject(input: PinProjectInput): Promise<ActionResult<n
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      error: 'Не удалось закрепить проект',
     }
   } finally {
     metrics.report()
@@ -609,14 +653,13 @@ export async function pinProject(input: PinProjectInput): Promise<ActionResult<n
 export async function unpinProject(input: PinProjectInput): Promise<ActionResult<null>> {
   const metrics = createMutationMetrics('unpinProject')
   try {
+    if (!isPinProjectInput(input)) {
+      return { success: false, error: 'Некорректные данные' }
+    }
     const permissionStartedAt = Date.now()
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
     if (!resolved.ok) return { success: false, error: resolved.error }
-    if (!isUuid(input.projectId)) {
-      return { success: false, error: 'Некорректный проект' }
-    }
-
     const supabase = await createClient()
     const rateLimitStartedAt = Date.now()
     const rateError = await checkWriteRate(resolved.ctx.userId)
@@ -631,7 +674,7 @@ export async function unpinProject(input: PinProjectInput): Promise<ActionResult
     metrics.measure('delete_ms', deleteStartedAt)
 
     if (error) {
-      return { success: false, error: `Не удалось открепить проект: ${error.message}` }
+      return databaseFailure('unpinProject', 'Не удалось открепить проект', error)
     }
 
     const redisInvalidateStartedAt = Date.now()
@@ -644,7 +687,7 @@ export async function unpinProject(input: PinProjectInput): Promise<ActionResult
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      error: 'Не удалось открепить проект',
     }
   } finally {
     metrics.report()
@@ -661,6 +704,9 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
   let lock: { key: string; token: string | null } | null = null
   const metrics = createMutationMetrics('placeEmployee')
   try {
+    if (!isPlacementInput(input)) {
+      return { success: false, error: 'Некорректные данные' }
+    }
     const permissionStartedAt = Date.now()
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
@@ -668,10 +714,6 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
     if (!isValidTodayPlacementDate(input.selectedDate)) {
       return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
     }
-    if (!isUuid(input.projectId) || !isUuid(input.employeeId)) {
-      return { success: false, error: 'Некорректные данные' }
-    }
-
     const lockKey = placementLockKey(resolved.departmentId, input.employeeId)
     const lockStartedAt = Date.now()
     const acquiredLock = await acquireLock(lockKey)
@@ -707,6 +749,12 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
       return { success: false, error: 'Сотрудник не состоит в этом отделе' }
     }
 
+    // Повторно сужаем окно перехода через минскую полночь непосредственно
+    // перед записью. Это дополнительная защита устаревшего UI, не обещание
+    // атомарности с INSERT.
+    if (!isValidTodayPlacementDate(input.selectedDate)) {
+      return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
+    }
     const insertStartedAt = Date.now()
     const { error } = await supabase.from('department_board_placements').insert({
       department_id: resolved.departmentId,
@@ -717,7 +765,7 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
     metrics.measure('insert_ms', insertStartedAt)
 
     if (error && error.code !== '23505') {
-      return { success: false, error: `Не удалось разместить сотрудника: ${error.message}` }
+      return databaseFailure('placeEmployee', 'Не удалось разместить сотрудника', error)
     }
 
     const redisInvalidateStartedAt = Date.now()
@@ -730,7 +778,7 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      error: 'Не удалось разместить сотрудника',
     }
   } finally {
     if (lock) {
@@ -746,6 +794,9 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
 export async function removePlacement(input: PlacementInput): Promise<ActionResult<null>> {
   const metrics = createMutationMetrics('removePlacement')
   try {
+    if (!isPlacementInput(input)) {
+      return { success: false, error: 'Некорректные данные' }
+    }
     const permissionStartedAt = Date.now()
     const resolved = await resolveBoardDepartment(EMPLOYMENT_BOARD_EDIT, { department_id: input.departmentId })
     metrics.measure('permission_ms', permissionStartedAt)
@@ -753,15 +804,16 @@ export async function removePlacement(input: PlacementInput): Promise<ActionResu
     if (!isValidTodayPlacementDate(input.selectedDate)) {
       return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
     }
-    if (!isUuid(input.projectId) || !isUuid(input.employeeId)) {
-      return { success: false, error: 'Некорректные данные' }
-    }
-
     const supabase = await createClient()
     const rateLimitStartedAt = Date.now()
     const rateError = await checkWriteRate(resolved.ctx.userId)
     metrics.measure('rate_limit_ms', rateLimitStartedAt)
     if (rateError) return rateError
+    // Как и для INSERT, повторная проверка лишь уменьшает окно гонки с
+    // минской полночью; транзакционной гарантии между проверкой и DELETE нет.
+    if (!isValidTodayPlacementDate(input.selectedDate)) {
+      return { success: false, error: 'Доска устарела. Обновите страницу и повторите действие' }
+    }
     const deleteStartedAt = Date.now()
     const { error } = await supabase
       .from('department_board_placements')
@@ -772,7 +824,7 @@ export async function removePlacement(input: PlacementInput): Promise<ActionResu
     metrics.measure('delete_ms', deleteStartedAt)
 
     if (error) {
-      return { success: false, error: `Не удалось убрать сотрудника: ${error.message}` }
+      return databaseFailure('removePlacement', 'Не удалось убрать сотрудника', error)
     }
 
     const redisInvalidateStartedAt = Date.now()
@@ -785,7 +837,7 @@ export async function removePlacement(input: PlacementInput): Promise<ActionResu
     })
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      error: 'Не удалось убрать сотрудника',
     }
   } finally {
     metrics.report()

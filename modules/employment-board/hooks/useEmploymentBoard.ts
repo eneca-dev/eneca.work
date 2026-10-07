@@ -48,8 +48,9 @@ function updateDepartmentBoardCaches(
   return currentBoards.flatMap(([queryKey, board]) => {
     if (!board) return []
     const optimistic = updater(board)
-    queryClient.setQueryData<EmploymentBoard>(queryKey, optimistic)
-    return [{ queryKey, previous: board, optimistic }]
+    const storedOptimistic = queryClient.setQueryData<EmploymentBoard>(queryKey, optimistic)
+    if (!storedOptimistic) return []
+    return [{ queryKey, previous: board, optimistic: storedOptimistic }]
   })
 }
 
@@ -253,7 +254,7 @@ export function useUnpinProject({ onMutationStart, onMutationSettled }: BoardMut
 /** Presence обновляется обычным коротким запросом, Redis хранит его 20 секунд. */
 export function useBoardPresence(departmentId?: string) {
   return useQuery({
-    queryKey: [...queryKeys.employmentBoard.all, 'presence', departmentId ?? null],
+    queryKey: queryKeys.employmentBoard.presence(departmentId),
     queryFn: async () => {
       if (!departmentId) return []
       const result = await reportBoardPresence(departmentId)

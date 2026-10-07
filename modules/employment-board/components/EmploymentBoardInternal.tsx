@@ -23,6 +23,34 @@ interface EmploymentBoardInternalProps {
   queryParams?: FilterQueryParams
 }
 
+function RefreshErrorNotice({
+  hasSavedData,
+  onRetry,
+}: {
+  hasSavedData: boolean
+  onRetry: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex w-full flex-wrap items-center justify-between gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    >
+      <span>
+        {hasSavedData
+          ? 'Не удалось обновить доску. Показаны последние сохранённые данные.'
+          : 'Не удалось загрузить актуальные данные доски.'}
+      </span>
+      <button
+        type="button"
+        className="rounded-md border border-destructive/40 px-2.5 py-1 font-medium hover:bg-destructive/10"
+        onClick={onRetry}
+      >
+        Повторить
+      </button>
+    </div>
+  )
+}
+
 export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternalProps) {
   const boardDate = useEmploymentBoardDate()
   const requestEpochRef = useRef(0)
@@ -84,7 +112,12 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
     if (!canManagePlacements) setDropTargetId(null)
   }, [canManagePlacements])
   const departmentId = board?.departmentId
-  const { beginMutation, finishMutation } = useEmploymentBoardRealtime({
+  const {
+    beginMutation,
+    finishMutation,
+    refreshError,
+    retryRefresh,
+  } = useEmploymentBoardRealtime({
     departmentId,
     filters: queryParams,
     selectedDate: boardDate.selectedDate,
@@ -175,7 +208,7 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
     />
   )
 
-  if (isLoading) {
+  if (isLoading && !refreshError) {
     return (
       <div className="flex h-full min-h-0 flex-col bg-muted/20">
         <header className="flex shrink-0 justify-end border-b bg-card px-3 py-2">
@@ -194,15 +227,21 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
         <header className="flex shrink-0 justify-end border-b bg-card px-3 py-2">
           {datePicker}
         </header>
-        <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-sm text-destructive">
-          {error instanceof Error ? error.message : 'Не удалось загрузить доску'}
-        </div>
+        {refreshError ? (
+          <div className="flex min-h-0 flex-1 items-center">
+            <RefreshErrorNotice hasSavedData={false} onRetry={retryRefresh} />
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-sm text-destructive">
+            {error instanceof Error ? error.message : 'Не удалось загрузить доску'}
+          </div>
+        )}
       </div>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/20 md:flex-row">
+    <div className="flex h-full min-h-0 w-[calc(100vw-5rem)] max-w-full self-start flex-col overflow-hidden bg-muted/20 md:w-full md:flex-row">
       <SidePanel
         employees={filteredBoard.employees}
         unassignedIds={unassignedIds}
@@ -234,6 +273,7 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
           )}
           <div className="ml-auto">{datePicker}</div>
         </header>
+        {refreshError && <RefreshErrorNotice hasSavedData onRetry={retryRefresh} />}
 
         <div
           data-testid="employment-board-projects"

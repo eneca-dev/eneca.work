@@ -48,7 +48,10 @@ export function BoardDatePicker({
           <span>{label}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="end">
+      <PopoverContent
+        className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-0"
+        align="end"
+      >
         <Calendar
           mode="single"
           locale={ru}

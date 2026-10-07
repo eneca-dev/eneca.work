@@ -1,20 +1,20 @@
 'use client'
 
 import type { MutableRefObject } from 'react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import * as Sentry from '@sentry/nextjs'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
-import { removeInactiveEmploymentBoardSnapshots } from '@/modules/cache/realtime/dispatch-change'
+import {
+  removeInactiveEmploymentBoardSnapshots,
+  subscribeEmploymentBoardLoadingChanges,
+  type LoadingRealtimePayload,
+} from '@/modules/cache/realtime'
 import { createClient } from '@/utils/supabase/client'
 import { getDepartmentEmploymentBoard } from '../actions'
 import { assertBoardResponseDate } from './useEmploymentBoard'
-import {
-  subscribeEmploymentBoardLoadingChanges,
-  type LoadingRealtimePayload,
-} from '../lib/realtime-events'
 import type { EmploymentBoard, EmploymentBoardDateMode } from '../types'
 
 const BOARD_TABLES = ['department_pinned_projects', 'department_board_placements'] as const
@@ -64,21 +64,67 @@ export function useEmploymentBoardRealtime({
   pendingMutationsRef,
 }: EmploymentBoardRealtimeOptions) {
   const queryClient = useQueryClient()
+  const [refreshError, setRefreshError] = useState<Error | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingRealtimeConfirmationRef = useRef(false)
   const isMountedRef = useRef(true)
   const inFlightRef = useRef(false)
   const trailingRefreshRef = useRef(false)
   const mutationGenerationRef = useRef(0)
+  const confirmedMutationGenerationRef = useRef<number | null>(null)
+  const renderedQueryKeyHashRef = useRef<string | null>(null)
   const runFreshRef = useRef<() => Promise<void>>(async () => undefined)
-  const latestRef = useRef({ departmentId, filters, selectedDate, dateMode })
-  latestRef.current = { departmentId, filters, selectedDate, dateMode }
+  const queryKey = queryKeys.employmentBoard.list(
+    filters?.department_id,
+    selectedDate,
+    dateMode,
+  )
+  const queryKeyHash = JSON.stringify(queryKey)
+  const latestRef = useRef({
+    departmentId,
+    filters,
+    selectedDate,
+    dateMode,
+    queryKey,
+    queryKeyHash,
+  })
+  latestRef.current = {
+    departmentId,
+    filters,
+    selectedDate,
+    dateMode,
+    queryKey,
+    queryKeyHash,
+  }
 
-  const removeInactiveSnapshots = useCallback(() => {
-    removeInactiveEmploymentBoardSnapshots(queryClient)
-  }, [queryClient])
+  useEffect(() => {
+    if (
+      renderedQueryKeyHashRef.current !== null &&
+      renderedQueryKeyHashRef.current !== queryKeyHash &&
+      refreshTimerRef.current
+    ) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+    renderedQueryKeyHashRef.current = queryKeyHash
+    setRefreshError(null)
+  }, [queryKeyHash])
+
+  const reportRefreshError = useCallback((error: unknown, requestKeyHash: string, epoch: number) => {
+    const refreshFailure = error instanceof Error
+      ? error
+      : new Error('Не удалось обновить доску')
+
+    Sentry.captureException(refreshFailure, {
+      tags: { module: 'employment-board', action: 'realtimeFreshRefresh' },
+    })
+    if (
+      isMountedRef.current &&
+      latestRef.current.queryKeyHash === requestKeyHash &&
+      requestEpochRef.current === epoch
+    ) setRefreshError(refreshFailure)
+  }, [requestEpochRef])
 
   const runFresh = useCallback(async () => {
     if (!isMountedRef.current) return
@@ -91,81 +137,132 @@ export function useEmploymentBoardRealtime({
       return
     }
 
-    const request = latestRef.current
-    if (!request.departmentId) return
-    inFlightRef.current = true
-    const mutationGeneration = mutationGenerationRef.current
-    onRequireFresh()
-    const epoch = ++requestEpochRef.current
-    const queryKey = queryKeys.employmentBoard.list(
-      request.filters?.department_id,
-      request.selectedDate,
-      request.dateMode,
-    )
-    await queryClient.cancelQueries({ queryKey, exact: true })
-
-    try {
-      const result = await getDepartmentEmploymentBoard({
-        filters: request.filters,
-        selectedDate: request.selectedDate,
-        cachePolicy: 'fresh',
-      })
-      if (!result.success) throw new Error(result.error)
-      assertBoardResponseDate(result.data, request.selectedDate, request.dateMode)
-
-      const latest = latestRef.current
-      if (
-        isMountedRef.current &&
-        epoch === requestEpochRef.current &&
-        mutationGeneration === mutationGenerationRef.current &&
-        pendingMutationsRef.current === 0 &&
-        latest.selectedDate === request.selectedDate &&
-        latest.dateMode === request.dateMode
-      ) queryClient.setQueryData<EmploymentBoard>(queryKey, result.data)
-      else if (isMountedRef.current) trailingRefreshRef.current = true
-    } catch (error) {
-      if (error instanceof Error && error.name === 'BoardDateBoundaryError') {
-        onDateBoundary()
-      } else {
-        Sentry.captureException(error, {
-          tags: { module: 'employment-board', action: 'realtimeFreshRefresh' },
-        })
-      }
-    } finally {
-      inFlightRef.current = false
-      if (trailingRefreshRef.current && isMountedRef.current && pendingMutationsRef.current === 0) {
-        trailingRefreshRef.current = false
-        pendingRealtimeConfirmationRef.current = false
-        void runFreshRef.current()
-      }
-    }
-  }, [onDateBoundary, onRequireFresh, pendingMutationsRef, queryClient, requestEpochRef])
-  runFreshRef.current = runFresh
-
-  const scheduleFreshRefresh = useCallback(() => {
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    refreshTimerRef.current = setTimeout(() => {
-      refreshTimerRef.current = null
-      void runFresh()
-    }, REFRESH_DEBOUNCE_MS)
-  }, [runFresh])
-
-  const confirmRealtimeAndRefresh = useCallback(() => {
+    // Любой реально начавшийся fresh-запрос заменяет ожидающий fallback.
+    // Иначе глобальное событие во время мутации может запустить второй запрос
+    // через две секунды после уже выполненного подтверждающего чтения.
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current)
       fallbackTimerRef.current = null
-      pendingRealtimeConfirmationRef.current = false
-    } else {
-      pendingRealtimeConfirmationRef.current = true
+    }
+
+    const request = latestRef.current
+    inFlightRef.current = true
+    const mutationGeneration = mutationGenerationRef.current
+    setRefreshError(null)
+    const epoch = ++requestEpochRef.current
+    let terminalFailure = false
+
+    try {
+      await queryClient.cancelQueries({ queryKey: request.queryKey, exact: true })
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const result = await getDepartmentEmploymentBoard({
+            filters: request.filters,
+            selectedDate: request.selectedDate,
+            cachePolicy: 'fresh',
+          })
+          if (!result.success) throw new Error(result.error)
+          assertBoardResponseDate(result.data, request.selectedDate, request.dateMode)
+
+          if (
+            isMountedRef.current &&
+            epoch === requestEpochRef.current &&
+            mutationGeneration === mutationGenerationRef.current &&
+            pendingMutationsRef.current === 0 &&
+            latestRef.current.queryKeyHash === request.queryKeyHash
+          ) {
+            queryClient.setQueryData<EmploymentBoard>(request.queryKey, result.data)
+            setRefreshError(null)
+          }
+          return
+        } catch (error) {
+          if (error instanceof Error && error.name === 'BoardDateBoundaryError') {
+            const requestIsCurrent =
+              isMountedRef.current &&
+              epoch === requestEpochRef.current &&
+              mutationGeneration === mutationGenerationRef.current &&
+              latestRef.current.queryKeyHash === request.queryKeyHash
+            // Новый ключ загрузится обычным query после обновления даты. Для
+            // актуального boundary-ответа повтор старого ключа не нужен. Если
+            // запрос уже устарел, сохраняем trailing refresh нового ключа.
+            if (requestIsCurrent) {
+              trailingRefreshRef.current = false
+              onDateBoundary()
+            }
+            return
+          }
+
+          const requestIsCurrent =
+            isMountedRef.current &&
+            epoch === requestEpochRef.current &&
+            mutationGeneration === mutationGenerationRef.current &&
+            latestRef.current.queryKeyHash === request.queryKeyHash
+          if (!requestIsCurrent) return
+          if (attempt === 1) {
+            terminalFailure = true
+            reportRefreshError(error, request.queryKeyHash, epoch)
+          }
+        }
+      }
+    } catch (error) {
+      terminalFailure = true
+      reportRefreshError(error, request.queryKeyHash, epoch)
+    } finally {
+      inFlightRef.current = false
+      if (terminalFailure) {
+        trailingRefreshRef.current = false
+      } else if (
+        trailingRefreshRef.current &&
+        isMountedRef.current &&
+        pendingMutationsRef.current === 0
+      ) {
+        trailingRefreshRef.current = false
+        void runFreshRef.current()
+      }
+    }
+  }, [
+    onDateBoundary,
+    pendingMutationsRef,
+    queryClient,
+    reportRefreshError,
+    requestEpochRef,
+  ])
+  runFreshRef.current = runFresh
+
+  const scheduleFreshRefresh = useCallback(() => {
+    // Latch включается в момент события, до debounce: смена даты в этом окне
+    // тоже обязана обойти ранее записанный Redis-снимок.
+    onRequireFresh()
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null
+      void runFreshRef.current()
+    }, REFRESH_DEBOUNCE_MS)
+  }, [onRequireFresh])
+
+  const retryRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+    onRequireFresh()
+    void runFreshRef.current()
+  }, [onRequireFresh])
+
+  const confirmRealtimeAndRefresh = useCallback(() => {
+    removeInactiveEmploymentBoardSnapshots(queryClient)
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current)
+      fallbackTimerRef.current = null
+    }
+    if (pendingMutationsRef.current > 0) {
+      confirmedMutationGenerationRef.current = mutationGenerationRef.current
     }
     scheduleFreshRefresh()
-  }, [scheduleFreshRefresh])
+  }, [pendingMutationsRef, queryClient, scheduleFreshRefresh])
 
   const scheduleFallbackRefresh = useCallback(() => {
-    if (pendingRealtimeConfirmationRef.current) {
-      pendingRealtimeConfirmationRef.current = false
-      return
-    }
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current)
     fallbackTimerRef.current = setTimeout(() => {
       fallbackTimerRef.current = null
@@ -176,6 +273,7 @@ export function useEmploymentBoardRealtime({
   const beginMutation = useCallback(() => {
     pendingMutationsRef.current += 1
     mutationGenerationRef.current += 1
+    confirmedMutationGenerationRef.current = null
     requestEpochRef.current += 1
   }, [pendingMutationsRef, requestEpochRef])
 
@@ -185,22 +283,25 @@ export function useEmploymentBoardRealtime({
     if (trailingRefreshRef.current) {
       if (!inFlightRef.current) {
         trailingRefreshRef.current = false
-        pendingRealtimeConfirmationRef.current = false
+        confirmedMutationGenerationRef.current = null
         void runFreshRef.current()
       }
+      return
+    }
+    if (confirmedMutationGenerationRef.current === mutationGenerationRef.current) {
+      confirmedMutationGenerationRef.current = null
       return
     }
     scheduleFallbackRefresh()
   }, [pendingMutationsRef, scheduleFallbackRefresh])
 
   useEffect(() => subscribeEmploymentBoardLoadingChanges((payload) => {
-    removeInactiveSnapshots()
     if (!isLoadingInsertRelevant(payload, latestRef.current.selectedDate)) {
       onMarkDateChangeStale()
       return
     }
     scheduleFreshRefresh()
-  }), [onMarkDateChangeStale, removeInactiveSnapshots, scheduleFreshRefresh])
+  }), [onMarkDateChangeStale, scheduleFreshRefresh])
 
   useEffect(() => {
     if (!departmentId) return
@@ -209,11 +310,25 @@ export function useEmploymentBoardRealtime({
     const channel = supabase.channel(`employment-board:${departmentId}`)
     channelRef.current = channel
 
+    const handleLocalChange = () => { if (isActive) confirmRealtimeAndRefresh() }
     BOARD_TABLES.forEach((table) => {
       channel.on(
         'postgres_changes',
-        { event: '*', schema: 'public', table, filter: `department_id=eq.${departmentId}` },
-        () => { if (isActive) confirmRealtimeAndRefresh() },
+        { event: 'INSERT', schema: 'public', table, filter: `department_id=eq.${departmentId}` },
+        handleLocalChange,
+      )
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table, filter: `department_id=eq.${departmentId}` },
+        handleLocalChange,
+      )
+      // Postgres Changes не применяет фильтры к DELETE без полного old row.
+      // Обновляем открытые доски консервативно, пока таблицы не используют
+      // REPLICA IDENTITY FULL или серверный Broadcast.
+      channel.on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table },
+        handleLocalChange,
       )
     })
 
@@ -245,5 +360,11 @@ export function useEmploymentBoardRealtime({
     }
   }, [])
 
-  return { scheduleFallbackRefresh, beginMutation, finishMutation }
+  return {
+    scheduleFallbackRefresh,
+    beginMutation,
+    finishMutation,
+    refreshError,
+    retryRefresh,
+  }
 }

@@ -523,6 +523,9 @@ export const queryKeys = {
       selectedDate: string,
       dateMode: 'today' | 'dated',
     ) => [...queryKeys.employmentBoard.lists(), departmentId ?? null, selectedDate, dateMode] as const,
+    /** Presence зрителей открытой доски не относится к датированным снимкам. */
+    presence: (departmentId?: string) =>
+      [...queryKeys.employmentBoard.all, 'presence', departmentId ?? null] as const,
     /** Поиск проектов для ручного добавления на доску */
     search: (term: string) => [...queryKeys.employmentBoard.all, 'search', term] as const,
   },

@@ -4,7 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionResult } from '@/modules/cache/types'
 import type { EmploymentBoard } from '../types'
-import { emitEmploymentBoardLoadingChange, type LoadingRealtimePayload } from '../lib/realtime-events'
+import {
+  emitEmploymentBoardLoadingChange,
+  type LoadingRealtimePayload,
+} from '@/modules/cache/realtime'
 import {
   dispatchRealtimeChange,
   removeInactiveEmploymentBoardSnapshots,
@@ -15,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getBoard: vi.fn(),
   placeEmployee: vi.fn(),
   localCallbacks: [] as Array<() => void>,
+  localConfigs: [] as Array<{ event: string; table: string; filter?: string }>,
   removeChannel: vi.fn(),
 }))
 
@@ -26,7 +30,8 @@ vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), addBreadcrumb: vi.
 vi.mock('@/utils/supabase/client', () => ({
   createClient: () => {
     const channel = {
-      on: vi.fn((_kind, _config, callback: () => void) => {
+      on: vi.fn((_kind, config: { event: string; table: string; filter?: string }, callback: () => void) => {
+        mocks.localConfigs.push(config)
         mocks.localCallbacks.push(callback)
         return channel
       }),
@@ -37,7 +42,7 @@ vi.mock('@/utils/supabase/client', () => ({
 }))
 
 import { useEmploymentBoardRealtime } from './useEmploymentBoardRealtime'
-import { usePlaceEmployee } from './useEmploymentBoard'
+import { useEmploymentBoard, usePlaceEmployee } from './useEmploymentBoard'
 
 function board(): EmploymentBoard {
   return {
@@ -74,6 +79,7 @@ describe('useEmploymentBoardRealtime', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-10-07T09:00:00+03:00'))
     mocks.localCallbacks.length = 0
+    mocks.localConfigs.length = 0
     mocks.getBoard.mockReset()
     mocks.removeChannel.mockReset()
     onRequireFresh.mockReset()
@@ -88,30 +94,42 @@ describe('useEmploymentBoardRealtime', () => {
     vi.useRealTimers()
   })
 
-  function renderRealtime() {
+  interface RealtimeProps {
+    departmentId?: string
+    selectedDate: string
+    dateMode: 'today' | 'dated'
+  }
+
+  function renderRealtime(initialProps: RealtimeProps = {
+    departmentId: 'department',
+    selectedDate: '2026-10-07',
+    dateMode: 'today',
+  }) {
     const epochRef = createRef<number>()
     epochRef.current = 0
+    const pendingMutationsRef = { current: 0 }
     const wrapper = ({ children }: PropsWithChildren) =>
       createElement(QueryClientProvider, { client: queryClient }, children)
-    return renderHook(() => useEmploymentBoardRealtime({
-      departmentId: 'department',
-      selectedDate: '2026-10-07',
-      dateMode: 'today',
+    return renderHook((props: RealtimeProps) => useEmploymentBoardRealtime({
+      departmentId: props.departmentId,
+      selectedDate: props.selectedDate,
+      dateMode: props.dateMode,
       requestEpochRef: epochRef as { current: number },
       onRequireFresh,
       onMarkDateChangeStale,
       onDateBoundary,
-      pendingMutationsRef: { current: 0 },
-    }), { wrapper })
+      pendingMutationsRef,
+    }), { wrapper, initialProps })
   }
 
   it('uses one fresh controller and cancels fallback when local Realtime confirms the mutation', async () => {
     const realtime = renderRealtime()
-    expect(mocks.localCallbacks).toHaveLength(2)
+    expect(mocks.localCallbacks).toHaveLength(6)
 
     act(() => {
+      realtime.result.current.beginMutation()
       mocks.localCallbacks[0]()
-      realtime.result.current.scheduleFallbackRefresh()
+      realtime.result.current.finishMutation()
       vi.advanceTimersByTime(150)
     })
     await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
@@ -123,6 +141,56 @@ describe('useEmploymentBoardRealtime', () => {
 
     act(() => vi.advanceTimersByTime(2_100))
     expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps INSERT and UPDATE scoped while handling DELETE conservatively', () => {
+    renderRealtime()
+
+    const deleteConfigs = mocks.localConfigs.filter(({ event }) => event === 'DELETE')
+    expect(deleteConfigs).toHaveLength(2)
+    expect(deleteConfigs.every(({ filter }) => filter === undefined)).toBe(true)
+    expect(
+      mocks.localConfigs
+        .filter(({ event }) => event === 'INSERT' || event === 'UPDATE')
+        .every(({ filter }) => filter === 'department_id=eq.department'),
+    ).toBe(true)
+  })
+
+  it('cancels mutation fallback when a global loading event already starts fresh', async () => {
+    const realtime = renderRealtime()
+
+    act(() => {
+      realtime.result.current.beginMutation()
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      realtime.result.current.finishMutation()
+      vi.advanceTimersByTime(150)
+    })
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    act(() => vi.advanceTimersByTime(2_100))
+    expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs a fresh refresh from a global event before departmentId is known', async () => {
+    renderRealtime({
+      departmentId: undefined,
+      selectedDate: '2026-10-07',
+      dateMode: 'today',
+    })
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+    expect(mocks.localCallbacks).toHaveLength(0)
+    expect(mocks.getBoard).toHaveBeenCalledWith({
+      filters: undefined,
+      selectedDate: '2026-10-07',
+      cachePolicy: 'fresh',
+    })
   })
 
   it('routes the two-second fallback through the same fresh controller', async () => {
@@ -148,7 +216,7 @@ describe('useEmploymentBoardRealtime', () => {
     expect(mocks.getBoard).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves presence, search and other modules while removing inactive board snapshots', () => {
+  it('does not remove inactive snapshots outside the global dispatcher', () => {
     renderRealtime()
     const snapshotKey = ['employment-board', 'list', null, '2026-10-08', 'dated']
     const presenceKey = ['employment-board', 'presence', 'department']
@@ -161,10 +229,62 @@ describe('useEmploymentBoardRealtime', () => {
 
     act(() => emitEmploymentBoardLoadingChange(loadingPayload('UPDATE')))
 
+    expect(queryClient.getQueryData(snapshotKey)).toEqual(board())
+    expect(queryClient.getQueryData(presenceKey)).toEqual(['user'])
+    expect(queryClient.getQueryData(searchKey)).toEqual([])
+    expect(queryClient.getQueryData(otherKey)).toEqual(['loading'])
+  })
+
+  it('removes only inactive board snapshots for local table events', () => {
+    renderRealtime()
+    const snapshotKey = ['employment-board', 'list', null, '2026-10-08', 'dated']
+    const presenceKey = ['employment-board', 'presence', 'department']
+    const searchKey = ['employment-board', 'search', 'Проект']
+    const otherKey = ['loadings', 'list']
+    queryClient.setQueryData(snapshotKey, board())
+    queryClient.setQueryData(presenceKey, ['user'])
+    queryClient.setQueryData(searchKey, [])
+    queryClient.setQueryData(otherKey, ['loading'])
+
+    act(() => mocks.localCallbacks[0]())
+
     expect(queryClient.getQueryData(snapshotKey)).toBeUndefined()
     expect(queryClient.getQueryData(presenceKey)).toEqual(['user'])
     expect(queryClient.getQueryData(searchKey)).toEqual([])
     expect(queryClient.getQueryData(otherKey)).toEqual(['loading'])
+  })
+
+  it('cancels a pending debounce when the board query key changes', () => {
+    const realtime = renderRealtime()
+
+    act(() => emitEmploymentBoardLoadingChange(loadingPayload('UPDATE')))
+    realtime.rerender({
+      departmentId: 'department',
+      selectedDate: '2026-10-08',
+      dateMode: 'dated',
+    })
+    act(() => vi.advanceTimersByTime(200))
+
+    expect(mocks.getBoard).not.toHaveBeenCalled()
+    expect(onRequireFresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let an unrelated local event suppress the next mutation fallback', async () => {
+    const realtime = renderRealtime()
+
+    act(() => {
+      mocks.localCallbacks[0]()
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      realtime.result.current.beginMutation()
+      realtime.result.current.finishMutation()
+      vi.advanceTimersByTime(2_150)
+    })
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(2))
   })
 
   it('marks an irrelevant INSERT for a future fresh date change without refreshing the active date', () => {
@@ -205,6 +325,12 @@ describe('useEmploymentBoardRealtime', () => {
       const wrapper = ({ children }: PropsWithChildren) =>
         createElement(QueryClientProvider, { client: queryClient }, children)
       const { result } = renderHook(() => {
+        useEmploymentBoard({
+          selectedDate: '2026-10-07',
+          expectedDateMode: 'today',
+          requestEpochRef: epochRef as { current: number },
+          onDateBoundary,
+        })
         const realtime = useEmploymentBoardRealtime({
           departmentId: 'department',
           selectedDate: '2026-10-07',
@@ -251,6 +377,7 @@ describe('useEmploymentBoardRealtime', () => {
           : { success: false, error: 'placement failed' })
         await mutationResponse.promise
       })
+      act(() => vi.advanceTimersByTime(2_150))
       await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(2))
       await waitFor(() => expect(
         queryClient.getQueryData<EmploymentBoard>(queryKey)?.departmentName,
@@ -350,5 +477,154 @@ describe('useEmploymentBoardRealtime', () => {
     await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(2))
     act(() => vi.advanceTimersByTime(500))
     expect(mocks.getBoard).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not create a trailing controller refresh when the query key changes in-flight', async () => {
+    const first = deferred<{ success: true; data: EmploymentBoard }>()
+    mocks.getBoard.mockReturnValueOnce(first.promise)
+    const realtime = renderRealtime()
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    realtime.rerender({
+      departmentId: 'department',
+      selectedDate: '2026-10-08',
+      dateMode: 'dated',
+    })
+    await act(async () => {
+      first.resolve({ success: true, data: board() })
+      await first.promise
+    })
+    act(() => vi.advanceTimersByTime(500))
+
+    expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a trailing refresh for the new key when the old response crosses a boundary', async () => {
+    const first = deferred<{ success: true; data: EmploymentBoard }>()
+    mocks.getBoard
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...board(), selectedDate: '2026-10-08', dateMode: 'dated' },
+      })
+    const realtime = renderRealtime()
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    realtime.rerender({
+      departmentId: 'department',
+      selectedDate: '2026-10-08',
+      dateMode: 'dated',
+    })
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+
+    await act(async () => {
+      first.resolve({
+        success: true,
+        data: { ...board(), selectedDate: '2026-10-08' },
+      })
+      await first.promise
+    })
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(2))
+    expect(mocks.getBoard).toHaveBeenLastCalledWith({
+      filters: undefined,
+      selectedDate: '2026-10-08',
+      cachePolicy: 'fresh',
+    })
+    expect(onDateBoundary).not.toHaveBeenCalled()
+  })
+
+  it('moves a boundary mismatch to the new key without retrying the old realtime key', async () => {
+    const first = deferred<{ success: true; data: EmploymentBoard }>()
+    mocks.getBoard.mockReturnValueOnce(first.promise)
+    renderRealtime()
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await act(async () => {
+      first.resolve({
+        success: true,
+        data: { ...board(), selectedDate: '2026-10-08' },
+      })
+      await first.promise
+    })
+
+    expect(onDateBoundary).toHaveBeenCalledTimes(1)
+    act(() => vi.advanceTimersByTime(500))
+    expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds automatic retries and exposes a manual retry after the second failure', async () => {
+    const first = deferred<ActionResult<EmploymentBoard>>()
+    mocks.getBoard
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ success: false, error: 'refresh failed' })
+      .mockResolvedValueOnce({ success: true, data: board() })
+    const realtime = renderRealtime()
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await act(async () => {
+      first.resolve({ success: false, error: 'refresh failed' })
+      await first.promise
+    })
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(2))
+    expect(realtime.result.current.refreshError?.message).toBe('refresh failed')
+    act(() => vi.advanceTimersByTime(500))
+    expect(mocks.getBoard).toHaveBeenCalledTimes(2)
+
+    act(() => realtime.result.current.retryRefresh())
+
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(realtime.result.current.refreshError).toBeNull())
+  })
+
+  it('clears a refresh error when the board query key changes', async () => {
+    mocks.getBoard.mockResolvedValue({ success: false, error: 'refresh failed' })
+    const realtime = renderRealtime()
+
+    act(() => {
+      emitEmploymentBoardLoadingChange(loadingPayload('UPDATE'))
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(realtime.result.current.refreshError).not.toBeNull())
+
+    realtime.rerender({
+      departmentId: 'department',
+      selectedDate: '2026-10-08',
+      dateMode: 'dated',
+    })
+
+    await waitFor(() => expect(realtime.result.current.refreshError).toBeNull())
   })
 })
