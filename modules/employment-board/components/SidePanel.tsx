@@ -11,7 +11,8 @@ import type { BoardEmployee } from '../types'
 interface SidePanelProps {
   employees: BoardEmployee[]
   unassignedIds: Set<string>
-  canEdit: boolean
+  canManageProjects: boolean
+  canManagePlacements: boolean
   onDragStartEmployee: (employeeId: string, e: React.DragEvent) => void
   onDragEnd: () => void
   onPinProject: (project: { id: string; name: string }) => void
@@ -20,7 +21,8 @@ interface SidePanelProps {
 export function SidePanel({
   employees,
   unassignedIds,
-  canEdit,
+  canManageProjects,
+  canManagePlacements,
   onDragStartEmployee,
   onDragEnd,
   onPinProject,
@@ -38,7 +40,7 @@ export function SidePanel({
   }, [term])
 
   const { data: results = [] } = useBoardProjectSearch(debouncedTerm, {
-    enabled: canEdit && debouncedTerm.length >= 2,
+    enabled: canManageProjects && debouncedTerm.length >= 2,
   })
 
   const normalizedEmployeeTerm = employeeTerm.trim().toLocaleLowerCase('ru')
@@ -52,9 +54,12 @@ export function SidePanel({
   const assignedEmployees = filteredEmployees.filter((employee) => !unassignedIds.has(employee.id))
 
   return (
-    <aside className="flex w-[19rem] shrink-0 flex-col overflow-y-auto border-r bg-card shadow-sm">
-      {canEdit && (
-        <section className="border-b px-4 py-4">
+    <aside
+      data-testid="employment-board-side-panel"
+      className="flex max-h-[min(40dvh,20rem)] w-full shrink-0 flex-col overflow-hidden border-b bg-card shadow-sm md:max-h-none md:w-64 md:border-b-0 md:border-r"
+    >
+      {canManageProjects && (
+        <section className="max-h-[45%] shrink-0 overflow-y-auto border-b px-3 py-3 md:max-h-none md:overflow-visible">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Добавить проект
           </h2>
@@ -64,7 +69,7 @@ export function SidePanel({
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               placeholder="Найти проект…"
-              className="h-9 bg-background pl-8 text-xs"
+              className="h-8 bg-background pl-8 text-xs"
             />
           </div>
           {results.length > 0 && (
@@ -89,30 +94,33 @@ export function SidePanel({
         </section>
       )}
 
-      <section className="flex min-h-0 flex-1 flex-col px-4 py-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
+      <section
+        data-testid="employment-board-employee-scroll"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Users className="h-3.5 w-3.5" /> Сотрудники
           </h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[0.7rem] tabular-nums text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
             {employees.length}
           </span>
         </div>
-        <div className="relative mb-4">
+        <div className="relative mb-3">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={employeeTerm}
             onChange={(e) => setEmployeeTerm(e.target.value)}
             placeholder="Поиск сотрудника…"
-            className="h-9 bg-background pl-8 text-xs"
+            className="h-8 bg-background pl-8 text-xs"
           />
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-3 pr-1">
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-xs font-medium text-primary">Свободны</h3>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.7rem] font-medium tabular-nums text-primary">
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium tabular-nums text-primary">
                 {unassignedEmployees.length}
               </span>
             </div>
@@ -121,9 +129,9 @@ export function SidePanel({
                 <EmployeeChip
                   key={employee.id}
                   employee={employee}
-                  draggable={canEdit}
-                  onDragStart={canEdit ? (e) => onDragStartEmployee(employee.id, e) : undefined}
-                  onDragEnd={canEdit ? onDragEnd : undefined}
+                  draggable={canManagePlacements}
+                  onDragStart={canManagePlacements ? (e) => onDragStartEmployee(employee.id, e) : undefined}
+                  onDragEnd={canManagePlacements ? onDragEnd : undefined}
                   className="w-full justify-start border-primary/30 bg-primary/10 text-foreground shadow-sm"
                 />
               ))}
@@ -152,9 +160,9 @@ export function SidePanel({
                   <EmployeeChip
                     key={employee.id}
                     employee={employee}
-                    draggable={canEdit}
-                    onDragStart={canEdit ? (e) => onDragStartEmployee(employee.id, e) : undefined}
-                    onDragEnd={canEdit ? onDragEnd : undefined}
+                    draggable={canManagePlacements}
+                    onDragStart={canManagePlacements ? (e) => onDragStartEmployee(employee.id, e) : undefined}
+                    onDragEnd={canManagePlacements ? onDragEnd : undefined}
                     className="w-full justify-start opacity-70"
                   />
                 ))}

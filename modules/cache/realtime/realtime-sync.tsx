@@ -12,6 +12,7 @@ import {
   INVALIDATION_DEBOUNCE_MS,
   type TableSubscription,
 } from './config'
+import { dispatchRealtimeChange, removeInactiveEmploymentBoardSnapshots } from './dispatch-change'
 
 /**
  * Компонент для синхронизации кеша с Supabase Realtime
@@ -57,7 +58,7 @@ export function RealtimeSync() {
    * Добавляет ключи в очередь на инвалидацию с debounce
    */
   const scheduleInvalidation = useCallback(
-    (keys: readonly unknown[][]) => {
+    (keys: readonly (readonly unknown[])[]) => {
       keys.forEach((key) => {
         pendingInvalidationsRef.current.add(JSON.stringify(key))
       })
@@ -71,6 +72,10 @@ export function RealtimeSync() {
     [flushInvalidations]
   )
 
+  const removeInactiveBoardSnapshots = useCallback(() => {
+    removeInactiveEmploymentBoardSnapshots(queryClient)
+  }, [queryClient])
+
   /**
    * Обработчик изменений в таблице
    */
@@ -83,9 +88,14 @@ export function RealtimeSync() {
         console.log(`[RealtimeSync] ${payload.eventType} on ${subscription.table}`)
       }
 
-      scheduleInvalidation(subscription.invalidateKeys)
+      dispatchRealtimeChange(
+        subscription,
+        payload,
+        scheduleInvalidation,
+        removeInactiveBoardSnapshots,
+      )
     },
-    [scheduleInvalidation]
+    [removeInactiveBoardSnapshots, scheduleInvalidation]
   )
 
   useEffect(() => {
@@ -126,16 +136,27 @@ export function RealtimeSync() {
         const events = subscription.events ?? ['*']
 
         events.forEach((event) => {
-          channel = channel.on(
-            'postgres_changes',
-            {
-              event: event === '*' ? '*' : event,
-              schema: 'public',
-              table: subscription.table,
-              filter: subscription.filter,
-            },
-            (payload) => handleChange(subscription, payload)
-          )
+          const callback = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) =>
+            handleChange(subscription, payload)
+          const base = {
+            schema: 'public' as const,
+            table: subscription.table,
+            filter: subscription.filter,
+          }
+
+          switch (event) {
+            case 'INSERT':
+              channel = channel.on('postgres_changes', { ...base, event: 'INSERT' }, callback)
+              break
+            case 'UPDATE':
+              channel = channel.on('postgres_changes', { ...base, event: 'UPDATE' }, callback)
+              break
+            case 'DELETE':
+              channel = channel.on('postgres_changes', { ...base, event: 'DELETE' }, callback)
+              break
+            default:
+              channel = channel.on('postgres_changes', { ...base, event: '*' }, callback)
+          }
         })
       })
 

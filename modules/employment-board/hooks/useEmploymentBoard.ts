@@ -1,8 +1,12 @@
 'use client'
 
+import type { MutableRefObject } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { createCacheQuery, queryKeys, staleTimePresets } from '@/modules/cache'
+import { createCacheQuery } from '@/modules/cache/hooks/use-cache-query'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+import { staleTimePresets } from '@/modules/cache/client/query-client'
 import type { FilterQueryParams } from '@/modules/inline-filter'
+import { getCurrentMinskDate, getEmploymentBoardDateMode } from '../lib/board-date'
 import {
   getDepartmentEmploymentBoard,
   pinProject,
@@ -12,9 +16,19 @@ import {
   searchBoardProjects,
   unpinProject,
 } from '../actions'
-import type { EmploymentBoard, PinProjectInput, PlacementInput } from '../types'
+import type {
+  EmploymentBoard,
+  EmploymentBoardCachePolicy,
+  EmploymentBoardDateMode,
+  PinProjectInput,
+  PlacementInput,
+} from '../types'
 
-type BoardCacheSnapshot = readonly [QueryKey, EmploymentBoard | undefined]
+interface BoardCacheSnapshot {
+  queryKey: QueryKey
+  previous: EmploymentBoard
+  optimistic: EmploymentBoard
+}
 
 /**
  * Доска может быть закэширована как с id отдела, так и без него: фактический
@@ -25,35 +39,129 @@ function updateDepartmentBoardCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   departmentId: string,
   updater: (board: EmploymentBoard) => EmploymentBoard,
+  predicate: (board: EmploymentBoard) => boolean = () => true,
 ): BoardCacheSnapshot[] {
-  const snapshots = queryClient
+  const currentBoards = queryClient
     .getQueriesData<EmploymentBoard>({ queryKey: queryKeys.employmentBoard.all })
-    .filter(([, board]) => board?.departmentId === departmentId)
+    .filter(([, board]) => board?.departmentId === departmentId && predicate(board))
 
-  snapshots.forEach(([queryKey, board]) => {
-    if (board) queryClient.setQueryData<EmploymentBoard>(queryKey, updater(board))
+  return currentBoards.flatMap(([queryKey, board]) => {
+    if (!board) return []
+    const optimistic = updater(board)
+    const storedOptimistic = queryClient.setQueryData<EmploymentBoard>(queryKey, optimistic)
+    if (!storedOptimistic) return []
+    return [{ queryKey, previous: board, optimistic: storedOptimistic }]
   })
-
-  return snapshots
 }
 
 function restoreBoardCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   snapshots: BoardCacheSnapshot[] | undefined,
 ) {
-  snapshots?.forEach(([queryKey, board]) => queryClient.setQueryData(queryKey, board))
+  snapshots?.forEach(({ queryKey, previous, optimistic }) => {
+    const current = queryClient.getQueryData<EmploymentBoard>(queryKey)
+    if (current === optimistic) queryClient.setQueryData(queryKey, previous)
+  })
 }
 
 interface BoardMutationOptions {
-  /** Запускает fallback только после подтверждённой сервером записи. */
-  onMutationSuccess?: () => void
+  onMutationStart?: () => void
+  onMutationSettled?: () => void
 }
 
-export const useEmploymentBoard = createCacheQuery<EmploymentBoard, FilterQueryParams | undefined>({
-  queryKey: (filters) => queryKeys.employmentBoard.list(filters?.department_id),
-  queryFn: (filters) => getDepartmentEmploymentBoard(filters),
-  staleTime: staleTimePresets.realtime,
-})
+export class BoardDateBoundaryError extends Error {
+  constructor() {
+    super('Employment board date boundary crossed')
+    this.name = 'BoardDateBoundaryError'
+  }
+}
+
+export class BoardSupersededError extends Error {
+  constructor() {
+    super('Employment board request was superseded')
+    this.name = 'BoardSupersededError'
+  }
+}
+
+function cancelTodayBoardQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.cancelQueries({
+    queryKey: queryKeys.employmentBoard.lists(),
+    predicate: (query) =>
+      (query.state.data as EmploymentBoard | undefined)?.dateMode === 'today',
+  })
+}
+
+interface UseEmploymentBoardInput {
+  filters?: FilterQueryParams
+  selectedDate: string
+  expectedDateMode: EmploymentBoardDateMode
+  cachePolicy?: EmploymentBoardCachePolicy
+  onDateBoundary: () => void
+  requestEpochRef?: MutableRefObject<number>
+}
+
+export function assertBoardResponseDate(
+  board: EmploymentBoard,
+  selectedDate: string,
+  expectedDateMode: EmploymentBoardDateMode,
+  currentMinskDate = getCurrentMinskDate(),
+): void {
+  const arrivalMode = getEmploymentBoardDateMode(selectedDate, currentMinskDate)
+  if (
+    board.selectedDate !== selectedDate ||
+    board.dateMode !== expectedDateMode ||
+    board.dateMode !== arrivalMode
+  ) {
+    throw new BoardDateBoundaryError()
+  }
+}
+
+export function useEmploymentBoard({
+  filters,
+  selectedDate,
+  expectedDateMode,
+  cachePolicy = 'cache-aside',
+  onDateBoundary,
+  requestEpochRef,
+}: UseEmploymentBoardInput) {
+  const query = useQuery({
+    queryKey: queryKeys.employmentBoard.list(
+      filters?.department_id,
+      selectedDate,
+      expectedDateMode,
+    ),
+    queryFn: async () => {
+      const requestEpoch = requestEpochRef?.current
+      const result = await getDepartmentEmploymentBoard({ filters, selectedDate, cachePolicy })
+      if (!result.success) throw new Error(result.error)
+      if (requestEpoch !== undefined && requestEpoch !== requestEpochRef?.current) {
+        throw new BoardSupersededError()
+      }
+
+      try {
+        assertBoardResponseDate(result.data, selectedDate, expectedDateMode)
+      } catch (error) {
+        if (error instanceof BoardDateBoundaryError) onDateBoundary()
+        throw error
+      }
+      return result.data
+    },
+    staleTime: staleTimePresets.realtime,
+    gcTime: 5 * 60 * 1000,
+    retry: (failureCount, error) =>
+      !(error instanceof BoardDateBoundaryError || error instanceof BoardSupersededError) &&
+      failureCount < 2,
+  })
+  const isControlFlowError =
+    query.error instanceof BoardDateBoundaryError || query.error instanceof BoardSupersededError
+
+  return {
+    ...query,
+    error: isControlFlowError ? null : query.error,
+    isLoading: query.isLoading || (isControlFlowError && !query.data),
+    isPending: query.isPending || (isControlFlowError && !query.data),
+  }
+}
 
 /**
  * Поиск проектов для правой панели. Term должен быть уже задебаунсен вызывающим.
@@ -71,7 +179,7 @@ export const useBoardProjectSearch = createCacheQuery<Array<{ id: string; name: 
  * Локальные изменения показываются сразу, затем всегда подтверждаются свежим
  * серверным снимком. Автоматические размещения из loadings клиент не моделирует.
  */
-export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function usePinProject({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PinProjectInput) => {
@@ -80,6 +188,7 @@ export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) 
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (board) => ({
         ...board,
@@ -108,12 +217,12 @@ export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) 
           project.id === input.projectId ? { ...project, isPending: false } : project,
         ),
       }))
-      onMutationSuccess?.()
     },
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
-export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function useUnpinProject({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PinProjectInput) => {
@@ -122,6 +231,7 @@ export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         return {
@@ -137,14 +247,14 @@ export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
-    onSuccess: () => onMutationSuccess?.(),
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
 /** Presence обновляется обычным коротким запросом, Redis хранит его 20 секунд. */
 export function useBoardPresence(departmentId?: string) {
   return useQuery({
-    queryKey: [...queryKeys.employmentBoard.all, 'presence', departmentId ?? null],
+    queryKey: queryKeys.employmentBoard.presence(departmentId),
     queryFn: async () => {
       if (!departmentId) return []
       const result = await reportBoardPresence(departmentId)
@@ -162,7 +272,7 @@ export function useBoardPresence(departmentId?: string) {
  * реальные loadings. При ошибке восстанавливается прежний снимок, а после
  * завершения запрос всегда сверяется с сервером.
  */
-export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function usePlaceEmployee({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PlacementInput) => {
@@ -171,7 +281,8 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
       return result.data
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
+      onMutationStart?.()
+      await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const employee = old.employees.find((item) => item.id === input.employeeId)
         if (!employee) return old
@@ -188,7 +299,7 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
           ),
           unassignedEmployeeIds: old.unassignedEmployeeIds.filter((id) => id !== input.employeeId),
         }
-      })
+      }, (board) => board.dateMode === 'today')
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
@@ -207,13 +318,13 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
               }
             : project,
         ),
-      }))
-      onMutationSuccess?.()
+      }), (board) => board.dateMode === 'today')
     },
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
-export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function useRemovePlacement({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PlacementInput) => {
@@ -222,7 +333,8 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
       return result.data
     },
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
+      onMutationStart?.()
+      await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const projects = old.projects.map((project) =>
           project.id === input.projectId
@@ -244,10 +356,10 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
             ? old.unassignedEmployeeIds
             : [...old.unassignedEmployeeIds, input.employeeId],
         }
-      })
+      }, (board) => board.dateMode === 'today')
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
-    onSuccess: () => onMutationSuccess?.(),
+    onSettled: () => onMutationSettled?.(),
   })
 }

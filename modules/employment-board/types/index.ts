@@ -15,6 +15,8 @@ export interface BoardEmployee {
 
 /** Как сотрудник попал на карточку проекта */
 export type PlacementSource = 'loading' | 'manual'
+export type EmploymentBoardDateMode = 'today' | 'dated'
+export type EmploymentBoardCachePolicy = 'cache-aside' | 'fresh'
 
 /** Сотрудник, размещённый на карточке проекта */
 export interface BoardProjectEmployee extends BoardEmployee {
@@ -38,6 +40,8 @@ export interface BoardProject {
 
 /** Данные доски занятости отдела */
 export interface EmploymentBoard {
+  selectedDate: string
+  dateMode: EmploymentBoardDateMode
   departmentId: string
   departmentName: string
   projects: BoardProject[]
@@ -58,4 +62,11 @@ export interface PlacementInput {
   departmentId: string
   projectId: string
   employeeId: string
+  selectedDate: string
+}
+
+export interface EmploymentBoardRequest {
+  filters?: import('@/modules/inline-filter').FilterQueryParams
+  selectedDate: string
+  cachePolicy?: EmploymentBoardCachePolicy
 }
