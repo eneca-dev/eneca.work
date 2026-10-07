@@ -1,4 +1,4 @@
-import { createElement, type PropsWithChildren } from 'react'
+import { createElement, createRef, type PropsWithChildren } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -100,6 +100,32 @@ describe('useEmploymentBoard date boundary', () => {
     ])
   })
 
+  it('does not let an ordinary request started before Realtime overwrite fresh data', async () => {
+    const ordinary = deferred<ActionResult<EmploymentBoard>>()
+    actionMocks.getDepartmentEmploymentBoard.mockReturnValueOnce(ordinary.promise)
+    const epochRef = createRef<number>()
+    epochRef.current = 0
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const queryKey = ['employment-board', 'list', null, '2026-10-07', 'today']
+    const fresh = { ...board('2026-10-07', 'today'), departmentName: 'Свежий отдел' }
+    const { result } = renderHook(() => useEmploymentBoard({
+      selectedDate: '2026-10-07',
+      expectedDateMode: 'today',
+      requestEpochRef: epochRef as { current: number },
+      onDateBoundary: vi.fn(),
+    }), { wrapper })
+
+    await waitFor(() => expect(actionMocks.getDepartmentEmploymentBoard).toHaveBeenCalledTimes(1))
+    epochRef.current += 1
+    queryClient.setQueryData(queryKey, fresh)
+    ordinary.resolve({ success: true, data: { ...fresh, departmentName: 'Старый отдел' } })
+
+    await waitFor(() => expect(result.current.isFetching).toBe(false))
+    expect(result.current.error).toBeNull()
+    expect(queryClient.getQueryData<EmploymentBoard>(queryKey)?.departmentName).toBe('Свежий отдел')
+  })
+
   it('optimistically places and removes employees only in today snapshots', async () => {
     const today = board('2026-10-07', 'today')
     const dated = board('2026-10-08', 'dated')
@@ -156,5 +182,65 @@ describe('useEmploymentBoard date boundary', () => {
 
     expect(queryClient.getQueryData<EmploymentBoard>(todayKey)?.projects[0].employees).toEqual([])
     expect(queryClient.getQueryData<EmploymentBoard>(datedKey)).toEqual(dated)
+  })
+
+  it('does not recreate a snapshot removed by Realtime during mutation rollback', async () => {
+    const snapshot = board('2026-10-07', 'today')
+    const employee = { id: 'employee', name: 'Сотрудник', avatarUrl: null, positionName: null, teamName: null }
+    snapshot.employees = [employee]
+    snapshot.projects = [{ id: 'project', name: 'Проект', isPinned: true, employees: [] }]
+    const queryKey = ['employment-board', 'list', null, '2026-10-07', 'today']
+    queryClient.setQueryData(queryKey, snapshot)
+    const response = deferred<ActionResult<null>>()
+    actionMocks.placeEmployee.mockReturnValueOnce(response.promise)
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const mutation = renderHook(() => usePlaceEmployee(), { wrapper })
+
+    act(() => mutation.result.current.mutate({
+      departmentId: 'department',
+      projectId: 'project',
+      employeeId: employee.id,
+      selectedDate: '2026-10-07',
+    }))
+    await waitFor(() => expect(
+      queryClient.getQueryData<EmploymentBoard>(queryKey)?.projects[0].employees,
+    ).toHaveLength(1))
+    queryClient.removeQueries({ queryKey, exact: true })
+    response.resolve({ success: false, error: 'failed' })
+
+    await waitFor(() => expect(mutation.result.current.isError).toBe(true))
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined()
+  })
+
+  it('does not overwrite a fresh active snapshot during mutation rollback', async () => {
+    const snapshot = board('2026-10-07', 'today')
+    const employee = { id: 'employee', name: 'Сотрудник', avatarUrl: null, positionName: null, teamName: null }
+    snapshot.employees = [employee]
+    snapshot.projects = [{ id: 'project', name: 'Проект', isPinned: true, employees: [] }]
+    const queryKey = ['employment-board', 'list', null, '2026-10-07', 'today']
+    queryClient.setQueryData(queryKey, snapshot)
+    const response = deferred<ActionResult<null>>()
+    actionMocks.placeEmployee.mockReturnValueOnce(response.promise)
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const mutation = renderHook(() => usePlaceEmployee(), { wrapper })
+
+    act(() => mutation.result.current.mutate({
+      departmentId: 'department',
+      projectId: 'project',
+      employeeId: employee.id,
+      selectedDate: '2026-10-07',
+    }))
+    await waitFor(() => expect(
+      queryClient.getQueryData<EmploymentBoard>(queryKey)?.projects[0].employees,
+    ).toHaveLength(1))
+    const fresh = { ...snapshot, departmentName: 'Свежий отдел' }
+    queryClient.setQueryData(queryKey, fresh)
+    response.resolve({ success: false, error: 'failed' })
+
+    await waitFor(() => expect(mutation.result.current.isError).toBe(true))
+    expect(queryClient.getQueryData(queryKey)).toEqual(fresh)
+    expect(queryClient.getQueryData<EmploymentBoard>(queryKey)?.departmentName).toBe('Свежий отдел')
   })
 })

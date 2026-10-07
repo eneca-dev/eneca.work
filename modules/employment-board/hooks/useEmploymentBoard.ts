@@ -1,5 +1,6 @@
 'use client'
 
+import type { MutableRefObject } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { createCacheQuery } from '@/modules/cache/hooks/use-cache-query'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
@@ -23,7 +24,11 @@ import type {
   PlacementInput,
 } from '../types'
 
-type BoardCacheSnapshot = readonly [QueryKey, EmploymentBoard | undefined]
+interface BoardCacheSnapshot {
+  queryKey: QueryKey
+  previous: EmploymentBoard
+  optimistic: EmploymentBoard
+}
 
 /**
  * Доска может быть закэширована как с id отдела, так и без него: фактический
@@ -36,33 +41,44 @@ function updateDepartmentBoardCaches(
   updater: (board: EmploymentBoard) => EmploymentBoard,
   predicate: (board: EmploymentBoard) => boolean = () => true,
 ): BoardCacheSnapshot[] {
-  const snapshots = queryClient
+  const currentBoards = queryClient
     .getQueriesData<EmploymentBoard>({ queryKey: queryKeys.employmentBoard.all })
     .filter(([, board]) => board?.departmentId === departmentId && predicate(board))
 
-  snapshots.forEach(([queryKey, board]) => {
-    if (board) queryClient.setQueryData<EmploymentBoard>(queryKey, updater(board))
+  return currentBoards.flatMap(([queryKey, board]) => {
+    if (!board) return []
+    const optimistic = updater(board)
+    queryClient.setQueryData<EmploymentBoard>(queryKey, optimistic)
+    return [{ queryKey, previous: board, optimistic }]
   })
-
-  return snapshots
 }
 
 function restoreBoardCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   snapshots: BoardCacheSnapshot[] | undefined,
 ) {
-  snapshots?.forEach(([queryKey, board]) => queryClient.setQueryData(queryKey, board))
+  snapshots?.forEach(({ queryKey, previous, optimistic }) => {
+    const current = queryClient.getQueryData<EmploymentBoard>(queryKey)
+    if (current === optimistic) queryClient.setQueryData(queryKey, previous)
+  })
 }
 
 interface BoardMutationOptions {
-  /** Запускает fallback только после подтверждённой сервером записи. */
-  onMutationSuccess?: () => void
+  onMutationStart?: () => void
+  onMutationSettled?: () => void
 }
 
 export class BoardDateBoundaryError extends Error {
   constructor() {
     super('Employment board date boundary crossed')
     this.name = 'BoardDateBoundaryError'
+  }
+}
+
+export class BoardSupersededError extends Error {
+  constructor() {
+    super('Employment board request was superseded')
+    this.name = 'BoardSupersededError'
   }
 }
 
@@ -80,6 +96,7 @@ interface UseEmploymentBoardInput {
   expectedDateMode: EmploymentBoardDateMode
   cachePolicy?: EmploymentBoardCachePolicy
   onDateBoundary: () => void
+  requestEpochRef?: MutableRefObject<number>
 }
 
 export function assertBoardResponseDate(
@@ -104,6 +121,7 @@ export function useEmploymentBoard({
   expectedDateMode,
   cachePolicy = 'cache-aside',
   onDateBoundary,
+  requestEpochRef,
 }: UseEmploymentBoardInput) {
   const query = useQuery({
     queryKey: queryKeys.employmentBoard.list(
@@ -112,8 +130,12 @@ export function useEmploymentBoard({
       expectedDateMode,
     ),
     queryFn: async () => {
+      const requestEpoch = requestEpochRef?.current
       const result = await getDepartmentEmploymentBoard({ filters, selectedDate, cachePolicy })
       if (!result.success) throw new Error(result.error)
+      if (requestEpoch !== undefined && requestEpoch !== requestEpochRef?.current) {
+        throw new BoardSupersededError()
+      }
 
       try {
         assertBoardResponseDate(result.data, selectedDate, expectedDateMode)
@@ -126,15 +148,17 @@ export function useEmploymentBoard({
     staleTime: staleTimePresets.realtime,
     gcTime: 5 * 60 * 1000,
     retry: (failureCount, error) =>
-      !(error instanceof BoardDateBoundaryError) && failureCount < 2,
+      !(error instanceof BoardDateBoundaryError || error instanceof BoardSupersededError) &&
+      failureCount < 2,
   })
-  const isDateBoundary = query.error instanceof BoardDateBoundaryError
+  const isControlFlowError =
+    query.error instanceof BoardDateBoundaryError || query.error instanceof BoardSupersededError
 
   return {
     ...query,
-    error: isDateBoundary ? null : query.error,
-    isLoading: query.isLoading || isDateBoundary,
-    isPending: query.isPending || isDateBoundary,
+    error: isControlFlowError ? null : query.error,
+    isLoading: query.isLoading || (isControlFlowError && !query.data),
+    isPending: query.isPending || (isControlFlowError && !query.data),
   }
 }
 
@@ -154,7 +178,7 @@ export const useBoardProjectSearch = createCacheQuery<Array<{ id: string; name: 
  * Локальные изменения показываются сразу, затем всегда подтверждаются свежим
  * серверным снимком. Автоматические размещения из loadings клиент не моделирует.
  */
-export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function usePinProject({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PinProjectInput) => {
@@ -163,6 +187,7 @@ export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) 
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (board) => ({
         ...board,
@@ -191,12 +216,12 @@ export function usePinProject({ onMutationSuccess }: BoardMutationOptions = {}) 
           project.id === input.projectId ? { ...project, isPending: false } : project,
         ),
       }))
-      onMutationSuccess?.()
     },
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
-export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function useUnpinProject({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PinProjectInput) => {
@@ -205,6 +230,7 @@ export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await queryClient.cancelQueries({ queryKey: queryKeys.employmentBoard.all })
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         return {
@@ -220,7 +246,7 @@ export function useUnpinProject({ onMutationSuccess }: BoardMutationOptions = {}
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
-    onSuccess: () => onMutationSuccess?.(),
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
@@ -245,7 +271,7 @@ export function useBoardPresence(departmentId?: string) {
  * реальные loadings. При ошибке восстанавливается прежний снимок, а после
  * завершения запрос всегда сверяется с сервером.
  */
-export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function usePlaceEmployee({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PlacementInput) => {
@@ -254,6 +280,7 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const employee = old.employees.find((item) => item.id === input.employeeId)
@@ -291,12 +318,12 @@ export function usePlaceEmployee({ onMutationSuccess }: BoardMutationOptions = {
             : project,
         ),
       }), (board) => board.dateMode === 'today')
-      onMutationSuccess?.()
     },
+    onSettled: () => onMutationSettled?.(),
   })
 }
 
-export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions = {}) {
+export function useRemovePlacement({ onMutationStart, onMutationSettled }: BoardMutationOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: PlacementInput) => {
@@ -305,6 +332,7 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
       return result.data
     },
     onMutate: async (input) => {
+      onMutationStart?.()
       await cancelTodayBoardQueries(queryClient)
       const snapshots = updateDepartmentBoardCaches(queryClient, input.departmentId, (old) => {
         const projects = old.projects.map((project) =>
@@ -331,6 +359,6 @@ export function useRemovePlacement({ onMutationSuccess }: BoardMutationOptions =
       return { snapshots }
     },
     onError: (_error, _input, context) => restoreBoardCaches(queryClient, context?.snapshots),
-    onSuccess: () => onMutationSuccess?.(),
+    onSettled: () => onMutationSettled?.(),
   })
 }

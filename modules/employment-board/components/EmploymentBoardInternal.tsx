@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { useHasPermission } from '@/modules/permissions'
 import { EMPLOYMENT_BOARD_EDIT } from '../constants'
@@ -24,11 +24,24 @@ interface EmploymentBoardInternalProps {
 
 export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternalProps) {
   const boardDate = useEmploymentBoardDate()
+  const requestEpochRef = useRef(0)
+  const pendingMutationsRef = useRef(0)
+  const [requiresFresh, setRequiresFresh] = useState(false)
+  const [staleOnDate, setStaleOnDate] = useState<string | null>(null)
+  const requireFresh = useCallback(() => setRequiresFresh(true), [])
+  const markDateChangeStale = useCallback(() => setStaleOnDate(boardDate.selectedDate), [boardDate.selectedDate])
+  useEffect(() => {
+    if (staleOnDate !== null && staleOnDate !== boardDate.selectedDate) setRequiresFresh(true)
+  }, [boardDate.selectedDate, staleOnDate])
   const { data: board, isLoading, error } = useEmploymentBoard({
     filters: queryParams,
     selectedDate: boardDate.selectedDate,
     expectedDateMode: boardDate.mode,
+    cachePolicy: requiresFresh || (staleOnDate !== null && staleOnDate !== boardDate.selectedDate)
+      ? 'fresh'
+      : 'cache-aside',
     onDateBoundary: boardDate.refreshCurrentMinskDate,
+    requestEpochRef,
   })
   const canEdit = useHasPermission(EMPLOYMENT_BOARD_EDIT)
   const rawEmployeeFilter = queryParams?.employee_id
@@ -65,11 +78,22 @@ export function EmploymentBoardInternal({ queryParams }: EmploymentBoardInternal
 
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const departmentId = board?.departmentId
-  const { scheduleFallbackRefresh } = useEmploymentBoardRealtime(departmentId)
-  const pinProject = usePinProject({ onMutationSuccess: scheduleFallbackRefresh })
-  const unpinProject = useUnpinProject({ onMutationSuccess: scheduleFallbackRefresh })
-  const placeEmployee = usePlaceEmployee({ onMutationSuccess: scheduleFallbackRefresh })
-  const removePlacement = useRemovePlacement({ onMutationSuccess: scheduleFallbackRefresh })
+  const { beginMutation, finishMutation } = useEmploymentBoardRealtime({
+    departmentId,
+    filters: queryParams,
+    selectedDate: boardDate.selectedDate,
+    dateMode: boardDate.mode,
+    requestEpochRef,
+    onRequireFresh: requireFresh,
+    onMarkDateChangeStale: markDateChangeStale,
+    onDateBoundary: boardDate.refreshCurrentMinskDate,
+    pendingMutationsRef,
+  })
+  const mutationOptions = { onMutationStart: beginMutation, onMutationSettled: finishMutation }
+  const pinProject = usePinProject(mutationOptions)
+  const unpinProject = useUnpinProject(mutationOptions)
+  const placeEmployee = usePlaceEmployee(mutationOptions)
+  const removePlacement = useRemovePlacement(mutationOptions)
   const { data: presenceIds = [] } = useBoardPresence(departmentId)
 
   const handleDropEmployee = useCallback(

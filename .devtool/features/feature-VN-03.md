@@ -6,7 +6,7 @@ assignee: "Владимир Нестерович"
 epic: "feature"
 dueDate: null
 created: "2026-10-06T08:39:34.190Z"
-modified: "2026-10-06T09:39:50.522Z"
+modified: "2026-10-06T11:13:52.771Z"
 completedAt: null
 labels: ["v1.5.0"]
 order: "a2"
