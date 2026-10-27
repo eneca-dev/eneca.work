@@ -107,6 +107,8 @@ type LoadingInsert = Database['public']['Tables']['loadings']['Insert']
 type LoadingUpdate = Database['public']['Tables']['loadings']['Update']
 
 export interface CreateLoadingInput {
+  /** Только визуальная отметка; не влияет на ставку и расчёты. */
+  isProspective?: boolean
   /** ID этапа декомпозиции */
   stageId: string
   /** ID раздела */
@@ -124,6 +126,8 @@ export interface CreateLoadingInput {
 }
 
 export interface UpdateLoadingInput {
+  /** undefined сохраняет прежнее значение, false снимает отметку. */
+  isProspective?: boolean
   /** ID загрузки */
   loadingId: string
   /** ID этапа декомпозиции (опционально, для смены этапа) */
@@ -151,6 +155,7 @@ export interface DeleteLoadingInput {
 }
 
 export interface LoadingResult {
+  isProspective: boolean
   id: string
   stageId: string
   employeeId: string
@@ -168,6 +173,7 @@ export interface LoadingResult {
 }
 
 export interface CreateLoadingBatchInput {
+  isProspective?: boolean
   /** ID этапа декомпозиции */
   stageId: string
   /** ID раздела */
@@ -210,11 +216,15 @@ function isValidRate(rate: number): boolean {
  * Общая валидация полей загрузки (без employee — он отличается в single/batch)
  */
 function validateLoadingFields(input: {
+  isProspective?: boolean
   stageId: string
   startDate: string
   endDate: string
   rate: number
 }): string | null {
+  if (input.isProspective !== undefined && typeof input.isProspective !== 'boolean') {
+    return 'Признак перспективной работы должен быть логическим значением'
+  }
   if (!input.stageId?.trim()) return 'ID этапа обязателен'
   if (!isValidDate(input.startDate)) return 'Неверный формат даты начала'
   if (!isValidDate(input.endDate)) return 'Неверный формат даты окончания'
@@ -230,6 +240,7 @@ function validateLoadingFields(input: {
  */
 function mapLoadingToResult(row: LoadingRow): LoadingResult {
   return {
+    isProspective: row.is_prospective ?? false,
     id: row.loading_id,
     stageId: row.loading_stage || '',
     employeeId: row.loading_responsible || '',
@@ -277,6 +288,7 @@ export async function createLoading(
       loading_finish: input.endDate,
       loading_rate: input.rate,
       loading_comment: input.comment || null,
+      is_prospective: input.isProspective ?? false,
       loading_status: 'active',
       is_shortage: false,
       loading_created: new Date().toISOString(),
@@ -344,6 +356,7 @@ export async function createLoadingBatch(
       loading_finish: input.endDate,
       loading_rate: input.rate,
       loading_comment: input.comment || null,
+      is_prospective: input.isProspective ?? false,
       loading_status: 'active' as const,
       is_shortage: false,
       loading_created: now,
@@ -386,6 +399,9 @@ export async function updateLoading(
   input: UpdateLoadingInput
 ): Promise<ActionResult<LoadingResult>> {
   try {
+    if (input.isProspective !== undefined && typeof input.isProspective !== 'boolean') {
+      return { success: false, error: 'Признак перспективной работы должен быть логическим значением' }
+    }
     const supabase = await createClient()
 
     // Валидация ID загрузки
@@ -460,6 +476,10 @@ export async function updateLoading(
 
     if (input.comment !== undefined) {
       updateData.loading_comment = input.comment || null
+    }
+
+    if (input.isProspective !== undefined) {
+      updateData.is_prospective = input.isProspective
     }
 
     // Проверка дат (если обе переданы)
@@ -869,6 +889,7 @@ export async function splitLoading(
       loading_finish: original.loading_finish,
       loading_rate: original.loading_rate,
       loading_comment: original.loading_comment,
+      is_prospective: original.is_prospective ?? false,
       loading_status: 'active',
       is_shortage: original.is_shortage ?? false,
       loading_created: now,

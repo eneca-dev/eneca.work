@@ -36,6 +36,8 @@ export interface Loading {
   rate: number
   status?: string
   comment?: string
+  /** Visual marker; does not change workload calculations. */
+  isProspective?: boolean
   createdAt?: string
   updatedAt?: string
 }

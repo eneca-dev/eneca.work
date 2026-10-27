@@ -105,6 +105,7 @@ export function LoadingModalNew({
       startDate: createData.startDate,
       endDate: createData.endDate,
       comment: createData.comment,
+      isProspective: createData.isProspective,
     } : undefined,
   })
 
@@ -287,6 +288,7 @@ export function LoadingModalNew({
           startDate: formData.startDate,
           endDate: formData.endDate,
           comment: formData.comment,
+          isProspective: formData.isProspective,
         })
       } else if (employeeIds.length > 1) {
         // Batch-создание — один INSERT + один revalidatePath + одна инвалидация кэшей
@@ -300,6 +302,7 @@ export function LoadingModalNew({
           startDate: formData.startDate,
           endDate: formData.endDate,
           comment: formData.comment,
+          isProspective: formData.isProspective,
         })
 
         if (result.success && result.data.created > 0) {
@@ -327,6 +330,7 @@ export function LoadingModalNew({
         startDate: formData.startDate,
         endDate: formData.endDate,
         comment: formData.comment,
+        isProspective: formData.isProspective,
       })
     }
   }, [validateForm, selectedSectionId, formData, mode, createLoading, updateLoading, editData, onClose, queryClient])
@@ -356,6 +360,7 @@ export function LoadingModalNew({
         startDate: formData.startDate,
         endDate: formData.endDate,
         comment: formData.comment,
+        isProspective: formData.isProspective,
       })
     }, 0)
   }, [formData, selectedSectionId, effectiveProjectId])

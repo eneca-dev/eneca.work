@@ -118,6 +118,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
         endDate: input.endDate,
         rate: input.rate,
         comment: input.comment || undefined,
+        isProspective: input.isProspective ?? false,
         status: 'active',
         createdAt: new Date().toISOString(),
         updatedAt: null,
@@ -429,6 +430,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                       ...(input.endDate !== undefined && { endDate: input.endDate }),
                       ...(input.rate !== undefined && { rate: input.rate }),
                       ...(input.comment !== undefined && { comment: input.comment }),
+                      ...(input.isProspective !== undefined && { isProspective: input.isProspective }),
                       updatedAt: new Date().toISOString(),
                       _optimistic: true,
                     })
@@ -450,6 +452,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                     ...(input.endDate !== undefined && { endDate: input.endDate }),
                     ...(input.rate !== undefined && { rate: input.rate }),
                     ...(input.comment !== undefined && { comment: input.comment }),
+                    ...(input.isProspective !== undefined && { isProspective: input.isProspective }),
                     updatedAt: new Date().toISOString(),
                     _optimistic: true,
                   })
@@ -490,6 +493,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                 ...(input.endDate !== undefined && { endDate: input.endDate }),
                 ...(input.rate !== undefined && { rate: input.rate }),
                 ...(input.comment !== undefined && { comment: input.comment }),
+                ...(input.isProspective !== undefined && { isProspective: input.isProspective }),
                 updatedAt: new Date().toISOString(),
                 _optimistic: true,
               }
@@ -565,6 +569,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
                       ...(input.endDate !== undefined && { endDate: input.endDate }),
                       ...(input.rate !== undefined && { rate: input.rate }),
                       ...(input.comment !== undefined && { comment: input.comment }),
+                      ...(input.isProspective !== undefined && { isProspective: input.isProspective }),
                       updatedAt: new Date().toISOString(),
                       _optimistic: true,
                     }

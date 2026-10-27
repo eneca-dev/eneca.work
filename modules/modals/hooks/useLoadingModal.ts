@@ -36,6 +36,8 @@ export interface LoadingFormData {
   rate: number
   /** Комментарий */
   comment: string
+  /** Предварительно запланированная работа; не меняет расчёт загрузки */
+  isProspective: boolean
   /** ID этапа декомпозиции (опционально) */
   decompositionStageId: string
 }
@@ -50,6 +52,7 @@ export interface Loading {
   end_date: string
   rate: number
   comment: string | null
+  isProspective?: boolean
   section_id: string
 }
 
@@ -68,6 +71,7 @@ export interface UseLoadingModalOptions {
     startDate?: string
     endDate?: string
     comment?: string
+    isProspective?: boolean
   }
 }
 
@@ -122,6 +126,7 @@ function getDefaultFormData(): LoadingFormData {
     endDate: getDateInDays(7), // Через неделю
     rate: 1.0,
     comment: '',
+    isProspective: false,
     decompositionStageId: '', // Опциональный этап
   }
 }
@@ -161,6 +166,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
         endDate,
         rate: initialLoading.rate,
         comment: initialLoading.comment ?? '',
+        isProspective: initialLoading.isProspective ?? false,
         decompositionStageId: '', // Будет установлено в LoadingModalNew на основе breadcrumbs
       }
       return initialFormData
@@ -177,6 +183,7 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       if (initialFormValues.startDate !== undefined) defaultForm.startDate = initialFormValues.startDate
       if (initialFormValues.endDate !== undefined) defaultForm.endDate = initialFormValues.endDate
       if (initialFormValues.comment !== undefined) defaultForm.comment = initialFormValues.comment
+      if (initialFormValues.isProspective !== undefined) defaultForm.isProspective = initialFormValues.isProspective
     }
     return defaultForm
   })
@@ -296,7 +303,8 @@ export function useLoadingModal(options: UseLoadingModalOptions): UseLoadingModa
       formData.startDate !== initialStartDate ||
       formData.endDate !== initialEndDate ||
       rateChanged ||
-      formData.comment !== (initialLoading.comment ?? '')
+      formData.comment !== (initialLoading.comment ?? '') ||
+      formData.isProspective !== (initialLoading.isProspective ?? false)
     )
   }, [mode, formData, initialLoading, selectedSectionId])
 

@@ -47,6 +47,7 @@ import type { MonthlyBarLoading } from '@/components/shared/timeline'
 import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
+import { ProspectiveLoadingBadge } from '@/components/shared/timeline/ProspectiveLoadingBadge'
 
 /**
  * Контекст режима выборочного bulk-shift, передаётся в loading bars.
@@ -215,6 +216,14 @@ const LoadingBarWithResize = memo(function LoadingBarWithResize({
   // Используем preview позицию если есть, иначе оригинальную
   const displayLeft = previewPosition?.left ?? bar.left
   const displayWidth = previewPosition?.width ?? bar.width
+  const isProspective = bar.period.isProspective === true
+  const stackProspectiveBadge = isProspective && displayWidth < 68
+  const compactProspectiveBadge = displayWidth < 240
+  // Reserve space for the entire sticky rate + marker so labels cannot cover it.
+  const rateGroupWidth = isProspective && !stackProspectiveBadge
+    ? 36 + 4 + (compactProspectiveBadge ? 12 : 82)
+    : 36
+  const labelOffset = rateGroupWidth + 6
 
   // Показываем preview даты в tooltip во время resize
   const displayStartDate = isResizing && previewDates ? previewDates.startDate : startDateString
@@ -312,27 +321,30 @@ const LoadingBarWithResize = memo(function LoadingBarWithResize({
 
         {/* Sticky rate badge (always visible, stops at right edge) */}
         <div
-          className="absolute left-0.5 top-0 bottom-0 flex items-center flex-shrink-0"
+          className={cn('absolute left-0.5 top-0 bottom-0 flex items-center justify-center flex-shrink-0', stackProspectiveBadge ? 'flex-col' : 'gap-1')}
           style={{
             zIndex: 10,
-            transform: `translateX(clamp(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px), ${Math.max(0, displayWidth - 48)}px))`,
+            transform: `translateX(clamp(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px), ${Math.max(0, displayWidth - rateGroupWidth - 8)}px))`,
           }}
         >
-          <span className="inline-flex items-center justify-center w-[36px] h-[20px] bg-black/20 text-white text-[10px] font-semibold tabular-nums rounded shadow-sm">
+          <span className={cn('inline-flex items-center justify-center w-[36px] bg-black/20 text-white text-[10px] font-semibold tabular-nums rounded shadow-sm', stackProspectiveBadge ? 'h-[14px]' : 'h-[20px]')}>
             {bar.period.rate || 1}
           </span>
+          {isProspective && <ProspectiveLoadingBadge compact={compactProspectiveBadge} />}
         </div>
 
         {/* Bar content */}
         <div
-          className="absolute left-[42px] top-0 bottom-0 flex items-center"
+          className="absolute top-0 bottom-0 flex items-center overflow-hidden"
           style={{
+            left: labelOffset,
+            width: Math.max(0, displayWidth - labelOffset - 8),
             zIndex: 2,
             transform: `translateX(max(0px, calc(var(--timeline-scroll-left, 0px) - ${displayLeft}px)))`,
           }}
         >
           {bar.period.type === 'loading' && (() => {
-            const labelParts = getBarLabelParts(bar.period, displayWidth)
+            const labelParts = getBarLabelParts(bar.period, displayWidth - (labelOffset - 42))
             const maxLines = 2
 
             if (labelParts.displayMode === 'icon-only') {
@@ -651,6 +663,7 @@ export function EmployeeRow({
         end_date: loading.endDate,
         rate: loading.rate,
         comment: loading.comment || null,
+        isProspective: loading.isProspective,
         section_id: loading.stageId || loading.sectionId, // stageId для этапов, sectionId как fallback для прямых загрузок на раздел
         employee_team_id: employee.teamId ?? null,
         employee_department_id: employee.departmentId ?? null,
@@ -725,6 +738,7 @@ export function EmployeeRow({
       stageId: l.stageId,
       stageName: l.stageName,
       comment: l.comment,
+      isProspective: l.isProspective,
       employeeId: l.employeeId,
     }))
   }, [isMonthlyMode, employee.loadings])

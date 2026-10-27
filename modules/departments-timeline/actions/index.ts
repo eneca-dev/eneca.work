@@ -584,6 +584,7 @@ export async function getDepartmentsData(
           endDate: item.loading_finish,
           rate: item.loading_rate || 1,
           comment: item.loading_comment ?? undefined,
+          isProspective: item.is_prospective ?? false,
         })
       }
     })

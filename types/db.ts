@@ -6960,6 +6960,7 @@ export type Database = {
         Row: {
           external_id: string | null
           external_source: string | null
+          is_prospective: boolean
           is_shortage: boolean
           loading_comment: string | null
           loading_created: string | null
@@ -6980,6 +6981,7 @@ export type Database = {
         Insert: {
           external_id?: string | null
           external_source?: string | null
+          is_prospective?: boolean
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null
@@ -7000,6 +7002,7 @@ export type Database = {
         Update: {
           external_id?: string | null
           external_source?: string | null
+          is_prospective?: boolean
           is_shortage?: boolean
           loading_comment?: string | null
           loading_created?: string | null
@@ -25810,6 +25813,7 @@ export type Database = {
           first_name: string | null
           full_name: string | null
           has_loadings: boolean | null
+          is_prospective: boolean | null
           last_name: string | null
           loading_comment: string | null
           loading_finish: string | null
