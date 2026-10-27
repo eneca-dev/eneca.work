@@ -186,6 +186,7 @@ export const openLoadingModalNewCreate = (data?: {
   startDate?: string
   endDate?: string
   comment?: string
+  isProspective?: boolean
 }) => useModalStore.getState().openModal('loading-new-create', data)
 
 /**
@@ -203,6 +204,7 @@ export const openLoadingModalNewEdit = (
       end_date: string
       rate: number
       comment: string | null
+      isProspective?: boolean
       section_id: string
       /** Команда исполнителя (для permission gating, опционально) */
       employee_team_id?: string | null

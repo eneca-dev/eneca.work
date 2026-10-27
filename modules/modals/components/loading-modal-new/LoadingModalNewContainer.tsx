@@ -33,6 +33,7 @@ export function LoadingModalNewContainer() {
 
   // Загружаем данные загрузки при открытии в режиме редактирования
   useEffect(() => {
+    let cancelled = false
     if (isEditOpen && modalData) {
       const data = modalData as {
         loadingId?: string
@@ -46,8 +47,10 @@ export function LoadingModalNewContainer() {
         projectId?: string
       }
 
-      // Если loading уже передан, используем его
-      if (data.loading) {
+      // Старые потребители могут передать загрузку без нового признака.
+      // Тогда читаем полную запись, чтобы сохранение формы не сбросило отметку.
+      if (data.loading && typeof data.loading.isProspective === 'boolean') {
+        setIsLoadingData(false)
         setEditData({
           loadingId: data.loadingId || data.loading.id,
           sectionId: data.sectionId || data.loading.section_id,
@@ -58,15 +61,19 @@ export function LoadingModalNewContainer() {
         return
       }
 
-      // Если есть только loadingId, загружаем данные
-      if (data.loadingId && data.sectionId) {
+      const loadingId = data.loadingId || data.loading?.id
+      const sectionId = data.sectionId || data.loading?.section_id
+      // Запрашиваем полные данные, в том числе для старых снимков без признака.
+      if (loadingId && sectionId) {
+        setEditData(null)
         setIsLoadingData(true)
-        getLoadingById(data.loadingId)
+        getLoadingById(loadingId)
           .then((result) => {
+            if (cancelled) return
             if (result.success) {
               setEditData({
                 loadingId: result.data.id,
-                sectionId: data.sectionId!,
+                sectionId,
                 loading: {
                   id: result.data.id,
                   employee_id: result.data.employeeId,
@@ -74,7 +81,9 @@ export function LoadingModalNewContainer() {
                   end_date: result.data.endDate,
                   rate: result.data.rate,
                   comment: result.data.comment,
-                  section_id: result.data.stageId, // loading_stage в БД
+                  isProspective: result.data.isProspective ?? false,
+                  // У прямой загрузки loading_stage пуст; сохраняем реальный sectionId.
+                  section_id: result.data.stageId || sectionId,
                   employee_team_id: result.data.employeeTeamId ?? null,
                   employee_department_id: result.data.employeeDepartmentId ?? null,
                 },
@@ -87,18 +96,23 @@ export function LoadingModalNewContainer() {
             }
           })
           .catch((error) => {
+            if (cancelled) return
             console.error('⚠️ LoadingModalNewContainer: ошибка при загрузке данных', error)
             closeModal()
           })
           .finally(() => {
-            setIsLoadingData(false)
+            if (!cancelled) setIsLoadingData(false)
           })
+      } else {
+        setEditData(null)
+        setIsLoadingData(false)
       }
     } else {
       // Сбрасываем состояние при закрытии модалки
       setEditData(null)
       setIsLoadingData(false)
     }
+    return () => { cancelled = true }
   }, [isEditOpen, modalData])
 
   // Cross-department grants на сотрудника-исполнителя (для проверки прав НО/ТЛ-получателей)
@@ -142,13 +156,15 @@ export function LoadingModalNewContainer() {
 
   // Режим редактирования
   if (isEditOpen) {
+    const requested = modalData as LoadingModalNewEditData | null
+    const requestedId = requested?.loadingId || requested?.loading?.id
     // Показываем загрузку или модалку с данными
     if (isLoadingData) {
       return null // Можно показать loader если нужно
     }
 
     // Если нет данных, не рендерим
-    if (!editData || !editData.loading) {
+    if (!editData || !editData.loading || editData.loadingId !== requestedId) {
       return null
     }
 

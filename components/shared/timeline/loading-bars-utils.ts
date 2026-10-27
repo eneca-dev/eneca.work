@@ -6,6 +6,7 @@
 // TODO: Refactor - consider moving to a dedicated utils module
 
 import type { Loading, TimelineUnit } from "@/types/planning"
+import { PROSPECTIVE_LOADING_DESCRIPTION } from './prospective-loading'
 
 /**
  * Константы для расчёта высоты и позиционирования полосок загрузки
@@ -35,6 +36,7 @@ export interface BarPeriod {
   stageId?: string
   stageName?: string
   comment?: string // Комментарий к загрузке
+  isProspective?: boolean
   loading?: Loading // Исходная загрузка для доступа к полным данным
 }
 
@@ -295,13 +297,27 @@ export function calculateLayers(periods: BarPeriod[]): number[] {
     groups.push(...chains)
   }
 
-  // Пред-вычисляем minStart каждой группы — избегаем пересчёта в компараторе сортировки
+  // Пред-вычисляем ключи сортировки каждой группы — избегаем пересчёта в
+  // компараторе и не зависим от порядка строк в ответе БД. Без tie-breaker
+  // группы с одинаковым start могли менять слой после обычного refetch.
   const groupMinStart = groups.map((g) => {
     let min = starts[g[0]]
     for (let i = 1; i < g.length; i++) if (starts[g[i]] < min) min = starts[g[i]]
     return min
   })
-  const groupOrder = groups.map((_, i) => i).sort((a, b) => groupMinStart[a] - groupMinStart[b])
+  const groupMaxEnd = groups.map((g) => {
+    let max = ends[g[0]]
+    for (let i = 1; i < g.length; i++) if (ends[g[i]] > max) max = ends[g[i]]
+    return max
+  })
+  const groupStableKey = groups.map((g) =>
+    g.map((idx) => periods[idx].id).sort().join('\u0000')
+  )
+  const groupOrder = groups.map((_, i) => i).sort((a, b) =>
+    groupMinStart[a] - groupMinStart[b]
+      || groupMaxEnd[b] - groupMaxEnd[a]
+      || groupStableKey[a].localeCompare(groupStableKey[b])
+  )
 
   // Размещаем группы на слоях. Храним placed по слою в Map — O(1) lookup вместо O(n).
   const placedByLayer = new Map<number, number[]>()
@@ -370,6 +386,9 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     stageId: loading.stageId,
     stageName: loading.stageName,
     comment: loading.comment,
+    // Сохраняем undefined для старых клиентских снимков. При открытии формы
+    // контейнер дочитает запись из БД и не примет неизвестное значение за false.
+    isProspective: loading.isProspective,
     loading,
   }))
 }
@@ -611,6 +630,7 @@ function formatDate(date: Date): string {
  */
 export function formatBarTooltip(period: BarPeriod): string {
   const lines: string[] = []
+  if (period.isProspective) lines.push(`Перспектива: ${PROSPECTIVE_LOADING_DESCRIPTION}`)
   if (period.projectName) lines.push(`Проект: ${period.projectName}`)
   if (period.objectName) lines.push(`Объект: ${period.objectName}`)
   if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)

@@ -28,6 +28,7 @@ export interface MonthlyBarLoading {
   stageId?: string
   stageName?: string
   comment?: string
+  isProspective?: boolean
   employeeId?: string
 }
 

@@ -14,7 +14,9 @@
  */
 
 import { AlertCircle, ChevronRight, Folder, Box, CircleDashed } from 'lucide-react'
+import { useId } from 'react'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { differenceInBusinessDays } from 'date-fns'
@@ -76,6 +78,7 @@ export function LoadingForm({
   onChangeStage,
   isUpdating = false,
 }: LoadingFormProps) {
+  const prospectiveId = useId()
   // Извлекаем sectionId из breadcrumbs для загрузки этапов декомпозиции
   const sectionId = selectedBreadcrumbs?.find(b => b.type === 'section')?.id ?? null
 
@@ -223,6 +226,24 @@ export function LoadingForm({
             onChange={(value) => onFieldChange('decompositionStageId', value)}
             disabled={disabled}
             placeholder="Выберите этап"
+          />
+        </div>
+
+        <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+          <div className="space-y-1">
+            <label htmlFor={prospectiveId} className="text-sm font-medium cursor-pointer">
+              Перспективная работа
+            </label>
+            <p id={`${prospectiveId}-description`} className="text-xs text-muted-foreground">
+              Предварительное планирование. Работа пока не подтверждена.
+            </p>
+          </div>
+          <Switch
+            id={prospectiveId}
+            aria-describedby={`${prospectiveId}-description`}
+            checked={formData.isProspective}
+            onCheckedChange={(checked) => onFieldChange('isProspective', checked)}
+            disabled={disabled}
           />
         </div>
 

@@ -186,6 +186,8 @@ export interface LoadingModalNewCreateData {
   endDate?: string
   /** Предзаполненный комментарий (для копирования загрузки) */
   comment?: string
+  /** Предзаполненная отметка перспективной работы (для копирования) */
+  isProspective?: boolean
 }
 
 export interface LoadingModalNewEditData {
@@ -201,6 +203,7 @@ export interface LoadingModalNewEditData {
     end_date: string
     rate: number
     comment: string | null
+    isProspective?: boolean
     section_id: string
     /** Команда исполнителя (для permission check на клиенте, опционально) */
     employee_team_id?: string | null
