@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionResult } from '@/modules/cache/types'
 import type { EmploymentBoard } from '../types'
 import { useEmploymentBoardDate } from './useEmploymentBoardDate'
+import { notifyEmploymentBoardPersonnelChanged } from '@/modules/cache/realtime/employment-board-events'
 
 const actionMocks = vi.hoisted(() => ({
   getDepartmentEmploymentBoard: vi.fn(),
@@ -124,6 +125,50 @@ describe('useEmploymentBoard date boundary', () => {
     await waitFor(() => expect(result.current.isFetching).toBe(false))
     expect(result.current.error).toBeNull()
     expect(queryClient.getQueryData<EmploymentBoard>(queryKey)?.departmentName).toBe('Свежий отдел')
+  })
+
+  it('uses fresh after a personnel edit while unmounted, including remount and another date', async () => {
+    notifyEmploymentBoardPersonnelChanged(queryClient)
+    actionMocks.getDepartmentEmploymentBoard.mockImplementation(({ selectedDate }) =>
+      Promise.resolve({ success: true, data: board(selectedDate, selectedDate === '2026-10-07' ? 'today' : 'dated') }))
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const mounted = renderHook(() => useEmploymentBoard({
+      selectedDate: '2026-10-07', expectedDateMode: 'today', onDateBoundary: vi.fn(),
+    }), { wrapper })
+    await waitFor(() => expect(mounted.result.current.data).toBeDefined())
+    mounted.unmount()
+    const remounted = renderHook(() => useEmploymentBoard({
+      selectedDate: '2026-10-08', expectedDateMode: 'dated', onDateBoundary: vi.fn(),
+    }), { wrapper })
+    await waitFor(() => expect(remounted.result.current.data).toBeDefined())
+    expect(actionMocks.getDepartmentEmploymentBoard.mock.calls).toEqual([
+      [{ filters: undefined, selectedDate: '2026-10-07', cachePolicy: 'fresh' }],
+      [{ filters: undefined, selectedDate: '2026-10-08', cachePolicy: 'fresh' }],
+    ])
+  })
+
+  it('does not restore an old ordinary response after a personnel change', async () => {
+    const ordinary = deferred<ActionResult<EmploymentBoard>>()
+    actionMocks.getDepartmentEmploymentBoard.mockReturnValueOnce(ordinary.promise)
+    // Prove the revision guard independently of TanStack cancellation.
+    vi.spyOn(queryClient, 'cancelQueries').mockResolvedValue(undefined)
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const queryKey = ['employment-board', 'list', null, '2026-10-07', 'today']
+    const mounted = renderHook(() => useEmploymentBoard({
+      selectedDate: '2026-10-07', expectedDateMode: 'today', onDateBoundary: vi.fn(),
+    }), { wrapper })
+    await waitFor(() => expect(actionMocks.getDepartmentEmploymentBoard).toHaveBeenCalledTimes(1))
+    const fresh = { ...board('2026-10-07', 'today'), departmentName: 'После кадрового изменения' }
+    await act(async () => {
+      notifyEmploymentBoardPersonnelChanged(queryClient)
+      queryClient.setQueryData(queryKey, fresh)
+      ordinary.resolve({ success: true, data: board('2026-10-07', 'today') })
+      await ordinary.promise
+    })
+    await waitFor(() => expect(mounted.result.current.isFetching).toBe(false))
+    expect(queryClient.getQueryData(queryKey)).toEqual(fresh)
   })
 
   it('rechecks an open board when a private employment period changes elsewhere', async () => {

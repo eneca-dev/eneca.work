@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns'
 
 interface UseScissorsInteractionOptions {
@@ -47,58 +47,52 @@ export function useScissorsInteraction({
 }: UseScissorsInteractionOptions): UseScissorsInteractionReturn {
   const [cutLinePosition, setCutLinePosition] = useState<number | null>(null)
   const [isValidCut, setIsValidCut] = useState(false)
-  const splitDateRef = useRef<string | null>(null)
 
   const totalDays = differenceInCalendarDays(parseISO(endDate), parseISO(startDate)) + 1
+
+  const getCut = useCallback((e: React.MouseEvent) => {
+    const relativeX = e.clientX - e.currentTarget.getBoundingClientRect().left
+    const dayOffset = Math.floor(relativeX / dayCellWidth)
+    return {
+      position: dayOffset * dayCellWidth,
+      date: dayOffset >= 1 && dayOffset < totalDays
+        ? format(addDays(parseISO(startDate), dayOffset), 'yyyy-MM-dd') : null,
+    }
+  }, [dayCellWidth, startDate, totalDays])
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!isActive) return
 
-      const rect = e.currentTarget.getBoundingClientRect()
-      const relativeX = e.clientX - rect.left
-
-      // Вычисляем смещение в днях от начала бара
-      const dayOffset = Math.floor(relativeX / dayCellWidth)
-
-      // splitDate = startDate + dayOffset (это дата начала ВТОРОЙ части)
-      const splitDate = format(addDays(parseISO(startDate), dayOffset), 'yyyy-MM-dd')
-
-      // Валидация: splitDate должна быть строго внутри диапазона
-      // (не на первый день — иначе первая часть будет пустой,
-      //  и не позже последнего дня — иначе вторая часть будет пустой)
-      const valid = dayOffset >= 1 && dayOffset < totalDays
-
-      // Позиция линии — привязана к границе дня
-      const linePos = dayOffset * dayCellWidth
-
-      setCutLinePosition(linePos)
-      setIsValidCut(valid)
-      splitDateRef.current = valid ? splitDate : null
+      const cut = getCut(e)
+      setCutLinePosition(cut.position)
+      setIsValidCut(cut.date !== null)
     },
-    [isActive, dayCellWidth, startDate, totalDays]
+    [isActive, getCut]
   )
 
   const handleMouseLeave = useCallback(() => {
     setCutLinePosition(null)
     setIsValidCut(false)
-    splitDateRef.current = null
   }, [])
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!isActive || !splitDateRef.current) return
+      if (!isActive) return
+      // A remounted bar may receive a click before its first mousemove.
+      // Use the actual click coordinates rather than a previous hover position.
+      const cut = getCut(e)
+      if (!cut.date) return
 
       e.stopPropagation()
       e.preventDefault()
-      onSplit(loadingId, splitDateRef.current)
+      onSplit(loadingId, cut.date)
 
       // Сброс после клика
       setCutLinePosition(null)
       setIsValidCut(false)
-      splitDateRef.current = null
     },
-    [isActive, loadingId, onSplit]
+    [isActive, loadingId, onSplit, getCut]
   )
 
   if (!isActive) {

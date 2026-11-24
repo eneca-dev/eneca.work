@@ -6,6 +6,7 @@ import type { ActionResult } from '@/modules/cache/types'
 import type { EmploymentBoard } from '../types'
 import {
   emitEmploymentBoardLoadingChange,
+  notifyEmploymentBoardPersonnelChanged,
   type LoadingRealtimePayload,
 } from '@/modules/cache/realtime'
 import {
@@ -141,6 +142,32 @@ describe('useEmploymentBoardRealtime', () => {
 
     act(() => vi.advanceTimersByTime(2_100))
     expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes personnel changes through one fresh controller scoped to its QueryClient', async () => {
+    const realtime = renderRealtime()
+    const otherClient = new QueryClient()
+    act(() => {
+      notifyEmploymentBoardPersonnelChanged(otherClient)
+      vi.advanceTimersByTime(200)
+    })
+    expect(mocks.getBoard).not.toHaveBeenCalled()
+    act(() => {
+      notifyEmploymentBoardPersonnelChanged(queryClient)
+      notifyEmploymentBoardPersonnelChanged(queryClient)
+      vi.advanceTimersByTime(150)
+    })
+    await waitFor(() => expect(mocks.getBoard).toHaveBeenCalledTimes(1))
+    expect(mocks.getBoard).toHaveBeenCalledWith({
+      filters: undefined, selectedDate: '2026-10-07', cachePolicy: 'fresh',
+    })
+    realtime.unmount()
+    act(() => {
+      notifyEmploymentBoardPersonnelChanged(queryClient)
+      vi.advanceTimersByTime(200)
+    })
+    expect(mocks.getBoard).toHaveBeenCalledTimes(1)
+    otherClient.clear()
   })
 
   it('keeps INSERT and UPDATE scoped while handling DELETE conservatively', () => {

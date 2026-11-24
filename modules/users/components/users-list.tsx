@@ -50,8 +50,9 @@ import { cn } from "@/lib/utils"
 import * as Sentry from "@sentry/nextjs"
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
-import { getEmploymentStatus } from '../lib/employment-client'
+import { getEmploymentStatus, type EmploymentDatedCommand } from '../lib/employment-client'
 import { finishEmployeeEmployment } from '../actions/employment'
+import { notifyEmploymentBoardPersonnelChanged } from '@/modules/cache/realtime'
 
 interface UsersListProps {
   users: User[]
@@ -363,18 +364,20 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
     setIsDialogOpen(true)
   }, [])
 
-  const handleDeleteUser = useCallback(async (userId: string) => {
+  const handleDeleteUser = useCallback(async (userId: string, command?: EmploymentDatedCommand) => {
     if (!employmentActionReady) return false
     Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'UsersList: delete user confirm', data: { user_id: userId } })
     setIsDeleting(userId)
     try {
       await Sentry.startSpan({ name: 'Users/UsersList deleteUser', op: 'ui.action', attributes: { user_id: userId } }, async () => {
         if (employmentMode === 'finish') {
-          const result = await finishEmployeeEmployment(userId)
+          if (!command) throw new Error('Выберите последний рабочий день и обновите кадровые данные.')
+          const result = await finishEmployeeEmployment(userId, command)
           if (!result.success) throw new Error(result.error)
+          notifyEmploymentBoardPersonnelChanged(queryClient)
           await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.users.all }),
             queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() }),
-            queryClient.invalidateQueries({ queryKey: queryKeys.employmentBoard.lists() }),
           ])
         } else {
           await deleteUser(userId)
@@ -382,7 +385,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
       })
       toast({
         title: "Успех",
-        description: employmentMode === 'finish' ? 'Сегодня — последний рабочий день сотрудника. История сохранена.' : 'Пользователь успешно удален',
+        description: employmentMode === 'finish' ? `Последний рабочий день — ${command!.effectiveDate}, включительно. История сохранена.` : 'Пользователь успешно удален',
       })
       if (onUserUpdated) {
         onUserUpdated()
@@ -1333,12 +1336,12 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
         user={userToDelete}
         mode={employmentMode}
         disabled={!employmentActionReady}
-        onConfirm={async () => {
+        onConfirm={async (command) => {
           if (userToDelete) {
             Sentry.addBreadcrumb({ category: 'ui.confirm', level: 'info', message: 'UsersList: confirm delete user', data: { user_id: userToDelete.id } })
           }
           if (userToDelete) {
-            return handleDeleteUser(userToDelete.id)
+            return handleDeleteUser(userToDelete.id, command)
           }
           return false
         }}

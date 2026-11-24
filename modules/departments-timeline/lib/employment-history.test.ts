@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Department, Employee, EmploymentSegment, Loading } from '../types'
 import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
-import { getDailyCapacity, getMonthlyCapacityPercentage, projectEmploymentHistory } from './employment-history'
+import { getDailyCapacity, getMonthlyCapacityPercentage, projectEmploymentHistory, previewLoadingDates } from './employment-history'
 
 const loading: Loading = {
   id: 'loading', sectionId: 'section', stageId: 'stage',
@@ -26,6 +26,70 @@ const month: MonthCell = {
   startDate: '2026-11-02', endDate: '2026-11-03', isCurrentMonth: false,
   workingDays: 2, workingDates: ['2026-11-02', '2026-11-03'],
 }
+
+describe('loading resize preview with employment history', () => {
+  it('updates dates and daily/monthly totals immediately without changing saved capacity or the previous snapshot', () => {
+    const original = project([segment()])
+    const serialized = JSON.stringify(original)
+    const result = previewLoadingDates(original, employee.id, loading.id, '2026-11-03', '2026-11-03', '2026-11-19')
+    const department = result[0]
+    const row = department.teams[0].employees[0]
+    expect(row.loadings?.[0]).toMatchObject({ startDate: '2026-11-03', endDate: '2026-11-03' })
+    expect(row.dailyWorkloads?.['2026-11-02']).toBeUndefined()
+    expect(row.dailyWorkloads?.['2026-11-03']).toBe(1)
+    expect(department.teams[0].dailyWorkloads).toEqual(row.dailyWorkloads)
+    expect(department.dailyWorkloads).toEqual(row.dailyWorkloads)
+    expect(getMonthlyCapacityPercentage(department, month)).toBe(50)
+    expect(department.dailyCapacity).toEqual(original[0].dailyCapacity)
+    expect(JSON.stringify(original)).toBe(serialized)
+  })
+
+  it('updates both sides of a transfer and can bring work back into a previously empty membership row', () => {
+    const segments = [segment({ endDate: '2026-11-10' }),
+      segment({ departmentId: 'new', teamId: 'new-team', startDate: '2026-11-11' })]
+    const original = projectEmploymentHistory(departments(), [{ ...employee,
+      loadings: [{ ...loading, startDate: '2026-11-01', endDate: '2026-11-05' }] }], segments, '2026-11-19')
+    expect(original[1].teams[0].employees[0].loadings).toEqual([])
+    const result = previewLoadingDates(original, employee.id, loading.id, '2026-11-01', '2026-11-15', '2026-11-19')
+    expect(result[0].dailyWorkloads?.['2026-11-10']).toBe(1)
+    expect(result[0].dailyWorkloads?.['2026-11-11']).toBeUndefined()
+    expect(result[1].dailyWorkloads?.['2026-11-11']).toBe(1)
+    expect(result[1].dailyWorkloads?.['2026-11-16']).toBeUndefined()
+    expect(result[1].teams[0].employees[0].loadings?.[0].endDate).toBe('2026-11-15')
+  })
+
+  it('updates guest workload without adding it to the host department total', () => {
+    const original = departments()
+    original[1].teams.push({ id: 'guests', name: 'Guests', departmentId: 'new', isGuestTeam: true,
+      employees: [{ ...employee, isGuest: true }] })
+    const projected = projectEmploymentHistory(original, [employee], [segment()], '2026-11-19')
+    const result = previewLoadingDates(projected, employee.id, loading.id, '2026-11-01', '2026-11-02', '2026-11-19')
+    const guest = result[1].teams.find(team => team.isGuestTeam)!
+    expect(guest.dailyWorkloads?.['2026-11-02']).toBe(1)
+    expect(guest.dailyWorkloads?.['2026-11-03']).toBeUndefined()
+    expect(result[1].dailyWorkloads).toEqual({})
+    expect(guest.employees[0].isGuest).toBe(true)
+  })
+
+  it('retains an out-of-employment loading as a conflict and restores it when resized into employment', () => {
+    const original = project([segment()])
+    const outside = previewLoadingDates(original, employee.id, loading.id, '2026-12-01', '2026-12-02', '2026-11-19')
+    expect(outside[0].teams[0].employees[0].loadings).toEqual([])
+    expect(outside[0].teams[0].employees[0].employmentConflicts?.[0].id).toBe(loading.id)
+    const restored = previewLoadingDates(outside, employee.id, loading.id, '2026-11-01', '2026-11-02', '2026-11-19')
+    expect(restored[0].teams[0].employees[0].loadings?.[0].id).toBe(loading.id)
+    expect(restored[0].teams[0].employees[0].employmentConflicts).toEqual([])
+  })
+
+  it('keeps legacy snapshots supported and ignores unknown loading ids', () => {
+    const original = departments()
+    original[0].teams[0].employees = [employee]
+    expect(previewLoadingDates(original, employee.id, 'missing', '2026-11-01', '2026-11-02', '2026-11-19')).toBe(original)
+    const result = previewLoadingDates(original, employee.id, loading.id, '2026-11-01', '2026-11-02', '2026-11-19')
+    expect(result[0].teams[0].employees[0].loadings?.[0].endDate).toBe('2026-11-02')
+    expect(result[0].dailyCapacity).toBeUndefined()
+  })
+})
 
 describe('employment history projection', () => {
   it('does not recreate a filtered native team from the full history of a guest', () => {

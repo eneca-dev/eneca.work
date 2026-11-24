@@ -15,6 +15,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/modules/cache'
+import type { Department } from '@/modules/departments-timeline/types'
 import {
   createLoading,
   updateLoading,
@@ -33,6 +34,8 @@ import type {
 } from '../actions/loadings'
 
 export interface UseLoadingMutationsOptions {
+  /** Wait for server confirmation before showing split parts. Defaults to optimistic. */
+  optimisticSplit?: boolean
   /** Callback при успешном создании */
   onCreateSuccess?: (data: LoadingResult) => void
   /** Callback при успешном обновлении */
@@ -959,6 +962,7 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     },
 
     onMutate: async (input: SplitLoadingInput): Promise<OptimisticContext> => {
+      if (options.optimisticSplit === false) return {}
       await Promise.all([
         queryClient.cancelQueries({ queryKey: queryKeys.departmentsTimeline.all }),
         queryClient.cancelQueries({ queryKey: queryKeys.resourceGraph.all }),
@@ -1105,6 +1109,29 @@ export function useLoadingMutations(options: UseLoadingMutationsOptions = {}) {
     },
 
     onSuccess: async (data, _variables, context) => {
+      if (options.optimisticSplit === false) {
+        // Show only the two records actually returned by the completed server action.
+        queryClient.setQueriesData<Department[]>(
+          { queryKey: queryKeys.departmentsTimeline.lists() },
+          old => Array.isArray(old) ? old.map(department => ({
+            ...department,
+            teams: department.teams.map(team => ({
+              ...team,
+              employees: team.employees.map(employee => {
+                const original = employee.loadings?.find(loading => loading.id === data.original.id)
+                if (!original) return employee
+                const loadings = employee.loadings!.map(loading => loading.id === data.original.id
+                  ? { ...loading, startDate: data.original.startDate, endDate: data.original.endDate } : loading)
+                if (!loadings.some(loading => loading.id === data.created.id)) {
+                  loadings.push({ ...original, id: data.created.id,
+                    startDate: data.created.startDate, endDate: data.created.endDate })
+                }
+                return { ...employee, loadings, loadingsCount: loadings.length }
+              }),
+            })),
+          })) : old,
+        )
+      }
       // Заменяем temp ID на реальный UUID
       const oldTempId = context?.tempId
       if (oldTempId && data.created) {

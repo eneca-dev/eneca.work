@@ -26,7 +26,7 @@ import { getEmploymentStatus } from '@/modules/users/lib/employment-client'
 import { createAdminClient } from '@/utils/supabase/admin'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/db'
-import { employmentRangeSchema, readEmploymentSegments, type EmploymentRange } from '../lib/employment-history.server'
+import { EMPLOYMENT_ID_BATCH_SIZE, employmentRangeSchema, readEmploymentSegments, type EmploymentRange } from '../lib/employment-history.server'
 import { projectEmploymentHistory } from '../lib/employment-history'
 
 // ============================================================================
@@ -80,6 +80,21 @@ async function fetchAllPages<T>(query: PaginatedQuery<T>): Promise<PaginatedQuer
       return { data: rows, error: null }
     }
   }
+}
+
+// Fresh builders preserve filters and independent pagination for each bounded ID list.
+async function fetchEmployeeBatches<T>(
+  ids: string[],
+  createQuery: (batch: string[]) => PaginatedQuery<T>,
+): Promise<PaginatedQueryResult<T>> {
+  const rows: T[] = []
+  const uniqueIds = [...new Set(ids)]
+  for (let offset = 0; offset < uniqueIds.length; offset += EMPLOYMENT_ID_BATCH_SIZE) {
+    const result = await fetchAllPages(createQuery(uniqueIds.slice(offset, offset + EMPLOYMENT_ID_BATCH_SIZE)))
+    if (result.error) return { data: null, error: result.error }
+    rows.push(...(result.data ?? []))
+  }
+  return { data: rows, error: null }
 }
 
 /**
@@ -375,84 +390,80 @@ export async function getDepartmentsData(
     const workloadClient = employmentSegments
       ? createAdminClient() as SupabaseClient<Database>
       : supabase
-    let employeeQuery = workloadClient
-      .from('view_employee_workloads')
-      .select('*')
-    employeeQuery = employmentSegments
-      ? employeeQuery.in('user_id', historicalEmployeeIds)
-      : employeeQuery.or('loading_status.eq.active,loading_status.is.null').in('final_department_id', orgDepartmentIds)
-    if (historyRange) employeeQuery = employeeQuery.eq('loading_status', 'active')
-      .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
+    function createEmployeeQuery(employeeIds: string[]) {
+      let employeeQuery = workloadClient
+        .from('view_employee_workloads')
+        .select('*')
+      employeeQuery = employmentSegments
+        ? employeeQuery.in('user_id', employeeIds)
+        : employeeQuery.or('loading_status.eq.active,loading_status.is.null').in('final_department_id', orgDepartmentIds)
+      if (historyRange) employeeQuery = employeeQuery.eq('loading_status', 'active')
+        .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
 
-    // Запрос для гостевых сотрудников: они должны проходить ВНЕ фильтров по
-    // final_department_id / final_team_id, потому что у них эти поля = их
-    // родного отдела (а не отдела-получателя). Иначе фильтр вида
-    // .eq('final_department_id', 'Отдел развития') отбросил бы гостя.
-    // Гости фильтруются только по user_id и базовым restricted-проектам.
-    let guestQueryBuilder = guestEmployeeIds.length > 0
-      ? workloadClient
-          .from('view_employee_workloads')
-          .select('*')
-          .in('user_id', guestEmployeeIds)
-      : null
-    if (guestQueryBuilder && !employmentSegments) {
-      guestQueryBuilder = guestQueryBuilder.or('loading_status.eq.active,loading_status.is.null')
-    }
-    if (guestQueryBuilder && historyRange) guestQueryBuilder = guestQueryBuilder.eq('loading_status', 'active')
-      .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
-
-    if (guestQueryBuilder && restrictedProjectIds.length > 0) {
-      guestQueryBuilder = guestQueryBuilder.or(
-        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
-      )
-    }
-
-    // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
-    // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
-    // .or() с is.null сохраняет строки сотрудников без загрузок (project_id IS NULL) —
-    // иначе PostgreSQL NOT IN отбросил бы их (NULL NOT IN = NULL = отфильтровано).
-    if (restrictedProjectIds.length > 0) {
-      employeeQuery = employeeQuery.or(
-        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
-      )
-    }
-
-    // ----- Org-фильтры (только для main employeeQuery) -----
-    // Гостям эти фильтры НЕ применяются: у guest final_department_id / final_team_id =
-    // его родного отдела, а не отдела-получателя гранта, иначе фильтр их отбросил бы.
-
-    if (!employmentSegments && secureFilters?.department_id) {
-      employeeQuery = applyMultiValueFilter(
-        employeeQuery,
-        secureFilters.department_id,
-        'final_department_id',
-        'final_department_name',
-      )
-    }
-
-    if (!employmentSegments && secureFilters?.team_id) {
-      employeeQuery = applyMultiValueFilter(
-        employeeQuery,
-        secureFilters.team_id,
-        'final_team_id',
-        'final_team_name',
-      )
-    }
-
-    for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'department_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('final_department_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('final_department_name', 'ilike', val)
+      // 🔒 Исключаем загрузки по restricted-проектам — скроет их из timeline
+      // и автоматически уберёт из calculateDailyWorkloads/aggregateDailyWorkloads.
+      // .or() с is.null сохраняет строки сотрудников без загрузок (project_id IS NULL) —
+      // иначе PostgreSQL NOT IN отбросил бы их (NULL NOT IN = NULL = отфильтровано).
+      if (restrictedProjectIds.length > 0) {
+        employeeQuery = employeeQuery.or(
+          `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`
+        )
       }
+
+      // ----- Org-фильтры (только для main employeeQuery) -----
+      // Гостям эти фильтры НЕ применяются: у guest final_department_id / final_team_id =
+      // его родного отдела, а не отдела-получателя гранта, иначе фильтр их отбросил бы.
+
+      if (!employmentSegments && secureFilters?.department_id) {
+        employeeQuery = applyMultiValueFilter(
+          employeeQuery,
+          secureFilters.department_id,
+          'final_department_id',
+          'final_department_name',
+        )
+      }
+
+      if (!employmentSegments && secureFilters?.team_id) {
+        employeeQuery = applyMultiValueFilter(
+          employeeQuery,
+          secureFilters.team_id,
+          'final_team_id',
+          'final_team_name',
+        )
+      }
+
+      for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'department_id')) {
+        if (isUuid(val)) {
+          employeeQuery = employeeQuery.neq('final_department_id', val)
+        } else {
+          employeeQuery = employeeQuery.not('final_department_name', 'ilike', val)
+        }
+      }
+
+      for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'team_id')) {
+        if (isUuid(val)) {
+          employeeQuery = employeeQuery.neq('final_team_id', val)
+        } else {
+          employeeQuery = employeeQuery.not('final_team_name', 'ilike', val)
+        }
+      }
+
+      return applyLoadingLevelFilters(employeeQuery)
+        .order('final_department_name').order('final_team_name')
+        .order('last_name').order('first_name').order('user_id').order('loading_id')
     }
 
-    for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'team_id')) {
-      if (isUuid(val)) {
-        employeeQuery = employeeQuery.neq('final_team_id', val)
-      } else {
-        employeeQuery = employeeQuery.not('final_team_name', 'ilike', val)
-      }
+    // Guests must not inherit current department/team filters.
+    function createGuestQuery(employeeIds: string[]) {
+      let query = workloadClient.from('view_employee_workloads').select('*').in('user_id', employeeIds)
+      if (!employmentSegments) query = query.or('loading_status.eq.active,loading_status.is.null')
+      if (historyRange) query = query.eq('loading_status', 'active')
+        .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
+      if (restrictedProjectIds.length > 0) query = query.or(
+        `project_id.is.null,project_id.not.in.(${restrictedProjectIds.join(',')})`)
+      return applyLoadingLevelFilters(query)
+        .order('final_department_name').order('final_team_name')
+        .order('last_name').order('first_name').order('user_id').order('loading_id')
     }
 
     // ----- Loading-уровень фильтры (для обоих: main + guest) -----
@@ -501,39 +512,14 @@ export async function getDepartmentsData(
       return q as Q
     }
 
-    employeeQuery = applyLoadingLevelFilters(employeeQuery)
-    if (guestQueryBuilder) {
-      guestQueryBuilder = applyLoadingLevelFilters(guestQueryBuilder)
-    }
-
-    // Порядок обязателен для пагинации: без него Postgres не гарантирует,
-    // что две соседние страницы не пересекутся и не пропустят строки.
-    // user_id + loading_id завершают порядок для сотрудников с одинаковыми ФИО.
-    employeeQuery = employeeQuery
-      .order('final_department_name')
-      .order('final_team_name')
-      .order('last_name')
-      .order('first_name')
-      .order('user_id')
-      .order('loading_id')
-    if (guestQueryBuilder) {
-      guestQueryBuilder = guestQueryBuilder
-        .order('final_department_name')
-        .order('final_team_name')
-        .order('last_name')
-        .order('first_name')
-        .order('user_id')
-        .order('loading_id')
-    }
-
     // Параллельно: основная выборка + гостевые сотрудники.
     // Гости идут отдельно потому что фильтры по final_department_id / final_team_id
     // их бы отбросили (у гостя эти поля = его родного отдела, не получателя).
     const [employeeResult, guestResult] = await Promise.all([
-      fetchAllPages(employeeQuery),
-      guestQueryBuilder
-        ? fetchAllPages(guestQueryBuilder)
-        : Promise.resolve({ data: [], error: null }),
+      employmentSegments
+        ? fetchEmployeeBatches(historicalEmployeeIds, createEmployeeQuery)
+        : fetchAllPages(createEmployeeQuery([])),
+      fetchEmployeeBatches(guestEmployeeIds, createGuestQuery),
     ])
 
     const { data: employeeData, error: employeeError } = employeeResult
@@ -570,16 +556,18 @@ export async function getDepartmentsData(
     if (employmentSegments && !secureFilters?.project_id && !secureFilters?.['!project_id']) {
       const candidateIds = [...new Set([...historicalEmployeeIds, ...guestEmployeeIds])]
       if (candidateIds.length) {
-        let identitiesQuery = workloadClient.from('view_users')
-          .select('user_id,first_name,last_name,full_name,avatar_url,department_id,department_name,team_id,team_name,position_name,employment_rate')
-          .in('user_id', candidateIds).order('user_id')
-        if (secureFilters?.responsible_id) identitiesQuery = applyMultiValueFilter(
-          identitiesQuery, secureFilters.responsible_id, 'user_id', 'full_name', true)
-        for (const excluded of getNegatedParams(secureFilters, 'responsible_id')) {
-          identitiesQuery = isUuid(excluded) ? identitiesQuery.neq('user_id', excluded)
-            : identitiesQuery.not('full_name', 'ilike', `%${excluded}%`)
-        }
-        const identities = await fetchAllPages(identitiesQuery)
+        const identities = await fetchEmployeeBatches(candidateIds, (batch) => {
+          let identitiesQuery = workloadClient.from('view_users')
+            .select('user_id,first_name,last_name,full_name,avatar_url,department_id,department_name,team_id,team_name,position_name,employment_rate')
+            .in('user_id', batch).order('user_id')
+          if (secureFilters?.responsible_id) identitiesQuery = applyMultiValueFilter(
+            identitiesQuery, secureFilters.responsible_id, 'user_id', 'full_name', true)
+          for (const excluded of getNegatedParams(secureFilters, 'responsible_id')) {
+            identitiesQuery = isUuid(excluded) ? identitiesQuery.neq('user_id', excluded)
+              : identitiesQuery.not('full_name', 'ilike', `%${excluded}%`)
+          }
+          return identitiesQuery
+        })
         if (identities.error) throw new Error('Не удалось получить состав сотрудников')
         const visibleIdentities = new Set(allEmployeeRows.map(row => row.user_id))
         for (const person of identities.data ?? []) {

@@ -12,6 +12,7 @@ export interface EmploymentDateRange { startDate: string; endDate: string }
 const baselineSchema = z.object({ employee_id: z.string().uuid() })
 const periodSchema = baselineSchema.extend({ valid_from: z.string(), valid_to: z.string().nullable() })
 type Period = z.infer<typeof periodSchema>
+const ID_BATCH_SIZE = 100
 
 /** Only narrows an existing authorized employee set; it never grants visibility. */
 export async function getAvailableEmployeeIds(
@@ -32,8 +33,8 @@ export async function getAvailableEmployeeIds(
   const baseline = new Set<string>()
   const periods: Period[] = []
   // Keep PostgREST URLs bounded and read every page, not just the API's first 1000 rows.
-  for (let offset = 0; offset < ids.length; offset += 200) {
-    const batch = ids.slice(offset, offset + 200)
+  for (let offset = 0; offset < ids.length; offset += ID_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + ID_BATCH_SIZE)
     if (range.startDate < cutoverDate) {
       const result = await admin.from('employee_employment_baseline').select('employee_id').in('employee_id', batch)
       if (result.error) throw new Error('Не удалось проверить исходный состав сотрудников')
@@ -105,12 +106,27 @@ export async function getAssignableEmployeeIds(
   if (!editScopes.some(permission => ctx.permissions.includes(permission))) {
     throw new Error('Недостаточно прав для назначения сотрудника')
   }
-  const [{ data: people, error: peopleError }, { data: grants, error: grantsError }] = await Promise.all([
-    supabase.from('view_users').select('user_id,department_id,team_id').in('user_id', ids),
-    supabase.from('employee_loading_access_grants')
-      .select('employee_id,granted_to_department_id').in('employee_id', ids),
-  ])
-  if (peopleError || grantsError || !people || !grants) throw new Error('Не удалось проверить право назначения')
+  const people: Pick<Database['public']['Views']['view_users']['Row'], 'user_id' | 'department_id' | 'team_id'>[] = []
+  const grants: Pick<Database['public']['Tables']['employee_loading_access_grants']['Row'], 'employee_id' | 'granted_to_department_id'>[] = []
+  for (let offset = 0; offset < ids.length; offset += ID_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + ID_BATCH_SIZE)
+    // Fresh builders per page keep URLs bounded and preserve grants past the API row limit.
+    for (let from = 0; ; from += 1000) {
+      const [peopleResult, grantsResult] = await Promise.all([
+        supabase.from('view_users').select('user_id,department_id,team_id').in('user_id', batch)
+          .order('user_id').range(from, from + 999),
+        supabase.from('employee_loading_access_grants')
+          .select('employee_id,granted_to_department_id').in('employee_id', batch)
+          .order('employee_id').order('granted_to_department_id').range(from, from + 999),
+      ])
+      if (peopleResult.error || grantsResult.error || !peopleResult.data || !grantsResult.data) {
+        throw new Error('Не удалось проверить право назначения')
+      }
+      people.push(...peopleResult.data)
+      grants.push(...grantsResult.data)
+      if (peopleResult.data.length < 1000 && grantsResult.data.length < 1000) break
+    }
+  }
   const grantMap = new Map<string, string[]>()
   for (const grant of grants) {
     if (!grant.employee_id || !grant.granted_to_department_id) continue

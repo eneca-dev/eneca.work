@@ -44,6 +44,7 @@ type Constraint = { operation: string; column: string; value: unknown }
 let tables: Record<string, Row[]>
 let failures: Record<string, string>
 let calls: Query[]
+let failEmployeeId: string | undefined
 
 // A small data fixture adapter applies actual requested equality/membership/range
 // predicates. Unsupported expressions fail the test instead of silently matching.
@@ -94,7 +95,12 @@ class Query implements PromiseLike<QueryResult> {
     resolve?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
     reject?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
+    const idFilter = this.constraints.find(item => item.operation === 'in' && item.column === 'user_id')
+    const requestedIds = (idFilter?.value ?? []) as string[]
+    const oversized = requestedIds.length > 100
     const error = failures[`${this.client}/${this.table}`]
+      || (oversized ? 'HeadersOverflowError' : undefined)
+      || (failEmployeeId && requestedIds.includes(failEmployeeId) ? 'Failed batch' : undefined)
     const result: QueryResult = error
       ? { data: null, error: { message: error } }
       : { data: (tables[this.table] ?? []).filter(row => this.predicates.every(test => test(row)))
@@ -134,6 +140,7 @@ describe('dated department reader security and data contract', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     calls = []
     failures = {}
+    failEmployeeId = undefined
     tables = {
       projects: [{ project_id: ids.restricted, is_restricted: true }],
       view_organizational_structure: [
@@ -257,6 +264,63 @@ describe('dated department reader security and data contract', () => {
     expect((await getDepartmentsData({}, { startDate: '2026-02-30', endDate: '2026-03-01' })).success).toBe(false)
     expect((await getDepartmentsData({}, { startDate: '2000-01-01', endDate: '2026-11-20' })).success).toBe(false)
     expect(mocks.createAdminClient).not.toHaveBeenCalled()
+  })
+
+  function largeDepartment(size: number) {
+    const employeeIds = Array.from({ length: size }, (_, index) =>
+      `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`)
+    tables.employee_employment_baseline = employeeIds.map(employee_id => ({
+      employee_id, department_id: ids.department, team_id: ids.team, employment_rate: 1,
+    }))
+    tables.employee_employment_periods = []
+    tables.view_users = employeeIds.map(user_id => ({
+      user_id, full_name: user_id, department_id: ids.department, team_id: ids.team, employment_rate: 1,
+    }))
+    tables.view_employee_workloads = employeeIds.map((id, index) =>
+      loading(`visible-${index}`, '2026-11-18', '2026-11-18', ids.project, id))
+    return employeeIds
+  }
+
+  it('reads 596 employees in bounded requests without losing capacity, loadings or restrictions', async () => {
+    const employeeIds = largeDepartment(596)
+    tables.view_employee_workloads.push(
+      loading('secret', '2026-11-18', '2026-11-18', ids.restricted, employeeIds[595]),
+      loading('outside-date', '2026-12-01', '2026-12-01', ids.project, employeeIds[595]),
+      loading('unauthorized', '2026-11-18', '2026-11-18', ids.project, ids.guest))
+    const [department] = resultData(await getDepartmentsData({}, range))
+    expect(department.dailyCapacity?.['2026-11-18']).toBe(596)
+    expect(department.dailyWorkloads?.['2026-11-18']).toBe(596)
+    expect(department.teams.flatMap(team => team.employees)).toHaveLength(596)
+    for (const table of ['view_users', 'view_employee_workloads']) {
+      const batches = calls.filter(call => call.table === table).map(call =>
+        call.constraints.find(item => item.operation === 'in' && item.column === 'user_id')!.value as string[])
+      expect(batches.map(batch => batch.length)).toEqual([100, 100, 100, 100, 100, 96])
+      expect(batches.flat()).toEqual(employeeIds)
+    }
+    expect(JSON.stringify(department)).not.toMatch(/secret|outside-date|unauthorized/)
+  })
+
+  it('does not return a partial department when a later employee batch fails', async () => {
+    const employeeIds = largeDepartment(201)
+    failEmployeeId = employeeIds[150]
+    expect((await getDepartmentsData({}, range)).success).toBe(false)
+  })
+
+  it('continues row pagination within each employee batch', async () => {
+    const employeeIds = largeDepartment(101)
+    tables.view_employee_workloads = Array.from({ length: 1001 }, (_, index) =>
+      loading(`many-${index}`, '2026-11-18', '2026-11-18', ids.project, employeeIds[0]))
+    tables.view_employee_workloads.push(loading('last-batch', '2026-11-18', '2026-11-18', ids.project, employeeIds[100]))
+    const [department] = resultData(await getDepartmentsData({}, range))
+    expect(department.dailyWorkloads?.['2026-11-18']).toBe(1002)
+    expect(department.dailyCapacity?.['2026-11-18']).toBe(101)
+  })
+
+  it('skips workload and identity requests for an empty authorized historical scope', async () => {
+    tables.employee_employment_baseline = []
+    tables.employee_employment_periods = []
+    resultData(await getDepartmentsData({}, range))
+    expect(calls.some(call => ['view_users', 'view_employee_workloads'].includes(call.table))).toBe(false)
   })
 
   it('applies authoritative restricted filtering to granted guests without adding guest capacity to the host', async () => {

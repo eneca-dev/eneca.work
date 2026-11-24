@@ -10,16 +10,18 @@ vi.mock('@/utils/supabase/admin', () => ({ createAdminClient: mocks.admin }))
 vi.mock('@/modules/permissions/server/get-filter-context', () => ({
   getFilterContext: async () => ({ success: true, data: {
     userId: other, permissions: mocks.permissions,
+    grantedAccessDepartmentIds: ['20000000-0000-4000-8000-000000000001'],
   } }),
 }))
-import { assertEmploymentAvailable, assertEmploymentReassignment, getAvailableEmployeeIds } from './employment-availability.server'
+import { assertEmploymentAvailable, assertEmploymentReassignment, getAvailableEmployeeIds, getAssignableEmployeeIds } from './employment-availability.server'
 
 const employee = '00000000-0000-4000-8000-000000000001'
 const other = '00000000-0000-4000-8000-000000000002'
 const cutover = '2026-11-19'
 type Period = { employee_id: string; valid_from: string; valid_to: string | null }
 
-function setup(periods: Period[] = [], baseline: string[] = []) {
+function setup(periods: Period[] = [], baseline: string[] = [], failedId?: string,
+  grants: { employee_id: string; granted_to_department_id: string }[] = []) {
   const inCalls = vi.fn()
   const rangeCalls = vi.fn()
   const from = vi.fn((table: string) => {
@@ -37,12 +39,20 @@ function setup(periods: Period[] = [], baseline: string[] = []) {
   const getUser = vi.fn().mockResolvedValue({ data: { user: { id: other } }, error: null })
   const supabase = {
     auth: { getUser },
-    from: (table: string) => ({
-      select: () => ({ in: (_column: string, ids: string[]) => Promise.resolve({
-        data: table === 'view_users' ? ids.map(user_id => ({ user_id, department_id: null, team_id: null })) : [],
-        error: null,
-      }) }),
-    }),
+    from: (table: string) => {
+      let selectedIds: string[] = []
+      const query = {
+        select: () => query,
+        in: (_column: string, ids: string[]) => { selectedIds = ids; inCalls(table, _column, ids); return query },
+        order: () => query,
+        range: async (start: number, end: number) => ({
+          data: table === 'view_users' ? selectedIds.slice(start, end + 1).map(user_id => ({ user_id, department_id: null, team_id: null }))
+            : grants.filter(grant => selectedIds.includes(grant.employee_id)).slice(start, end + 1),
+          error: selectedIds.length > 100 || (failedId && selectedIds.includes(failedId)) ? { message: 'Request failed' } : null,
+        }),
+      }
+      return query
+    },
   } as unknown as SupabaseClient<Database>
   return { supabase, inCalls, rangeCalls, from, getUser }
 }
@@ -59,6 +69,34 @@ describe('employment availability server boundary', () => {
     mocks.status.mockResolvedValue(null)
     expect(await getAvailableEmployeeIds(supabase, [employee], { startDate: cutover, endDate: cutover })).toEqual([employee])
     expect(mocks.admin).not.toHaveBeenCalled()
+  })
+
+  it('authorizes a full 596-person roster in bounded requests without losing anyone', async () => {
+    const { supabase, inCalls } = setup()
+    const ids = Array.from({ length: 596 }, (_, index) => `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`)
+    expect(await getAssignableEmployeeIds(supabase, [...ids, ids[0]])).toEqual(ids)
+    for (const table of ['view_users', 'employee_loading_access_grants']) {
+      const batches = inCalls.mock.calls.filter(call => call[0] === table).map(call => call[2] as string[])
+      expect(batches.map(batch => batch.length)).toEqual([100, 100, 100, 100, 100, 96])
+      expect(batches.flat()).toEqual(ids)
+    }
+    expect(mocks.admin).not.toHaveBeenCalled()
+  })
+
+  it('rejects the complete authorization result when a later batch fails', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`)
+    const { supabase } = setup([], [], ids[100])
+    await expect(getAssignableEmployeeIds(supabase, ids)).rejects.toThrow('право назначения')
+  })
+
+  it('reads a relevant grant beyond the first 1000 rows without granting unrelated access', async () => {
+    mocks.permissions = ['loadings.edit.scope.team']
+    const grants = Array.from({ length: 1000 }, (_, index) => ({
+      employee_id: employee, granted_to_department_id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    }))
+    grants.push({ employee_id: employee, granted_to_department_id: '20000000-0000-4000-8000-000000000001' })
+    const { supabase } = setup([], [], undefined, grants)
+    expect(await getAssignableEmployeeIds(supabase, [employee, other])).toEqual([employee])
   })
 
   it('rejects malformed and reversed dates before database access', async () => {

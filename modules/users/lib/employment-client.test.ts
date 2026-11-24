@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/db'
-import { assertCanCreateEmployee, finishEmployment, getEmploymentStatus, registerEmployment, updateProfileWithEmployment } from './employment-client'
+import { assertCanCreateEmployee, finishEmployment, getEmploymentStatus, getEmploymentEditContext, registerEmployment, updateProfileWithEmployment } from './employment-client'
+import { EmploymentPartialSuccessError } from './employment-dated'
 
 const enabled = { enabled: true, cutoverDate: '2026-11-19', today: '2026-11-19' }
+const dated = {
+  effectiveDate: '2026-11-20',
+  expectedPeriodId: '00000000-0000-4000-8000-000000000003',
+  expectedUpdatedAt: '2026-11-19T12:00:00.123456+00:00',
+}
 
 function setup(status: unknown = enabled) {
   const eq = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -17,6 +23,60 @@ function setup(status: unknown = enabled) {
 }
 
 describe('employment client contract', () => {
+  it('sends explicit dates and an unrounded period token without the legacy fallback', async () => {
+    const { supabase, rpc, update } = setup()
+    await updateProfileWithEmployment(supabase, 'employee', { employment_rate: 0.5, first_name: 'Иван' }, dated)
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('update_employee_employment_dated', {
+      p_employee_id: 'employee', p_changes: { employment_rate: 0.5 },
+      p_effective_date: dated.effectiveDate, p_expected_period_id: dated.expectedPeriodId,
+      p_expected_updated_at: dated.expectedUpdatedAt,
+    })
+    expect(update).toHaveBeenCalledExactlyOnceWith({ first_name: 'Иван' })
+  })
+
+  it.each(['PGRST202', '55000', '40001', '42501'])('fails closed on dated RPC error %s', async (code) => {
+    const { supabase, rpc, from } = setup()
+    rpc.mockResolvedValue({ data: null, error: { code, message: 'private SQL text' } })
+    const operation = updateProfileWithEmployment(supabase, 'employee', { employment_rate: 0.5, first_name: 'Иван' }, dated)
+    await expect(operation).rejects.not.toThrow('private SQL text')
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('reads and validates authorized context without rounding the concurrency token', async () => {
+    const { supabase, rpc } = setup()
+    const context = { ...enabled, periodId: dated.expectedPeriodId, periodUpdatedAt: dated.expectedUpdatedAt, minDate: '2026-11-19' }
+    rpc.mockResolvedValue({ data: context, error: null })
+    expect(await getEmploymentEditContext(supabase, 'employee', 'update')).toEqual(context)
+    expect(rpc).toHaveBeenCalledWith('get_employee_employment_edit_context', { p_employee_id: 'employee', p_operation: 'update' })
+  })
+
+  it('rejects incomplete active context and never falls back on a missing context RPC', async () => {
+    const { supabase, rpc, from } = setup()
+    rpc.mockResolvedValue({ data: { ...enabled, minDate: null, periodId: null, periodUpdatedAt: null }, error: null })
+    await expect(getEmploymentEditContext(supabase, 'employee', 'finish')).rejects.toThrow()
+    rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202' } })
+    await expect(getEmploymentEditContext(supabase, 'employee', 'finish')).rejects.toThrow('ещё не подключён')
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('finishes on an explicit last working date and passes the period token', async () => {
+    const { supabase, rpc } = setup()
+    await finishEmployment(supabase, 'employee', dated)
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('finish_employee_employment_dated', {
+      p_employee_id: 'employee', p_last_working_date: dated.effectiveDate,
+      p_expected_period_id: dated.expectedPeriodId, p_expected_updated_at: dated.expectedUpdatedAt,
+    })
+  })
+
+  it('rejects invalid explicit dates before any DB call', async () => {
+    const { supabase, rpc, from } = setup()
+    await expect(updateProfileWithEmployment(supabase, 'employee', { employment_rate: 0.5 }, { ...dated, effectiveDate: '2026-02-30' })).rejects.toThrow()
+    await expect(finishEmployment(supabase, 'employee', { ...dated, effectiveDate: '2026-11-20T00:00:00Z' })).rejects.toThrow()
+    expect(rpc).not.toHaveBeenCalled()
+    expect(from).not.toHaveBeenCalled()
+  })
+
   it('keeps cosmetic edits on profiles without an unnecessary status request', async () => {
     const { supabase, rpc, update, eq } = setup()
     await updateProfileWithEmployment(supabase, 'employee', { first_name: 'Иван' })
@@ -51,6 +111,16 @@ describe('employment client contract', () => {
     const result = await updateProfileWithEmployment(supabase, 'employee', { team_id: 'team', first_name: 'Иван' })
     expect(result.error?.message).toContain('Кадровые изменения сохранены')
     expect(result.error?.message).toContain('profile denied')
+  })
+
+  it('exposes structured partial success for dated writes without raw SQL text', async () => {
+    const { supabase, eq, rpc } = setup()
+    eq.mockResolvedValue({ data: null, error: { message: 'secret database details' } })
+    const result = updateProfileWithEmployment(supabase, 'employee', { employment_rate: 0.5, first_name: 'Иван' }, dated)
+    await expect(result).rejects.toBeInstanceOf(EmploymentPartialSuccessError)
+    await expect(result).rejects.toThrow('Кадровые изменения сохранены')
+    await expect(result).rejects.not.toThrow('secret database details')
+    expect(rpc).toHaveBeenCalledTimes(1)
   })
 
   it('uses the old profile path until initialization', async () => {

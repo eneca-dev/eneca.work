@@ -28,6 +28,8 @@ export type { BulkShiftMode }
 import type { Department, TeamFreshness } from '../types'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import type { EmploymentRange } from '../lib/employment-history.server'
+import { previewLoadingDates } from '../lib/employment-history'
+import { formatMinskDate } from '@/lib/timezone-utils'
 
 // Re-export calendar events hook from resource-graph
 export { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
@@ -141,27 +143,8 @@ function updateLoadingDatesInEmployeeCache(
     return departments
   }
 
-  return departments.map((department) => ({
-    ...department,
-    teams: department.teams.map((team) => ({
-      ...team,
-      employees: team.employees.map((employee) => {
-        // Обновляем только загрузки нужного сотрудника
-        if (employee.id !== employeeId) return employee
-        // Dated totals must be recalculated together with membership on the server.
-        if (employee.employmentSegments) return employee
-
-        return {
-          ...employee,
-          loadings: employee.loadings?.map((loading) =>
-            loading.id === loadingId
-              ? { ...loading, startDate, endDate: finishDate }
-              : loading
-          ),
-        }
-      }),
-    })),
-  }))
+  return previewLoadingDates(departments, employeeId, loadingId, startDate, finishDate,
+    formatMinskDate(new Date()))
 }
 
 /**
