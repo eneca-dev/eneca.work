@@ -6,6 +6,8 @@
 
 'use server'
 
+import { assertEmploymentAvailable, assertEmploymentReassignment } from '@/modules/users/lib/employment-availability.server'
+
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import { formatMinskDate } from '@/lib/timezone-utils'
@@ -1132,6 +1134,7 @@ export async function createSectionLoading(
       }
     }
 
+    await assertEmploymentAvailable(supabase, [input.employeeId], { startDate: input.startDate, endDate: input.endDate })
     // Создание загрузки
     const { data, error } = await supabase
       .from('loadings')
@@ -1302,6 +1305,8 @@ export async function updateSectionLoading(
     if (Object.keys(updateData).length === 0) {
       return { success: true, data: undefined }
     }
+
+    await assertEmploymentReassignment(supabase, input.loadingId, input.employeeId, input)
 
     const { error } = await supabase
       .from('loadings')

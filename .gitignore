@@ -14,6 +14,17 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+
+# Python test cache
+__pycache__/
+*.py[cod]
+
+# Local database backups
+*.backup
+*.backup.gz
+*.dump
+*.dump.gz
+
 *.local
 *.log
 .idea/

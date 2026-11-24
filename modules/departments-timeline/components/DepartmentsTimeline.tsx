@@ -7,10 +7,10 @@
 
 'use client'
 
-import { useMemo, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
 import { ChevronsUpDown, ChevronsDownUp, Database } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
-import { getTodayMinsk } from '@/lib/timezone-utils'
+import { getTodayMinsk, formatMinskDate } from '@/lib/timezone-utils'
 import { useDepartmentsData, useTeamsFreshness, useCompanyCalendarEvents } from '../hooks'
 import { useDepartmentsTimelineUIStore } from '../stores'
 import { Button } from '@/components/ui/button'
@@ -107,6 +107,18 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
 
   const isAdmin = useIsAdmin()
   const isMonthlyMode = timelineScale === 'month'
+  const [currentDay, setCurrentDay] = useState(() => formatMinskDate(new Date()))
+  useEffect(() => {
+    const update = () => setCurrentDay(formatMinskDate(new Date()))
+    const timer = window.setInterval(update, 60_000)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [])
 
   // Load company calendar events (holidays and transfers) - cached for 24h
   const { data: calendarEvents = [] } = useCompanyCalendarEvents()
@@ -114,7 +126,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   // Timeline range and cells
   const range = useMemo(
     () => resolveTimelineRange(customDateRange, { daysBefore: DAYS_BEFORE_TODAY, daysAfter: DAYS_AFTER_TODAY }),
-    [customDateRange]
+    [customDateRange, currentDay]
   )
   const dayCells = useMemo(
     () => generateDayCells(range, calendarEvents),
@@ -136,7 +148,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
       MONTHLY_MONTHS_AFTER,
       calendarEvents
     )
-  }, [isMonthlyMode, calendarEvents])
+  }, [isMonthlyMode, calendarEvents, currentDay])
 
   // Width calculations depend on scale
   const timelineWidth = isMonthlyMode
@@ -152,8 +164,11 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
 
   // Data fetching with external query params
   const { data: departments, isLoading, error } = useDepartmentsData(
-    filtersApplied ? queryParams : {},
-    { enabled: shouldFetchData }
+    { filters: filtersApplied ? queryParams : {}, today: currentDay, range: {
+      startDate: isMonthlyMode ? monthCells[0].startDate : formatMinskDate(dayCells[0].date),
+      endDate: isMonthlyMode ? monthCells[monthCells.length - 1].endDate : formatMinskDate(dayCells[dayCells.length - 1].date),
+    } },
+    { enabled: shouldFetchData, queryOptions: { refetchInterval: 60_000, refetchOnWindowFocus: true } }
   )
 
   // Group departments: «гражд» → общие → «пром».
@@ -346,6 +361,11 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
 
   return (
     <div className="h-full flex flex-col bg-background">
+      {departments?.[0]?.employmentCutoverDate && (
+        <p className="px-3 py-1 text-xs text-muted-foreground border-b">
+          До {departments[0].employmentCutoverDate.split('-').reverse().join('.')} расчёт ведётся по составу сотрудников на дату запуска учёта.
+        </p>
+      )}
       {/* Timeline Header - Dates row (sticky) */}
       {!error && (
         <header className="sticky top-0 z-20 bg-card border-b shadow-sm">

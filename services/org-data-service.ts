@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/client"
 import { createAdminClient } from "@/utils/supabase/admin"
 import * as Sentry from "@sentry/nextjs"
 import { getUserPermissions } from "@/modules/permissions/supabase/supabasePermissions"
+import { assertCanCreateEmployee, getEmploymentStatus, registerEmployment, updateProfileWithEmployment } from '@/modules/users/lib/employment-client'
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -1045,7 +1046,7 @@ export async function updateUser(
         // console.log("Выполняем обновление в БД для пользователя:", userId);
         span.setAttribute("updates.count", Object.keys(updates).length)
         
-        const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
+        const { error } = await updateProfileWithEmployment(supabase, userId, updates)
 
         if (error) {
           span.setAttribute("db.success", false)
@@ -1127,6 +1128,10 @@ export async function createUser(userData: {
         span.setAttribute("operation", "create_user")
         
         const supabase = createClient()
+        const { data: { user: actor }, error: actorError } = await supabase.auth.getUser()
+        if (actorError || !actor) throw new Error('Не авторизован')
+        await assertCanCreateEmployee(supabase, actor.id)
+        await getEmploymentStatus(supabase)
         const adminClient = createAdminClient()
         
         // 1. Создаем пользователя в auth.users через Admin API
@@ -1316,6 +1321,7 @@ export async function createUser(userData: {
             .from("teams")
             .select("team_id")
             .eq("team_name", "Без команды")
+            .eq("department_id", profileData.department_id)
             .single()
           
           if (!defaultTeam.data) {
@@ -1412,6 +1418,12 @@ export async function createUser(userData: {
             }
           })
           throw new Error(`Не удалось создать профиль пользователя: ${profileError.message}`)
+        }
+
+        try {
+          await registerEmployment(supabase, authData.user.id)
+        } catch (error) {
+          throw new Error(`Профиль ${authData.user.id} создан, но оформление сотрудника не завершено. Не создавайте дубликат; обратитесь к администратору. ${error instanceof Error ? error.message : ''}`)
         }
 
         span.setAttribute("profile.success", true)

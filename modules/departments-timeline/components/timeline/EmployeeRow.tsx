@@ -48,6 +48,7 @@ import type { MonthCell } from '@/modules/resource-graph/utils/monthly-cell-util
 import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { ProspectiveLoadingBadge } from '@/components/shared/timeline/ProspectiveLoadingBadge'
+import { clipLoadingsToEmployment } from '../../lib/employment-display'
 
 /**
  * Контекст режима выборочного bulk-shift, передаётся в loading bars.
@@ -527,6 +528,12 @@ export function EmployeeRow({
 }: EmployeeRowProps) {
   const isMonthlyMode = timelineScale === 'month'
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
+  const currentTeamId = employee.currentTeamId === undefined ? (employee.teamId ?? null) : employee.currentTeamId
+  const currentDepartmentId = employee.currentDepartmentId === undefined ? (employee.departmentId ?? null) : employee.currentDepartmentId
+  const displayLoadings = useMemo(() => clipLoadingsToEmployment(
+    employee.loadings ?? [], employee.employmentSegments,
+  ), [employee.loadings, employee.employmentSegments])
+  const sourceIds = useMemo(() => new Map(displayLoadings.map(loading => [loading.id, loading.sourceLoadingId])), [displayLoadings])
 
   // Permission gating для этого сотрудника. teamId/departmentId есть в Employee
   // (из view_employee_workloads через final_team_id/final_department_id).
@@ -535,8 +542,8 @@ export function EmployeeRow({
   const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
   const canEdit = useCanEditLoading({
     responsibleId: employee.id,
-    teamId: employee.teamId ?? null,
-    departmentId: employee.departmentId ?? null,
+    teamId: currentTeamId,
+    departmentId: currentDepartmentId,
     subdivisionId: null,
     projectId: null, // varies per loading; PM check fallback на server
     grantedToDepartmentIds: grantsIndex[employee.id] ?? [],
@@ -562,10 +569,10 @@ export function EmployeeRow({
     () => ({
       isActive: isSelectionActive,
       activeProjectId: selectionActiveProjectId,
-      isSelected: (loadingId: string) => selectedIds.has(loadingId),
-      toggle: selectionToggle,
+      isSelected: (loadingId: string) => selectedIds.has(sourceIds.get(loadingId) ?? loadingId),
+      toggle: (loadingId: string) => selectionToggle(sourceIds.get(loadingId) ?? loadingId),
     }),
-    [isSelectionActive, selectionActiveProjectId, selectedIds, selectionToggle]
+    [isSelectionActive, selectionActiveProjectId, selectedIds, selectionToggle, sourceIds]
   )
 
   // Сколько загрузок этого сотрудника выбрано в текущем режиме bulk-shift
@@ -609,7 +616,11 @@ export function EmployeeRow({
   )
 
   // Обработчик клика на loading bar для открытия модалки редактирования
-  const handleLoadingClick = useCallback((loading: Loading) => {
+  const handleLoadingClick = useCallback((displayLoading: Loading) => {
+    const sourceId = sourceIds.get(displayLoading.id) ?? displayLoading.id
+    const loading = employee.loadings?.find(item => item.id === sourceId)
+      ?? employee.employmentConflicts?.find(item => item.id === sourceId)
+    if (!loading) return
     // Проверяем что есть sectionId (это главное для открытия модалки)
     if (!loading.sectionId) {
       return
@@ -665,15 +676,15 @@ export function EmployeeRow({
         comment: loading.comment || null,
         isProspective: loading.isProspective,
         section_id: loading.stageId || loading.sectionId, // stageId для этапов, sectionId как fallback для прямых загрузок на раздел
-        employee_team_id: employee.teamId ?? null,
-        employee_department_id: employee.departmentId ?? null,
+        employee_team_id: currentTeamId,
+        employee_department_id: currentDepartmentId,
       },
       // Передаём breadcrumbs только если они полные (содержат section).
       // Если sectionId отсутствует — модалка сама загрузит breadcrumbs через API по stageId.
       breadcrumbs: (loading.sectionId && breadcrumbs.length > 0) ? breadcrumbs : undefined,
       projectId: loading.projectId,
     })
-  }, [employee.id, employee.teamId, employee.departmentId])
+  }, [employee.id, employee.loadings, employee.employmentConflicts, currentTeamId, currentDepartmentId, sourceIds])
 
   // Обработчик создания новой загрузки для сотрудника
   const handleCreateLoading = useCallback((e: React.MouseEvent) => {
@@ -691,7 +702,7 @@ export function EmployeeRow({
   // Convert loadings to periods
   const allPeriods = useMemo(() => {
     // Маппим departments-timeline Loading (string dates) → planning Loading (Date)
-    const planningLoadings: PlanningLoading[] = (employee.loadings ?? []).map((l) => ({
+    const planningLoadings: PlanningLoading[] = displayLoadings.map((l) => ({
       ...l,
       startDate: new Date(l.startDate),
       endDate: new Date(l.endDate),
@@ -699,7 +710,7 @@ export function EmployeeRow({
       updatedAt: l.updatedAt ? new Date(l.updatedAt) : new Date(0),
     }))
     return loadingsToPeriods(planningLoadings)
-  }, [employee.loadings])
+  }, [displayLoadings])
 
   // Calculate bar renders
   const barRenders = useMemo(() => {
@@ -725,8 +736,8 @@ export function EmployeeRow({
 
   // Monthly mode: convert loadings to MonthlyBarLoading format
   const monthlyBarLoadings = useMemo((): MonthlyBarLoading[] => {
-    if (!isMonthlyMode || !employee.loadings) return []
-    return employee.loadings.map((l) => ({
+    if (!isMonthlyMode) return []
+    return displayLoadings.map((l) => ({
       id: l.id,
       startDate: l.startDate,
       endDate: l.endDate,
@@ -741,7 +752,7 @@ export function EmployeeRow({
       isProspective: l.isProspective,
       employeeId: l.employeeId,
     }))
-  }, [isMonthlyMode, employee.loadings])
+  }, [isMonthlyMode, displayLoadings])
 
   // Monthly row height based on bar layout
   const monthlyRowHeight = useMemo(() => {
@@ -840,6 +851,17 @@ export function EmployeeRow({
                     {employeeSelectedCount}
                   </span>
                 )}
+                {(employee.employmentConflicts?.length ?? 0) > 0 && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-amber-700 dark:text-amber-300 shrink-0"
+                    title={`Загрузок вне периодов работы: ${employee.employmentConflicts!.length}. Нажмите, чтобы открыть первую.`}
+                    aria-label={`Загрузок вне периодов работы: ${employee.employmentConflicts!.length}`}
+                    onClick={() => handleLoadingClick(employee.employmentConflicts![0])}
+                  >
+                    ⚠ {employee.employmentConflicts!.length}
+                  </button>
+                )}
               </div>
               <div className="text-[10px] text-muted-foreground truncate">
                 {employee.position || 'Без должности'}
@@ -856,7 +878,7 @@ export function EmployeeRow({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary cursor-default">
-                    {employee.employmentRate || 1}
+                    {employee.employmentRate ?? 1}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -877,7 +899,7 @@ export function EmployeeRow({
                 monthCells={monthCells}
                 monthCellWidth={monthCellWidth}
                 onLoadingClick={(loadingId) => {
-                  const loading = employee.loadings?.find((l) => l.id === loadingId)
+                  const loading = displayLoadings.find((l) => l.id === loadingId)
                   if (loading) handleLoadingClick(loading)
                 }}
               />
@@ -908,7 +930,7 @@ export function EmployeeRow({
                     onLoadingClick={handleLoadingClick}
                     onLoadingResize={handleLoadingResize}
                     onSplitLoading={handleSplitLoading}
-                    canEdit={canEdit}
+                    canEdit={canEdit && employee.employmentSegments === undefined}
                     selectionContext={selectionContext}
                   />
                 ))}

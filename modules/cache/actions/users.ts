@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '../types'
+import { getAssignableEmployeeIds, getAvailableEmployeeIds, type EmploymentDateRange } from '@/modules/users/lib/employment-availability.server'
 
 // ============================================================================
 // Types
@@ -34,7 +35,7 @@ export interface CachedUser {
  *
  * @returns Список пользователей с базовой информацией
  */
-export async function getUsers(): Promise<ActionResult<CachedUser[]>> {
+export async function getUsers(range?: EmploymentDateRange): Promise<ActionResult<CachedUser[]>> {
   try {
     const supabase = await createClient()
 
@@ -62,6 +63,11 @@ export async function getUsers(): Promise<ActionResult<CachedUser[]>> {
         team_id: user.team_id ?? null,
       }))
 
+    if (range) {
+      const assignable = await getAssignableEmployeeIds(supabase, users.map(user => user.user_id))
+      const available = new Set(await getAvailableEmployeeIds(supabase, assignable, range))
+      return { success: true, data: users.filter(user => available.has(user.user_id)) }
+    }
     return { success: true, data: users }
   } catch (error) {
     console.error('[getUsers] Error:', error)

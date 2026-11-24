@@ -154,6 +154,8 @@ export function LoadingForm({
           </label>
           {mode === 'create' ? (
             <MultiEmployeeSelector
+              startDate={formData.startDate}
+              endDate={formData.endDate}
               value={formData.employeeIds}
               onChange={(ids) => onFieldChange('employeeIds', ids)}
               error={errors.employeeId}
@@ -162,6 +164,8 @@ export function LoadingForm({
             />
           ) : (
             <EmployeeSelector
+              startDate={formData.startDate}
+              endDate={formData.endDate}
               value={formData.employeeId}
               onChange={(value) => onFieldChange('employeeId', value)}
               error={errors.employeeId}

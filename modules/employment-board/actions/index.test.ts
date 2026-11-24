@@ -25,6 +25,13 @@ const mocks = vi.hoisted(() => ({
   releaseLock: vi.fn(),
   touchBoardPresence: vi.fn(),
   writeBoardCache: vi.fn(),
+  availableEmployees: vi.fn(),
+  assertAvailable: vi.fn(),
+}))
+
+vi.mock('@/modules/users/lib/employment-availability.server', () => ({
+  getAvailableEmployeeIds: mocks.availableEmployees,
+  assertEmploymentAvailable: mocks.assertAvailable,
 }))
 
 vi.mock('@/utils/supabase/server', () => ({
@@ -145,6 +152,8 @@ const placement: PlacementInput = {
 describe('employment board server action contracts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.availableEmployees.mockImplementation(async (_client: unknown, ids: string[]) => ids)
+    mocks.assertAvailable.mockResolvedValue(undefined)
     mocks.getFilterContextForTasksTabs.mockResolvedValue({ success: true, data: permissionContext })
     mocks.getCurrentMinskDate.mockReturnValue(TODAY)
     mocks.acquireLock.mockResolvedValue({ acquired: true, token: 'token' })
@@ -203,6 +212,22 @@ describe('employment board server action contracts', () => {
     expect(mocks.readBoardCache).not.toHaveBeenCalled()
     expect(mocks.acquireBoardBuildLock).not.toHaveBeenCalled()
     expect(mocks.writeBoardCache).not.toHaveBeenCalled()
+  })
+
+  it('excludes employees outside their employment period on the selected day', async () => {
+    mocks.availableEmployees.mockResolvedValue([])
+    const supabase = createSupabase({
+      view_users: { data: [{ user_id: EMPLOYEE_ID, first_name: 'Сотрудник' }], error: null },
+      departments: { data: { department_name: 'Отдел' }, error: null },
+    })
+    mocks.createClient.mockResolvedValue(supabase.client)
+    const result = await getDepartmentEmploymentBoard({
+      filters: { department_id: DEPARTMENT_ID }, selectedDate: TOMORROW, cachePolicy: 'fresh',
+    })
+    expect(result.success).toBe(true)
+    expect(mocks.availableEmployees).toHaveBeenCalledWith(supabase.client, [EMPLOYEE_ID],
+      { startDate: TOMORROW, endDate: TOMORROW })
+    expect(supabase.from).not.toHaveBeenCalledWith('loadings')
   })
 
   it('keeps database details out of client-facing errors', async () => {

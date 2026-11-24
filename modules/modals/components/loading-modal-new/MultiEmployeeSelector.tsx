@@ -26,8 +26,11 @@ import { useEmployeeSearch } from './useEmployeeSearch'
 import { EmployeeCommandItem } from './EmployeeCommandItem'
 import { useFilterContext, canAssignLoadingToUser } from '@/modules/permissions'
 import { useAllLoadingAccessGrantsIndex } from '@/modules/users/hooks/use-loading-access-grants'
+import { useAvailableEmployees } from './useAvailableEmployees'
 
 export interface MultiEmployeeSelectorProps {
+  startDate: string
+  endDate: string
   /** Массив выбранных ID сотрудников */
   value: string[]
   /** Callback при изменении */
@@ -41,6 +44,8 @@ export interface MultiEmployeeSelectorProps {
 }
 
 export function MultiEmployeeSelector({
+  startDate,
+  endDate,
   value,
   onChange,
   error,
@@ -50,7 +55,10 @@ export function MultiEmployeeSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const { data: allUsers = [], isLoading } = useUsers()
+  const { data: allUsers = [] } = useUsers()
+  const availability = useAvailableEmployees(startDate, endDate)
+  const candidates = availability.isError ? [] : availability.data ?? []
+  const isLoading = availability.isLoading
   const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
   const { data: departments = [] } = useCachedDepartments()
 
@@ -65,8 +73,8 @@ export function MultiEmployeeSelector({
   // admin/subdivision_head/PM → все (server-side гейтит).
   const { data: filterCtx } = useFilterContext()
   const users = useMemo(() => {
-    if (!filterCtx) return allUsers
-    return allUsers.filter((u) =>
+    if (!filterCtx) return candidates
+    return candidates.filter((u) =>
       canAssignLoadingToUser(
         {
           user_id: u.user_id,
@@ -77,7 +85,7 @@ export function MultiEmployeeSelector({
         filterCtx
       )
     )
-  }, [allUsers, filterCtx, grantsIndex])
+  }, [candidates, filterCtx, grantsIndex])
 
   // "Гостевой" сотрудник: чужой отдел, виден через грант
   const isGuestEmployee = useCallback(
@@ -96,13 +104,13 @@ export function MultiEmployeeSelector({
   // Map для быстрого доступа к выбранным пользователям
   const selectedUsersMap = useMemo(() => {
     const map = new Map<string, CachedUser>()
-    for (const user of users) {
+    for (const user of allUsers) {
       if (value.includes(user.user_id)) {
         map.set(user.user_id, user)
       }
     }
     return map
-  }, [users, value])
+  }, [allUsers, value])
 
   // Сортировка: выбранные сверху
   const sortedUsers = useMemo(() => {
@@ -166,7 +174,7 @@ export function MultiEmployeeSelector({
               onValueChange={setSearch}
             />
             <CommandList>
-              <CommandEmpty>Сотрудники не найдены</CommandEmpty>
+              <CommandEmpty>{availability.isError ? 'Не удалось проверить занятость. Проверьте даты и повторите попытку.' : 'Сотрудники не найдены'}</CommandEmpty>
               <CommandGroup>
                 {sortedUsers.map((user) => {
                   const isSelected = value.includes(user.user_id)

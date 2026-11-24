@@ -47,12 +47,12 @@ export function flattenDepartments(
   let deptIndex = 0
 
   const pushTeam = (team: Team) => {
-    out.push({ kind: 'team', key: `team:${team.id}`, team })
+    out.push({ kind: 'team', key: `team:${team.departmentId}:${team.id}`, team })
     if (!expandedNodes.team.has(team.id)) return
     for (const emp of sortTeamEmployees(team)) {
       out.push({
         kind: 'employee',
-        key: `emp:${team.id}:${emp.id}`,
+        key: `emp:${team.departmentId}:${team.id}:${emp.id}`,
         employee: emp,
         isTeamLead: emp.id === team.teamLeadId,
       })

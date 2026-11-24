@@ -7,6 +7,8 @@
 
 'use server'
 
+import { assertEmploymentAvailable, assertEmploymentReassignment } from '@/modules/users/lib/employment-availability.server'
+
 import { createClient } from '@/utils/supabase/server'
 import type { ActionResult } from '@/modules/cache'
 import type {
@@ -1472,6 +1474,7 @@ export async function createLoading(input: {
 
     const supabase = await createClient()
 
+    await assertEmploymentAvailable(supabase, [input.responsibleId], { startDate: input.startDate, endDate: input.endDate })
     // RLS проверяет авторизацию на уровне базы данных
     const { data, error } = await supabase
       .from('loadings')
@@ -1550,6 +1553,8 @@ export async function updateLoading(
     if (updates.endDate !== undefined) {
       updateData.loading_finish = updates.endDate
     }
+
+    await assertEmploymentReassignment(supabase, loadingId, updates.responsibleId, updates)
 
     const { error } = await supabase
       .from('loadings')

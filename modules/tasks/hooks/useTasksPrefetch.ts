@@ -26,7 +26,7 @@ import { TASKS_FILTER_CONFIG, type TaskTab, type TasksViewMode } from '../stores
 
 // Server Actions (queryFn источники)
 import { getKanbanSectionsPaginated } from '@/modules/kanban/actions'
-import { getDepartmentsData, getTeamsFreshness } from '@/modules/departments-timeline/actions'
+import { getTeamsFreshness } from '@/modules/departments-timeline/actions'
 import { getSectionsHierarchy } from '@/modules/sections-page/actions'
 import { getResourceGraphData } from '@/modules/resource-graph'
 import { getCompanyCalendarEvents } from '@/modules/resource-graph/actions'
@@ -105,19 +105,7 @@ function prefetchHeavy(queryClient: QueryClient, tab: TaskTab): void {
   }
 
   if (viewMode === 'departments') {
-    const filters = filtersApplied ? queryParams : {}
-    const key = queryKeys.departmentsTimeline.list(filters)
-    void queryClient
-      .prefetchQuery({
-        queryKey: key,
-        queryFn: async () => {
-          const r = await getDepartmentsData(filters)
-          if (!r.success) throw new Error(r.error)
-          return r.data
-        },
-        staleTime: STALE.infinity,
-      })
-      .catch(() => {})
+    // The mounted timeline owns its visible date range and dated cache key.
     return
   }
 

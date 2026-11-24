@@ -14,6 +14,1856 @@ export type Database = {
   }
   public: {
     Tables: {
+      employee_employment_baseline: {
+        Row: {
+          department_id: string | null
+          employee_id: string
+          employment_rate: number
+          singleton: boolean
+          subdivision_id: string | null
+          team_id: string | null
+        }
+        Insert: {
+          department_id?: string | null
+          employee_id: string
+          employment_rate: number
+          singleton?: boolean
+          subdivision_id?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          department_id?: string | null
+          employee_id?: string
+          employment_rate?: number
+          singleton?: boolean
+          subdivision_id?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_department_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_with_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_analytics_departments_2"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_singleton_fkey"
+            columns: ["singleton"]
+            isOneToOne: false
+            referencedRelation: "employment_history_settings"
+            referencedColumns: ["singleton"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "subdivisions"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_subdivisions_with_heads"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_team_leads"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_baseline_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_teams_with_leads"
+            referencedColumns: ["team_id"]
+          },
+        ]
+      }
+      employee_employment_periods: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_source: string | null
+          department_id: string | null
+          employee_id: string
+          employment_rate: number
+          id: string
+          subdivision_id: string | null
+          team_id: string | null
+          updated_at: string
+          updated_by: string | null
+          updated_source: string | null
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_source?: string | null
+          department_id?: string | null
+          employee_id: string
+          employment_rate: number
+          id?: string
+          subdivision_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_source?: string | null
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_source?: string | null
+          department_id?: string | null
+          employee_id?: string
+          employment_rate?: number
+          id?: string
+          subdivision_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_source?: string | null
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_department_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_with_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_analytics_departments_2"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "subdivisions"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_subdivisions_with_heads"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_subdivision_id_fkey"
+            columns: ["subdivision_id"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["subdivision_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_team_leads"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "view_teams_with_leads"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employee_employment_periods_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      employment_history_settings: {
+        Row: {
+          cutover_date: string
+          initialized_at: string
+          initialized_by: string
+          singleton: boolean
+        }
+        Insert: {
+          cutover_date: string
+          initialized_at?: string
+          initialized_by: string
+          singleton?: boolean
+        }
+        Update: {
+          cutover_date?: string
+          initialized_at?: string
+          initialized_by?: string
+          singleton?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["department_head_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employment_history_settings_initialized_by_fkey"
+            columns: ["initialized_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      employment_legacy_import_settings: {
+        Row: {
+          archived_department_id: string
+          archived_team_id: string
+          singleton: boolean
+        }
+        Insert: {
+          archived_department_id: string
+          archived_team_id: string
+          singleton?: boolean
+        }
+        Update: {
+          archived_department_id?: string
+          archived_team_id?: string
+          singleton?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_department_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_sections_loadings"
+            referencedColumns: ["employee_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_departments_with_heads"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_analytics_departments_2"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_department_id_fkey"
+            columns: ["archived_department_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_department_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_planning_team_freshness"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_fixed"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy_v3"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings_v2"
+            referencedColumns: ["responsible_team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_team_leads"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "employment_legacy_import_settings_archived_team_id_fkey"
+            columns: ["archived_team_id"]
+            isOneToOne: false
+            referencedRelation: "view_teams_with_leads"
+            referencedColumns: ["team_id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           created_at: string
@@ -40144,6 +41994,24 @@ export type Database = {
       }
     }
     Functions: {
+      employee_employment_status: { Args: never; Returns: Json }
+      finish_employee_employment: {
+        Args: { p_employee_id: string }
+        Returns: undefined
+      }
+      initialize_employee_employment_history: {
+        Args: { p_cutover_date: string; p_initialized_by: string }
+        Returns: number
+      }
+      is_legacy_employment_import: { Args: never; Returns: boolean }
+      register_employee_employment: {
+        Args: { p_employee_id: string }
+        Returns: undefined
+      }
+      update_employee_employment: {
+        Args: { p_changes: Json; p_employee_id: string }
+        Returns: undefined
+      }
       archive_old_loadings: {
         Args: { days_threshold?: number }
         Returns: {

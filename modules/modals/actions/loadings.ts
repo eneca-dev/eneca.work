@@ -1,5 +1,7 @@
 'use server'
 
+import { assertEmploymentAvailable, assertEmploymentReassignment } from '@/modules/users/lib/employment-availability.server'
+
 /**
  * Loading Modal New - Server Actions для CRUD операций с загрузками сотрудников
  *
@@ -279,6 +281,8 @@ export async function createLoading(
     const restrictedError = await assertNotRestrictedBySection(supabase, input.sectionId)
     if (restrictedError) return { success: false, error: restrictedError }
 
+    await assertEmploymentAvailable(supabase, [input.employeeId], { startDate: input.startDate, endDate: input.endDate })
+
     // Подготовка данных для вставки
     const insertData: LoadingInsert = {
       loading_stage: input.stageId,
@@ -345,6 +349,7 @@ export async function createLoadingBatch(
     const restrictedError = await assertNotRestrictedBySection(supabase, input.sectionId)
     if (restrictedError) return { success: false, error: restrictedError }
 
+    await assertEmploymentAvailable(supabase, input.employeeIds, { startDate: input.startDate, endDate: input.endDate })
     const now = new Date().toISOString()
 
     // Подготовка массива для batch insert
@@ -492,6 +497,7 @@ export async function updateLoading(
       }
     }
 
+    await assertEmploymentReassignment(supabase, input.loadingId, input.employeeId, input)
     // Обновление в БД
     const { data, error } = await supabase
       .from('loadings')

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
+import { getEmploymentStatus } from '@/modules/users/lib/employment-client'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -79,6 +80,15 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
+    // Не удаляем роли/профиль сотрудника, на который ссылается история.
+    // Проверка выполняется до любого разрушительного действия.
+    if ((await getEmploymentStatus(supabase))?.enabled) {
+      return NextResponse.json(
+        { error: 'История занятости включена. Используйте завершение работы сотрудника вместо удаления профиля.' },
+        { status: 409 }
+      )
+    }
+
     // Создаем admin клиент для удаления
     const adminClient = createAdminClient()
 
@@ -134,4 +144,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 }
     )
   }
-} 
+}

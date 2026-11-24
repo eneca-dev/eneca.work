@@ -22,6 +22,12 @@ import {
   getFilterContextForTasksTabs,
 } from '@/modules/permissions'
 import { getRestrictedProjectIds } from '@/modules/permissions/server/restricted-projects'
+import { getEmploymentStatus } from '@/modules/users/lib/employment-client'
+import { createAdminClient } from '@/utils/supabase/admin'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/db'
+import { employmentRangeSchema, readEmploymentSegments, type EmploymentRange } from '../lib/employment-history.server'
+import { projectEmploymentHistory } from '../lib/employment-history'
 
 // ============================================================================
 // Helper Functions
@@ -175,13 +181,20 @@ function aggregateDailyWorkloads(employees: Employee[]): Record<string, number> 
  * @returns Список отделов с полной структурой
  */
 export async function getDepartmentsData(
-  filters?: FilterQueryParams
+  filters?: FilterQueryParams,
+  requestedRange?: EmploymentRange,
 ): Promise<ActionResult<Department[]>> {
   return Sentry.startSpan(
     { name: 'getDepartmentsData', op: 'db.query' },
     async () => {
   try {
     const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'Требуется авторизация' }
+    const historyStatus = await getEmploymentStatus(supabase)
+    const historyRange = historyStatus?.enabled
+      ? employmentRangeSchema.parse(requestedRange)
+      : null
 
     // 🔒 Получаем контекст разрешений и применяем обязательные фильтры.
     // Используем getFilterContextForTasksTabs — для user/team_lead с
@@ -193,11 +206,25 @@ export async function getDepartmentsData(
       getRestrictedProjectIds(),
     ])
     const filterContext = filterContextResult.success ? filterContextResult.data : null
+    if (!filterContext) return { success: false, error: 'Не удалось определить область доступа' }
+    const scope = filterContext.scope
+    if (!scope || (scope.level === 'team' && !scope.teamIds?.length)
+      || (scope.level === 'department' && !scope.departmentIds?.length)
+      || (scope.level === 'subdivision' && !scope.subdivisionIds?.length)
+      || (scope.level === 'projects' && !scope.projectIds?.length)) {
+      return { success: false, error: 'Область доступа не назначена' }
+    }
     const secureFilters = applyMandatoryFilters(filters || {}, filterContext)
     const isAdmin = filterContext?.permissions.includes('hierarchy.is_admin') ?? false
 
     // Для админа фильтрация не нужна — используется пустой массив.
-    const restrictedProjectIds = isAdmin ? [] : allRestrictedIds
+    let restrictedProjectIds = isAdmin ? [] : allRestrictedIds
+    if (historyRange && !isAdmin) {
+      const restricted = await fetchAllPages(createAdminClient().from('projects')
+        .select('project_id').eq('is_restricted', true).order('project_id'))
+      if (restricted.error || !restricted.data) throw new Error('Не удалось проверить доступ к проектам')
+      restrictedProjectIds = restricted.data.map(row => String(row.project_id))
+    }
 
     // 1. Загружаем организационную структуру
     let orgQuery = supabase.from('view_organizational_structure').select('*')
@@ -335,11 +362,27 @@ export async function getDepartmentsData(
       ),
     ]
 
-    let employeeQuery = supabase
+    const employmentSegments = historyRange && historyStatus?.cutoverDate
+      ? await readEmploymentSegments(historyRange, historyStatus.cutoverDate, orgData,
+        guestEmployeeIds, !!secureFilters?.team_id || excludeTeams.length > 0)
+      : null
+    const historicalEmployeeIds = employmentSegments
+      ? [...new Set(employmentSegments.filter(segment =>
+        orgDepartmentIds.includes(segment.departmentId)).map(segment => segment.employeeId))]
+      : []
+    // Service-role reading is limited to identities resolved from authorized history/grants.
+    // Current-profile RLS cannot represent membership in a previous department.
+    const workloadClient = employmentSegments
+      ? createAdminClient() as SupabaseClient<Database>
+      : supabase
+    let employeeQuery = workloadClient
       .from('view_employee_workloads')
       .select('*')
-      .or('loading_status.eq.active,loading_status.is.null')
-      .in('final_department_id', orgDepartmentIds)
+    employeeQuery = employmentSegments
+      ? employeeQuery.in('user_id', historicalEmployeeIds)
+      : employeeQuery.or('loading_status.eq.active,loading_status.is.null').in('final_department_id', orgDepartmentIds)
+    if (historyRange) employeeQuery = employeeQuery.eq('loading_status', 'active')
+      .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
 
     // Запрос для гостевых сотрудников: они должны проходить ВНЕ фильтров по
     // final_department_id / final_team_id, потому что у них эти поля = их
@@ -347,12 +390,16 @@ export async function getDepartmentsData(
     // .eq('final_department_id', 'Отдел развития') отбросил бы гостя.
     // Гости фильтруются только по user_id и базовым restricted-проектам.
     let guestQueryBuilder = guestEmployeeIds.length > 0
-      ? supabase
+      ? workloadClient
           .from('view_employee_workloads')
           .select('*')
-          .or('loading_status.eq.active,loading_status.is.null')
           .in('user_id', guestEmployeeIds)
       : null
+    if (guestQueryBuilder && !employmentSegments) {
+      guestQueryBuilder = guestQueryBuilder.or('loading_status.eq.active,loading_status.is.null')
+    }
+    if (guestQueryBuilder && historyRange) guestQueryBuilder = guestQueryBuilder.eq('loading_status', 'active')
+      .lte('loading_start', historyRange.endDate).gte('loading_finish', historyRange.startDate)
 
     if (guestQueryBuilder && restrictedProjectIds.length > 0) {
       guestQueryBuilder = guestQueryBuilder.or(
@@ -374,7 +421,7 @@ export async function getDepartmentsData(
     // Гостям эти фильтры НЕ применяются: у guest final_department_id / final_team_id =
     // его родного отдела, а не отдела-получателя гранта, иначе фильтр их отбросил бы.
 
-    if (secureFilters?.department_id) {
+    if (!employmentSegments && secureFilters?.department_id) {
       employeeQuery = applyMultiValueFilter(
         employeeQuery,
         secureFilters.department_id,
@@ -383,7 +430,7 @@ export async function getDepartmentsData(
       )
     }
 
-    if (secureFilters?.team_id) {
+    if (!employmentSegments && secureFilters?.team_id) {
       employeeQuery = applyMultiValueFilter(
         employeeQuery,
         secureFilters.team_id,
@@ -392,7 +439,7 @@ export async function getDepartmentsData(
       )
     }
 
-    for (const val of getNegatedParams(secureFilters, 'department_id')) {
+    for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'department_id')) {
       if (isUuid(val)) {
         employeeQuery = employeeQuery.neq('final_department_id', val)
       } else {
@@ -400,7 +447,7 @@ export async function getDepartmentsData(
       }
     }
 
-    for (const val of getNegatedParams(secureFilters, 'team_id')) {
+    for (const val of employmentSegments ? [] : getNegatedParams(secureFilters, 'team_id')) {
       if (isUuid(val)) {
         employeeQuery = employeeQuery.neq('final_team_id', val)
       } else {
@@ -518,6 +565,38 @@ export async function getDepartmentsData(
     // как обычные, отличаются только распределением по командам (см. ниже).
     const allEmployeeRows = [...(employeeData ?? []), ...guestEmployeeData]
 
+    // An employee with only hidden/inactive loadings still contributes saved capacity.
+    // A separate identity read prevents visibility of projects from changing the denominator.
+    if (employmentSegments && !secureFilters?.project_id && !secureFilters?.['!project_id']) {
+      const candidateIds = [...new Set([...historicalEmployeeIds, ...guestEmployeeIds])]
+      if (candidateIds.length) {
+        let identitiesQuery = workloadClient.from('view_users')
+          .select('user_id,first_name,last_name,full_name,avatar_url,department_id,department_name,team_id,team_name,position_name,employment_rate')
+          .in('user_id', candidateIds).order('user_id')
+        if (secureFilters?.responsible_id) identitiesQuery = applyMultiValueFilter(
+          identitiesQuery, secureFilters.responsible_id, 'user_id', 'full_name', true)
+        for (const excluded of getNegatedParams(secureFilters, 'responsible_id')) {
+          identitiesQuery = isUuid(excluded) ? identitiesQuery.neq('user_id', excluded)
+            : identitiesQuery.not('full_name', 'ilike', `%${excluded}%`)
+        }
+        const identities = await fetchAllPages(identitiesQuery)
+        if (identities.error) throw new Error('Не удалось получить состав сотрудников')
+        const visibleIdentities = new Set(allEmployeeRows.map(row => row.user_id))
+        for (const person of identities.data ?? []) {
+          if (!person.user_id || visibleIdentities.has(person.user_id)) continue
+          employeesMap.set(person.user_id, {
+            id: person.user_id, name: person.full_name ?? '', fullName: person.full_name ?? undefined,
+            firstName: person.first_name ?? undefined, lastName: person.last_name ?? undefined,
+            avatarUrl: person.avatar_url ?? undefined, departmentId: person.department_id ?? undefined,
+            teamId: person.team_id ?? undefined, employmentRate: person.employment_rate ?? 1,
+            departmentName: person.department_name ?? undefined, teamName: person.team_name ?? undefined,
+            position: person.position_name ?? undefined,
+            loadings: [], dailyWorkloads: {}, workload: 0,
+          })
+        }
+      }
+    }
+
     // Дедупликация загрузок по loading_id. Нужна по двум причинам:
     // 1) Гость, чей родной отдел тоже в выборке, приходит И в employeeData,
     //    И в guestEmployeeData — его загрузки задвоились бы.
@@ -551,7 +630,7 @@ export async function getDepartmentsData(
           dailyWorkloads: {},
           hasLoadings: item.has_loadings ?? undefined,
           loadingsCount: item.loadings_count ?? undefined,
-          employmentRate: item.employment_rate || 1,
+          employmentRate: item.employment_rate ?? 1,
           workload: 0,
         })
       }
@@ -560,7 +639,14 @@ export async function getDepartmentsData(
 
       // Добавляем загрузку, если она есть, имеет все обязательные поля
       // и ещё не была добавлена (дедуп по loading_id).
-      if (item.loading_id && item.loading_start && item.loading_finish) {
+      if (item.loading_id && item.loading_start && item.loading_finish && item.loading_status === 'active') {
+        if (historyRange && employmentSegments) {
+          if (item.loading_start > historyRange.endDate || item.loading_finish < historyRange.startDate) return
+          // Scoped readers receive only loadings touching their authorized membership.
+          // Missing scoped periods are not evidence of an employment conflict.
+          if (!isAdmin && !employmentSegments.some(segment => segment.employeeId === item.user_id
+            && segment.startDate <= item.loading_finish! && segment.endDate >= item.loading_start!)) return
+        }
         if (seenLoadingIds.has(item.loading_id)) return
         seenLoadingIds.add(item.loading_id)
 
@@ -591,7 +677,7 @@ export async function getDepartmentsData(
 
     // Вычисляем dailyWorkloads для каждого сотрудника
     employeesMap.forEach((employee) => {
-      if (employee.loadings && employee.loadings.length > 0) {
+      if (!employmentSegments && employee.loadings && employee.loadings.length > 0) {
         employee.dailyWorkloads = calculateDailyWorkloads(employee.loadings)
       }
     })
@@ -718,6 +804,16 @@ export async function getDepartmentsData(
         .flatMap((t) => t.employees)
       department.dailyWorkloads = aggregateDailyWorkloads(allEmployees)
     })
+
+    if (employmentSegments && historyStatus) {
+      const projected = projectEmploymentHistory([...departmentsMap.values()],
+        [...employeesMap.values()], employmentSegments, historyStatus.today,
+        secureFilters?.team_id || excludeTeams.length > 0
+          ? new Set(orgData.map(row => `${row.department_id}/${row.team_id}`)) : undefined)
+      departmentsMap.clear()
+      projected.forEach(department => departmentsMap.set(department.id,
+        { ...department, employmentCutoverDate: historyStatus.cutoverDate ?? undefined }))
+    }
 
     // Если применён фильтр по проекту или ответственному — убираем пустые команды/отделы,
     // т.к. org structure возвращает ВСЮ иерархию, а employee query — только релевантных

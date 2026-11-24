@@ -45,6 +45,16 @@ export interface Loading {
 /**
  * Сотрудник в команде
  */
+export interface EmploymentSegment {
+  employeeId: string
+  departmentId: string | null
+  teamId: string | null
+  /** Inclusive boundaries, clipped to the requested timeline range. */
+  startDate: string
+  endDate: string
+  employmentRate: number
+}
+
 export interface Employee {
   id: string
   name: string
@@ -62,6 +72,12 @@ export interface Employee {
   avatarUrl?: string
   workload: number
   employmentRate?: number
+  employmentSegments?: EmploymentSegment[]
+  /** Original loadings with no intersection with any known employment segment in the requested range. */
+  employmentConflicts?: Loading[]
+  dailyCapacity?: Record<string, number>
+  currentDepartmentId?: string | null
+  currentTeamId?: string | null
   hasLoadings?: boolean
   loadingsCount?: number
   dailyWorkloads?: Record<string, number>
@@ -82,6 +98,7 @@ export interface Employee {
  * Команда в отделе
  */
 export interface Team {
+  dailyCapacity?: Record<string, number>
   id: string
   name: string
   code?: string
@@ -105,6 +122,9 @@ export interface Team {
  * Отдел организации
  */
 export interface Department {
+  /** Dates before this day use the immutable initial workforce snapshot. */
+  employmentCutoverDate?: string
+  dailyCapacity?: Record<string, number>
   id: string
   name: string
   subdivisionId?: string | null

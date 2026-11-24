@@ -21,6 +21,7 @@ import type { DayInfo } from '@/modules/resource-graph/types'
 import { aggregateMonthlyWorkload, type MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
+import { getDailyCapacity, getMonthlyCapacityPercentage } from '../../lib/employment-history'
 
 interface TeamRowContentProps {
   team: Team
@@ -67,6 +68,7 @@ const TeamDayCell = memo(function TeamDayCell({
         cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
       )}
       style={{ left, width, height: TEAM_ROW_HEIGHT }}
+      title={totalCapacity <= 0 ? 'Нет базы расчёта' : undefined}
     >
       {loadPercentage > 0 && (
         <div
@@ -147,7 +149,7 @@ export function TeamRowContent({
   // Calculate team capacity
   const totalTeamCapacity = useMemo(() => {
     return team.employees.reduce((sum, emp) => {
-      return sum + (emp.employmentRate || 1)
+      return sum + (emp.employmentRate ?? 1)
     }, 0)
   }, [team.employees])
 
@@ -234,9 +236,8 @@ export function TeamRowContent({
           {isMonthlyMode ? (
             monthCells.map((cell, i) => {
               const monthWorkload = aggregateMonthlyWorkload(team.dailyWorkloads, cell, calendarMap)
-              const loadPercentage = totalTeamCapacity > 0
-                ? Math.round((monthWorkload / totalTeamCapacity) * 100)
-                : 0
+              const percentage = getMonthlyCapacityPercentage(team, cell, calendarMap, totalTeamCapacity)
+              const loadPercentage = percentage ?? 0
 
               return (
                 <div
@@ -247,6 +248,7 @@ export function TeamRowContent({
                     cell.isCurrentMonth && 'bg-primary/[0.03]'
                   )}
                   style={{ width: monthCellWidth, height: TEAM_ROW_HEIGHT }}
+                  title={percentage === null ? 'Нет базы расчёта' : undefined}
                 >
                   {loadPercentage > 0 && (
                     <div
@@ -307,7 +309,7 @@ export function TeamRowContent({
                   key={col.index}
                   cell={cell}
                   dailyWorkloads={team.dailyWorkloads}
-                  totalCapacity={totalTeamCapacity}
+                  totalCapacity={getDailyCapacity(team, formatMinskDate(cell.date), totalTeamCapacity)}
                   left={col.start}
                   width={col.size}
                 />

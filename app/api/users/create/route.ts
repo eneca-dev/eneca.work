@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 import * as Sentry from "@sentry/nextjs"
+import { assertCanCreateEmployee, getEmploymentStatus, registerEmployment } from '@/modules/users/lib/employment-client'
 
 export async function POST(request: NextRequest) {
   return Sentry.startSpan(
@@ -12,8 +13,6 @@ export async function POST(request: NextRequest) {
     async (span) => {
       try {
         const userData = await request.json()
-        console.log("=== API createUser ===")
-        console.log("Получены данные:", userData)
 
         span.setAttribute("user.email", userData.email)
 
@@ -30,6 +29,17 @@ export async function POST(request: NextRequest) {
         }
 
         span.setAttribute("current_user.id", user.id)
+
+        try {
+          await assertCanCreateEmployee(supabase, user.id)
+        } catch (error) {
+          return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Не удалось проверить права' },
+            { status: 403 }
+          )
+        }
+        // Проверяем доступность истории до создания Auth-пользователя.
+        await getEmploymentStatus(supabase)
 
         // Создаем админский клиент для операций с Auth API
         const adminClient = createAdminClient()
@@ -217,7 +227,6 @@ export async function POST(request: NextRequest) {
         // Заполняем обязательные поля значениями по умолчанию если они пустые
         await fillDefaultFields(supabase, profileData)
 
-        console.log("Данные профиля для создания:", profileData)
 
         // 4. Создаем или обновляем профиль пользователя (UPSERT)
         // Supabase автоматически создает базовую запись в profiles при создании пользователя в auth.users
@@ -244,6 +253,17 @@ export async function POST(request: NextRequest) {
             { error: `Не удалось обновить профиль пользователя: ${profileError.message}` },
             { status: 400 }
           )
+        }
+
+        try {
+          await registerEmployment(supabase, authData.user.id)
+        } catch (error) {
+          Sentry.captureException(error)
+          return NextResponse.json({
+            error: 'Профиль создан, но оформление сотрудника не завершено. Не создавайте дубликат; обратитесь к администратору.',
+            userId: authData.user.id,
+            employmentPending: true,
+          }, { status: 409 })
         }
 
         // 5. Назначаем роль пользователю через user_roles
@@ -338,6 +358,7 @@ async function fillDefaultFields(supabase: any, profileData: any) {
       .from("teams")
       .select("team_id")
       .eq("team_name", "Без команды")
+      .eq("department_id", profileData.department_id)
       .single()
     
     if (!defaultTeam.data) {

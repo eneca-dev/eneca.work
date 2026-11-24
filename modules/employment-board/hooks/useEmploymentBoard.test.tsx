@@ -126,6 +126,23 @@ describe('useEmploymentBoard date boundary', () => {
     expect(queryClient.getQueryData<EmploymentBoard>(queryKey)?.departmentName).toBe('Свежий отдел')
   })
 
+  it('rechecks an open board when a private employment period changes elsewhere', async () => {
+    vi.setSystemTime(new Date('2026-10-07T09:00:00.000Z'))
+    actionMocks.getDepartmentEmploymentBoard
+      .mockResolvedValueOnce({ success: true, data: { ...board('2026-10-07', 'today'),
+        employees: [{ id: 'former', name: 'Сотрудник', avatarUrl: null, positionName: null, teamName: null }] } })
+      .mockResolvedValueOnce({ success: true, data: board('2026-10-07', 'today') })
+    const wrapper = ({ children }: PropsWithChildren) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const { result } = renderHook(() => useEmploymentBoard({
+      selectedDate: '2026-10-07', expectedDateMode: 'today', onDateBoundary: vi.fn(),
+    }), { wrapper })
+    await waitFor(() => expect(result.current.data?.employees).toHaveLength(1))
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+    await waitFor(() => expect(result.current.data?.employees).toHaveLength(0))
+    expect(actionMocks.getDepartmentEmploymentBoard).toHaveBeenCalledTimes(2)
+  })
+
   it('optimistically places and removes employees only in today snapshots', async () => {
     const today = board('2026-10-07', 'today')
     const dated = board('2026-10-08', 'dated')
