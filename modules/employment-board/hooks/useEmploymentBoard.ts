@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { createCacheQuery } from '@/modules/cache/hooks/use-cache-query'
 import { queryKeys } from '@/modules/cache/keys/query-keys'
 import { staleTimePresets } from '@/modules/cache/client/query-client'
+import { getEmploymentBoardPersonnelRevision } from '@/modules/cache/realtime/employment-board-events'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 import { getCurrentMinskDate, getEmploymentBoardDateMode } from '../lib/board-date'
 import {
@@ -124,6 +125,7 @@ export function useEmploymentBoard({
   onDateBoundary,
   requestEpochRef,
 }: UseEmploymentBoardInput) {
+  const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: queryKeys.employmentBoard.list(
       filters?.department_id,
@@ -132,9 +134,15 @@ export function useEmploymentBoard({
     ),
     queryFn: async () => {
       const requestEpoch = requestEpochRef?.current
-      const result = await getDepartmentEmploymentBoard({ filters, selectedDate, cachePolicy })
+      const personnelRevision = getEmploymentBoardPersonnelRevision(queryClient)
+      const result = await getDepartmentEmploymentBoard({
+        filters, selectedDate, cachePolicy: personnelRevision > 0 ? 'fresh' : cachePolicy,
+      })
       if (!result.success) throw new Error(result.error)
-      if (requestEpoch !== undefined && requestEpoch !== requestEpochRef?.current) {
+      if (
+        personnelRevision !== getEmploymentBoardPersonnelRevision(queryClient) ||
+        (requestEpoch !== undefined && requestEpoch !== requestEpochRef?.current)
+      ) {
         throw new BoardSupersededError()
       }
 

@@ -9,6 +9,7 @@ vi.mock('@sentry/nextjs', () => ({
   captureException: mocks.captureException,
 }))
 import { finishEmployeeEmployment } from './employment'
+import { EmploymentOperationError } from '../lib/employment-dated'
 
 const actorId = '00000000-0000-4000-8000-000000000001'
 const employeeId = '00000000-0000-4000-8000-000000000002'
@@ -45,5 +46,22 @@ describe('finish employee action', () => {
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }) } })
     expect((await finishEmployeeEmployment(employeeId)).success).toBe(false)
     expect(mocks.finish).not.toHaveBeenCalled()
+  })
+
+  it('validates dated commands before opening a client', async () => {
+    const dated = { effectiveDate: '2026-02-30', expectedPeriodId: employeeId, expectedUpdatedAt: '2026-11-24T00:00:00Z' }
+    expect((await finishEmployeeEmployment(employeeId, dated)).success).toBe(false)
+    expect(mocks.createClient).not.toHaveBeenCalled()
+  })
+
+  it('passes the selected last day and exact token to the authenticated writer', async () => {
+    const dated = { effectiveDate: '2026-11-24', expectedPeriodId: employeeId, expectedUpdatedAt: '2026-11-24T00:00:00.123456Z' }
+    expect((await finishEmployeeEmployment(employeeId, dated)).success).toBe(true)
+    expect(mocks.finish).toHaveBeenCalledWith(await mocks.createClient.mock.results[0].value, employeeId, dated)
+  })
+
+  it('returns a safe actionable stale-form error instead of blaming permissions', async () => {
+    mocks.finish.mockRejectedValue(new EmploymentOperationError('Кадровые данные изменились. Обновите форму.'))
+    expect(await finishEmployeeEmployment(employeeId)).toEqual({ success: false, error: 'Кадровые данные изменились. Обновите форму.' })
   })
 })

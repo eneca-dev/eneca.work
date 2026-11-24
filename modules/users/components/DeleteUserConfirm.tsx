@@ -6,12 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, User as UserIcon, Mail } from 'lucide-react'
 import type { UserPresentation } from '../lib/types'
+import type { EmploymentDatedCommand } from '../lib/employment-client'
+import { useEmploymentDatedForm } from '../hooks/use-employment-dated-form'
+import { EmploymentDateField } from './employment-date-field'
 
 interface DeleteUserConfirmProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   user: Pick<UserPresentation, 'id' | 'name' | 'email'> | null
-  onConfirm: () => Promise<boolean>
+  onConfirm: (command?: EmploymentDatedCommand) => Promise<boolean>
   mode?: 'delete' | 'finish'
   disabled?: boolean
 }
@@ -19,20 +22,24 @@ interface DeleteUserConfirmProps {
 export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm, mode = 'delete', disabled = false }: DeleteUserConfirmProps) {
   const [showSecondConfirm, setShowSecondConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const employmentDate = useEmploymentDatedForm(open && mode === 'finish', user?.id, 'finish')
+  const finishReady = mode !== 'finish' || (employmentDate.ready && employmentDate.context?.enabled === true)
 
   // Reset to first step when dialog is closed externally
   useEffect(() => {
     setShowSecondConfirm(false)
-  }, [open, mode])
+  }, [open, mode, user?.id])
 
   const handleFirstConfirm = () => {
+    if (disabled || !finishReady) return
     setShowSecondConfirm(true)
   }
 
   const handleSecondConfirm = async () => {
+    if (disabled || !finishReady) return
     setIsDeleting(true)
     try {
-      if (await onConfirm()) handleClose()
+      if (await onConfirm(mode === 'finish' ? employmentDate.getCommand() : undefined)) handleClose()
     } finally {
       setIsDeleting(false)
     }
@@ -68,7 +75,7 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm, mode = 
                 <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
                 <AlertDescription className="text-red-700 dark:text-red-300">
                   {mode === 'finish'
-                    ? 'Сегодня по Минску будет последним рабочим днём сотрудника, включительно. Профиль, история и загрузки сохранятся.'
+                    ? `${employmentDate.date || 'Выбранная дата'} будет последним рабочим днём сотрудника, включительно. Профиль, история и загрузки сохранятся.`
                     : 'Вы действительно хотите удалить пользователя? Это действие нельзя отменить.'}
                 </AlertDescription>
               </Alert>
@@ -83,13 +90,14 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm, mode = 
                   <span>{user.email}</span>
                 </div>
               </div>
+              {mode === 'finish' && <EmploymentDateField form={employmentDate} operation="finish" disabled={isDeleting} />}
             </>
           ) : (
             <Alert variant="destructive" className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
               <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
               <AlertDescription className="text-red-700 dark:text-red-300">
                 {mode === 'finish'
-                  ? 'Подтвердите завершение работы. Доступ к приложению автоматически не отключается — его необходимо ограничить отдельно.'
+                  ? `Подтвердите завершение работы: последний рабочий день ${employmentDate.date}, включительно. Доступ к приложению автоматически не отключается — его необходимо ограничить отдельно.`
                   : <><strong>Внимание!</strong> Пользователь и его профиль будут удалены безвозвратно.</>}
               </AlertDescription>
             </Alert>
@@ -106,11 +114,11 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm, mode = 
             Отмена
           </Button>
           {!showSecondConfirm ? (
-            <Button variant="destructive" onClick={handleFirstConfirm} disabled={disabled}>
+            <Button variant="destructive" onClick={handleFirstConfirm} disabled={disabled || !finishReady}>
               {mode === 'finish' ? 'Завершить работу' : 'Удалить пользователя'}
             </Button>
           ) : (
-            <Button variant="destructive" onClick={handleSecondConfirm} disabled={isDeleting || disabled}>
+            <Button variant="destructive" onClick={handleSecondConfirm} disabled={isDeleting || disabled || !finishReady}>
               {isDeleting ? 'Сохранение...' : mode === 'finish' ? 'Подтвердить завершение' : 'Подтвердить удаление'}
             </Button>
           )}

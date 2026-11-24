@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/client"
 import { createAdminClient } from "@/utils/supabase/admin"
 import * as Sentry from "@sentry/nextjs"
 import { getUserPermissions } from "@/modules/permissions/supabase/supabasePermissions"
-import { assertCanCreateEmployee, getEmploymentStatus, registerEmployment, updateProfileWithEmployment } from '@/modules/users/lib/employment-client'
+import { assertCanCreateEmployee, getEmploymentStatus, registerEmployment, updateProfileWithEmployment, type EmploymentDatedCommand } from '@/modules/users/lib/employment-client'
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -466,7 +466,11 @@ export async function getAvailableRoles(canAddAdmin: boolean = false): Promise<{
 // Обновление пользователя
 export async function updateUser(
   userId: string,
-  userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined">> & { firstName?: string; lastName?: string; roleId?: string },
+  userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined" | "department" | "team" | "subdivision">> & {
+    firstName?: string; lastName?: string; roleId?: string
+    department?: string | null; team?: string | null; subdivision?: string | null
+  },
+  datedCommand?: EmploymentDatedCommand,
 ) {
   return Sentry.startSpan(
     {
@@ -1046,7 +1050,7 @@ export async function updateUser(
         // console.log("Выполняем обновление в БД для пользователя:", userId);
         span.setAttribute("updates.count", Object.keys(updates).length)
         
-        const { error } = await updateProfileWithEmployment(supabase, userId, updates)
+        const { error } = await updateProfileWithEmployment(supabase, userId, updates, datedCommand)
 
         if (error) {
           span.setAttribute("db.success", false)

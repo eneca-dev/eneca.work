@@ -2,8 +2,12 @@ import 'server-only'
 import { z } from 'zod'
 import { createAdminClient } from '@/utils/supabase/admin'
 import type { EmploymentSegment } from '../types'
+import { MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER } from '@/modules/resource-graph/constants'
 
 export interface EmploymentRange { startDate: string; endDate: string }
+
+// Bound UUID filters in URLs and PostgREST Content-Location headers.
+export const EMPLOYMENT_ID_BATCH_SIZE = 100
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`)
@@ -11,8 +15,15 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 })
 export const employmentRangeSchema = z.object({ startDate: date, endDate: date })
   .refine(value => value.startDate <= value.endDate, 'Некорректный диапазон')
-  .refine(value => Date.parse(value.endDate) - Date.parse(value.startDate) <= 366 * 5 * 86400000,
-    'Диапазон не должен превышать пять лет')
+  .refine(value => {
+    const start = new Date(`${value.startDate}T00:00:00Z`)
+    const end = new Date(`${value.endDate}T00:00:00Z`)
+    const monthCount = (end.getUTCFullYear() - start.getUTCFullYear()) * 12
+      + end.getUTCMonth() - start.getUTCMonth() + 1
+    // The existing monthly timeline displays 36 months before and 36 after today.
+    // Count calendar months rather than approximating years with a number of days.
+    return monthCount <= MONTHLY_MONTHS_BEFORE + MONTHLY_MONTHS_AFTER
+  }, `Диапазон не должен превышать ${MONTHLY_MONTHS_BEFORE + MONTHLY_MONTHS_AFTER} календарных месяцев`)
 
 const savedRow = z.object({
   employee_id: z.string().uuid(), department_id: z.string().uuid().nullable(),
@@ -43,21 +54,24 @@ export async function readEmploymentSegments(
     // Two bounded scopes instead of interpolated PostgREST expressions.
     for (const [column, ids] of [['department_id', departments], ['employee_id', guestIds]] as const) {
       if (!ids.length) continue
-      let query = admin.from(table).select(table === 'employee_employment_periods'
-        ? 'employee_id,department_id,team_id,employment_rate,valid_from,valid_to'
-        : 'employee_id,department_id,team_id,employment_rate').in(column, ids)
-      if (table === 'employee_employment_periods') {
-        query = query.lte('valid_from', range.endDate).or(`valid_to.is.null,valid_to.gt.${range.startDate}`)
-      }
-      query = query.order('employee_id')
-      if (table === 'employee_employment_periods') query = query.order('valid_from')
-      for (let offset = 0; ; offset += 1000) {
-        const result = await query.range(offset, offset + 999)
-        if (result.error) throw new Error('Не удалось прочитать историю сотрудников')
-        const page = z.array(savedRow).parse(result.data)
-        rows.push(...page.map(row => table === 'employee_employment_baseline'
-          ? { ...row, valid_from: range.startDate, valid_to: cutover } : row))
-        if (page.length < 1000) break
+      for (let batchStart = 0; batchStart < ids.length; batchStart += EMPLOYMENT_ID_BATCH_SIZE) {
+        const batch = ids.slice(batchStart, batchStart + EMPLOYMENT_ID_BATCH_SIZE)
+        let query = admin.from(table).select(table === 'employee_employment_periods'
+          ? 'employee_id,department_id,team_id,employment_rate,valid_from,valid_to'
+          : 'employee_id,department_id,team_id,employment_rate').in(column, batch)
+        if (table === 'employee_employment_periods') {
+          query = query.lte('valid_from', range.endDate).or(`valid_to.is.null,valid_to.gt.${range.startDate}`)
+        }
+        query = query.order('employee_id')
+        if (table === 'employee_employment_periods') query = query.order('valid_from')
+        for (let offset = 0; ; offset += 1000) {
+          const result = await query.range(offset, offset + 999)
+          if (result.error) throw new Error('Не удалось прочитать историю сотрудников')
+          const page = z.array(savedRow).parse(result.data)
+          rows.push(...page.map(row => table === 'employee_employment_baseline'
+            ? { ...row, valid_from: range.startDate, valid_to: cutover } : row))
+          if (page.length < 1000) break
+        }
       }
     }
   }

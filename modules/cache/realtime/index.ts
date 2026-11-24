@@ -15,6 +15,9 @@ export {
 export {
   emitEmploymentBoardLoadingChange,
   subscribeEmploymentBoardLoadingChanges,
+  getEmploymentBoardPersonnelRevision,
+  notifyEmploymentBoardPersonnelChanged,
+  subscribeEmploymentBoardPersonnelChanges,
   type LoadingRealtimePayload,
 } from './employment-board-events'
 export { removeInactiveEmploymentBoardSnapshots } from './dispatch-change'

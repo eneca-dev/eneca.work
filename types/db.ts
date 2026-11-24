@@ -41994,6 +41994,54 @@ export type Database = {
       }
     }
     Functions: {
+      assert_employee_employment_edit_access: {
+        Args: { p_employee_id: string; p_operation: string }
+        Returns: undefined
+      }
+      get_employee_employment_edit_context: {
+        Args: { p_employee_id: string; p_operation: string }
+        Returns: Json
+      }
+      update_employee_employment_internal: {
+        Args: {
+          p_changes: Json
+          p_effective_date: string
+          p_employee_id: string
+          p_expected_period_id: string
+          p_expected_updated_at: string
+          p_use_current_date: boolean
+        }
+        Returns: undefined
+      }
+      finish_employee_employment_internal: {
+        Args: {
+          p_employee_id: string
+          p_expected_period_id: string
+          p_expected_updated_at: string
+          p_last_working_date: string
+          p_use_current_date: boolean
+        }
+        Returns: undefined
+      }
+      update_employee_employment_dated: {
+        Args: {
+          p_changes: Json
+          p_effective_date: string
+          p_employee_id: string
+          p_expected_period_id: string
+          p_expected_updated_at: string
+        }
+        Returns: undefined
+      }
+      finish_employee_employment_dated: {
+        Args: {
+          p_employee_id: string
+          p_expected_period_id: string
+          p_expected_updated_at: string
+          p_last_working_date: string
+        }
+        Returns: undefined
+      }
       employee_employment_status: { Args: never; Returns: Json }
       finish_employee_employment: {
         Args: { p_employee_id: string }

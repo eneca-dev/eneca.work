@@ -6,7 +6,7 @@
 
 'use client'
 
-import { memo, useMemo, useState, Fragment, useCallback } from 'react'
+import { memo, useMemo, useState, useRef, Fragment, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Building2, MessageSquare, UserPlus, Check, ArrowLeftRight } from 'lucide-react'
 import { formatMinskDate, parseMinskDate } from '@/lib/timezone-utils'
@@ -49,6 +49,7 @@ import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { ProspectiveLoadingBadge } from '@/components/shared/timeline/ProspectiveLoadingBadge'
 import { clipLoadingsToEmployment } from '../../lib/employment-display'
+import { toast } from '@/hooks/use-toast'
 
 /**
  * Контекст режима выборочного bulk-shift, передаётся в loading bars.
@@ -118,6 +119,8 @@ interface LoadingBarWithResizeProps {
   canEdit: boolean
   /** Контекст режима выбора bulk-shift (если активен в этом отделе) */
   selectionContext: SelectionContext
+  /** Original dates distinguish actual endpoints from employment display clipping. */
+  sourceLoading?: Loading
 }
 
 const LoadingBarWithResize = memo(function LoadingBarWithResize({
@@ -130,6 +133,7 @@ const LoadingBarWithResize = memo(function LoadingBarWithResize({
   onSplitLoading,
   canEdit,
   selectionContext,
+  sourceLoading,
 }: LoadingBarWithResizeProps) {
   // Bulk-shift selection state для этого bar
   const isLoadingType = bar.period.type === 'loading'
@@ -194,7 +198,9 @@ const LoadingBarWithResize = memo(function LoadingBarWithResize({
   })
 
   const isClippedLeft = parseMinskDate(startDateString) < timelineRange.start
+    || (sourceLoading !== undefined && startDateString !== sourceLoading.startDate.slice(0, 10))
   const isClippedRight = parseMinskDate(endDateString) > timelineRange.end
+    || (sourceLoading !== undefined && endDateString !== sourceLoading.endDate.slice(0, 10))
 
   // Обработчик клика — в режиме выбора toggle, иначе открытие модалки
   const handleClick = useCallback(() => {
@@ -550,10 +556,16 @@ export function EmployeeRow({
   })
 
   // Mutation hook для обновления дат загрузки
-  const { mutate: mutateLoadingDates } = useUpdateLoadingDates()
+  const { mutate: mutateLoadingDates, isPending: isSavingDates } = useUpdateLoadingDates()
+  // Also guard the interval before the mutation's pending state renders.
+  const loadingSaveInFlight = useRef(false)
 
   // Mutation hook для разрезания загрузки
-  const { split: { mutate: splitLoading } } = useLoadingMutations()
+  const { split: { mutate: splitLoading, isPending: isSplitting } } = useLoadingMutations({
+    optimisticSplit: false,
+    onSplitSuccess: () => toast({ title: 'Загрузка разделена', description: 'Обе части сохранены.' }),
+    onError: (error) => toast({ title: 'Не удалось разделить загрузку', description: error.message, variant: 'destructive' }),
+  })
 
   // Selection mode context (для bulk-shift с выбором)
   const isSelectionActive = useBulkShiftSelectionStore(
@@ -593,26 +605,36 @@ export function EmployeeRow({
   // Callback для обработки resize загрузки
   const handleLoadingResize = useCallback(
     (loadingId: string, startDate: string, finishDate: string) => {
+      const display = displayLoadings.find(loading => loading.id === loadingId)
+      const sourceId = sourceIds.get(loadingId) ?? loadingId
+      const source = employee.loadings?.find(loading => loading.id === sourceId)
       // Блокируем resize для оптимистичных записей с temp ID (ещё не сохранены в БД)
-      if (loadingId.startsWith('temp-')) return
+      if (!canEdit || loadingSaveInFlight.current || isSavingDates || isSplitting || !display || !source || sourceId.startsWith('temp-')) return
 
+      loadingSaveInFlight.current = true
       mutateLoadingDates({
-        loadingId,
+        loadingId: sourceId,
         employeeId: employee.id,
-        startDate,
-        finishDate,
-      })
+        // A displayed fragment must never shorten the untouched source endpoint.
+        startDate: startDate === display.startDate ? source.startDate : startDate,
+        finishDate: finishDate === display.endDate ? source.endDate : finishDate,
+      }, { onSettled: () => { loadingSaveInFlight.current = false } })
     },
-    [employee.id, mutateLoadingDates]
+    [canEdit, isSavingDates, isSplitting, displayLoadings, sourceIds, employee.id, employee.loadings, mutateLoadingDates]
   )
 
   // Обработчик разрезания загрузки (ножницы)
   const handleSplitLoading = useCallback(
     (loadingId: string, splitDate: string) => {
-      if (loadingId.startsWith('temp-')) return
-      splitLoading({ loadingId, splitDate })
+      const sourceId = sourceIds.get(loadingId) ?? loadingId
+      if (!canEdit || loadingSaveInFlight.current || isSavingDates || isSplitting || sourceId.startsWith('temp-')) return
+      loadingSaveInFlight.current = true
+      toast({ title: 'Сохраняем разрез…', description: 'Дождитесь подтверждения сохранения обеих частей.' })
+      splitLoading({ loadingId: sourceId, splitDate }, {
+        onSettled: () => { loadingSaveInFlight.current = false },
+      })
     },
-    [splitLoading]
+    [canEdit, isSavingDates, isSplitting, sourceIds, splitLoading]
   )
 
   // Обработчик клика на loading bar для открытия модалки редактирования
@@ -930,7 +952,8 @@ export function EmployeeRow({
                     onLoadingClick={handleLoadingClick}
                     onLoadingResize={handleLoadingResize}
                     onSplitLoading={handleSplitLoading}
-                    canEdit={canEdit && employee.employmentSegments === undefined}
+                    canEdit={canEdit && !isSavingDates && !isSplitting}
+                    sourceLoading={employee.loadings?.find(loading => loading.id === sourceIds.get(bar.period.id))}
                     selectionContext={selectionContext}
                   />
                 ))}

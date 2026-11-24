@@ -3,6 +3,8 @@ vi.mock('server-only', () => ({}))
 const db = vi.hoisted(() => ({ from: vi.fn(), rows: {} as Record<string, unknown[]>, calls: [] as unknown[][], error: false }))
 vi.mock('@/utils/supabase/admin', () => ({ createAdminClient: () => ({ from: db.from }) }))
 import { employmentRangeSchema, readEmploymentSegments } from './employment-history.server'
+import { generateMonthCells } from '@/modules/resource-graph/utils/monthly-cell-utils'
+import { MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER } from '@/modules/resource-graph/constants'
 
 const employee = '00000000-0000-4000-8000-000000000001'
 const guest = '00000000-0000-4000-8000-000000000002'
@@ -29,6 +31,25 @@ beforeEach(() => {
   })
 })
 describe('history reading contract', () => {
+  it.each(['2026-11-24T12:00:00Z', '2024-02-29T12:00:00Z'])(
+    'accepts the complete existing monthly timeline around %s', now => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date(now))
+        const cells = generateMonthCells(0, MONTHLY_MONTHS_BEFORE, MONTHLY_MONTHS_AFTER)
+        expect(cells).toHaveLength(72)
+        expect(employmentRangeSchema.safeParse({
+          startDate: cells[0].startDate, endDate: cells[cells.length - 1].endDate,
+        }).success).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  it('bounds the range to 72 inclusive calendar months, including leap February', () => {
+    expect(employmentRangeSchema.safeParse({ startDate: '2021-03-01', endDate: '2027-02-28' }).success).toBe(true)
+    expect(employmentRangeSchema.safeParse({ startDate: '2021-03-01', endDate: '2027-03-01' }).success).toBe(false)
+    expect(employmentRangeSchema.safeParse({ startDate: '2018-03-01', endDate: '2024-02-29' }).success).toBe(true)
+  })
   it('joins immutable baseline and half-open periods without a duplicate cutover day', async () => {
     db.rows.employee_employment_baseline = [row]
     db.rows.employee_employment_periods = [{ ...row, employment_rate: 0.5, valid_from: '2026-11-19', valid_to: '2026-11-21' }]

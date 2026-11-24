@@ -29,6 +29,10 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { EmployeeAccessGrantsSection } from "./employee-access-grants-section"
 import * as Sentry from "@sentry/nextjs"
+import { useEmploymentDatedForm } from '../hooks/use-employment-dated-form'
+import { EmploymentDateField } from './employment-date-field'
+import { EmploymentPartialSuccessError } from '../lib/employment-dated'
+import { notifyEmploymentBoardPersonnelChanged } from '@/modules/cache/realtime'
 
 interface UserDialogProps {
   open: boolean
@@ -177,6 +181,16 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
     return false
   }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user, isSelfEdit, isSubdivisionHead])
+
+  const hasPersonnelChanges = !!user && (
+    (isAdmin && (formData.subdivision || '') !== (user.subdivision || '')) ||
+    (canEditDepartmentField && (formData.department || '') !== (user.department || '')) ||
+    (canEditTeamField && (formData.team || '') !== (user.team || '')) ||
+    (canEditSalaryFields && (formData.employmentRate ?? 1) !== (user.employmentRate ?? 1))
+  )
+  const employmentDate = useEmploymentDatedForm(
+    open && (isAdmin || canEditDepartmentField || canEditTeamField || canEditSalaryFields), user?.id, 'update',
+  )
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
@@ -429,8 +443,20 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     }
   }
 
+  const refreshEmploymentQueries = async () => {
+    notifyEmploymentBoardPersonnelChanged(queryClient)
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() }),
+    ])
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (hasPersonnelChanges && !employmentDate.ready) {
+      toast({ title: 'Проверьте кадровые данные', description: employmentDate.error || 'Дождитесь проверки периода и выберите доступную дату.', variant: 'destructive' })
+      return
+    }
     setIsLoading(true)
 
     try {
@@ -444,7 +470,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         // console.log("Отправляемые данные формы:", formData);
         
         // Подготавливаем данные для отправки, исключая проблемные поля
-        const updateData: any = {
+        const updateData: Parameters<typeof updateUser>[1] = {
           firstName: formData.firstName,
           lastName: formData.lastName,
           country: formData.country,
@@ -460,18 +486,18 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         }
 
         // Добавляем подразделение если пользователь admin
-        if (isAdmin && formData.subdivision !== undefined) {
+        if (isAdmin && formData.subdivision !== undefined && (formData.subdivision || '') !== (user.subdivision || '')) {
           updateData.subdivision = formData.subdivision && formData.subdivision !== "" ? formData.subdivision : null
         }
 
         // Добавляем отдел если пользователь может его редактировать
-        if (canEditDepartmentField) {
+        if (canEditDepartmentField && (formData.department || '') !== (user.department || '')) {
           // Отдел - может быть пустым (null)
           updateData.department = formData.department && formData.department !== "" ? formData.department : null
         }
 
         // Добавляем команду если пользователь может её редактировать
-        if (canEditTeamField) {
+        if (canEditTeamField && (formData.team || '') !== (user.team || '')) {
           // Валидация обязательности команды
           if (!formData.team || formData.team === "") {
             toast({
@@ -540,14 +566,16 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         // Добавляем ставку и загруженность только если пользователь администратор
         if (canEditSalaryFields) {
           if (formData.salary !== undefined) updateData.salary = formData.salary
-          if (formData.employmentRate !== undefined) updateData.employmentRate = formData.employmentRate
+          if (formData.employmentRate !== undefined && formData.employmentRate !== (user.employmentRate ?? 1)) updateData.employmentRate = formData.employmentRate
         }
 
         // Роли управляются через модальное окно
         
         // console.log("Итоговые данные для updateUser:", updateData);
         
-        await Sentry.startSpan({ name: 'Users/UserDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, updateData))
+        const employmentCommand = hasPersonnelChanges ? employmentDate.getCommand() : undefined
+        await Sentry.startSpan({ name: 'Users/UserDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, updateData, employmentCommand))
+        if (hasPersonnelChanges) await refreshEmploymentQueries()
         // console.log("updateUser завершен успешно");
         
         // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
@@ -597,7 +625,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         
         toast({
           title: "Успешно",
-          description: isEditingOwnProfile ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
+          description: employmentCommand ? `Кадровые изменения действуют с ${employmentCommand.effectiveDate}.` : isEditingOwnProfile ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
         })
         onOpenChange(false)
         if (onUserUpdated) {
@@ -608,6 +636,16 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         }
       }
     } catch (error) {
+      if (error instanceof EmploymentPartialSuccessError) {
+        try {
+          await refreshEmploymentQueries()
+        } finally {
+          toast({ title: 'Кадровые изменения сохранены', description: error.message, variant: 'destructive' })
+          onOpenChange(false)
+          onUserUpdated?.()
+        }
+        return
+      }
       console.error("Ошибка при сохранении пользователя:", error)
       toast({
         title: "Ошибка",
@@ -643,6 +681,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         />
         <Modal.Body className="flex-1 min-h-0 overflow-y-auto min-w-0">
           <div className="grid grid-cols-1 gap-3 py-3 min-w-0">
+            {hasPersonnelChanges && <EmploymentDateField form={employmentDate} operation="update" disabled={isLoading} />}
             {/* Имя и Фамилия в одну строку */}
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
               <Label className="text-right md:col-span-1 col-span-full pt-2">Имя и Фамилия</Label>
@@ -1066,6 +1105,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 type="submit" 
                 variant="success"
                 loading={isLoading}
+                disabled={hasPersonnelChanges && !employmentDate.ready}
                 icon={<Save />}
                 className="w-full sm:w-auto"
               >

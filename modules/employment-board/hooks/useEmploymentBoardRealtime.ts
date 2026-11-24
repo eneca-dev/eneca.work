@@ -10,6 +10,7 @@ import { queryKeys } from '@/modules/cache/keys/query-keys'
 import {
   removeInactiveEmploymentBoardSnapshots,
   subscribeEmploymentBoardLoadingChanges,
+  subscribeEmploymentBoardPersonnelChanges,
   type LoadingRealtimePayload,
 } from '@/modules/cache/realtime'
 import { createClient } from '@/utils/supabase/client'
@@ -302,6 +303,12 @@ export function useEmploymentBoardRealtime({
     }
     scheduleFreshRefresh()
   }), [onMarkDateChangeStale, scheduleFreshRefresh])
+
+  useEffect(() => subscribeEmploymentBoardPersonnelChanges(queryClient, () => {
+    // Supersede both ordinary and fresh responses immediately, before debounce.
+    requestEpochRef.current += 1
+    scheduleFreshRefresh()
+  }), [queryClient, requestEpochRef, scheduleFreshRefresh])
 
   useEffect(() => {
     if (!departmentId) return

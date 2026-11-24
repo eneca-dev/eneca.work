@@ -1,4 +1,4 @@
-import type { Department, Employee, EmploymentSegment, Team } from '../types'
+import type { Department, Employee, EmploymentSegment, Loading, Team } from '../types'
 import { aggregateMonthlyWorkload, type MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { DayInfo } from '@/modules/resource-graph/types'
 
@@ -82,6 +82,47 @@ function aggregate(rows: CapacityRow[], field: 'dailyCapacity' | 'dailyWorkloads
     }
   }
   return result
+}
+
+/** Update the source loading and dated totals together while its save is pending. */
+export function previewLoadingDates(
+  departments: Department[], employeeId: string, loadingId: string,
+  startDate: string, endDate: string, today: string,
+): Department[] {
+  const copies = departments.flatMap(department => department.teams.flatMap(team =>
+    team.employees.filter(employee => employee.id === employeeId)))
+  const sourceLoadings = new Map<string, Loading>()
+  for (const employee of copies) {
+    for (const loading of [...(employee.loadings ?? []), ...(employee.employmentConflicts ?? [])]) {
+      sourceLoadings.set(loading.id, loading)
+    }
+  }
+  if (!sourceLoadings.has(loadingId)) return departments
+  const updatedLoadings = [...sourceLoadings.values()].map(loading => loading.id === loadingId
+    ? { ...loading, startDate, endDate } : loading)
+  const allSegments = copies.flatMap(employee => employee.employmentSegments ?? [])
+  return departments.map(department => {
+    const teams = department.teams.map(team => {
+      const employees = team.employees.map(employee => {
+        if (employee.id !== employeeId) return employee
+        if (employee.employmentSegments !== undefined) {
+          return projectEmployee({ ...employee, loadings: updatedLoadings },
+            employee.employmentSegments, today, allSegments)
+        }
+        // Preserve the legacy path for snapshots without employment history.
+        return { ...employee, loadings: employee.loadings?.map(loading => loading.id === loadingId
+          ? { ...loading, startDate, endDate } : loading) }
+      })
+      return { ...team, employees,
+        ...(team.dailyCapacity !== undefined
+          ? { dailyWorkloads: aggregate(employees, 'dailyWorkloads') } : {}),
+      }
+    })
+    return { ...department, teams,
+      ...(department.dailyCapacity !== undefined
+        ? { dailyWorkloads: aggregate(teams.filter(team => !team.isGuestTeam), 'dailyWorkloads') } : {}),
+    }
+  })
 }
 
 /** Project saved employment membership without changing the underlying loading intervals. */
