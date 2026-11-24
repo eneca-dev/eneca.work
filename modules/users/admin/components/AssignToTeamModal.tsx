@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { createClient } from "@/utils/supabase/client"
+import { updateProfileWithEmployment } from '@/modules/users/lib/employment-client'
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
 import { UserPlus, Users } from 'lucide-react'
@@ -266,10 +267,7 @@ export default function AssignToTeamModal({
       }
 
       // Назначаем пользователя в команду
-      const { error } = await supabase
-        .from("profiles")
-        .update({ team_id: team.id })
-        .eq("user_id", selectedUser.user_id)
+      const { error } = await updateProfileWithEmployment(supabase, selectedUser.user_id, { team_id: team.id })
 
       if (error) {
         console.error("Ошибка при назначении в команду:", error)

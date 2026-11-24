@@ -25,8 +25,11 @@ import { useEmployeeSearch } from './useEmployeeSearch'
 import { EmployeeCommandItem } from './EmployeeCommandItem'
 import { useFilterContext, canAssignLoadingToUser } from '@/modules/permissions'
 import { useAllLoadingAccessGrantsIndex } from '@/modules/users/hooks/use-loading-access-grants'
+import { useAvailableEmployees } from './useAvailableEmployees'
 
 export interface EmployeeSelectorProps {
+  startDate: string
+  endDate: string
   /** Выбранный ID сотрудника */
   value: string
   /** Callback при изменении */
@@ -40,6 +43,8 @@ export interface EmployeeSelectorProps {
 }
 
 export function EmployeeSelector({
+  startDate,
+  endDate,
   value,
   onChange,
   error,
@@ -50,7 +55,10 @@ export function EmployeeSelector({
   const [search, setSearch] = useState('')
 
   // Загрузка списка пользователей и cross-department грантов
-  const { data: allUsers = [], isLoading } = useUsers()
+  const { data: allUsers = [] } = useUsers()
+  const availability = useAvailableEmployees(startDate, endDate)
+  const candidates = availability.isError ? [] : availability.data ?? []
+  const isLoading = availability.isLoading
   const { data: grantsIndex = {} } = useAllLoadingAccessGrantsIndex()
   const { data: departments = [] } = useCachedDepartments()
 
@@ -65,8 +73,8 @@ export function EmployeeSelector({
   // admin/subdivision_head/PM → все (server-side гейтит).
   const { data: filterCtx } = useFilterContext()
   const users = useMemo(() => {
-    if (!filterCtx) return allUsers
-    return allUsers.filter((u) =>
+    if (!filterCtx) return candidates
+    return candidates.filter((u) =>
       canAssignLoadingToUser(
         {
           user_id: u.user_id,
@@ -77,7 +85,7 @@ export function EmployeeSelector({
         filterCtx
       )
     )
-  }, [allUsers, filterCtx, grantsIndex])
+  }, [candidates, filterCtx, grantsIndex])
 
   // Помечаем "гостевых": сотрудник принадлежит чужому отделу, но виден через грант.
   // Бейдж показывает название его реального отдела (departmentNameById).
@@ -155,7 +163,7 @@ export function EmployeeSelector({
               onValueChange={setSearch}
             />
             <CommandList>
-              <CommandEmpty>Сотрудники не найдены</CommandEmpty>
+              <CommandEmpty>{availability.isError ? 'Не удалось проверить занятость. Проверьте даты и повторите попытку.' : 'Сотрудники не найдены'}</CommandEmpty>
               <CommandGroup>
                 {filteredUsers.map((user) => {
                   const isGuest = isGuestEmployee(user.user_id, user.department_id)

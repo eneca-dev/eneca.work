@@ -23,6 +23,7 @@ import type { DayInfo } from '@/modules/resource-graph/types'
 import { aggregateMonthlyWorkload, type MonthCell } from '@/modules/resource-graph/utils/monthly-cell-utils'
 import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
+import { getDailyCapacity, getMonthlyCapacityPercentage } from '../../lib/employment-history'
 
 interface DepartmentRowContentProps {
   department: Department
@@ -70,6 +71,7 @@ const DepartmentDayCell = memo(function DepartmentDayCell({
         cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
       )}
       style={{ left, width, height: DEPARTMENT_ROW_HEIGHT }}
+      title={totalCapacity <= 0 ? 'Нет базы расчёта' : undefined}
     >
       {loadPercentage > 0 && (
         <div
@@ -190,7 +192,7 @@ export function DepartmentRowContent({
       .filter((team) => !team.isGuestTeam)
       .reduce((sum, team) => {
         return sum + team.employees.reduce((teamSum, emp) => {
-          return teamSum + (emp.employmentRate || 1)
+          return teamSum + (emp.employmentRate ?? 1)
         }, 0)
       }, 0)
   }, [department.teams])
@@ -272,9 +274,8 @@ export function DepartmentRowContent({
             /* Monthly mode: aggregated workload bars per month */
             monthCells.map((cell, i) => {
               const monthWorkload = aggregateMonthlyWorkload(department.dailyWorkloads, cell, calendarMap)
-              const loadPercentage = totalDepartmentCapacity > 0
-                ? Math.round((monthWorkload / totalDepartmentCapacity) * 100)
-                : 0
+              const percentage = getMonthlyCapacityPercentage(department, cell, calendarMap, totalDepartmentCapacity)
+              const loadPercentage = percentage ?? 0
 
               return (
                 <div
@@ -285,6 +286,7 @@ export function DepartmentRowContent({
                     cell.isCurrentMonth && 'bg-primary/[0.03]'
                   )}
                   style={{ width: monthCellWidth, height: DEPARTMENT_ROW_HEIGHT }}
+                  title={percentage === null ? 'Нет базы расчёта' : undefined}
                 >
                   {loadPercentage > 0 && (
                     <div
@@ -345,7 +347,7 @@ export function DepartmentRowContent({
                   key={col.index}
                   cell={cell}
                   dailyWorkloads={department.dailyWorkloads}
-                  totalCapacity={totalDepartmentCapacity}
+                  totalCapacity={getDailyCapacity(department, formatMinskDate(cell.date), totalDepartmentCapacity)}
                   left={col.start}
                   width={col.size}
                 />

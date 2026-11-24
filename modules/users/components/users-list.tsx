@@ -48,6 +48,10 @@ import { DeleteUserConfirm } from "./DeleteUserConfirm"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
 import * as Sentry from "@sentry/nextjs"
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/modules/cache'
+import { getEmploymentStatus } from '../lib/employment-client'
+import { finishEmployeeEmployment } from '../actions/employment'
 
 interface UsersListProps {
   users: User[]
@@ -202,8 +206,21 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
   // Получаем разрешения пользователя
   const profile = useUserStore((state) => state.profile)
   const viewerId = useUserStore((state) => state.id)
+  const queryClient = useQueryClient()
+  const employmentStatus = useQuery({
+    queryKey: ['users', 'employment-status', viewerId],
+    queryFn: () => getEmploymentStatus(createClient()),
+    enabled: Boolean(viewerId),
+    staleTime: 0,
+  })
+  const employmentMode = employmentStatus.data?.enabled ? 'finish' : 'delete'
+  const employmentActionReady = employmentStatus.isSuccess
+  const employmentActionLabel = !employmentActionReady
+    ? employmentStatus.isError ? 'Не удалось проверить кадровый учёт' : 'Проверка кадрового учёта…'
+    : employmentMode === 'finish' ? 'Завершить работу' : 'Удалить'
   const {
     canEditAllUsers,
+    canDeleteUsers,
     canEditSubdivision,
     canEditTeam,
     canEditDepartment,
@@ -347,19 +364,30 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
   }, [])
 
   const handleDeleteUser = useCallback(async (userId: string) => {
+    if (!employmentActionReady) return false
     Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'UsersList: delete user confirm', data: { user_id: userId } })
     setIsDeleting(userId)
     try {
       await Sentry.startSpan({ name: 'Users/UsersList deleteUser', op: 'ui.action', attributes: { user_id: userId } }, async () => {
-        await deleteUser(userId)
+        if (employmentMode === 'finish') {
+          const result = await finishEmployeeEmployment(userId)
+          if (!result.success) throw new Error(result.error)
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.departmentsTimeline.lists() }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.employmentBoard.lists() }),
+          ])
+        } else {
+          await deleteUser(userId)
+        }
       })
       toast({
         title: "Успех",
-        description: "Пользователь успешно удален",
+        description: employmentMode === 'finish' ? 'Сегодня — последний рабочий день сотрудника. История сохранена.' : 'Пользователь успешно удален',
       })
       if (onUserUpdated) {
         onUserUpdated()
       }
+      return true
     } catch (error) {
       console.error("Ошибка удаления пользователя:", error)
       toast({
@@ -367,10 +395,11 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
         description: error instanceof Error ? error.message : "Не удалось удалить пользователя",
         variant: "destructive",
       })
+      return false
     } finally {
       setIsDeleting(null)
     }
-  }, [onUserUpdated])
+  }, [onUserUpdated, employmentActionReady, employmentMode, queryClient])
 
   const handleDialogClose = useCallback(() => {
     setIsDialogOpen(false)
@@ -1078,10 +1107,10 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                               Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
                                               openDeleteDialog(user)
                                             }}
-                                            disabled={isDeleting === user.id}
+                                            disabled={isDeleting === user.id || !employmentActionReady || !(canDeleteUsers || isAdmin) || user.id === viewerId}
                                           >
                                             <Trash className="mr-2 h-4 w-4" />
-                                            {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                            {isDeleting === user.id ? 'Сохранение...' : employmentActionLabel}
                                           </DropdownMenuItem>
                                         </DropdownMenuContent>
                                       </DropdownMenu>
@@ -1262,10 +1291,10 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                                           Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
                                                           openDeleteDialog(user)
                                                         }}
-                                                        disabled={isDeleting === user.id}
+                                                        disabled={isDeleting === user.id || !employmentActionReady || !(canDeleteUsers || isAdmin) || user.id === viewerId}
                                                       >
                                                         <Trash className="mr-2 h-4 w-4" />
-                                                        {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                                        {isDeleting === user.id ? 'Сохранение...' : employmentActionLabel}
                                                       </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
@@ -1302,14 +1331,16 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         user={userToDelete}
+        mode={employmentMode}
+        disabled={!employmentActionReady}
         onConfirm={async () => {
           if (userToDelete) {
             Sentry.addBreadcrumb({ category: 'ui.confirm', level: 'info', message: 'UsersList: confirm delete user', data: { user_id: userToDelete.id } })
           }
           if (userToDelete) {
-            await handleDeleteUser(userToDelete.id)
-            setDeleteDialogOpen(false)
+            return handleDeleteUser(userToDelete.id)
           }
+          return false
         }}
       />
     </Card>

@@ -7,6 +7,8 @@
 
 'use server'
 
+import { getAvailableEmployeeIds, assertEmploymentAvailable } from '@/modules/users/lib/employment-availability.server'
+
 import { createHash } from 'node:crypto'
 import { createClient } from '@/utils/supabase/server'
 import * as Sentry from '@sentry/nextjs'
@@ -420,7 +422,10 @@ export async function getDepartmentEmploymentBoard(
           employeesResult.error || pinnedResult.error || placementsResult.error || deptResult.error
         if (step1Error) return fail(step1Error.message)
 
-        const employees: BoardEmployee[] = (employeesResult.data ?? []).map((u) => ({
+        const availableIds = new Set(await getAvailableEmployeeIds(supabase,
+          (employeesResult.data ?? []).flatMap(row => row.user_id ? [row.user_id] : []),
+          { startDate: selectedDate, endDate: selectedDate }))
+        const employees: BoardEmployee[] = (employeesResult.data ?? []).filter(u => u.user_id && availableIds.has(u.user_id)).map((u) => ({
           id: u.user_id as string,
           name: [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Без имени',
           avatarUrl: (u.avatar_url as string | null) ?? null,
@@ -748,6 +753,7 @@ export async function placeEmployee(input: PlacementInput): Promise<ActionResult
     if (!employee || employee.department_id !== resolved.departmentId) {
       return { success: false, error: 'Сотрудник не состоит в этом отделе' }
     }
+    await assertEmploymentAvailable(supabase, [input.employeeId], { startDate: input.selectedDate, endDate: input.selectedDate })
 
     // Повторно сужаем окно перехода через минскую полночь непосредственно
     // перед записью. Это дополнительная защита устаревшего UI, не обещание

@@ -5,6 +5,13 @@ const db = vi.hoisted(() => ({
   rows: new Map<string, Record<string, unknown>>(),
   writes: [] as Array<{ operation: string; data: Record<string, unknown> }>,
   denied: false,
+  unavailable: false,
+}))
+vi.mock('@/modules/users/lib/employment-availability.server', () => ({
+  assertEmploymentReassignment: vi.fn(),
+  assertEmploymentAvailable: async () => {
+    if (db.unavailable) throw new Error('Сотрудник не работает в выбранный период')
+  },
 }))
 
 vi.mock('@/utils/supabase/server', () => ({
@@ -55,6 +62,7 @@ beforeEach(() => {
   db.rows.clear()
   db.writes = []
   db.denied = false
+  db.unavailable = false
   db.rows.set('loading-1', {
     loading_id: 'loading-1', loading_stage: input.stageId, loading_section: input.sectionId,
     loading_responsible: input.employeeId, loading_start: input.startDate,
@@ -64,6 +72,12 @@ beforeEach(() => {
 })
 
 describe('prospective loading persistence', () => {
+  it('does not create assignments outside employment periods', async () => {
+    db.unavailable = true
+    expect((await createLoading(input)).success).toBe(false)
+    expect((await createLoadingBatch({ ...input, employeeIds: [input.employeeId] })).success).toBe(false)
+    expect(db.writes).toEqual([])
+  })
   it.each([true, false, undefined])('creates with flag %s and preserves normal loading fields', async isProspective => {
     const result = await createLoading({ ...input, isProspective })
     expect(result).toMatchObject({ success: true, data: { isProspective: isProspective ?? false, rate: 0.5 } })

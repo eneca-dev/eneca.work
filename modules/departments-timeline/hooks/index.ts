@@ -27,6 +27,7 @@ export type { BulkShiftMode }
 
 import type { Department, TeamFreshness } from '../types'
 import type { FilterQueryParams } from '@/modules/inline-filter'
+import type { EmploymentRange } from '../lib/employment-history.server'
 
 // Re-export calendar events hook from resource-graph
 export { useCompanyCalendarEvents } from '@/modules/resource-graph/hooks'
@@ -50,10 +51,11 @@ export const departmentsTimelineKeys = queryKeys.departmentsTimeline
  * @example
  * const { data, isLoading, error } = useDepartmentsData({ department_id: 'xxx' })
  */
-export const useDepartmentsData = createCacheQuery<Department[], FilterQueryParams>({
-  queryKey: (filters) => queryKeys.departmentsTimeline.list(filters),
-  queryFn: getDepartmentsData,
-  staleTime: Infinity, // Обновляется через Realtime
+export const useDepartmentsData = createCacheQuery<Department[], { filters: FilterQueryParams; range: EmploymentRange; today: string }>({
+  queryKey: ({ filters, range, today }) => queryKeys.departmentsTimeline.list(filters, { ...range, today }),
+  queryFn: ({ filters, range }) => getDepartmentsData(filters, range),
+  staleTime: 60_000,
+  gcTime: 5 * 60_000,
 })
 
 /**
@@ -146,6 +148,8 @@ function updateLoadingDatesInEmployeeCache(
       employees: team.employees.map((employee) => {
         // Обновляем только загрузки нужного сотрудника
         if (employee.id !== employeeId) return employee
+        // Dated totals must be recalculated together with membership on the server.
+        if (employee.employmentSegments) return employee
 
         return {
           ...employee,

@@ -147,6 +147,10 @@ export function useEmploymentBoard({
       return result.data
     },
     staleTime: staleTimePresets.realtime,
+    // Employment periods are private (no client Postgres Changes subscription).
+    // Reconcile completion from another session; existing cache-policy/epoch rules remain.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     gcTime: 5 * 60 * 1000,
     retry: (failureCount, error) =>
       !(error instanceof BoardDateBoundaryError || error instanceof BoardSupersededError) &&
