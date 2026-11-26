@@ -50,6 +50,7 @@ import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { ProspectiveLoadingBadge } from '@/components/shared/timeline/ProspectiveLoadingBadge'
 import { clipLoadingsToEmployment } from '../../lib/employment-display'
 import { toast } from '@/hooks/use-toast'
+import { EmploymentFinishedLabel } from '@/modules/users/components/employment-finished-label'
 
 /**
  * Контекст режима выборочного bulk-shift, передаётся в loading bars.
@@ -73,6 +74,7 @@ interface EmployeeRowProps {
   timelineScale: TimelineScaleMode
   monthCells: MonthCell[]
   monthCellWidth: number
+  lastWorkingDate?: string
 }
 
 interface EmployeeDayCellProps {
@@ -531,8 +533,14 @@ export function EmployeeRow({
   timelineScale,
   monthCells,
   monthCellWidth,
+  lastWorkingDate,
 }: EmployeeRowProps) {
   const isMonthlyMode = timelineScale === 'month'
+  const rateDescription = lastWorkingDate && (employee.employmentRate ?? 1) === 0
+    ? 'Сегодня сотрудник не учитывается в мощности команды. В прошлые дни расчёт учитывает его занятость на соответствующую дату.'
+    : employee.transferredOn && (employee.employmentRate ?? 1) === 0
+      ? 'Сегодня сотрудник учитывается в другом отделе или команде. Здесь сохранены данные его прежнего состава.'
+    : 'Занятость сотрудника на сегодня'
   const [isHoveredAvatar, setIsHoveredAvatar] = useState(false)
   const currentTeamId = employee.currentTeamId === undefined ? (employee.teamId ?? null) : employee.currentTeamId
   const currentDepartmentId = employee.currentDepartmentId === undefined ? (employee.departmentId ?? null) : employee.currentDepartmentId
@@ -891,6 +899,12 @@ export function EmployeeRow({
                   <span className="text-primary font-medium"> · {employee.categoryName}</span>
                 )}
               </div>
+              {employee.transferredOn ? (
+                <p className="truncate text-[10px] leading-3 text-muted-foreground"
+                  title={`Переведён с ${employee.transferredOn.split('-').reverse().join('.')}${lastWorkingDate ? ` · Последний рабочий день ${lastWorkingDate.split('-').reverse().join('.')}` : ''}`}>
+                  Переведён с {employee.transferredOn.split('-').reverse().join('.')}
+                </p>
+              ) : <EmploymentFinishedLabel lastWorkingDate={lastWorkingDate} />}
             </div>
           </div>
 
@@ -899,12 +913,12 @@ export function EmployeeRow({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary cursor-default">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary cursor-default" title={rateDescription}>
                     {employee.employmentRate ?? 1}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  Ставка
+                  {rateDescription}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

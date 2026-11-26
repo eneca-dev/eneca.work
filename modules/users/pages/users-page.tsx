@@ -14,9 +14,10 @@ import { getUsers } from "@/services/org-data-service"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "@/hooks/use-toast"
 import { queryKeys, staleTimePresets } from "@/modules/cache"
 import { useUserStore } from "@/stores/useUserStore"
+import { useFinishedEmployees } from "../hooks/use-finished-employees"
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
@@ -28,6 +29,9 @@ export default function UsersPage() {
     queryFn: getUsers,
     staleTime: staleTimePresets.medium,
   })
+  const employmentRosterEnabled = !isLoading && users.length > 0
+  const employmentRoster = useFinishedEmployees(employmentRosterEnabled)
+  const [showFinishedEmployees, setShowFinishedEmployees] = useState(false)
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -56,7 +60,10 @@ export default function UsersPage() {
       message: 'UsersPage: forceRefresh clicked'
     })
     try {
-      await refetch()
+      await Promise.all([
+        refetch({ throwOnError: true }),
+        ...(employmentRosterEnabled ? [employmentRoster.refetch({ throwOnError: true })] : []),
+      ])
       toast({
         title: "Данные обновлены",
         description: "Список пользователей успешно обновлён"
@@ -71,7 +78,7 @@ export default function UsersPage() {
         variant: "destructive"
       })
     }
-  }, [refetch])
+  }, [refetch, employmentRosterEnabled, employmentRoster.refetch])
 
   // Логируем ошибки загрузки в Sentry
   useEffect(() => {
@@ -124,7 +131,8 @@ export default function UsersPage() {
 
   // Преобразуем UserWithRoles в User для совместимости с компонентами
   const usersAsUserType = useMemo(() => {
-    return users.map(user => ({
+    const finishedIds = new Set(employmentRoster.data?.finishedEmployeeIds ?? [])
+    return users.filter(user => showFinishedEmployees || !finishedIds.has(user.user_id)).map(user => ({
       id: user.user_id,
       name: user.full_name,
       email: user.email,
@@ -147,7 +155,7 @@ export default function UsersPage() {
       salary: user.salary ? parseFloat(user.salary) : 0,
       isHourly: user.is_hourly || false
     }))
-  }, [users])
+  }, [users, showFinishedEmployees, employmentRoster.data])
 
   if (error) {
     return (
@@ -223,12 +231,29 @@ export default function UsersPage() {
               </TabsList>
               
               <TabsContent value="list" className="space-y-4">
-                <UsersList
-                  users={usersAsUserType}
-                  onUserUpdated={handleUserUpdated}
-                  onRefresh={forceRefresh}
-                  isRefreshing={isFetching}
-                />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={showFinishedEmployees}
+                    onChange={event => setShowFinishedEmployees(event.target.checked)} />
+                  Показывать завершивших работу
+                </label>
+                {employmentRosterEnabled && employmentRoster.isError ? (
+                  <div role="alert" className="space-y-2 text-sm">
+                    <p>Не удалось проверить текущий состав сотрудников. Список временно недоступен.</p>
+                    <button type="button" className="text-primary underline" onClick={() => employmentRoster.refetch()}>
+                      Повторить проверку состава
+                    </button>
+                  </div>
+                ) : employmentRosterEnabled && (employmentRoster.isPending || !employmentRoster.data) ? (
+                  <p role="status" className="text-sm text-muted-foreground">Проверка текущего состава сотрудников…</p>
+                ) : (
+                  <UsersList
+                    users={usersAsUserType}
+                    finishedOnByEmployeeId={employmentRoster.data?.finishedOnByEmployeeId}
+                    onUserUpdated={handleUserUpdated}
+                    onRefresh={forceRefresh}
+                    isRefreshing={isFetching || employmentRoster.isFetching}
+                  />
+                )}
               </TabsContent>
               
               <TabsContent value="add-user" className="space-y-4">

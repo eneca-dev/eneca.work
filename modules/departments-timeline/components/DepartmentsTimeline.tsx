@@ -37,6 +37,8 @@ import { TeamSubgroupDivider } from './timeline/TeamSubgroupDivider'
 import { flattenDepartments, type DeptFlatRow } from './timeline/flatten-departments'
 import { VirtualList, type VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useFinishedEmployees } from '@/modules/users/hooks/use-finished-employees'
+import { filterCurrentEmployeeRows } from '../lib/employment-display'
 
 // ============================================================================
 // Internal Props (for embedding in TasksView)
@@ -163,7 +165,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
   )
 
   // Data fetching with external query params
-  const { data: departments, isLoading, error } = useDepartmentsData(
+  const { data: departments, isLoading: isDepartmentsLoading, error: departmentsError } = useDepartmentsData(
     { filters: filtersApplied ? queryParams : {}, today: currentDay, range: {
       startDate: isMonthlyMode ? monthCells[0].startDate : formatMinskDate(dayCells[0].date),
       endDate: isMonthlyMode ? monthCells[monthCells.length - 1].endDate : formatMinskDate(dayCells[dayCells.length - 1].date),
@@ -171,23 +173,36 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
     { enabled: shouldFetchData, queryOptions: { refetchInterval: 60_000, refetchOnWindowFocus: true } }
   )
 
+  const [showHistory, setShowHistory] = useState(false)
+  const finishedRoster = useFinishedEmployees(shouldFetchData)
+  const rangeEnd = isMonthlyMode ? monthCells[monthCells.length - 1].endDate
+    : formatMinskDate(dayCells[dayCells.length - 1].date)
+  const isPastRange = rangeEnd < currentDay
+  const isLoading = isDepartmentsLoading || (shouldFetchData && finishedRoster.isPending)
+  const error = departmentsError ?? finishedRoster.error
+  const visibleDepartments = useMemo(() => {
+    if (!departments || !finishedRoster.data || finishedRoster.isError) return []
+    return showHistory || isPastRange ? departments
+      : filterCurrentEmployeeRows(departments, finishedRoster.data.finishedEmployeeIds)
+  }, [departments, finishedRoster.data, finishedRoster.isError, showHistory, isPastRange])
+
   // Group departments: «гражд» → общие → «пром».
   // Внутри каждой группы сохраняем порядок из исходных данных (алфавит с сервера).
   const groupedDepartments = useMemo(() => {
-    if (!departments || departments.length === 0) {
+    if (visibleDepartments.length === 0) {
       return { grazhd: [], general: [], prom: [] }
     }
-    const grazhd: typeof departments = []
-    const prom: typeof departments = []
-    const general: typeof departments = []
-    for (const d of departments) {
+    const grazhd: typeof visibleDepartments = []
+    const prom: typeof visibleDepartments = []
+    const general: typeof visibleDepartments = []
+    for (const d of visibleDepartments) {
       const name = d.name.toLowerCase()
       if (name.includes('гражд')) grazhd.push(d)
       else if (name.includes('пром')) prom.push(d)
       else general.push(d)
     }
     return { grazhd, general, prom }
-  }, [departments])
+  }, [visibleDepartments])
 
   // Load freshness data
   const { data: freshnessData } = useTeamsFreshness()
@@ -245,6 +260,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
         case 'employee':
           return (
             <EmployeeRow
+              lastWorkingDate={finishedRoster.data?.finishedOnByEmployeeId?.[row.employee.id]}
               employee={row.employee}
               employeeIndex={0}
               dayCells={dayCells}
@@ -263,7 +279,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
         }
       }
     },
-    [totalWidth, dayCells, freshnessData, timelineScale, monthCells, calendarMap]
+    [totalWidth, dayCells, freshnessData, timelineScale, monthCells, calendarMap, finishedRoster.data?.finishedOnByEmployeeId]
   )
 
   // Expand all nodes in the tree (batch operation)
@@ -361,6 +377,11 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
 
   return (
     <div className="h-full flex flex-col bg-background">
+      <label className="flex items-center gap-2 px-3 py-1 text-xs border-b">
+        <input type="checkbox" checked={showHistory} onChange={event => setShowHistory(event.target.checked)} />
+        Показывать историю состава
+        {isPastRange && <span className="text-muted-foreground">В прошлом диапазоне показан исторический состав.</span>}
+      </label>
       {departments?.[0]?.employmentCutoverDate && (
         <p className="px-3 py-1 text-xs text-muted-foreground border-b">
           До {departments[0].employmentCutoverDate.split('-').reverse().join('.')} расчёт ведётся по составу сотрудников на дату запуска учёта.
@@ -453,6 +474,7 @@ export function DepartmentsTimelineInternal({ queryParams, loadAllEnabled, onLoa
             <div className="text-center">
               <p className="text-destructive mb-2">Ошибка загрузки данных</p>
               <p className="text-sm text-muted-foreground">{error.message}</p>
+              {finishedRoster.isError && <Button variant="outline" onClick={() => finishedRoster.refetch()}>Повторить проверку состава</Button>}
             </div>
           </div>
         )}
