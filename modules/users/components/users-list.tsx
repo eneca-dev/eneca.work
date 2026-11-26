@@ -53,8 +53,10 @@ import { queryKeys } from '@/modules/cache'
 import { getEmploymentStatus, type EmploymentDatedCommand } from '../lib/employment-client'
 import { finishEmployeeEmployment } from '../actions/employment'
 import { notifyEmploymentBoardPersonnelChanged } from '@/modules/cache/realtime'
+import { EmploymentFinishedLabel } from './employment-finished-label'
 
 interface UsersListProps {
+  finishedOnByEmployeeId?: Readonly<Record<string, string>>
   users: User[]
   onUserUpdated?: () => void
   onRefresh?: () => Promise<void>
@@ -162,7 +164,7 @@ function FilterDropdown({
   )
 }
 
-function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: UsersListProps) {
+function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false, finishedOnByEmployeeId }: UsersListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -1010,6 +1012,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                       <div className="font-medium text-xs sm:text-sm">
                                         <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.name}</span>
                                       </div>
+                                      <EmploymentFinishedLabel lastWorkingDate={finishedOnByEmployeeId?.[user.id]} />
                                       <div className="text-xs text-muted-foreground hidden sm:block">
                                         <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none text-[10px]">{user.email}</span>
                                       </div>
@@ -1219,6 +1222,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                                   <div className="font-medium text-xs sm:text-sm">
                                                     <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
                                                   </div>
+                                                  <EmploymentFinishedLabel lastWorkingDate={finishedOnByEmployeeId?.[user.id]} />
                                                   <div className="text-xs text-muted-foreground hidden sm:block">
                                                     <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
                                                   </div>

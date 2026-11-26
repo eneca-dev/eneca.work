@@ -51,12 +51,32 @@ const employee: Employee = {
   employmentSegments: [{ employeeId: 'employee', departmentId: 'department', teamId: 'team',
     startDate: '2026-11-10', endDate: '2026-11-30', employmentRate: 1 }],
 }
-function show(person = employee) {
+function show(person = employee, lastWorkingDate?: string) {
   render(<EmployeeRow employee={person} employeeIndex={0} dayCells={dayCells}
-    isTeamLead={false} timelineScale="day" monthCells={[]} monthCellWidth={400} />)
+    isTeamLead={false} timelineScale="day" monthCells={[]} monthCellWidth={400} lastWorkingDate={lastWorkingDate} />)
 }
 describe('employment display loading controls', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.permission = true; mocks.scissorsActive = false })
+
+  it('explains an archived employee last working day and zero capacity today', () => {
+    show({ ...employee, employmentRate: 0 }, '2026-11-24')
+    const text = 'Работа завершена · последний день 24.11.2026'
+    expect(screen.getByText(text)).toHaveAttribute('title', text)
+    expect(screen.getByTitle('Сегодня сотрудник не учитывается в мощности команды. В прошлые дни расчёт учитывает его занятость на соответствующую дату.')).toHaveTextContent('0')
+  })
+
+  it('does not label an employee as finished from a zero rate alone', () => {
+    show({ ...employee, employmentRate: 0 })
+    expect(screen.queryByText(/^Работа завершена/)).not.toBeInTheDocument()
+    expect(screen.getByTitle('Занятость сотрудника на сегодня')).toHaveTextContent('0')
+  })
+
+  it('labels a former membership using its actual transfer date', () => {
+    show({ ...employee, employmentRate: 0, transferredOn: '2026-11-25' })
+    expect(screen.getByText('Переведён с 25.11.2026')).toHaveAttribute('title', 'Переведён с 25.11.2026')
+    expect(screen.getByTitle('Сегодня сотрудник учитывается в другом отделе или команде. Здесь сохранены данные его прежнего состава.')).toHaveTextContent('0')
+    expect(screen.queryByText(/^Работа завершена/)).not.toBeInTheDocument()
+  })
 
   it('shows server failures and success through the actual application Toaster', async () => {
     show()

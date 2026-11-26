@@ -28,6 +28,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/db'
 import { EMPLOYMENT_ID_BATCH_SIZE, employmentRangeSchema, readEmploymentSegments, type EmploymentRange } from '../lib/employment-history.server'
 import { projectEmploymentHistory } from '../lib/employment-history'
+import { annotateEmployeeTransfers } from '../lib/employment-transfers.server'
 
 // ============================================================================
 // Helper Functions
@@ -794,10 +795,10 @@ export async function getDepartmentsData(
     })
 
     if (employmentSegments && historyStatus) {
-      const projected = projectEmploymentHistory([...departmentsMap.values()],
+      const projected = await annotateEmployeeTransfers(projectEmploymentHistory([...departmentsMap.values()],
         [...employeesMap.values()], employmentSegments, historyStatus.today,
         secureFilters?.team_id || excludeTeams.length > 0
-          ? new Set(orgData.map(row => `${row.department_id}/${row.team_id}`)) : undefined)
+          ? new Set(orgData.map(row => `${row.department_id}/${row.team_id}`)) : undefined))
       departmentsMap.clear()
       projected.forEach(department => departmentsMap.set(department.id,
         { ...department, employmentCutoverDate: historyStatus.cutoverDate ?? undefined }))

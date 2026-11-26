@@ -81,6 +81,7 @@ export const queryKeys = {
     list: (filters?: UserFilters) => [...queryKeys.users.lists(), filters] as const,
     /** Полный список пользователей с ролями (UserWithRoles из view_users) */
     fullList: () => [...queryKeys.users.all, 'full-list'] as const,
+    finishedEmployees: (today: string) => [...queryKeys.users.all, 'finished-employees', today] as const,
     details: () => [...queryKeys.users.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.users.details(), id] as const,
     current: () => [...queryKeys.users.all, 'current'] as const,

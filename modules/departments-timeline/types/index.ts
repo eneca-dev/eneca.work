@@ -78,6 +78,8 @@ export interface Employee {
   dailyCapacity?: Record<string, number>
   currentDepartmentId?: string | null
   currentTeamId?: string | null
+  /** First day in a different membership; present only on a former membership row. */
+  transferredOn?: string
   hasLoadings?: boolean
   loadingsCount?: number
   dailyWorkloads?: Record<string, number>

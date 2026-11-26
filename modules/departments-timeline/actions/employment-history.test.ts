@@ -247,10 +247,11 @@ describe('dated department reader security and data contract', () => {
     })
   })
 
-  it('uses only frozen baseline for a wholly pre-cutover range', async () => {
+  it('uses only frozen baseline for pre-cutover capacity even when later transfer metadata is read', async () => {
     const [department] = resultData(await getDepartmentsData({}, { startDate: '2026-11-17', endDate: '2026-11-18' }))
     expect(department.dailyCapacity).toEqual({ '2026-11-17': 1, '2026-11-18': 1 })
-    expect(calls.some(call => call.table === 'employee_employment_periods')).toBe(false)
+    // Later periods may be read for a transfer label; their rate must not replace baseline capacity.
+    expect(department.teams[0].employees[0].employmentSegments?.every(segment => segment.employmentRate === 1)).toBe(true)
   })
 
   it('fails instead of returning a partial capacity denominator when the identity read fails', async () => {

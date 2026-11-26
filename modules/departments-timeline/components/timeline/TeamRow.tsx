@@ -22,6 +22,7 @@ import { aggregateMonthlyWorkload, type MonthCell } from '@/modules/resource-gra
 import type { TimelineScaleMode } from '@/components/shared/timeline'
 import type { VirtualColumn } from '@/modules/shared/virtualized-tree'
 import { getDailyCapacity, getMonthlyCapacityPercentage } from '../../lib/employment-history'
+import { getCapacityExplanation, getDailyWorkloadExplanation } from '../../lib/workload-explanation'
 
 interface TeamRowContentProps {
   team: Team
@@ -58,6 +59,8 @@ const TeamDayCell = memo(function TeamDayCell({
   const loadPercentage = !isWeekend && !isSpecialDayOff && totalCapacity > 0
     ? Math.round((workload / totalCapacity) * 100)
     : 0
+  const explanation = getDailyWorkloadExplanation(formatMinskDate(cell.date), workload,
+    totalCapacity, loadPercentage, isWeekend || isSpecialDayOff)
 
   return (
     <div
@@ -68,12 +71,12 @@ const TeamDayCell = memo(function TeamDayCell({
         cell.isToday && 'bg-green-300/60 dark:bg-green-700/25',
       )}
       style={{ left, width, height: TEAM_ROW_HEIGHT }}
-      title={totalCapacity <= 0 ? 'Нет базы расчёта' : undefined}
+      title={explanation}
     >
       {loadPercentage > 0 && (
         <div
           className="absolute bottom-1 left-1 right-1 flex items-end justify-center"
-          title={`Загрузка команды: ${loadPercentage}%`}
+          title={explanation}
         >
           <div
             className={cn(
@@ -212,7 +215,7 @@ export function TeamRowContent({
             {totalTeamCapacity > 0 && (
               <span
                 className="text-xs font-medium text-muted-foreground tabular-nums"
-                title="Сумма ставок сотрудников команды"
+                title={getCapacityExplanation('команды')}
               >
                 {formatWorkload(totalTeamCapacity)}
               </span>
