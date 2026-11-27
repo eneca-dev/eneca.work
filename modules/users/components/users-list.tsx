@@ -1181,7 +1181,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false, fini
                               </TableRow>
 
                               {expandedGroups[`${subdivision}-${department}`] &&
-                                Object.entries(teams).map(([team, teamUsers]) => (
+                                Object.entries(teams)
+                                  .sort(([firstTeam], [secondTeam]) => firstTeam.localeCompare(secondTeam, 'ru', { numeric: true, sensitivity: 'base' }))
+                                  .map(([team, teamUsers]) => (
                                   <React.Fragment key={`${subdivision}-${department}-${team}`}>
                                     {/* Заголовок команды */}
                                     <TableRow className="bg-muted/30 hover:bg-muted/30">
